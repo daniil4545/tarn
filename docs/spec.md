@@ -1,9 +1,9 @@
-# Spec: lull, an agent-first terminal (working name)
+# Spec: tarn, an agent-first terminal
 
 Status: draft
 Canon: this spec; upstream build guide `HACKING.md`; upstream agent guide `AGENTS.md`.
 
-lull is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. It keeps the Ghostty core and app as they are and adds a narrow set of features for working with CLI coding agents. Claude Code is the primary agent; the `tk` task tracker is its companion.
+tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. It keeps the Ghostty core and app as they are and adds a narrow set of features for working with CLI coding agents. Claude Code is the primary agent; the `tk` task tracker is its companion.
 
 ## Contents
 
@@ -46,15 +46,15 @@ Requirements. M - must, S - should, later - out of the first version. "Session d
 | R5 | Markdown preview panel next to the terminal, mermaid diagrams rendered | M | 84% of file paths in answers are markdown |
 | R6 | File editing in a GUI panel: mouse, selection, save | M | new |
 | R7 | Command completion and history in the shell | M | shell setup, documented |
-| R8 | Agent control CLI `lull`: list sessions, open a file in the panel, notify, focus a session | M | new |
+| R8 | Agent control CLI `tarn`: list sessions, open a file in the panel, notify, focus a session | M | new |
 | R9 | Click on a file path in terminal output opens the file in the panel; absolute, `~/` and relative paths | S | new |
 | R10 | Several agents per project shown as separate sessions | S | new |
 | R11 | HTML and PDF in the same panel | later | 5 PDF paths, HTML opened in a browser |
 | R12 | Editor-like prompt input: mouse, selection, multi-line | S | Claude Code itself, verify |
 | R13 | SSH sessions in the sidebar, surviving a dropped connection | later | 3-4 mentions |
 | R14 | Phone access to waiting sessions outside the home network, free | S | outside the app, documented |
-| R15 | `lull new` opens a session in a project with an entry prompt; `lull send` puts text into another session's input | M | 50+ manual hand-overs |
-| R16 | `lull run` shows a command in a panel, runs it after the user presses Enter, returns the output to the agent | M | ~35 pasted outputs |
+| R15 | `tarn new` opens a session in a project with an entry prompt; `tarn send` puts text into another session's input | M | 50+ manual hand-overs |
+| R16 | `tarn run` shows a command in a panel, runs it after the user presses Enter, returns the output to the agent | M | ~35 pasted outputs |
 | R17 | Subagent panel inside a session: which subagents run and what they do | S | 14 requests |
 | R18 | Tracker connector: the sidebar shows the `tk` task of each session; a task `ask` marks the session as waiting; `tk` can focus or start a session | S | `tk` already links tasks to session ids |
 
@@ -71,8 +71,8 @@ Out of scope:
 
 ```mermaid
 flowchart LR
-  cc["Claude Code hooks"] -->|"lull hook, JSON"| sock[("Control socket")]
-  agent["Agent CLI calls"] -->|"lull cmd"| sock
+  cc["Claude Code hooks"] -->|"tarn hook, JSON"| sock[("Control socket")]
+  agent["Agent CLI calls"] -->|"tarn cmd"| sock
   sock --> reg["Session registry"]
   core["Ghostty core events"] --> reg
   tk["tk CLI"] -->|"task, ask, JSON"| reg
@@ -88,12 +88,12 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 | Block | Responsibility | Talks to |
 | --- | --- | --- |
 | Ghostty core and app (upstream) | rendering, input, tabs, splits, core events | registry via insertion points |
-| Control socket | unix socket of the running app; one JSON line per request | `lull` CLI, registry, panels |
-| `lull` CLI | thin client: `hook`, `ls`, `open`, `notify`, `focus`, `new`, `send`, `run` | control socket |
+| Control socket | unix socket of the running app; one JSON line per request | `tarn` CLI, registry, panels |
+| `tarn` CLI | thin client: `hook`, `ls`, `open`, `notify`, `focus`, `new`, `send`, `run` | control socket |
 | Session registry | one record per terminal surface; agent state machine | sidebar, notifications |
 | Sidebar | sessions with state and task; click or shortcut focuses the surface | registry, terminal view |
 | File panel | markdown preview with mermaid, text editing | terminal view, socket |
-| Command panel | shows a command from `lull run`, runs it on Enter, sends output back | socket, terminal view |
+| Command panel | shows a command from `tarn run`, runs it on Enter, sends output back | socket, terminal view |
 | Tracker connector | reads `tk` tasks claimed by each session through the `tk` CLI | `tk`, registry |
 
 - Initiator: Claude Code hooks, agent commands and the user. Source of truth for agent state: hook events and `tk` asks; for cwd and title: Ghostty core events.
@@ -101,7 +101,7 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 
 ### 2.1 Fork rules
 
-1. Our Swift code lives in `macos/Sources/Features/Lull/`. Upstream files change only at insertion points listed in `docs/architecture.md`.
+1. Our Swift code lives in `macos/Sources/Features/Tarn/`. Upstream files change only at insertion points listed in `docs/architecture.md`.
 2. `main` carries our work. `upstream/main` is merged in on a schedule; a merge that touches an insertion point gets its own commit.
 3. Our docs live in `docs/`, which upstream does not have. Upstream `README.md` and `AGENTS.md` stay untouched; our agent profile is `.claude/CLAUDE.md`.
 
@@ -111,7 +111,7 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 2. Input: core events per surface (pwd, title, notification, bell, child exited, command finished); hook events with `session_id`, `cwd`, event name; `tk` tasks. Output: session list for the sidebar and the CLI; state changes for notifications.
 3. How it works:
    1. A new surface creates a record in state `idle`.
-   2. A hook event is matched to a surface by the surface id passed in the environment of the shell (`LULL_SURFACE`).
+   2. A hook event is matched to a surface by the surface id passed in the environment of the shell (`TARN_SURFACE`).
    3. The event moves the record through the state machine of section 8.
    4. A transition into `waiting` or `done` raises a notification when the surface is not focused.
 4. Rules: one writer (main actor); an event for an unknown surface is dropped and logged; a repeated event in the same state changes nothing.
@@ -119,7 +119,7 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 ### 2.3 File panel
 
 1. Purpose: read and edit files next to a session without another app.
-2. Input: a path from a click, a `lull open` call or a shortcut. Output: the file shown or saved.
+2. Input: a path from a click, a `tarn open` call or a shortcut. Output: the file shown or saved.
 3. How it works: markdown is rendered to HTML with mermaid diagrams and shown in WKWebView; text files open in an NSTextView-based editor with syntax highlighting. HTML and PDF come later (R11).
 4. Rules: the panel never writes a file the user did not save; a file changed on disk while open is reloaded or flagged, never silently overwritten.
 
@@ -131,7 +131,7 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
    1. On a hook event and on a timer, the connector asks the `tk` CLI for active tasks in JSON.
    2. A task whose claim matches a session's `agentSessionID` is attached to that session.
    3. A non-empty `ask` moves the session to `waiting` with the ask text.
-   4. From the `tk` board, a task opens its session through `lull focus`, or starts one through `lull new` with the entry prompt `take T-<n>`.
+   4. From the `tk` board, a task opens its session through `tarn focus`, or starts one through `tarn new` with the entry prompt `take T-<n>`.
 4. Rules: the connector only reads `tk` through its CLI, never the `~/tasks` files; `tk` missing or failing leaves the sidebar without task lines, nothing else changes. Changes on the `tk` side are tasks of the tracker project.
 
 ## 3. Scenarios
@@ -140,11 +140,11 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 | --- | --- | --- |
 | Happy path | 5 sessions run; Claude Code in session 3 asks for permission | sidebar marks session 3 `waiting`, notification names the project; click focuses session 3 |
 | Repeat | the same hook event arrives twice | state unchanged, one notification |
-| Temporary error | the app is not running when a hook fires | `lull hook` exits 0 within 100 ms; Claude Code is not blocked |
+| Temporary error | the app is not running when a hook fires | `tarn hook` exits 0 within 100 ms; Claude Code is not blocked |
 | Permanent error | hooks are not installed for a session | the session shows `idle` from core events only, never a wrong agent state |
 | File conflict | an agent rewrites a file open in the editor | the panel flags the change and offers reload; unsaved edits are kept |
-| Hand-over | an agent runs `lull send <session> "<text>"` | the text appears in the target input; nothing is submitted until the user presses Enter |
-| Command for the user | an agent runs `lull run "<command>"` | the command panel shows it; it runs only on the user's Enter; the agent gets exit code and output |
+| Hand-over | an agent runs `tarn send <session> "<text>"` | the text appears in the target input; nothing is submitted until the user presses Enter |
+| Command for the user | an agent runs `tarn run "<command>"` | the command panel shows it; it runs only on the user's Enter; the agent gets exit code and output |
 | Task asks | an agent sets `ask` on its `tk` task | the session shows `waiting` with the ask text, even without a hook event |
 
 ## 4. Data and states
@@ -190,7 +190,7 @@ Code sources, read in the source repositories on 2026-10-21. Ported code keeps i
 | Stage | Need | Source (MIT unless noted) | Lines | Use |
 | --- | --- | --- | --- | --- |
 | S1 | socket protocol: one JSON line each way, version field, size limits; CLI client | [kooky](https://github.com/iAmCorey/kooky) `KookyHookKit`: `CLIProtocol`, `CLIFrontend`, `Parser`, `KookyCLI/main.swift` | 234, 482, 444, 206 | port |
-| S1 | hook receiver on a unix socket, event bound to a surface id | kooky `KookyKit/Sessions/HookServer.swift` | 463 | adapt to the registry and `LULL_SURFACE` |
+| S1 | hook receiver on a unix socket, event bound to a surface id | kooky `KookyKit/Sessions/HookServer.swift` | 463 | adapt to the registry and `TARN_SURFACE` |
 | S1 | session aggregate for the sidebar | kooky `AgentMonitor.swift`; [Calyx](https://github.com/yuuichieguchi/Calyx) `AgentStateResolver` to cross-check | 525 | adapt |
 | S2 | system notification and jump to the tab | kooky `NotificationManager.swift`; Calyx `PaneNotificationLedger`, `NotificationClickRouter` | 95 | port kooky, Calyx as reference |
 | S2 | order "waiting longest first" | own code | - | write |
@@ -242,7 +242,7 @@ Draft, to be agreed:
 - Notification title `<project>`, body `Needs your permission`.
 - Notification title `<project>`, body `Waiting for your input`.
 - Notification title `<project>`, body `Done`.
-- `lull ls` row: `3  lull  main  waiting  2m  T-22`.
+- `tarn ls` row: `3  tarn  main  waiting  2m  T-22`.
 
 ## 12. Decisions and open questions
 
@@ -254,7 +254,7 @@ Draft, to be agreed:
 - Decided: agent commands `new`, `send`, `run` join the CLI (R15, R16) - session data shows 50+ manual hand-overs and ~35 pasted outputs; `send` and `run` never press Enter for the user, so one session cannot act in another without the user; rejected: raw key sending.
 - Decided: the tracker connector talks to `tk` only through its CLI and JSON output - two independent projects, `tk` keeps its rule of writes through its core; rejected: reading `~/tasks` files (couples to the file format).
 - Decided: HTML, PDF (R11) and SSH (R13) move to later - session data: 5 PDF paths, HTML opened in a browser, 3-4 SSH mentions.
-- Q2: final project name. `lull` is a working name; the repository can be renamed later.
+- Decided: the name is `tarn` (a small mountain lake: small, clear, quiet) - no namesakes among terminals and agent tools on GitHub, Homebrew, Product Hunt or the web, checked 2026-10-21; rejected: `lull` (a Product Hunt tool for coding-agent sessions), `wisp` (wispterm, a terminal for agents), `aerie` (a macOS productivity app). Trademarks and domains not checked.
 - Q5: shell for R7. The login shell is zsh, but prompts pasted from Warp look like fish; the setup guide targets the shell the terminal starts.
 
 ## 13. Slicing
@@ -262,15 +262,15 @@ Draft, to be agreed:
 | Stage | Result | Depends on |
 | --- | --- | --- |
 | S0 | fork builds from source, `make check` and `make bench` baseline, R2 and R12 verified, shell setup doc for R7 | - |
-| S1 | `lull` CLI with `hook` and `ls`, control socket, session registry, sidebar (R3, R8, R10) | S0 |
-| S2 | notifications and jump to waiting session (R4), `lull notify`, `lull focus` | S1 |
-| S3 | file panel with markdown and mermaid preview, path click, `lull open` (R5, R9) | S1 |
+| S1 | `tarn` CLI with `hook` and `ls`, control socket, session registry, sidebar (R3, R8, R10) | S0 |
+| S2 | notifications and jump to waiting session (R4), `tarn notify`, `tarn focus` | S1 |
+| S3 | file panel with markdown and mermaid preview, path click, `tarn open` (R5, R9) | S1 |
 | S4 | editing in the panel (R6) | S3 |
-| S5 | `lull new`, `lull send`, `lull run` with the command panel (R15, R16) | S2 |
+| S5 | `tarn new`, `tarn send`, `tarn run` with the command panel (R15, R16) | S2 |
 | S6 | tracker connector (R18), subagent panel (R17) | S2 |
 | later | HTML and PDF (R11), SSH sessions (R13), phone access guide (R14) | S3 |
 
-Implementation is on hold while the tracker is in progress; this spec is the input for slicing when work resumes. Tasks go to `tk` under project `lull`. S1 also measures the real token cost of one stage; later estimates use that number.
+Implementation is on hold while the tracker is in progress; this spec is the input for slicing when work resumes. Tasks go to `tk` under project `tarn`. S1 also measures the real token cost of one stage; later estimates use that number.
 
 ## 14. Access and readiness
 
@@ -286,6 +286,6 @@ Readiness for slicing:
 
 - [x] every entity has states, transitions, writer, storage;
 - [x] scenarios: happy path, repeat, temporary and permanent error;
-- [ ] Q2 and Q5 answered;
+- [ ] Q5 answered;
 - [ ] hook events for subagents checked (R17);
 - [ ] Limpid, Vesta, viterm, Conterm, agterm read (section 9).
