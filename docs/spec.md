@@ -1,7 +1,7 @@
 # Spec: tarn, an agent-first terminal
 
-Status: draft
-Canon: this spec; upstream build guide `HACKING.md`; upstream agent guide `AGENTS.md`.
+Status: agreed for the first version (S0-S3); the second wave is scoped, not designed.
+Canon: this spec; upstream build guides `HACKING.md` and `macos/AGENTS.md`; agent profile `.claude/CLAUDE.md`.
 
 tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. It keeps the Ghostty core and app as they are and adds a narrow set of features for working with CLI coding agents. Claude Code is the primary agent; the `tk` task tracker is its companion.
 
@@ -24,39 +24,39 @@ tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. I
 
 ## 1. Goal and scope
 
-- Goal: one terminal for all work with agents: sessions, files, servers, commands. It must stay as fast and light as Ghostty.
-- Result: the user runs 5-6 Claude Code sessions in one window, sees which one waits and on which task, jumps to it in one action, reads or edits a spec next to the session, and lets agents hand work over without copy-paste.
+- Goal: one terminal for all work with agents. It must stay as fast and light as Ghostty.
+- Result of the first version: the user reads specs and reports as rendered markdown next to the session, sees all Claude Code sessions with their state in a sidebar, and gets one notification when a session needs them.
 
 Principles:
 
-1. **Simplicity.** A part stays only if something breaks without it. Everything outside section 1 is cut, not hidden behind a setting.
-2. **Speed.** Startup, input latency and memory stay at the level of upstream Ghostty built from the same commit. Numbers come from a benchmark, not from impressions.
-3. **Reliability.** The Ghostty core is not modified. Our code lives in its own files; upstream files change only at named insertion points.
-4. **Lightweight and local.** No account, cloud, telemetry, subscription or built-in AI model.
-5. **Agent-first.** An agent is a full user of the terminal. Everything the user does by mouse, an agent can do by command.
+1. **Simplicity.** A part stays only if something breaks without it. Everything outside this section is cut, not hidden behind a setting.
+2. **Speed.** Startup, input latency, idle CPU and memory stay at the level of upstream Ghostty built from the same commit. Numbers come from a benchmark, not from impressions.
+3. **Reliability.** The Ghostty core is not modified. Our code lives in its own files; upstream files change only at insertion points listed in `docs/architecture.md`.
+4. **Lightweight and local.** No account, cloud, telemetry, subscription, built-in AI model or network requests from our code.
+5. **Agent-first.** An agent is a full user of the terminal: it opens files, lists sessions and asks for attention by command. Focus and keystrokes stay with the human.
 
-Requirements. M - must, S - should, later - out of the first version. "Session data" is the analysis of 683 Claude Code sessions from 2026-09-01 to 2026-10-21.
+Requirements. "Session data" is the analysis of 683 Claude Code sessions from 2026-09-01 to 2026-10-21.
 
-| ID | Requirement | Pri. | Comes from |
+| ID | Requirement | Wave | Evidence |
 | --- | --- | --- | --- |
-| R1 | Tabs and a simple split | M | upstream |
-| R2 | Full-screen TUIs work completely, with mouse and trackpad: Claude Code, `tk` | M | upstream, verify |
-| R3 | Sidebar with all sessions: project, branch, agent state (working, waiting, done) | M | median 5 parallel sessions, peak 16 |
-| R4 | Jump to a waiting session in one action, also from a system notification | M | 13.5% of replies come after more than 10 min |
-| R5 | Markdown preview panel next to the terminal, mermaid diagrams rendered | M | 84% of file paths in answers are markdown |
-| R6 | File editing in a GUI panel: mouse, selection, save | M | new |
-| R7 | Command completion and history in zsh | M | shell setup, documented |
-| R8 | Agent control CLI `tarn`: list sessions, open a file in the panel, notify, focus a session | M | new |
-| R9 | Click on a file path in terminal output opens the file in the panel; absolute, `~/` and relative paths | S | new |
-| R10 | Several agents per project shown as separate sessions | S | new |
-| R11 | HTML and PDF in the same panel | later | 5 PDF paths, HTML opened in a browser |
-| R12 | Editor-like prompt input: mouse, selection, multi-line | S | Claude Code itself, verify |
-| R13 | SSH sessions in the sidebar, surviving a dropped connection | later | 3-4 mentions |
-| R14 | Phone access to waiting sessions outside the home network, free | S | outside the app, documented |
-| R15 | `tarn new` opens a session in a project with an entry prompt; `tarn send` puts text into another session's input | M | 50+ manual hand-overs |
-| R16 | `tarn run` shows a command in a panel, runs it after the user presses Enter, returns the output to the agent | M | ~35 pasted outputs |
-| R17 | Subagent panel inside a session: which subagents run and what they do | S | 14 requests |
-| R18 | Tracker connector: the sidebar shows the `tk` task of each session; a task `ask` marks the session as waiting; `tk` can focus or start a session | S | `tk` already links tasks to session ids |
+| R1 | Tabs and a simple split | first, upstream | - |
+| R2 | Full-screen TUIs work completely, with mouse and trackpad: Claude Code, `tk` | first, upstream, verify | Warp breaks TUI navigation |
+| R5 | Markdown preview panel next to the terminal, mermaid rendered, no network | first | 84% of file paths in answers are markdown |
+| R7 | Command completion and history in zsh | first, setup guide | - |
+| R9 | Click on a file path in terminal output opens it in the panel; absolute, `~/` and relative paths | first | ~25 complaints about opening files |
+| R3 | Sidebar with all sessions: project, branch, state | first | median 5 parallel sessions, peak 16 |
+| R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
+| R10 | Several agents per project shown as separate sessions | first | - |
+| R4 | One notification per need; jump to the next session that needs the user by a shortcut or a click | first | 13.5% of replies come after more than 10 min |
+| R12 | Editor-like prompt input | first, Claude Code itself, verify | - |
+| R6 | File editing in a GUI panel | second | - |
+| R15 | `tarn new` and `tarn send`: hand-over between sessions | second | 50+ manual hand-overs |
+| R16 | `tarn run`: a command for the user with output back to the agent | second | ~35 pasted outputs |
+| R17 | Subagent panel inside a session | second | 14 requests |
+| R18 | Tracker connector: the `tk` task of each session in the sidebar | second | `tk` links tasks to session ids |
+| R11 | HTML and PDF in the panel | later | 5 PDF paths, HTML opened in a browser |
+| R13 | SSH sessions in the sidebar | later | 3-4 mentions |
+| R14 | Phone access to waiting sessions, free, outside the home network | later, guide | - |
 
 Out of scope:
 
@@ -65,88 +65,101 @@ Out of scope:
 - team features, paid plans, theme or plugin store;
 - a full IDE: debugger, project system, extensions;
 - session restore after quitting the app: the user keeps the terminal open;
+- agents inside tmux in the first version: the surface key does not survive tmux (section 12);
+- an agent moving the user's focus;
 - Linux and Windows.
 
 ## 2. Architecture
 
 ```mermaid
 flowchart LR
-  cc["Claude Code hooks"] -->|"tarn hook, JSON"| sock[("Control socket")]
-  agent["Agent CLI calls"] -->|"tarn cmd"| sock
+  plug["Claude Code plugin hooks"] -->|"tarn hook, JSON"| sock[("Control socket")]
+  agent["Agent: tarn open, ls, notify"] -->|"JSON line"| sock
   sock --> reg["Session registry"]
   core["Ghostty core events"] --> reg
-  tk["tk CLI"] -->|"task, ask, JSON"| reg
   reg --> side["Sidebar"]
-  reg --> note["Notifications"]
-  side -->|"focus"| term["Ghostty terminal view"]
-  term -->|"path click"| panel["File panel"]
-  sock -->|"open, run"| panel
+  reg -->|"one per need"| note["Ghostty notification route"]
+  side -->|"click, shortcut"| term["Terminal view"]
+  term -->|"path click"| panel["Markdown panel"]
+  sock -->|"open file"| panel
 ```
 
-Hooks, agent commands and tracker data meet in the registry; it is the only owner of session state.
+Hooks and agent commands enter through one socket; the registry is the only owner of session state; notifications reuse Ghostty's own route.
 
 | Block | Responsibility | Talks to |
 | --- | --- | --- |
-| Ghostty core and app (upstream) | rendering, input, tabs, splits, core events | registry via insertion points |
-| Control socket | unix socket of the running app; one JSON line per request | `tarn` CLI, registry, panels |
-| `tarn` CLI | thin client: `hook`, `ls`, `open`, `notify`, `focus`, `new`, `send`, `run` | control socket |
+| Ghostty core and app (upstream) | rendering, input, tabs, splits, core events, notification route | registry via insertion points |
+| Control socket | unix socket of the running app; one JSON line per request and per reply | `tarn` CLI, registry, panel |
+| `tarn` CLI | thin client inside the app bundle: `hook`, `open`, `ls`, `notify` | control socket |
+| Claude Code plugin | ships the hook configuration that calls `tarn hook` | Claude Code |
 | Session registry | one record per terminal surface; agent state machine | sidebar, notifications |
-| Sidebar | sessions with state and task; click or shortcut focuses the surface | registry, terminal view |
-| File panel | markdown preview with mermaid, text editing | terminal view, socket |
-| Command panel | shows a command from `tarn run`, runs it on Enter, sends output back | socket, terminal view |
-| Tracker connector | reads `tk` tasks claimed by each session through the `tk` CLI | `tk`, registry |
-| Subagent panel | subagents of the focused session: type, current tool, last answer | registry |
+| Sidebar | sessions with state; click or shortcut focuses the surface | registry, terminal view |
+| Markdown panel | read-only preview of markdown, mermaid included | terminal view, socket |
 
-- Initiator: Claude Code hooks, agent commands and the user. Source of truth for agent state: hook events and `tk` asks; for cwd and title: Ghostty core events.
-- State owner: session registry, in memory only. External side effects: system notifications.
+- Initiator: Claude Code hooks, agent commands and the user. Source of truth for agent state: hook events; for cwd and title: Ghostty core events.
+- State owner: session registry, in memory only. External side effects: system notifications through Ghostty.
 
 ### 2.1 Fork rules
 
-1. Our Swift code lives in `macos/Sources/Features/Tarn/`. Upstream files change only at insertion points listed in `docs/architecture.md`.
+1. Our Swift code lives in `macos/Sources/Features/Tarn/`, our tests in `macos/Tests/Tarn/`, our make targets in `tarn.mk`. Upstream files change only at insertion points listed in `docs/architecture.md`.
 2. `main` carries our work. `upstream/main` is merged in on a schedule; a merge that touches an insertion point gets its own commit.
-3. Our docs live in `docs/`, which upstream does not have. Upstream `README.md` and `AGENTS.md` stay untouched; our agent profile is `.claude/CLAUDE.md`.
+3. Our docs live in `docs/`, which upstream does not have. Upstream `README.md`, `AGENTS.md` and `Makefile` stay untouched; our agent profile is `.claude/CLAUDE.md`.
+4. Where Ghostty already has a function (AppleScript `focus`, `input text`, `new tab`, notification route), our code calls it instead of a port.
 
-### 2.2 Session registry
+### 2.2 Control socket and error rule
+
+1. Path `~/Library/Application Support/tarn/tarn.sock`, mode 0600. On start the app removes a stale socket file and binds anew. Any local process of the user can talk to it: an accepted cost.
+2. Request and reply are one JSON line each, with a `version` field. A version mismatch is an error reply.
+3. Error rule for every component: the error goes to the log (`os_log`, subsystem `tarn`) with command, surface and reason; the caller gets `{"ok": false, "error": "<text>"}` and the CLI exits with 1; the app never crashes on bad input and state does not change. Exception: `tarn hook` (2.3).
+
+### 2.3 Hook bridge
+
+1. Purpose: turn Claude Code hook events into registry updates without ever slowing the agent.
+2. Input: hook JSON on stdin (`session_id`, `cwd`, `hook_event_name`, `notification_type`). Output: one line to the socket.
+3. How it works:
+   1. The `tarn` plugin for Claude Code registers `tarn hook` for `UserPromptSubmit`, `PostToolUse`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `SessionEnd`.
+   2. `tarn hook` reads `TARN_SURFACE`, which the app sets in the environment of each surface.
+   3. It sends the event with the surface id and exits.
+4. Rules, for any input: exit code 0; nothing on stdout or stderr; the whole run within 100 ms, connect and write included; no `TARN_SURFACE` or no socket means an immediate exit; errors go only to the log. The plugin never edits `~/.claude/settings.json`.
+
+### 2.4 Session registry
 
 1. Purpose: one place that knows every session and its agent state.
-2. Input: core events per surface (pwd, title, notification, bell, child exited, command finished); hook events with `session_id`, `cwd`, event name; `tk` tasks. Output: session list for the sidebar and the CLI; state changes for notifications.
+2. Input: core events per surface (pwd, title, child exited, surface closed, focus); hook events. Output: session list for the sidebar and `tarn ls`; transitions for notifications.
 3. How it works:
    1. A new surface creates a record in state `idle`.
-   2. A hook event is matched to a surface by the surface id passed in the environment of the shell (`TARN_SURFACE`).
-   3. The event moves the record through the state machine of section 8.
-   4. A transition into `waiting` or `done` raises a notification when the surface is not focused.
-4. Rules: one writer (main actor); an event for an unknown surface is dropped and logged; a repeated event in the same state changes nothing.
+   2. A hook event is matched to its record by surface id; the event moves the record by the table of section 8.
+   3. A transition into `permission` or `waiting` raises one notification when the surface is not focused, by Ghostty's own focus rule.
+   4. Focusing a surface sets `seen` on its record.
+4. Rules: one writer (main actor); an event for an unknown surface is dropped and logged; a repeated event in the same state changes nothing and raises nothing.
 
-### 2.3 File panel
+### 2.5 Markdown panel
 
-1. Purpose: read and edit files next to a session without another app.
-2. Input: a path from a click, a `tarn open` call or a shortcut. Output: the file shown or saved.
-3. How it works: markdown is rendered to HTML with mermaid diagrams and shown in WKWebView; text files open in an NSTextView-based editor with syntax highlighting. HTML and PDF come later (R11).
-4. Rules: the panel never writes a file the user did not save; a file changed on disk while open is reloaded or flagged, never silently overwritten.
-
-### 2.4 Tracker connector
-
-1. Purpose: show what each session works on and let the tracker and the terminal drive each other.
-2. Input: `tk` tasks whose `claim` is `claude:<session_id>`; the same `session_id` arrives in hook events. Output: task id, title, summary and `ask` on the session record.
-3. How it works:
-   1. On a hook event and on a timer, the connector runs `tk list --json` and keeps tasks with a non-empty `claim`.
-   2. A task whose claim matches a session's `agentSessionID` is attached to that session.
-   3. A non-empty `ask` moves the session to `waiting` with the ask text.
-   4. From the `tk` board, a task opens its session through `tarn focus`, or starts one through `tarn new` with the entry prompt `take T-<n>`.
-4. Rules: the connector only reads `tk` through its CLI, never the `~/tasks` files; `tk` missing or failing leaves the sidebar without task lines, nothing else changes. Changes on the `tk` side are tasks of the tracker project.
+1. Purpose: read a markdown file next to a session without another app.
+2. Input: a path from a click, `tarn open` or a shortcut. Output: the rendered file.
+3. How it works: markdown is rendered to HTML with highlight and mermaid from vendored assets and shown in WKWebView. When the file changes on disk, the panel re-renders it; the panel is read-only, so there is nothing to lose.
+4. Rules: no network: a `WKContentRuleList` blocks every non-file load; raw HTML inside markdown is escaped; links open in the system browser. Files over 5 MB or not UTF-8 get a one-line notice instead of a render.
 
 ## 3. Scenarios
 
 | Scenario | Start and steps | Result |
 | --- | --- | --- |
-| Happy path | 5 sessions run; Claude Code in session 3 asks for permission | sidebar marks session 3 `waiting`, notification names the project; click focuses session 3 |
+| Happy path | 5 sessions run; Claude Code in session 3 asks for permission | sidebar marks session 3 `permission`; one notification names the project; a click focuses session 3 |
+| Approval | the user approves in session 3 | `PostToolUse` moves it to `working`; the mark goes away |
+| Finished | Claude Code stops; a minute later `idle_prompt` arrives | `Stop` moves it to `waiting` with one notification; `idle_prompt` changes nothing |
+| Interrupted | the user presses Esc, no `Stop` arrives | `idle_prompt` later moves the session to `waiting`; the next prompt moves it to `working` |
 | Repeat | the same hook event arrives twice | state unchanged, one notification |
-| Temporary error | the app is not running when a hook fires | `tarn hook` exits 0 within 100 ms; Claude Code is not blocked |
-| Permanent error | hooks are not installed for a session | the session shows `idle` from core events only, never a wrong agent state |
-| File conflict | an agent rewrites a file open in the editor | the panel flags the change and offers reload; unsaved edits are kept |
-| Hand-over | an agent runs `tarn send <session> "<text>"` | the text appears in the target input; nothing is submitted until the user presses Enter |
-| Command for the user | an agent runs `tarn run "<command>"` | the command panel shows it; it runs only on the user's Enter; the agent gets exit code and output |
-| Task asks | an agent sets `ask` on its `tk` task | the session shows `waiting` with the ask text, even without a hook event |
+| App not running | a hook fires while tarn is closed or Claude runs in another terminal | `tarn hook` exits 0 at once; Claude Code is not slowed |
+| App hangs | the socket accepts but the app does not read | `tarn hook` gives up at 100 ms and exits 0 |
+| Hooks not installed | the plugin is missing | the session stays `idle` from core events only, never a wrong agent state |
+| Bad request | junk JSON or unknown command on the socket | error reply, log line, state unchanged |
+| Notifications denied | macOS has not allowed notifications | the sidebar still marks sessions; one log line |
+| Remote image | an opened markdown file links an `https://` image | no request leaves the machine; the image shows as a link |
+| File rewritten | an agent rewrites a file open in the panel | the panel re-renders it |
+| Agent asks for attention | an agent runs `tarn notify "<text>"` | its own session (by `TARN_SURFACE`) gets the note and one notification; the same text again raises nothing; focus does not move; focusing the session clears the note |
+| No duplicates | Claude Code also sends its terminal notification for the same need | the terminal notification of a live agent session is suppressed; the user sees one notification |
+| Path click | the user clicks `docs/spec.md:12` in agent output | the path resolves against the surface cwd; a markdown file opens in the panel; any other file opens in its default macOS app; a missing file shows a one-line notice |
+| Subagent event | a subagent finishes a tool while the main agent waits for permission | events carrying `agent_id` do not change the session state in the first version |
 
 ## 4. Data and states
 
@@ -154,9 +167,8 @@ See section 8.
 
 ## 5. Code model
 
-- `Session`: `surfaceID` (Ghostty surface, key), `agentSessionID` (Claude Code `session_id`, empty until the first hook), `cwd`, `project` (git root folder name), `branch` (empty outside git), `state`, `task` (`tk` id, title and ask; empty without a claim), `updatedAt`.
-- `AgentState`: `idle`, `working`, `waiting`, `done`.
-- `Subagent`: `agentID` (hook `agent_id`, key within a session), `agentType`, `currentTool` (last `PreToolUse` with this `agent_id`), `lastAnswer` (from `SubagentStop`), `state` (`running`, `done`).
+- `Session`: `surfaceID` (Ghostty surface UUID, key), `agentSessionID` (Claude Code `session_id`, empty until the first hook and after `SessionEnd`), `cwd`, `project` (git root folder name), `branch` (empty outside git), `state`, `stateSince` (time of entering the current state), `seen` (the user focused the surface since `stateSince`), `failed` (last stop was `StopFailure`), `note` (text from `tarn notify`, cleared on focus).
+- `AgentState`: `idle`, `working`, `permission`, `waiting`.
 
 ## 6. Stages
 
@@ -164,55 +176,76 @@ See section 13.
 
 ## 7. Acceptance
 
-- Command: `make check` in the fork runs upstream `zig build test` filtered to touched areas, our Swift unit tests and `swiftlint lint --strict`. Until it is green, the stage is not done.
-- Benchmark: `make bench` compares startup, input latency and memory with upstream Ghostty built from the same commit. Method and thresholds are set in stage S0.
-- Test scenarios: section 3 rows run against the registry with recorded hook payloads and a stub `tk`.
-- Not automated: look of the sidebar and panels, trackpad scrolling in TUIs - the user checks by eye at each stage.
+- Command: `make -f tarn.mk check` runs `swiftlint lint --strict` on our folders, `macos/build.nu --action test` and the hook bridge tests. Until it is green, the stage is not done.
+- Benchmark: `make -f tarn.mk bench` compares startup, input latency, idle CPU and memory with upstream Ghostty built from the same commit. It runs before a release and does not block a stage; thresholds are set in S0.
+
+| Section 3 rows | Level | How |
+| --- | --- | --- |
+| Happy path, Approval, Finished, Interrupted, Repeat | unit | registry fed with recorded hook payloads |
+| App not running, App hangs, Hooks not installed | unit | `tarn hook` against no socket, a socket that never reads, junk stdin |
+| Bad request | unit | socket handler with junk lines |
+| Remote image, File rewritten | unit | panel model with the rule list and a file watcher stub |
+| Notifications denied, Agent asks for attention, No duplicates | unit | notification gate with a stub center and a recorded OSC notification |
+| Path click | unit | path resolver with a cwd and the `path:line:col` forms |
+| Subagent event | unit | registry fed with events that carry `agent_id` |
+| Look of sidebar and panel, trackpad in TUIs | user | by eye at each stage |
+
 - Not checked: Linux and Windows builds.
 
 ## 8. State model
 
-| Entity | States and transitions | Frozen | Single writer | Storage |
+| Event | from `idle` | from `working` | from `permission` | from `waiting` |
 | --- | --- | --- | --- | --- |
-| `Subagent` | `running` on `SubagentStart`; `done` on `SubagentStop`; removed with its session | `agentID`, `agentType` | session registry | memory |
-| `Session` | `idle -> working` on prompt submit; `working -> waiting` on permission or idle prompt, or a `tk` ask; `waiting -> working` on next prompt; `working -> done` on stop; any state removed on child exit | `surfaceID` | session registry | memory |
+| `UserPromptSubmit` | `working` | - | `working` | `working` |
+| `PostToolUse` | `working` | - | `working` | `working` |
+| `Notification` `permission_prompt`, `PermissionRequest` | `permission` | `permission` | - | `permission` |
+| `Stop` | `waiting` | `waiting` | `waiting` | - |
+| `StopFailure` | `waiting`, `failed` | `waiting`, `failed` | `waiting`, `failed` | `failed` |
+| `Notification` `idle_prompt` | `waiting` | `waiting` | - | - |
+| `SessionEnd`, child exited | - | `idle` | `idle` | `idle` |
+
+`-` means no change. Every change resets `stateSince` and `seen`; any move to `working` clears `failed`. Events that carry `agent_id` (subagents) are ignored in the first version. A closed surface removes the record. Entity storage: memory; single writer: the registry. Unknown `notification_type` values are logged and ignored.
+
+`tarn notify` is not a state change: it sets `note` on the caller's own record; focusing the surface clears it.
+
+Known limit: Claude Code sends no event when the user approves a permission, so after approving a long command the session shows `permission` until the command ends and `PostToolUse` arrives. Revisit if Claude Code adds an approval event.
+
+Jump order for R4: `waiting` with `failed`, then `permission`, then `waiting` or a non-empty `note`; within a group unseen first, then the oldest `stateSince`. Sessions in `idle` or `working` without a note are skipped.
 
 ## 9. External facts and code sources
 
 | System | Fact | Source, date | If not so |
 | --- | --- | --- | --- |
-| Ghostty build | Zig 0.17.0 minimum; Xcode and macOS SDK as named in `HACKING.md` | `build.zig.zon:6`, `HACKING.md:52`, 2026-10-21 | S0 pins versions |
+| Ghostty build | Zig 0.17.0 minimum; the macOS app builds and tests through `macos/build.nu`, not `zig build` | `build.zig.zon:6`, `macos/AGENTS.md`, 2026-10-21 | S0 pins versions |
 | Ghostty churn | 142 commits touched `macos/` in 90 days | `git log --since=2026-07-23 -- macos`, 2026-10-21 | merge schedule changes |
-| Ghostty core events | pwd, title, notification, bell, child exited, progress, command finished reach the app through a C callback | `src/apprt/action.zig`, `macos/Sources/Ghostty/Ghostty.App.swift`, 2026-10-21 | registry needs its own parsing |
-| Claude Code hooks | events `UserPromptSubmit`, `Stop`, `Notification` (`notification_type` such as `permission_prompt`, `idle_prompt`; `message`, `title`), `PermissionRequest`, `SessionEnd`; every event carries `session_id`, `cwd`, `transcript_path`, `hook_event_name` | code.claude.com/docs/en/hooks, 2026-10-21 | state machine changes |
+| Ghostty core events | notification, title, pwd, bell, child exited, progress, command finished reach the app | `src/apprt/action.zig:203-333`, `macos/Sources/Ghostty/Ghostty.App.swift:653-780`, checked by review | registry needs its own parsing |
+| Ghostty surfaces | each surface has a stable UUID; per-surface environment variables are supported; close is an event | `AppDelegate.swift:969-977`, `SurfaceView.swift:591`, `Ghostty.App.swift:293`, checked by review | surface key changes |
+| Ghostty notifications | a notification is bound to a surface, shown only when it is not focused, a click focuses it | `Ghostty.App.swift:551-563,1620-1640`, `AppDelegate.swift:948-955`, checked by review | our own route needed |
+| Ghostty AppleScript | `focus`, `input text`, `new tab` with working directory and command | `macos/Ghostty.sdef:86-227` | second wave writes its own |
+| Claude Code hooks | every event carries `session_id`, `cwd`, `transcript_path`, `hook_event_name`; `Notification` adds `notification_type`, `message`, `title`; subagent events carry `agent_id`, `agent_type` | code.claude.com/docs/en/hooks, 2026-10-21 | state table changes |
 | Claude Code OSC 7501 | state escape sequence is not passed through tmux | code.claude.com/docs/en/terminal-config, 2026-10-21 | hooks stay the only source |
-| `tk` claims | `claim` and `Actor` are `<agent>:<full session id>`, taken from `CLAUDE_CODE_SESSION_ID`; `tk list --json` returns `id`, `title`, `project`, `status`, `claim`, `ask` per task | tracker `docs/spec.md` section 2.4; `tk list --json`, 2026-10-21 | connector needs another join key |
-| Claude Code subagent hooks | `SubagentStart` and `SubagentStop` carry `agent_id`, `agent_type`; `SubagentStop` adds `last_assistant_message` and `agent_transcript_path`; any hook fired inside a subagent carries `agent_id` | code.claude.com/docs/en/hooks, 2026-10-21 | R17 needs transcript parsing |
+| `tk` | `claim` is `<agent>:<session id>`; `tk list --json` returns `id`, `title`, `project`, `status`, `claim`, `ask` | tracker `docs/spec.md` 2.4; `tk list --json`, 2026-10-21 | second wave changes |
 
-Code sources. Four reference projects were picked from seven MIT agent terminals on libghostty by the same quality signals (GitHub tree, 2026-10-21): tests per source file, share of files over 40 KB, CI, lint, developer docs, contributors. Ported code keeps its copyright and an entry in `THIRD_PARTY.md`.
+Code sources. Four reference projects were picked from seven MIT agent terminals on libghostty by the same quality signals (GitHub tree, 2026-10-21). Ported code keeps its copyright and an entry in `THIRD_PARTY.md`.
 
-| Project | Why | Tests per file | Files over 40 KB | CI, lint, docs | Contributors |
-| --- | --- | --- | --- | --- | --- |
-| [agterm](https://github.com/umputun/agterm) | the only multi-author project; control socket and agent status close to R3, R8 | 1.07 | 6% | yes, yes, architecture | 45 |
-| [Limpid](https://github.com/nek0der/limpid) | smallest files, full docs; jump order matches R4 exactly | 0.43 | 1.6% | 9 workflows, yes, architecture | 2 |
-| [termio](https://github.com/termio-sh/termio) | markdown and editor for R5, R6 | 0.49 | 13% | 6 workflows, yes, architecture | 11 |
-| [Calyx](https://github.com/yuuichieguchi/Calyx) | densest tests; agent state and notification routing | 1.29 | 4% | yes, no, contributing only | 1 |
+| Project | Tests per file | Files over 40 KB | CI, lint, docs | Contributors |
+| --- | --- | --- | --- | --- |
+| [agterm](https://github.com/umputun/agterm) | 1.07 | 6% | yes, yes, architecture | 45 |
+| [Limpid](https://github.com/nek0der/limpid) | 0.43 | 1.6% | 9 workflows, yes, architecture | 2 |
+| [termio](https://github.com/termio-sh/termio) | 0.49 | 13% | 6 workflows, yes, architecture | 11 |
+| [Calyx](https://github.com/yuuichieguchi/Calyx) | 1.29 | 4% | yes, no, contributing only | 1 |
 
-Dropped by the same signals: kooky (no CI, lint or docs, 10% of files over 40 KB), Vesta (2 test files), Conterm (few tests, no lint or docs). cmux (GPL) and Mux0 (copying forbidden) give ideas only.
+Dropped by the same signals: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (copying forbidden) give ideas only.
 
 | Stage | Need | Source | Use |
 | --- | --- | --- | --- |
-| S1 | control socket: newline-delimited JSON, socket path and session id from the environment | agterm `ControlServer.swift`, `agtermCore` protocol and dispatcher, `agtermctl` | adapt: decouple from their `AppStore` |
-| S1 | agent status from Claude Code hooks, hook installer | agterm `AgentStatus.swift` (161 lines), `AgentHooksInstaller.swift`; Calyx `AgentStateResolver` to cross-check | adapt |
-| S2 | jump order: error, needs input, finished; unseen first, then oldest | Limpid `AttentionState.swift` (`jumpToAttention`) | port |
-| S2 | notification and click routing to the pane | Calyx `PaneNotificationLedger`, `NotificationClickRouter`; agterm `NotificationManager.swift` | adapt |
-| S3 | markdown to HTML with highlight, KaTeX and mermaid vendored, no CDN | termio `MarkdownHTML.swift` on [swift-markdown](https://github.com/swiftlang/swift-markdown) (Apache-2.0) | port |
-| S3 | path parsing `path:line:col` | none of the four checked yet; fallback kooky `TerminalOpenTarget.swift` (228 lines, Foundation only, tested) | check first |
-| S4 | syntax highlighting in NSTextView | termio `HighlightedTextView` with vendored Highlightr | port |
-| S4 | conflict with a file changed on disk | none found | write |
-| S5 | text into another session's input | agterm `session.type` (`injectText`) as idea; Enter never sent | write |
-| S5 | command for the user with output back to the agent | none found | write |
-| S6 | subagent panel | none found | write |
+| S1 | markdown to HTML, highlight and mermaid vendored, no CDN | termio `MarkdownHTML.swift` (890 lines) on [swift-markdown](https://github.com/swiftlang/swift-markdown) (Apache-2.0) | port |
+| S1 | path parsing `path:line:col` | kooky `TerminalOpenTarget.swift` (228 lines, Foundation only, tested), the one file taken from it | port |
+| S1 | socket: newline-delimited JSON, path from the environment | agterm `ControlServer.swift`, `agtermCore` protocol | adapt |
+| S2 | agent status from hooks | agterm `AgentStatus.swift` (161 lines); Calyx `AgentStateResolver` to cross-check | adapt to section 8 |
+| S2 | hooks shipped as a Claude Code plugin | the `tk` plugin layout | reuse the layout |
+| S3 | jump order | Limpid `AttentionState.swift` (`jumpToAttention`) | port, map to section 8 |
+| S3 | notification and click route | Ghostty itself | call |
 
 ## 10. Requirement traceability
 
@@ -220,63 +253,67 @@ Dropped by the same signals: kooky (no CI, lint or docs, 10% of files over 40 KB
 | --- | --- | --- | --- |
 | Tabs and simple split | R1 | S0 | plan |
 | TUIs with mouse and trackpad | R2 | S0 | plan |
-| Session overview with state | R3 | S1 | plan |
-| Jump to waiting session | R4 | S2 | plan |
-| Markdown preview | R5 | S3 | plan |
-| GUI file editing | R6 | S4 | plan |
-| Shell completion and history | R7 | S0 docs | plan |
-| Agent-first control | R8 | S1-S3 | plan |
-| Click on path | R9 | S3 | plan |
-| Several agents per project | R10 | S1 | plan |
-| HTML and PDF | R11 | later | moved by session data |
-| Editor-like input | R12 | S0 verify | plan |
-| SSH sessions | R13 | later | moved by session data |
-| Phone access | R14 | later docs | plan |
-| Hand-over between sessions | R15 | S5 | plan |
-| Command for the user | R16 | S5 | plan |
-| Subagent panel | R17 | S6 | plan |
-| Tracker connector | R18 | S6 | plan |
+| zsh completion and history | R7 | S0 | plan |
+| Editor-like input | R12 | S0 | plan |
+| Markdown preview | R5 | S1 | plan |
+| Click on path | R9 | S1 | plan |
+| Agent CLI | R8 | S1-S3 | plan |
+| Session overview with state | R3 | S2 | plan |
+| Several agents per project | R10 | S2 | plan |
+| Jump and notifications | R4 | S3 | plan |
+| GUI editing, hand-over, command for the user, subagents, tracker | R6, R15-R18 | second wave | scoped |
+| HTML and PDF, SSH, phone | R11, R13, R14 | later | moved by session data |
 
-- R3 state. When Claude Code in a session sends `Notification` with `permission_prompt`, then the session shows `waiting` until the next `UserPromptSubmit`.
-- R4 jump. When two sessions wait, then the jump shortcut focuses the one that started waiting first.
-- R15 send. When an agent sends text to a session, then the text stands in that session's input and is not submitted.
+- R3 state. When a session gets `permission_prompt`, then it shows `permission` until `UserPromptSubmit` or `PostToolUse`.
+- R4 jump. When one session failed and two wait, then the jump focuses the failed one first, then the unseen waiting one that started waiting earlier.
+- R5 no network. When a markdown file links a remote image, then no request leaves the machine.
+- R9 path. When the user clicks a relative path in a surface whose cwd is `/a/b`, then the file `/a/b/<path>` opens; a markdown file in the panel, any other in its default app.
 
 ## 11. Text samples
 
-Draft, to be agreed:
-
 - Notification title `<project>`, body `Needs your permission`.
-- Notification title `<project>`, body `Waiting for your input`.
-- Notification title `<project>`, body `Done`.
-- `tarn ls` row: `3  tarn  main  waiting  2m  T-22`.
+- Notification title `<project>`, body `Waiting for you`.
+- Notification title `<project>`, body `Failed, see the session`.
+- Notification title `<project>`, body: the text of `tarn notify`.
+- `tarn ls` row: `3  tarn  main  permission  2m`; `tarn ls --json` returns the `Session` fields.
+- `tarn open` on a missing file: `tarn: no such file: <path>`, exit code 1.
 
 ## 12. Decisions and open questions
 
 - Decided: fork Ghostty and add features in its Swift app - trusted core, notarized upstream, small Swift part; rejected: fork kooky (prebuilt engine from a cmux fork, root helper with NOPASSWD sudoers, edits other agents' settings), cmux (GPL and BSL, cloud), agterm, Calyx and other agent terminals (decided to build our own; their MIT code is used per section 9); affects: every upstream merge; revisit if merges cost more than a day a month.
-- Decided: agent state from Claude Code hooks, not screen parsing or OSC 7501 - hooks carry session id and work inside tmux; rejected: OSC 7501 (blocked by tmux), screen parsing (fragile); revisit if Claude Code adds a terminal-side state API.
-- Decided: registry in memory, no persistence - the user keeps the terminal open; revisit if restore after quit becomes a need.
-- Decided: upstream `AGENTS.md` and `README.md` stay untouched, our agent profile is `.claude/CLAUDE.md` - no merge conflicts; rejected: replacing `AGENTS.md` (conflicts on every upstream change).
-- Decided: the project is public from the start; everything in the repository is in English.
-- Decided: agent commands `new`, `send`, `run` join the CLI (R15, R16) - session data shows 50+ manual hand-overs and ~35 pasted outputs; `send` and `run` never press Enter for the user, so one session cannot act in another without the user; rejected: raw key sending.
-- Decided: the tracker connector talks to `tk` only through its CLI and JSON output - two independent projects, `tk` keeps its rule of writes through its core; rejected: reading `~/tasks` files (couples to the file format).
-- Decided: HTML, PDF (R11) and SSH (R13) move to later - session data: 5 PDF paths, HTML opened in a browser, 3-4 SSH mentions.
-- Decided: the name is `tarn` (a small mountain lake: small, clear, quiet) - no namesakes among terminals and agent tools on GitHub, Homebrew, Product Hunt or the web, checked 2026-10-21; rejected: `lull` (a Product Hunt tool for coding-agent sessions), `wisp` (wispterm, a terminal for agents), `aerie` (a macOS productivity app). Trademarks and domains not checked.
-- Decided: tarn starts the login shell, zsh; R7 is a setup guide for zsh-autosuggestions and fzf, no terminal code.
+- Decided: the name is `tarn` (a small mountain lake: small, clear, quiet) - no namesakes among terminals and agent tools on GitHub, Homebrew, Product Hunt or the web, checked 2026-10-21; rejected: `lull` (a Product Hunt tool for coding-agent sessions), `wisp` (wispterm), `aerie` (a macOS productivity app). Trademarks and domains not checked.
+- Decided: the project is public; everything in the repository is in English. Upstream `AGENTS.md`, `README.md`, `Makefile` stay untouched; our profile is `.claude/CLAUDE.md`.
+- Decided: first version in the order core, markdown, sessions, notifications - markdown is what the user uses all the time; the second wave (R6, R15-R18) is designed after the first ships.
+- Decided: agent state from Claude Code hooks - hooks carry the session id; rejected: OSC 7501 (blocked by tmux), screen parsing (fragile); revisit if Claude Code adds a terminal-side state API.
+- Decided: hooks ship as a Claude Code plugin, like `tk` - nothing edits `~/.claude/settings.json`; rejected: an installer that edits settings (the reason kooky was rejected), a manual guide (no updates).
+- Decided: notifications come only from tarn, one per need, through Ghostty's route; terminal notifications (OSC 9, 777) from a surface with a live agent session, that is a record with a non-empty `agentSessionID`, are suppressed - tarn names the project and the need; rejected: Claude Code's own notifications (no context), both (duplicates).
+- Decided: "finished" and "waiting for input" are one state `waiting`; `permission` stays separate as urgent - for the user both mean "the session waits for me"; rejected: separate states with a reminder.
+- Decided: agents never move focus; `tarn notify` marks the session and notifies; the user jumps - keystrokes never land in the wrong session; rejected: agent focus always or when the app is inactive.
+- Decided: agents inside tmux are out of the first version - the shell inside tmux inherits `TARN_SURFACE` from the tmux server, so events would land on the wrong record; revisit with R13 using the client tty as the key.
+- Decided: registry in memory, no persistence - the user keeps the terminal open.
+
+Open for the second wave, from the spec review of 2026-10-21 (resolve before designing R6, R15-R18):
+
+1. `tarn send`: a target without bracketed paste executes newlines; the text needs encoding per paste mode (`src/Surface.zig:3431`, `paste.zig:109-113`).
+2. Session address in the CLI: `tarn ls` numbers shift; commands need the surface UUID or the Claude session id.
+3. `tarn run`: timeout, sudo, large output, parallel calls, where the command runs, whether the user can edit it.
+4. `tarn new`: whether the entry prompt is submitted; which `claude` command and permission mode; tab or split.
+5. Tracker `ask` versus hook state: `ask` is a field shown in the sidebar, not a state transition; polling `tk` at most once per N seconds; `/clear` changes the session id.
+6. Subagent records: closed by the parent's `Stop` when `SubagentStop` never comes; keep the last N.
+7. Editor: unsaved edits versus a file changed on disk, deleted file, write errors, binary and large files.
 
 ## 13. Slicing
 
 | Stage | Result | Depends on |
 | --- | --- | --- |
-| S0 | fork builds from source, `make check` and `make bench` baseline, R2 and R12 verified, shell setup doc for R7 | - |
-| S1 | `tarn` CLI with `hook` and `ls`, control socket, session registry, sidebar (R3, R8, R10) | S0 |
-| S2 | notifications and jump to waiting session (R4), `tarn notify`, `tarn focus` | S1 |
-| S3 | file panel with markdown and mermaid preview, path click, `tarn open` (R5, R9) | S1 |
-| S4 | editing in the panel (R6) | S3 |
-| S5 | `tarn new`, `tarn send`, `tarn run` with the command panel (R15, R16) | S2 |
-| S6 | tracker connector (R18), subagent panel (R17) | S2 |
-| later | HTML and PDF (R11), SSH sessions (R13), phone access guide (R14) | S3 |
+| S0 core | fork builds from source with `macos/build.nu`; `tarn.mk` with `check` and `bench`; baseline numbers against upstream; R1, R2, R12 verified by eye; zsh guide for R7; `docs/architecture.md` with the insertion point list | - |
+| S1 markdown | control socket, `tarn` CLI with `open`, markdown panel with mermaid and the no-network rule, path click (R5, R8 `open`, R9) | S0 |
+| S2 sessions | Claude Code plugin with hooks, hook bridge, session registry, sidebar, `tarn ls` (R3, R8 `ls`, R10) | S1 |
+| S3 attention | notifications through Ghostty's route, suppression of agent-surface terminal notifications, jump shortcut, `tarn notify` (R4, R8 `notify`) | S2 |
+| second wave | design R6, R15-R18 against the open list of section 12 | S3 |
+| later | R11, R13, R14 | - |
 
-Implementation is on hold while the tracker is in progress; this spec is the input for slicing when work resumes. Tasks go to `tk` under project `tarn`. S1 also measures the real token cost of one stage; later estimates use that number.
+Implementation starts after the tracker work; tasks are in `tk` under project `tarn`. S1 measures the real token cost of one stage; later estimates use that number.
 
 ## 14. Access and readiness
 
@@ -284,14 +321,14 @@ Implementation is on hold while the tracker is in progress; this spec is the inp
 | --- | --- | --- | --- | --- | --- |
 | Zig 0.17.0 | agent | install per `HACKING.md` | S0 | `zig version` | no |
 | Xcode and macOS SDK | user | installed: Xcode 27.0; upstream guide names Xcode 26 | S0 | `xcodebuild -version` | check in S0 |
+| nushell for `macos/build.nu` | agent | Homebrew | S0 | `nu --version` | no |
 | swiftlint | agent | Homebrew | S0 | `swiftlint version` | no |
-| Claude Code with hooks | user | installed | S1 | `claude --version` | yes |
-| `tk` with JSON output | user | installed | S6 | `tk list --json` | yes |
+| Claude Code with plugins | user | installed | S2 | `claude --version` | yes |
 
 Readiness for slicing:
 
 - [x] every entity has states, transitions, writer, storage;
-- [x] scenarios: happy path, repeat, temporary and permanent error;
-- [x] open questions answered;
-- [x] hook events for subagents checked (R17);
-- [x] reference projects picked (section 9).
+- [x] scenarios cover happy path, repeat, temporary and permanent errors, and the no-network rule;
+- [x] behavior questions of the first version answered;
+- [x] reference projects picked;
+- [ ] second-wave questions of section 12, before the second wave.
