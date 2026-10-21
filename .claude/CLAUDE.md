@@ -47,7 +47,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 | --- | --- |
 | Autonomy | agent decides technical questions within the spec; behavior questions, irreversible steps and spending subscription limits go to the user |
 | Subagents | a stage runs through `orchestrate`: plan, `spec-reviewer`, workers, `code-reviewer` thorough, `skeptic` by `regress` |
-| Tracker | `tk`, project `tarn`; stage plan in `docs/plans/<stage>.md` |
+| Tracker | tix, project `tarn`; stage plan in `docs/plans/<stage>.md` |
 | Subagent brief | `~/.claude/templates/subagent-brief.md` |
 | Findings file | `docs/findings.jsonl` |
 
