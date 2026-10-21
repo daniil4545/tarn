@@ -45,7 +45,7 @@ Requirements. M - must, S - should, later - out of the first version. "Session d
 | R4 | Jump to a waiting session in one action, also from a system notification | M | 13.5% of replies come after more than 10 min |
 | R5 | Markdown preview panel next to the terminal, mermaid diagrams rendered | M | 84% of file paths in answers are markdown |
 | R6 | File editing in a GUI panel: mouse, selection, save | M | new |
-| R7 | Command completion and history in the shell | M | shell setup, documented |
+| R7 | Command completion and history in zsh | M | shell setup, documented |
 | R8 | Agent control CLI `tarn`: list sessions, open a file in the panel, notify, focus a session | M | new |
 | R9 | Click on a file path in terminal output opens the file in the panel; absolute, `~/` and relative paths | S | new |
 | R10 | Several agents per project shown as separate sessions | S | new |
@@ -95,6 +95,7 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 | File panel | markdown preview with mermaid, text editing | terminal view, socket |
 | Command panel | shows a command from `tarn run`, runs it on Enter, sends output back | socket, terminal view |
 | Tracker connector | reads `tk` tasks claimed by each session through the `tk` CLI | `tk`, registry |
+| Subagent panel | subagents of the focused session: type, current tool, last answer | registry |
 
 - Initiator: Claude Code hooks, agent commands and the user. Source of truth for agent state: hook events and `tk` asks; for cwd and title: Ghostty core events.
 - State owner: session registry, in memory only. External side effects: system notifications.
@@ -128,7 +129,7 @@ Hooks, agent commands and tracker data meet in the registry; it is the only owne
 1. Purpose: show what each session works on and let the tracker and the terminal drive each other.
 2. Input: `tk` tasks whose `claim` is `claude:<session_id>`; the same `session_id` arrives in hook events. Output: task id, title, summary and `ask` on the session record.
 3. How it works:
-   1. On a hook event and on a timer, the connector asks the `tk` CLI for active tasks in JSON.
+   1. On a hook event and on a timer, the connector runs `tk list --json` and keeps tasks with a non-empty `claim`.
    2. A task whose claim matches a session's `agentSessionID` is attached to that session.
    3. A non-empty `ask` moves the session to `waiting` with the ask text.
    4. From the `tk` board, a task opens its session through `tarn focus`, or starts one through `tarn new` with the entry prompt `take T-<n>`.
@@ -155,6 +156,7 @@ See section 8.
 
 - `Session`: `surfaceID` (Ghostty surface, key), `agentSessionID` (Claude Code `session_id`, empty until the first hook), `cwd`, `project` (git root folder name), `branch` (empty outside git), `state`, `task` (`tk` id, title and ask; empty without a claim), `updatedAt`.
 - `AgentState`: `idle`, `working`, `waiting`, `done`.
+- `Subagent`: `agentID` (hook `agent_id`, key within a session), `agentType`, `currentTool` (last `PreToolUse` with this `agent_id`), `lastAnswer` (from `SubagentStop`), `state` (`running`, `done`).
 
 ## 6. Stages
 
@@ -172,6 +174,7 @@ See section 13.
 
 | Entity | States and transitions | Frozen | Single writer | Storage |
 | --- | --- | --- | --- | --- |
+| `Subagent` | `running` on `SubagentStart`; `done` on `SubagentStop`; removed with its session | `agentID`, `agentType` | session registry | memory |
 | `Session` | `idle -> working` on prompt submit; `working -> waiting` on permission or idle prompt, or a `tk` ask; `waiting -> working` on next prompt; `working -> done` on stop; any state removed on child exit | `surfaceID` | session registry | memory |
 
 ## 9. External facts and code sources
@@ -181,32 +184,35 @@ See section 13.
 | Ghostty build | Zig 0.17.0 minimum; Xcode and macOS SDK as named in `HACKING.md` | `build.zig.zon:6`, `HACKING.md:52`, 2026-10-21 | S0 pins versions |
 | Ghostty churn | 142 commits touched `macos/` in 90 days | `git log --since=2026-07-23 -- macos`, 2026-10-21 | merge schedule changes |
 | Ghostty core events | pwd, title, notification, bell, child exited, progress, command finished reach the app through a C callback | `src/apprt/action.zig`, `macos/Sources/Ghostty/Ghostty.App.swift`, 2026-10-21 | registry needs its own parsing |
-| Claude Code hooks | events `UserPromptSubmit`, `Stop`, `Notification` (`permission_prompt`, `idle_prompt`), `PermissionRequest`; JSON carries `session_id`, `cwd` | code.claude.com/docs/en/hooks, 2026-10-21 | state machine changes |
+| Claude Code hooks | events `UserPromptSubmit`, `Stop`, `Notification` (`notification_type` such as `permission_prompt`, `idle_prompt`; `message`, `title`), `PermissionRequest`, `SessionEnd`; every event carries `session_id`, `cwd`, `transcript_path`, `hook_event_name` | code.claude.com/docs/en/hooks, 2026-10-21 | state machine changes |
 | Claude Code OSC 7501 | state escape sequence is not passed through tmux | code.claude.com/docs/en/terminal-config, 2026-10-21 | hooks stay the only source |
-| `tk` claims | `claim` and `Actor` are `<agent>:<full session id>`, taken from `CLAUDE_CODE_SESSION_ID` | tracker `docs/spec.md` section 2.4, 2026-10-21 | connector needs another join key |
+| `tk` claims | `claim` and `Actor` are `<agent>:<full session id>`, taken from `CLAUDE_CODE_SESSION_ID`; `tk list --json` returns `id`, `title`, `project`, `status`, `claim`, `ask` per task | tracker `docs/spec.md` section 2.4; `tk list --json`, 2026-10-21 | connector needs another join key |
+| Claude Code subagent hooks | `SubagentStart` and `SubagentStop` carry `agent_id`, `agent_type`; `SubagentStop` adds `last_assistant_message` and `agent_transcript_path`; any hook fired inside a subagent carries `agent_id` | code.claude.com/docs/en/hooks, 2026-10-21 | R17 needs transcript parsing |
 
-Code sources, read in the source repositories on 2026-10-21. Ported code keeps its copyright and an entry in `THIRD_PARTY.md`.
+Code sources. Four reference projects were picked from seven MIT agent terminals on libghostty by the same quality signals (GitHub tree, 2026-10-21): tests per source file, share of files over 40 KB, CI, lint, developer docs, contributors. Ported code keeps its copyright and an entry in `THIRD_PARTY.md`.
 
-| Stage | Need | Source (MIT unless noted) | Lines | Use |
-| --- | --- | --- | --- | --- |
-| S1 | socket protocol: one JSON line each way, version field, size limits; CLI client | [kooky](https://github.com/iAmCorey/kooky) `KookyHookKit`: `CLIProtocol`, `CLIFrontend`, `Parser`, `KookyCLI/main.swift` | 234, 482, 444, 206 | port |
-| S1 | hook receiver on a unix socket, event bound to a surface id | kooky `KookyKit/Sessions/HookServer.swift` | 463 | adapt to the registry and `TARN_SURFACE` |
-| S1 | session aggregate for the sidebar | kooky `AgentMonitor.swift`; [Calyx](https://github.com/yuuichieguchi/Calyx) `AgentStateResolver` to cross-check | 525 | adapt |
-| S2 | system notification and jump to the tab | kooky `NotificationManager.swift`; Calyx `PaneNotificationLedger`, `NotificationClickRouter` | 95 | port kooky, Calyx as reference |
-| S2 | order "waiting longest first" | own code | - | write |
-| S3 | markdown to HTML with highlight, KaTeX and mermaid vendored, no CDN | [termio](https://github.com/termio-sh/termio) `MarkdownHTML.swift` on [swift-markdown](https://github.com/swiftlang/swift-markdown) (Apache-2.0) | 890 | port |
-| S3 | path parsing `path:line:col`, `path#Lline`, with tests | kooky `Terminal/TerminalOpenTarget.swift` | 228 | port |
-| S4 | syntax highlighting in NSTextView | termio `HighlightedTextView` with vendored Highlightr | 872 | port |
-| S4 | conflict with a file changed on disk | none found: termio checks only remote files | - | write |
-| later | HTML and PDF | termio `Browser/FilePreview.swift`, `PreviewWebView.swift`, `PDF/PDFReaderView.swift` without annotations | 157, 119, 518 | adapt |
+| Project | Why | Tests per file | Files over 40 KB | CI, lint, docs | Contributors |
+| --- | --- | --- | --- | --- | --- |
+| [agterm](https://github.com/umputun/agterm) | the only multi-author project; control socket and agent status close to R3, R8 | 1.07 | 6% | yes, yes, architecture | 45 |
+| [Limpid](https://github.com/nek0der/limpid) | smallest files, full docs; jump order matches R4 exactly | 0.43 | 1.6% | 9 workflows, yes, architecture | 2 |
+| [termio](https://github.com/termio-sh/termio) | markdown and editor for R5, R6 | 0.49 | 13% | 6 workflows, yes, architecture | 11 |
+| [Calyx](https://github.com/yuuichieguchi/Calyx) | densest tests; agent state and notification routing | 1.29 | 4% | yes, no, contributing only | 1 |
 
-Ideas only, code not taken:
+Dropped by the same signals: kooky (no CI, lint or docs, 10% of files over 40 KB), Vesta (2 test files), Conterm (few tests, no lint or docs). cmux (GPL) and Mux0 (copying forbidden) give ideas only.
 
-- cmux (GPL-3.0; BUSL-1.1 for its server parts): JSON lines over a socket, panel id in the environment, jump to unread.
-- Mux0 (source-available, copying forbidden): hook to `AF_UNIX` socket chain.
-- Calyx MCP server over TCP on loopback: R8 stays a unix socket.
-
-Not yet examined, MIT by search: Limpid (jump to the waiting agent), Vesta (sidebar, CLI over a unix socket), viterm, Conterm, agterm. Read them before S1 and S2.
+| Stage | Need | Source | Use |
+| --- | --- | --- | --- |
+| S1 | control socket: newline-delimited JSON, socket path and session id from the environment | agterm `ControlServer.swift`, `agtermCore` protocol and dispatcher, `agtermctl` | adapt: decouple from their `AppStore` |
+| S1 | agent status from Claude Code hooks, hook installer | agterm `AgentStatus.swift` (161 lines), `AgentHooksInstaller.swift`; Calyx `AgentStateResolver` to cross-check | adapt |
+| S2 | jump order: error, needs input, finished; unseen first, then oldest | Limpid `AttentionState.swift` (`jumpToAttention`) | port |
+| S2 | notification and click routing to the pane | Calyx `PaneNotificationLedger`, `NotificationClickRouter`; agterm `NotificationManager.swift` | adapt |
+| S3 | markdown to HTML with highlight, KaTeX and mermaid vendored, no CDN | termio `MarkdownHTML.swift` on [swift-markdown](https://github.com/swiftlang/swift-markdown) (Apache-2.0) | port |
+| S3 | path parsing `path:line:col` | none of the four checked yet; fallback kooky `TerminalOpenTarget.swift` (228 lines, Foundation only, tested) | check first |
+| S4 | syntax highlighting in NSTextView | termio `HighlightedTextView` with vendored Highlightr | port |
+| S4 | conflict with a file changed on disk | none found | write |
+| S5 | text into another session's input | agterm `session.type` (`injectText`) as idea; Enter never sent | write |
+| S5 | command for the user with output back to the agent | none found | write |
+| S6 | subagent panel | none found | write |
 
 ## 10. Requirement traceability
 
@@ -246,7 +252,7 @@ Draft, to be agreed:
 
 ## 12. Decisions and open questions
 
-- Decided: fork Ghostty and add features in its Swift app - trusted core, notarized upstream, small Swift part; rejected: fork kooky (prebuilt engine from a cmux fork, root helper with NOPASSWD sudoers, edits other agents' settings), cmux (GPL and BSL, cloud), Calyx and other agent terminals (decided to build our own; their MIT code is used per section 9); affects: every upstream merge; revisit if merges cost more than a day a month.
+- Decided: fork Ghostty and add features in its Swift app - trusted core, notarized upstream, small Swift part; rejected: fork kooky (prebuilt engine from a cmux fork, root helper with NOPASSWD sudoers, edits other agents' settings), cmux (GPL and BSL, cloud), agterm, Calyx and other agent terminals (decided to build our own; their MIT code is used per section 9); affects: every upstream merge; revisit if merges cost more than a day a month.
 - Decided: agent state from Claude Code hooks, not screen parsing or OSC 7501 - hooks carry session id and work inside tmux; rejected: OSC 7501 (blocked by tmux), screen parsing (fragile); revisit if Claude Code adds a terminal-side state API.
 - Decided: registry in memory, no persistence - the user keeps the terminal open; revisit if restore after quit becomes a need.
 - Decided: upstream `AGENTS.md` and `README.md` stay untouched, our agent profile is `.claude/CLAUDE.md` - no merge conflicts; rejected: replacing `AGENTS.md` (conflicts on every upstream change).
@@ -255,7 +261,7 @@ Draft, to be agreed:
 - Decided: the tracker connector talks to `tk` only through its CLI and JSON output - two independent projects, `tk` keeps its rule of writes through its core; rejected: reading `~/tasks` files (couples to the file format).
 - Decided: HTML, PDF (R11) and SSH (R13) move to later - session data: 5 PDF paths, HTML opened in a browser, 3-4 SSH mentions.
 - Decided: the name is `tarn` (a small mountain lake: small, clear, quiet) - no namesakes among terminals and agent tools on GitHub, Homebrew, Product Hunt or the web, checked 2026-10-21; rejected: `lull` (a Product Hunt tool for coding-agent sessions), `wisp` (wispterm, a terminal for agents), `aerie` (a macOS productivity app). Trademarks and domains not checked.
-- Q5: shell for R7. The login shell is zsh, but prompts pasted from Warp look like fish; the setup guide targets the shell the terminal starts.
+- Decided: tarn starts the login shell, zsh; R7 is a setup guide for zsh-autosuggestions and fzf, no terminal code.
 
 ## 13. Slicing
 
@@ -280,12 +286,12 @@ Implementation is on hold while the tracker is in progress; this spec is the inp
 | Xcode and macOS SDK | user | installed: Xcode 27.0; upstream guide names Xcode 26 | S0 | `xcodebuild -version` | check in S0 |
 | swiftlint | agent | Homebrew | S0 | `swiftlint version` | no |
 | Claude Code with hooks | user | installed | S1 | `claude --version` | yes |
-| `tk` with JSON output | user | installed | S6 | `tk ctx --json` | check in S6 |
+| `tk` with JSON output | user | installed | S6 | `tk list --json` | yes |
 
 Readiness for slicing:
 
 - [x] every entity has states, transitions, writer, storage;
 - [x] scenarios: happy path, repeat, temporary and permanent error;
-- [ ] Q5 answered;
-- [ ] hook events for subagents checked (R17);
-- [ ] Limpid, Vesta, viterm, Conterm, agterm read (section 9).
+- [x] open questions answered;
+- [x] hook events for subagents checked (R17);
+- [x] reference projects picked (section 9).
