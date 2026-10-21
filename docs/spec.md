@@ -96,7 +96,7 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 
 1. Our Swift code lives in `macos/Sources/Features/Lull/`. Upstream files change only at insertion points listed in `docs/architecture.md`.
 2. `main` carries our work. `upstream/main` is merged in on a schedule; a merge that touches an insertion point gets its own commit.
-3. Our docs live in `docs/`, which upstream does not have. Upstream files `README.md` and `AGENTS.md` stay untouched until decision Q1.
+3. Our docs live in `docs/`, which upstream does not have. Upstream `README.md` and `AGENTS.md` stay untouched; our agent profile is `.claude/CLAUDE.md`.
 
 ### 2.2 Session registry
 
@@ -212,9 +212,9 @@ Draft, to be agreed:
 - Decided: fork Ghostty and add features in its Swift app - trusted core, notarized upstream, small Swift part; rejected: fork kooky (prebuilt engine from a cmux fork, root helper with NOPASSWD sudoers, edits other agents' settings), cmux (GPL and BSL, cloud), Calyx and other agent terminals (decided to build our own); affects: every upstream merge; revisit if merges cost more than a day a month.
 - Decided: agent state from Claude Code hooks, not screen parsing or OSC 7501 - hooks carry session id and work inside tmux; rejected: OSC 7501 (blocked by tmux), screen parsing (fragile); revisit if Claude Code adds a terminal-side state API.
 - Decided: registry in memory, no persistence - the user keeps the terminal open; revisit if restore after quit becomes a need.
-- Q1: upstream `AGENTS.md` targets Ghostty contributors and forbids PRs. Replace it in the fork, or keep it and put our agent profile in `.claude/CLAUDE.md`? Recommendation: keep it untouched, profile in `.claude/CLAUDE.md`, to avoid merge conflicts.
+- Decided: upstream `AGENTS.md` and `README.md` stay untouched, our agent profile is `.claude/CLAUDE.md` - no merge conflicts; rejected: replacing `AGENTS.md` (conflicts on every upstream change).
 - Q2: final project name. `lull` is a working name; the repository can be renamed later.
-- Q3: when to make the fork public as a product: now, or at the first release.
+- Decided: the project is public from the start; everything in the repository is in English.
 - Q4: R8 command set beyond `ls`, `open`, `notify`, `focus` - for example sending keys to a session. Recommendation: start with four commands.
 
 ## 13. Slicing
@@ -244,4 +244,4 @@ Readiness for slicing:
 
 - [x] every entity has states, transitions, writer, storage;
 - [x] scenarios: happy path, repeat, temporary and permanent error;
-- [ ] Q1-Q4 answered.
+- [ ] Q2 and Q4 answered.
