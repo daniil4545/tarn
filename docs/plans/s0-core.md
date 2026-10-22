@@ -2,7 +2,7 @@
 
 Status: draft, waiting for the user on the base tag and disk space (section 2).
 Canon: `docs/spec.md` (sections 1, 2.1, 7, 13, 14); `HACKING.md`; `macos/AGENTS.md`; `.claude/CLAUDE.md`.
-Inputs: research `agent-terminal/docs/research/ghostty-ecosystem-2026-10-22.md` and the Reddit scan of 2026-10-22 in ticket T-62.
+Inputs: research `agent-terminal/docs/research/landscape.md` and `code-sources.md` (merged on 2026-10-22).
 
 ## 1. Goal and scope
 

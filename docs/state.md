@@ -6,7 +6,7 @@
 
 ## Done
 
-- 2026-10-22, T-62: research of the Ghostty ecosystem (Reddit, Discussions, upstream, Tellurion) and an overview of interesting Ghostty projects, in the private research folder `~/Dev/self-projects/agent-terminal/docs/research/` (`ghostty-ecosystem`, `ghostty-reddit`, `ghostty-projects-overview`, `tellurion-trial`, all 2026-10-22). Draft stage plan `docs/plans/s0-core.md`. Checked: upstream milestones and tags with `gh api`, Tellurion tree and diff against `v1.3.1`.
+- 2026-10-22, T-62: research of the Ghostty ecosystem (Reddit, Discussions, upstream, Tellurion) and an overview of interesting Ghostty projects, in the private research folder `~/Dev/self-projects/agent-terminal/docs/research/` (merged into `landscape.md`, `code-sources.md`, `phone-access.md`; trial checklist `tellurion-trial-2026-10-22.md`). Draft stage plan `docs/plans/s0-core.md`. Checked: upstream milestones and tags with `gh api`, Tellurion tree and diff against `v1.3.1`.
 - 2026-10-22, T-69 (personal): phone access to the Mac works without tarn: NovaScale (SSH with embedded Tailscale) and Remote Login. R14 needs no code of ours.
 
 ## Next
