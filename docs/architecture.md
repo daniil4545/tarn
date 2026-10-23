@@ -42,7 +42,7 @@ flowchart LR
   class user person
 ```
 
-Blue: our code. Grey: external system. Yellow: person. Source: `plugin/hooks/hook.sh`, `ControlSocket.swift`, `AgentProcess.swift`.
+Blue: our code. Gray: external system. Yellow: person. Source: `plugin/hooks/hook.sh`, `ControlSocket.swift`, `AgentProcess.swift`.
 
 ### Modules
 

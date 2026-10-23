@@ -35,7 +35,11 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | build core library | `zig build -Demit-macos-app=false` |
 | build app | `macos/build.nu --configuration Debug --action build` |
 | app tests | `macos/build.nu --action test` |
-| Swift lint | `swiftlint lint --strict` |
+| Swift lint | `swiftlint lint --strict` (in `macos/`) on `Sources/Features/Tarn` and `Tests/Tarn` |
+| shell lint | `shellcheck plugin/hooks/hook.sh` |
+| Python lint | `uvx ruff check` and `uvx ruff format --check` on `plugin/test/` |
+| spelling | `typos` on our files (`git diff --name-only origin/main...HEAD`) |
+| hook invariant | `python3 -I plugin/test/hook_test.py` |
 | acceptance | `make -f tarn.mk check` (stage S0) |
 | benchmark | `make -f tarn.mk bench` (stage S0) |
 
@@ -54,7 +58,8 @@ Project profile for `~/.claude/docs/pipeline.md`:
 - Feature pipeline (user decision 2026-10-23): approve the feature, survey how other projects built it (read their code and architecture), approve our architecture, then write code. Take proven parts from other projects, then optimize and cut the excess; do not invent what exists. Copied code must be MIT or Apache-2.0 (see invariants); AGPL and GPL projects (Warp, Tellurion, cmux) are read for ideas only.
 - Branches: a stage goes in `s<N>-<name>`; merge into `main` on acceptance with the user's confirmation.
 - Upstream: `upstream/main` is merged into `main` on a schedule, one merge commit; conflicts at insertion points get their own commit.
-- Hosting: GitHub `daniil4545/tarn`. CI: none of ours yet; upstream workflows are not relied on.
+- Hosting: GitHub `daniil4545/tarn`. CI: none of ours yet; upstream workflows are not relied on. `gh` resolves to `ghostty-org/ghostty` by default: always pass `-R daniil4545/tarn`.
+- Linters: upstream gets `typos` and `prettier` from `nix develop`; here they come from brew. `prettier` is not run on our markdown: padded tables push `docs/` over its size limits.
 
 ## Critical invariants
 
