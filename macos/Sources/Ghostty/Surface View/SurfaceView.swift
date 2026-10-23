@@ -653,6 +653,11 @@ extension Ghostty {
                     return try initialInput.withCString { cInput in
                         config.initial_input = cInput
 
+                        // tarn: every surface tells its agent hooks which surface they run in.
+                        // An inherited value from the parent surface is replaced.
+                        var environmentVariables = environmentVariables
+                        environmentVariables["TARN_SURFACE"] = view.id.uuidString
+
                         // Convert dictionary to arrays for easier processing
                         let keys = Array(environmentVariables.keys)
                         let values = Array(environmentVariables.values)

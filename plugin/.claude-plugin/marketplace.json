@@ -1,0 +1,15 @@
+{
+  "name": "tarn",
+  "description": "tarn terminal integration for Claude Code",
+  "owner": {
+    "name": "Daniil Sukhar"
+  },
+  "plugins": [
+    {
+      "name": "tarn",
+      "description": "Reports agent state to the tarn sidebar: working, needs you, done",
+      "source": "./",
+      "version": "0.2.0"
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "tarn",
+  "version": "0.2.0",
+  "description": "Reports agent state to the tarn sidebar: working, needs you, done",
+  "author": {
+    "name": "Daniil Sukhar"
+  },
+  "repository": "https://github.com/daniil4545/tarn",
+  "license": "MIT"
+}
