@@ -10,10 +10,8 @@ extension Notification.Name {
     static let terminalTabsDidChange = Notification.Name("com.daniil4545.tarn.terminalTabsDidChange")
 }
 
-/// The tabs of one terminal window's tab group, grouped by project.
-///
-/// Every tab is its own window, so each window owns a model and shows its own copy of the
-/// sidebar. Only the selected tab's window is on screen, so that is the copy the user sees.
+/// The tabs of one terminal window's tab group, by section. Every tab is its own window with
+/// its own model; only the selected tab's copy is on screen.
 @MainActor
 final class SidebarModel: ObservableObject {
     struct Tab: Identifiable, Equatable {
@@ -291,11 +289,8 @@ final class SidebarModel: ObservableObject {
             }
     }
 
-    /// The tab title to show. A shell titles its window with a path, often cut with "…";
-    /// such a title is replaced by the full working directory with the home folder as "~".
-    /// Any other title, such as one set by a running program, is kept.
-    ///
-    /// An agent that leaves the shell's title in place (codex sets none) gets its own name.
+    /// The tab title to show: a shell's path title becomes the full working directory with "~";
+    /// under an agent, a shell title becomes the agent's name and an own title loses its mark.
     nonisolated static func displayTitle(_ title: String, pwd: String?, agent: String? = nil) -> String {
         if let agent, let name = AgentProcess.displayNames[agent] {
             // Agents lead their titles with a spinner or a mark (`✳`, `⠏`); the icon and

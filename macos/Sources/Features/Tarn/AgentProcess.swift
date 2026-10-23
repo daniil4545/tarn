@@ -4,10 +4,8 @@
 import Darwin
 import Foundation
 
-/// Names the coding agent that runs as a surface's foreground process, if any.
-///
-/// The foreground process group stays with the agent while it runs its own tools,
-/// so a `bash` started by Claude Code does not hide the agent.
+/// Names the coding agent that runs as a surface's foreground process, if any. The agent keeps
+/// the foreground group while its own tools run, so a `bash` it starts does not hide it.
 enum AgentProcess {
     /// Agent command names. A process matches one exactly, or as a prefix followed by a
     /// separator: brew's codex binary has the kernel name `codex-aarch64-a`.

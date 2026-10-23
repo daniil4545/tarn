@@ -22,8 +22,6 @@ final class TabCardPopover: NSObject, NSPopoverDelegate {
         popover.delegate = self
     }
 
-    /// Shows `tab`'s card beside `anchor`. While shown, it moves to the new row instead of
-    /// closing and opening again.
     func show(_ tab: SidebarModel.Tab, anchor: NSView, onAnswer: @escaping () -> Void) {
         host.rootView = AnyView(
             TabCard(tab: tab, onAnswer: onAnswer)

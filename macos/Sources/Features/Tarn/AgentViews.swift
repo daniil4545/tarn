@@ -65,7 +65,6 @@ struct AgentQuickActions: View {
 }
 
 /// A flat sidebar button that fills its share of the row, so paired buttons are equal.
-/// The primary one is tinted with the accent color.
 private struct SidebarActionStyle: ButtonStyle {
     var isPrimary = false
     var alignment: Alignment = .center

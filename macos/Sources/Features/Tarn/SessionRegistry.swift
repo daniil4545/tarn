@@ -43,9 +43,7 @@ struct AgentSession: Equatable {
 }
 
 extension AgentSession {
-    /// The transition table of `docs/spec.md` section 8 with the corrections of the
-    /// 2026-10-23 research: `PermissionRequest` is the permission signal, `Stop` with
-    /// background tasks keeps working, and subagent events only raise or clear permission.
+    /// The transition table of `docs/spec.md` section 8.
     mutating func handle(_ name: String, _ event: [String: Any]) {
         let agentID = event["agent_id"] as? String
         let isSubagent = agentID != nil
@@ -192,10 +190,8 @@ final class SessionRegistry {
 
     // MARK: Liveness
 
-    /// Claude Code sends no event when the user presses Esc, during a turn or on a
-    /// permission dialog. Its own signals close the gap: during a turn it shows a spinner
-    /// in the title and an indeterminate progress report; after Esc the title is back to
-    /// `✳`, the progress report is cleared and the screen says "Interrupted".
+    /// Claude Code sends no event on Esc; its title, progress report and "Interrupted" on
+    /// screen show it instead (`docs/spec.md` section 8).
     private func checkLiveness() {
         for (id, session) in sessions where session.state == .working || session.state == .permission {
             guard let view = Self.surfaceView(id) else {
@@ -256,9 +252,8 @@ final class SessionRegistry {
     nonisolated static func key(answering request: AgentRequest, option: Int, screen: String) -> Ghostty.Input.KeyEvent? {
         switch request.kind {
         case .tool:
-            // The card's command or file must be on screen too, so a key never approves what
-            // the user did not see. Long commands wrap and paths show relative, so only the
-            // command's start or the file name counts.
+            // The card's command start or file name must be on screen, so a key never approves
+            // what the user did not see; long commands wrap and paths show relative.
             let firstLine = request.detail.split(separator: "\n").first.map(String.init) ?? ""
             let mark = firstLine.hasPrefix("/") ? (firstLine as NSString).lastPathComponent : String(firstLine.prefix(30))
             guard screen.contains("1. Yes"), !mark.isEmpty, screen.contains(mark) else { return nil }
