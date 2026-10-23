@@ -45,7 +45,7 @@ extension AgentSession {
     /// 2026-10-23 research: `PermissionRequest` is the permission signal, `Stop` with
     /// background tasks keeps working, and subagent events only raise or clear permission.
     mutating func handle(_ name: String, _ event: [String: Any]) {
-        let isSubagent = event["agent_id"] as? String != nil
+        let isSubagent = event["agent_id"] is String
 
         switch name {
         case "UserPromptSubmit" where !isSubagent:

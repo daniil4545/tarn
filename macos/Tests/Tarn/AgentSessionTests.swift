@@ -8,7 +8,7 @@ struct AgentSessionTests {
     private func session(after events: [[String: Any]]) -> AgentSession {
         var session = AgentSession(surfaceID: UUID())
         for event in events {
-            session.handle(event["hook_event_name"] as! String, event)
+            session.handle(event["hook_event_name"] as? String ?? "", event)
         }
         return session
     }
