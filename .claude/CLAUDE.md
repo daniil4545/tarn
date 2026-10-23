@@ -51,6 +51,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 | Subagent brief | `~/.claude/templates/subagent-brief.md` |
 | Findings file | `docs/findings.jsonl` |
 
+- Feature pipeline (user decision 2026-10-23): approve the feature, survey how other projects built it (read their code and architecture), approve our architecture, then write code. Take proven parts from other projects, then optimize and cut the excess; do not invent what exists. Copied code must be MIT or Apache-2.0 (see invariants); AGPL and GPL projects (Warp, Tellurion, cmux) are read for ideas only.
 - Branches: a stage goes in `s<N>-<name>`; merge into `main` on acceptance with the user's confirmation.
 - Upstream: `upstream/main` is merged into `main` on a schedule, one merge commit; conflicts at insertion points get their own commit.
 - Hosting: GitHub `daniil4545/tarn`. CI: none of ours yet; upstream workflows are not relied on.
