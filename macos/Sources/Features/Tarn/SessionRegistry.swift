@@ -35,6 +35,8 @@ struct AgentSession: Equatable {
     /// A `PermissionRequest` arrived during the current turn, so a late
     /// `permission_prompt` notification is a duplicate.
     var sawPermissionRequest = false
+    /// The `agent_id` of the subagent whose request holds `permission`; nil for the main agent.
+    var permissionAgent: String?
 
     /// The turn ended and the user has not looked at it yet.
     var isUnseenDone: Bool { state == .waiting && !seen }
@@ -45,7 +47,8 @@ extension AgentSession {
     /// 2026-10-23 research: `PermissionRequest` is the permission signal, `Stop` with
     /// background tasks keeps working, and subagent events only raise or clear permission.
     mutating func handle(_ name: String, _ event: [String: Any]) {
-        let isSubagent = event["agent_id"] is String
+        let agentID = event["agent_id"] as? String
+        let isSubagent = agentID != nil
 
         switch name {
         case "UserPromptSubmit" where !isSubagent:
@@ -58,9 +61,12 @@ extension AgentSession {
             state = .permission
             request = Self.request(from: event)
             sawPermissionRequest = true
+            permissionAgent = agentID
 
         case "PostToolUse", "PostToolUseFailure":
-            if state == .permission || (!isSubagent && state != .working) {
+            // Only the agent that asked clears `permission`: a parallel subagent's tool
+            // finishing says nothing about the dialog on screen.
+            if (state == .permission && agentID == permissionAgent) || (!isSubagent && state != .working && state != .permission) {
                 state = .working
                 request = nil
             }
@@ -237,29 +243,34 @@ final class SessionRegistry {
               let model = view.surfaceModel
         else { return }
 
-        let screen = Self.bottomLines(view, count: 30)
-        let key: Ghostty.Input.KeyEvent?
-        switch request.kind {
-        case .tool:
-            // Option 0 approves once ("1. Yes"); option 1 rejects like Esc.
-            guard screen.contains("1. Yes") else { key = nil; break }
-            key = option == 0
-                ? .init(key: .digit1, text: "1")
-                : .init(key: .escape)
-        case .question:
-            guard option < request.options.count, option < 9,
-                  screen.contains(request.options[option]) else { key = nil; break }
-            let digits: [Ghostty.Input.Key] = [.digit1, .digit2, .digit3, .digit4, .digit5,
-                                                .digit6, .digit7, .digit8, .digit9]
-            key = .init(key: digits[option], text: "\(option + 1)")
-        }
-
-        guard let key else {
+        guard let key = Self.key(answering: request, option: option, screen: Self.bottomLines(view, count: 30)) else {
             Self.logger.info("dialog not on screen, focusing the surface instead")
             focus(surfaceID)
             return
         }
         model.sendKeyEvent(key)
+    }
+
+    /// The key that gives `option` to the dialog of `request`, or nil when the screen does
+    /// not show that dialog: another tool's request, a subagent's, or one already answered.
+    nonisolated static func key(answering request: AgentRequest, option: Int, screen: String) -> Ghostty.Input.KeyEvent? {
+        switch request.kind {
+        case .tool:
+            // The card's command or file must be on screen too, so a key never approves what
+            // the user did not see. Long commands wrap and paths show relative, so only the
+            // command's start or the file name counts.
+            let firstLine = request.detail.split(separator: "\n").first.map(String.init) ?? ""
+            let mark = firstLine.hasPrefix("/") ? (firstLine as NSString).lastPathComponent : String(firstLine.prefix(30))
+            guard screen.contains("1. Yes"), !mark.isEmpty, screen.contains(mark) else { return nil }
+            // Option 0 approves once ("1. Yes"); option 1 rejects like Esc.
+            return option == 0 ? .init(key: .digit1, text: "1") : .init(key: .escape)
+        case .question:
+            guard option < request.options.count, option < 9,
+                  screen.contains(request.options[option]) else { return nil }
+            let digits: [Ghostty.Input.Key] = [.digit1, .digit2, .digit3, .digit4, .digit5,
+                                                .digit6, .digit7, .digit8, .digit9]
+            return .init(key: digits[option], text: "\(option + 1)")
+        }
     }
 
     func focus(_ surfaceID: UUID) {
@@ -277,6 +288,11 @@ final class SessionRegistry {
             if s.state == .permission { return 1 }
             if s.isUnseenDone { return 2 }
             return nil
+        }
+        // A closed tab's record stays until a check finds its surface gone; drop it here,
+        // or the jump would keep picking a session that no longer exists.
+        for id in sessions.keys where Self.surfaceView(id) == nil {
+            remove(id)
         }
         let next = sessions.values
             .compactMap { s in rank(s).map { (s, $0) } }

@@ -52,6 +52,35 @@ struct AgentSessionTests {
         #expect(session(after: [prompt, subAsk, subTool]).state == .working)
     }
 
+    @Test func parallelSubagentToolDoesNotClearAnotherAgentsPermission() {
+        let otherTool: [String: Any] = ["hook_event_name": "PostToolUse", "agent_id": "s2"]
+        #expect(session(after: [prompt, ask, otherTool]).state == .permission)
+
+        var subAsk = ask
+        subAsk["agent_id"] = "s1"
+        #expect(session(after: [prompt, subAsk, toolDone]).state == .permission)
+        #expect(session(after: [prompt, subAsk, otherTool]).state == .permission)
+    }
+
+    @Test(arguments: [
+        // The card's command is on screen: the key goes.
+        ("Bash command\n  make test\n❯ 1. Yes\n  2. No", true),
+        // Another command's dialog: no key.
+        ("Bash command\n  rm -rf build\n❯ 1. Yes\n  2. No", false),
+        // No dialog at all.
+        ("make test\n> ", false),
+    ])
+    func quickAnswerNeedsTheCardsDialogOnScreen(screen: String, sends: Bool) {
+        let request = AgentRequest(kind: .tool, tool: "Bash", detail: "make test", options: [])
+        #expect((SessionRegistry.key(answering: request, option: 0, screen: screen) != nil) == sends)
+    }
+
+    @Test func quickAnswerMatchesAFileByItsName() {
+        let request = AgentRequest(kind: .tool, tool: "Edit", detail: "/u/dev/tarn/docs/spec.md", options: [])
+        let screen = "Edit file\n  docs/spec.md\n❯ 1. Yes\n  2. No"
+        #expect(SessionRegistry.key(answering: request, option: 0, screen: screen) != nil)
+    }
+
     @Test func latePermissionPromptAfterAnsweredRequestIsIgnored() {
         let late: [String: Any] = ["hook_event_name": "Notification", "notification_type": "permission_prompt"]
         #expect(session(after: [prompt, ask, toolDone, late]).state == .working)
