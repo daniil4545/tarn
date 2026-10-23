@@ -44,7 +44,9 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R5 | Markdown preview panel next to the terminal, mermaid rendered, no network | first | 84% of file paths in answers are markdown |
 | R7 | Command completion and history in zsh | first, setup guide | - |
 | R9 | Click on a file path in terminal output opens it in the panel; absolute, `~/` and relative paths | first | ~25 complaints about opening files |
-| R3 | Sidebar with all sessions: project, branch, state | first | median 5 parallel sessions, peak 16 |
+| R3 | Sidebar with all sessions: a tab running claude, codex or opencode sits in its project's group with the agent's icon and state; other tabs sit below a divider; the collapsed sidebar shows icons only | first | median 5 parallel sessions, peak 16 |
+| R19 | Pins: tabs pinned at the top of the sidebar, reordered among themselves | first | user request 2026-10-23 |
+| R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
 | R10 | Several agents per project shown as separate sessions | first | - |
 | R4 | One notification per need; jump to the next session that needs the user by a shortcut or a click | first | 13.5% of replies come after more than 10 min |
@@ -57,6 +59,9 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R11 | HTML and PDF in the panel | later | 5 PDF paths, HTML opened in a browser |
 | R13 | SSH sessions in the sidebar | later | 3-4 mentions |
 | R14 | Phone access to waiting sessions, free, outside the home network | later, guide | - |
+| R21 | Custom groups: the user creates a group and puts tabs into it | later | user request 2026-10-23 |
+| R22 | Preview of a localhost server an agent starts | later | Tellurion trial 2026-10-23 |
+| R23 | State for codex and opencode sessions | later | codex shows no state in the first version |
 
 Out of scope:
 
@@ -197,16 +202,23 @@ See section 13.
 | Event | from `idle` | from `working` | from `permission` | from `waiting` |
 | --- | --- | --- | --- | --- |
 | `UserPromptSubmit` | `working` | - | `working` | `working` |
-| `PostToolUse` | `working` | - | `working` | `working` |
-| `Notification` `permission_prompt`, `PermissionRequest` | `permission` | `permission` | - | `permission` |
-| `Stop` | `waiting` | `waiting` | `waiting` | - |
+| `PostToolUse`, `PostToolUseFailure` | `working` | - | `working` | `working` |
+| `PermissionRequest` | `permission` | `permission` | - | `permission` |
+| `Notification` `permission_prompt` | - | `permission`, unless a `PermissionRequest` came this turn | - | - |
+| `Stop` without background tasks | `waiting` | `waiting` | `waiting` | - |
+| `Stop` with background tasks | `working` | - | `working` | `working` |
 | `StopFailure` | `waiting`, `failed` | `waiting`, `failed` | `waiting`, `failed` | `failed` |
-| `Notification` `idle_prompt` | `waiting` | `waiting` | - | - |
-| `SessionEnd`, child exited | - | `idle` | `idle` | `idle` |
+| `Notification` `idle_prompt` | `waiting` | - | - | - |
+| `SessionEnd` with reason `clear` | `waiting` | `waiting` | `waiting` | - |
+| other `SessionEnd`, child exited | - | `idle` | `idle` | `idle` |
 
-`-` means no change. Every change resets `stateSince` and `seen`; any move to `working` clears `failed`. Events that carry `agent_id` (subagents) are ignored in the first version. A closed surface removes the record. Entity storage: memory; single writer: the registry. Unknown `notification_type` values are logged and ignored.
+`-` means no change. Every change resets `stateSince` and `seen`; any move to `working` clears `failed`. Events that carry `agent_id` (subagents) only raise `permission` through `PermissionRequest` and clear it through `PostToolUse` of the same agent; the rest are ignored. A quick answer sends its key only when the screen shows the dialog with the card's command or file; otherwise it focuses the surface. A closed surface removes the record. Entity storage: memory; single writer: the registry. Unknown `notification_type` values are logged and ignored.
+
+Corrections of the hook research of 2026-10-23 (`agent-terminal/docs/research/agent-status-2026-10-23.md`): `PermissionRequest` comes at once while `permission_prompt` comes about 6 s later, so the late one is a duplicate; `idle_prompt` during a turn would repaint a working session; `Stop` with background tasks is not the end of the work; `/clear` ends the session id but the agent keeps waiting in the same surface.
 
 `tarn notify` is not a state change: it sets `note` on the caller's own record; focusing the surface clears it.
+
+Esc: Claude Code sends no event when the user presses Esc. The registry reads the surface instead: `working` with no progress report and a title starting with `✳`, or `permission` with "Interrupted" in the last screen lines, for 2 s in a row, becomes `waiting` marked seen.
 
 Known limit: Claude Code sends no event when the user approves a permission, so after approving a long command the session shows `permission` until the command ends and `PostToolUse` arrives. Revisit if Claude Code adds an approval event.
 
@@ -291,6 +303,11 @@ Dropped by the same signals: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (copying
 - Decided: agents never move focus; `tarn notify` marks the session and notifies; the user jumps - keystrokes never land in the wrong session; rejected: agent focus always or when the app is inactive.
 - Decided: agents inside tmux are out of the first version - the shell inside tmux inherits `TARN_SURFACE` from the tmux server, so events would land on the wrong record; revisit with R13 using the client tty as the key.
 - Decided: registry in memory, no persistence - the user keeps the terminal open.
+- Decided (2026-10-23): the sidebar has layers from top to bottom - pins (R19), custom groups (R21), agent groups, plain tabs below a divider without a header; the first version ships agent groups and plain tabs, the layer list in code takes the rest without a rework.
+- Decided (2026-10-23): a tab joins an agent group while the foreground process of any of its splits is `claude`, `codex` or `opencode`, read by process name with an argv fallback for a version-like name or an interpreter (ported from macterm, MIT); it returns to plain tabs when the agent exits; rejected: hooks only (Claude only), staying in the group after exit (groups would not show live agents). Not detected: agents inside tmux or ssh, agents behind a wrapper script. Revisit if Ghostty adds a foreground-process event.
+- Decided (2026-10-23): a group is keyed by the full project root (git root, or the folder outside git); the header is the folder name, with its parent folder when two groups share it; rejected: the folder name alone (two `app` projects merged).
+- Decided (2026-10-23): agent icons are the monochrome logos from macterm (MIT), tinted like system icons; the logos are their owners' trademarks and only name the running agent; rejected: Tellurion's PNGs (AGPL).
+- Decided (2026-10-23): release tags are `tarn-vX.Y.Z` - the repository also holds upstream `vX.Y.Z` tags; rejected: `vX.Y.Z` (sorts below upstream releases, `git describe` picks upstream tags).
 
 Open for the second wave, from the spec review of 2026-10-21 (resolve before designing R6, R15-R18):
 
