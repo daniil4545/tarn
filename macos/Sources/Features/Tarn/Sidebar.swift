@@ -556,12 +556,6 @@ struct Sidebar: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background {
-            // ⌘⇧U jumps to the session that needs the user most.
-            Button("") { SessionRegistry.shared.focusNextWaiting() }
-                .keyboardShortcut("u", modifiers: [.command, .shift])
-                .hidden()
-        }
     }
 
     /// The terminals section gets a divider when agent groups are above it.

@@ -18,18 +18,8 @@ struct AgentRequest: Equatable {
     let tool: String
     /// The command, file or question text.
     let detail: String
-    /// Question options in order; the n-th is chosen by the digit key n.
+    /// Question options in order.
     let options: [String]
-    /// `detail` is a file path, which a dialog shows relative, so only its name is matched.
-    var detailIsPath = false
-
-    /// The part of `detail` a dialog shows as is: a file name, or the start of a command or
-    /// question, since long ones wrap. Too short to tell dialogs apart gives "".
-    var screenMark: String {
-        let firstLine = detail.split(separator: "\n").first.map(String.init) ?? ""
-        let mark = detailIsPath ? (firstLine as NSString).lastPathComponent : String(firstLine.prefix(30))
-        return mark.count < 4 ? "" : mark
-    }
 }
 
 /// One agent session, keyed by its surface.
@@ -47,6 +37,8 @@ struct AgentSession: Equatable {
     var sawPermissionRequest = false
     /// The `agent_id` of the subagent whose request holds `permission`; nil for the main agent.
     var permissionAgent: String?
+    /// A permission hook waits for the card's answer to `request`.
+    var answerable = false
 
     /// The turn ended and the user has not looked at it yet.
     var isUnseenDone: Bool { state == .waiting && !seen }
@@ -114,6 +106,14 @@ extension AgentSession {
         }
     }
 
+    /// While a hook waits, the session shows the oldest waiting request, whatever other events say.
+    mutating func show(waiting waitingRequest: AgentRequest?) {
+        answerable = waitingRequest != nil
+        guard let waitingRequest else { return }
+        state = .permission
+        request = waitingRequest
+    }
+
     static func request(from event: [String: Any]) -> AgentRequest {
         let tool = event["tool_name"] as? String ?? "tool"
         let input = event["tool_input"] as? [String: Any] ?? [:]
@@ -131,14 +131,43 @@ extension AgentSession {
                 options: quick ? options : [])
         }
 
-        if input["command"] == nil, let path = input["file_path"] as? String {
-            return AgentRequest(kind: .tool, tool: tool, detail: path, options: [], detailIsPath: true)
-        }
         let detail = input["command"] as? String
+            ?? input["file_path"] as? String
             ?? input["url"] as? String
             ?? input["description"] as? String
             ?? ""
         return AgentRequest(kind: .tool, tool: tool, detail: detail, options: [])
+    }
+}
+
+/// A permission hook that waits for the card's answer (`docs/spec.md` section 2.3).
+struct PendingAnswer<Reply: AnyObject> {
+    let request: AgentRequest
+    let input: [String: Any]
+    let reply: Reply
+
+    /// What still waits after `name`: a finished call drops its own request, the end of a
+    /// turn drops all.
+    static func remaining(_ waiting: [Self], after name: String, _ event: [String: Any]) -> [Self] {
+        let isMain = event["agent_id"] == nil
+        switch name {
+        case "UserPromptSubmit", "StopFailure", "SessionEnd":
+            return isMain ? [] : waiting
+        case "Stop":
+            let tasks = event["background_tasks"] as? [Any] ?? []
+            return isMain && tasks.isEmpty ? [] : waiting
+        case "PostToolUse", "PostToolUseFailure":
+            let tool = event["tool_name"] as? String
+            let input = event["tool_input"] as? [String: Any] ?? [:]
+            guard let done = waiting.firstIndex(where: {
+                $0.request.tool == tool && NSDictionary(dictionary: $0.input).isEqual(to: input)
+            }) else { return waiting }
+            var rest = waiting
+            rest.remove(at: done)
+            return rest
+        default:
+            return waiting
+        }
     }
 }
 
@@ -151,6 +180,8 @@ final class SessionRegistry {
     private static let logger = Logger(subsystem: "tarn", category: "registry")
 
     private(set) var sessions: [UUID: AgentSession] = [:]
+    /// Permission hooks that wait for the card, oldest first; the card shows the first.
+    private var pending: [UUID: [PendingAnswer<ControlSocket.Reply>]] = [:]
     private var socket: ControlSocket?
     private var timer: Timer?
     private var focusObservers: [UUID: AnyCancellable] = [:]
@@ -160,7 +191,7 @@ final class SessionRegistry {
 
     func start() {
         guard socket == nil else { return }
-        let socket = ControlSocket { [weak self] line in self?.receive(line) }
+        let socket = ControlSocket { [weak self] line, reply in self?.receive(line, reply: reply) }
         socket.start()
         self.socket = socket
 
@@ -172,7 +203,7 @@ final class SessionRegistry {
 
     // MARK: Events
 
-    private func receive(_ line: Data) {
+    private func receive(_ line: Data, reply: ControlSocket.Reply) {
         guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
               message["version"] as? Int == 1,
               let surfaceText = message["surface"] as? String,
@@ -188,9 +219,27 @@ final class SessionRegistry {
             return
         }
 
+        var waiting = pending[surfaceID] ?? []
+        if name == "PermissionRequest", message["reply"] as? Bool == true {
+            let request = AgentSession.request(from: event)
+            // The card has no buttons for several questions or a multi-select; the dialog answers.
+            if request.kind == .question && request.options.isEmpty {
+                reply.send(Data())
+            } else {
+                waiting.append(PendingAnswer(request: request, input: event["tool_input"] as? [String: Any] ?? [:], reply: reply))
+            }
+        }
+        let remaining = PendingAnswer.remaining(waiting, after: name, event)
+        // A dropped hook gets no answer and falls back to the agent's own dialog.
+        for item in waiting where !remaining.contains(where: { $0.reply === item.reply }) {
+            item.reply.send(Data())
+        }
+        pending[surfaceID] = remaining.isEmpty ? nil : remaining
+
         var session = sessions[surfaceID] ?? AgentSession(surfaceID: surfaceID)
         let old = session
         session.handle(name, event)
+        session.show(waiting: remaining.first?.request)
         guard session != old else { return }
 
         if session.state != old.state {
@@ -230,7 +279,9 @@ final class SessionRegistry {
             guard Date().timeIntervalSince(first) >= 2 else { continue }
 
             Self.logger.info("\(id, privacy: .public) \(String(describing: session.state), privacy: .public) -> waiting on liveness")
+            closePending(id)
             var next = session
+            next.answerable = false
             next.state = .waiting
             next.request = nil
             next.since = Date()
@@ -243,86 +294,53 @@ final class SessionRegistry {
 
     // MARK: Actions
 
-    /// Answers a permission request or a question from the sidebar card. The key goes
-    /// to the surface only if the dialog is on its screen; otherwise the surface is focused.
-    func answer(_ surfaceID: UUID, option: Int) {
-        guard let session = sessions[surfaceID],
-              session.state == .permission,
-              let request = session.request,
+    /// Answers `request`, the one the card shows, through its waiting hook (`docs/spec.md` 2.3).
+    func answer(_ surfaceID: UUID, request: AgentRequest, option: Int) {
+        guard var session = sessions[surfaceID],
               let view = Self.surfaceView(surfaceID),
-              let model = view.surfaceModel
+              var waiting = pending[surfaceID],
+              let first = waiting.first, first.request == request,
+              let line = Self.decision(for: first.request, input: first.input, option: option)
         else { return }
 
-        guard let key = Self.key(answering: request, option: option, screen: Self.bottomLines(view, count: 30)) else {
-            Self.logger.info("dialog not on screen, focusing the surface instead")
-            focus(surfaceID)
-            return
+        first.reply.send(line)
+        waiting.removeFirst()
+        pending[surfaceID] = waiting.isEmpty ? nil : waiting
+        if waiting.isEmpty {
+            session.state = .working
+            session.request = nil
+            session.since = Date()
         }
-        model.sendKeyEvent(key)
+        session.show(waiting: waiting.first?.request)
+        update(session, view: view)
     }
 
-    /// The key that gives `option` to the dialog of `request`, or nil when the screen does
-    /// not show that dialog: another tool's request, a subagent's, or one already answered.
-    nonisolated static func key(answering request: AgentRequest, option: Int, screen: String) -> Ghostty.Input.KeyEvent? {
-        // Menu lines without the selection cursor; a line must match a whole option, since
-        // "1. Yes, and always allow" also starts with "1. Yes".
-        let lines = screen.split(separator: "\n").map {
-            $0.trimmingCharacters(in: .whitespaces).trimmingPrefix("❯").trimmingCharacters(in: .whitespaces)
-        }
-        // The card's text must be in the dialog itself, the lines just above its first option,
-        // not in the transcript above it.
-        func dialogShowsCard(firstOption: String) -> Bool {
-            let mark = request.screenMark
-            guard !mark.isEmpty, let row = lines.lastIndex(of: firstOption) else { return false }
-            return lines[max(0, row - 12)..<row].contains { $0.contains(mark) }
-        }
-
+    /// The hook output that gives `option` to `request`: allow or deny a tool, or allow a
+    /// question with the chosen label as its answer. Nil for an option the request lacks.
+    nonisolated static func decision(for request: AgentRequest, input: [String: Any], option: Int) -> Data? {
+        let decision: [String: Any]
         switch request.kind {
         case .tool:
-            guard dialogShowsCard(firstOption: "1. Yes") else { return nil }
-            // Option 0 approves once; option 1 rejects like Esc.
-            return option == 0 ? .init(key: .digit1, text: "1") : .init(key: .escape)
+            decision = option == 0
+                ? ["behavior": "allow"]
+                : ["behavior": "deny", "message": "The user denied this in tarn."]
         case .question:
-            guard option < request.options.count, option < 9,
-                  let first = request.options.first, dialogShowsCard(firstOption: "1. \(first)"),
-                  lines.contains("\(option + 1). \(request.options[option])") else { return nil }
-            let digits: [Ghostty.Input.Key] = [.digit1, .digit2, .digit3, .digit4, .digit5,
-                                                .digit6, .digit7, .digit8, .digit9]
-            return .init(key: digits[option], text: "\(option + 1)")
+            guard request.options.indices.contains(option) else { return nil }
+            var updated = input
+            updated["answers"] = [request.detail: request.options[option]]
+            decision = ["behavior": "allow", "updatedInput": updated]
         }
+        let output = ["hookSpecificOutput": ["hookEventName": "PermissionRequest", "decision": decision]]
+        guard var data = try? JSONSerialization.data(withJSONObject: output) else { return nil }
+        data.append(UInt8(ascii: "\n"))
+        return data
     }
 
-    func focus(_ surfaceID: UUID) {
-        guard let view = Self.surfaceView(surfaceID),
-              let controller = view.window?.windowController as? BaseTerminalController
-        else { return }
-        controller.focusSurface(view)
-    }
+    // MARK: Pending answers
 
-    /// Focuses the session that needs the user most: failed, then permission, then an
-    /// unseen finished turn; within a group the oldest first.
-    func focusNextWaiting() {
-        // A closed tab's record stays until a check finds its surface gone; drop it here.
-        let alive = Set(sessions.keys.filter { Self.surfaceView($0) != nil })
-        for id in sessions.keys where !alive.contains(id) {
-            remove(id)
-        }
-        if let next = Self.nextWaiting(Array(sessions.values), alive: alive) { focus(next) }
-    }
-
-    /// The session the jump goes to; sessions of closed surfaces never count.
-    nonisolated static func nextWaiting(_ sessions: [AgentSession], alive: Set<UUID>) -> UUID? {
-        func rank(_ s: AgentSession) -> Int? {
-            if s.state == .waiting && s.failed && !s.seen { return 0 }
-            if s.state == .permission { return 1 }
-            if s.isUnseenDone { return 2 }
-            return nil
-        }
-        return sessions
-            .filter { alive.contains($0.surfaceID) }
-            .compactMap { s in rank(s).map { (s, $0) } }
-            .min { ($0.1, $0.0.since) < ($1.1, $1.0.since) }?
-            .0.surfaceID
+    private func closePending(_ id: UUID) {
+        pending[id]?.forEach { $0.reply.send(Data()) }
+        pending[id] = nil
     }
 
     // MARK: Store
@@ -334,6 +352,7 @@ final class SessionRegistry {
     }
 
     private func remove(_ id: UUID) {
+        closePending(id)
         sessions[id] = nil
         focusObservers[id] = nil
         idleSince[id] = nil

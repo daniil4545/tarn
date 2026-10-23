@@ -36,7 +36,7 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | build app | `macos/build.nu --configuration Debug --action build` |
 | app tests | `macos/build.nu --action test` |
 | Swift lint | `swiftlint lint --strict` (in `macos/`) on `Sources/Features/Tarn` and `Tests/Tarn` |
-| shell lint | `shellcheck plugin/hooks/hook.sh` |
+| shell lint | `shellcheck plugin/hooks/*.sh` |
 | Python lint | `uvx ruff check` and `uvx ruff format --check` on `plugin/test/` |
 | spelling | `typos` on our files (`git diff --name-only origin/main...HEAD`) |
 | hook invariant | `python3 -I plugin/test/hook_test.py` |
@@ -66,7 +66,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 - `src/` is not modified; Swift changes outside `macos/Sources/Features/Tarn/` only at insertion points listed in `docs/architecture.md`.
 - No network calls, telemetry or accounts in our code.
 - Ported code keeps its license header and an entry in `THIRD_PARTY.md`; no GPL, BSL or unlicensed code.
-- `tarn hook` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing.
+- `tarn hook` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing. The one exception is the `PermissionRequest` hook, which waits for the card while the app holds its connection (`docs/spec.md` 2.3).
 - Nothing edits `~/.claude/settings.json`; hooks ship as a Claude Code plugin.
 - No agent command moves focus or presses Enter for the user.
 - The session registry is the only writer of session state.

@@ -49,7 +49,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
 | R10 | Several agents per project shown as separate sessions | first | - |
-| R4 | One notification per need; jump to the next session that needs the user by a shortcut or a click | first | 13.5% of replies come after more than 10 min |
+| R4 | One notification per need; jump to the next session that needs the user by a click | first | 13.5% of replies come after more than 10 min |
 | R12 | Editor-like prompt input | first, Claude Code itself, verify | - |
 | R6 | File editing in a GUI panel | second | - |
 | R15 | `tarn new` and `tarn send`: hand-over between sessions | second | 50+ manual hand-overs |
@@ -124,8 +124,9 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 3. How it works:
    1. The `tarn` plugin for Claude Code registers `tarn hook` for `UserPromptSubmit`, `PostToolUse`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `SessionEnd`.
    2. `tarn hook` reads `TARN_SURFACE`, which the app sets in the environment of each surface.
-   3. It sends the event with the surface id and exits.
+   3. It sends the event with the surface id and exits; for `PermissionRequest` see rule 5.
 4. Rules, for any input: exit code 0; nothing on stdout or stderr; the whole run within 100 ms, connect and write included; no `TARN_SURFACE` or no socket means an immediate exit; errors go only to the log. The plugin never edits `~/.claude/settings.json`.
+5. Exception, `PermissionRequest`: the hook keeps the connection open while the app holds it (hook timeout 1 h) and prints the decision the card writes. No app, a closed connection, Esc or the timeout print nothing, and Claude Code shows its own dialog.
 
 ### 2.4 Session registry
 
@@ -155,7 +156,7 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 | Interrupted | the user presses Esc, no `Stop` arrives | `idle_prompt` later moves the session to `waiting`; the next prompt moves it to `working` |
 | Repeat | the same hook event arrives twice | state unchanged, one notification |
 | App not running | a hook fires while tarn is closed or Claude runs in another terminal | `tarn hook` exits 0 at once; Claude Code is not slowed |
-| App hangs | the socket accepts but the app does not read | `tarn hook` gives up at 100 ms and exits 0 |
+| App hangs | the socket accepts but the app does not read | `tarn hook` gives up at 100 ms and exits 0; a permission hook waits until its timeout |
 | Hooks not installed | the plugin is missing | the session stays `idle` from core events only, never a wrong agent state |
 | Bad request | junk JSON or unknown command on the socket | error reply, log line, state unchanged |
 | Notifications denied | macOS has not allowed notifications | the sidebar still marks sessions; one log line |
@@ -212,7 +213,7 @@ See section 13.
 | `SessionEnd` with reason `clear` | `waiting` | `waiting` | `waiting` | - |
 | other `SessionEnd`, child exited | - | `idle` | `idle` | `idle` |
 
-`-` means no change. Every change resets `stateSince` and `seen`; any move to `working` clears `failed`. Events that carry `agent_id` (subagents) only raise `permission` through `PermissionRequest` and clear it through `PostToolUse` of the same agent; the rest are ignored. A quick answer sends its key only when the screen shows a dialog whose first option is exactly `1. Yes` (or the question's first option) with the card's command start, file name or question in the 12 lines above it; otherwise it focuses the surface. A closed surface removes the record. Entity storage: memory; single writer: the registry. Unknown `notification_type` values are logged and ignored.
+`-` means no change. Every change resets `stateSince` and `seen`; any move to `working` clears `failed`. Events that carry `agent_id` (subagents) only raise `permission` through `PermissionRequest` and clear it through `PostToolUse` of the same agent; the rest are ignored. A quick answer is the decision of the waiting permission hook, tied to its own request; without a waiting hook the card shows no buttons. A closed surface removes the record. Entity storage: memory; single writer: the registry. Unknown `notification_type` values are logged and ignored.
 
 Corrections of the hook research of 2026-10-23 (`agent-terminal/docs/research/agent-status-2026-10-23.md`): `PermissionRequest` comes at once while `permission_prompt` comes about 6 s later, so the late one is a duplicate; `idle_prompt` during a turn would repaint a working session; `Stop` with background tasks is not the end of the work; `/clear` ends the session id but the agent keeps waiting in the same surface.
 
@@ -220,7 +221,7 @@ Corrections of the hook research of 2026-10-23 (`agent-terminal/docs/research/ag
 
 Esc: Claude Code sends no event when the user presses Esc. The registry reads the surface instead: `working` with no progress report and a title starting with `✳`, or `permission` with "Interrupted" in the last screen lines, for 2 s in a row, becomes `waiting` marked seen.
 
-Known limit: Claude Code sends no event when the user approves a permission, so after approving a long command the session shows `permission` until the command ends and `PostToolUse` arrives. Revisit if Claude Code adds an approval event.
+Known limit: approving in the terminal sends no event, so the session shows `permission` until `PostToolUse` arrives.
 
 Jump order for R4: `waiting` with `failed`, then `permission`, then `waiting` or a non-empty `note`; within a group unseen first, then the oldest `stateSince`. Sessions in `idle` or `working` without a note are skipped.
 
@@ -303,6 +304,7 @@ Dropped by the same signals: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (copying
 - Decided: agents never move focus; `tarn notify` marks the session and notifies; the user jumps - keystrokes never land in the wrong session; rejected: agent focus always or when the app is inactive.
 - Decided: agents inside tmux are out of the first version - the shell inside tmux inherits `TARN_SURFACE` from the tmux server, so events would land on the wrong record; revisit with R13 using the client tty as the key.
 - Decided: registry in memory, no persistence - the user keeps the terminal open.
+- Decided: quick answers go back as the permission hook's decision, and the session waits for the user; rejected: key presses matched to the dialog on screen (approved the wrong one with parallel calls), a 30 s wait, the jump shortcut.
 - Decided (2026-10-23): the sidebar has layers from top to bottom - pins (R19), custom groups (R21), agent groups, plain tabs below a divider without a header; the first version ships agent groups and plain tabs, the layer list in code takes the rest without a rework.
 - Decided (2026-10-23): a tab joins an agent group while the foreground process of any of its splits is `claude`, `codex` or `opencode`, read by process name with an argv fallback for a version-like name or an interpreter (ported from macterm, MIT); it returns to plain tabs when the agent exits; rejected: hooks only (Claude only), staying in the group after exit (groups would not show live agents). Not detected: agents inside tmux or ssh, agents behind a wrapper script. Revisit if Ghostty adds a foreground-process event.
 - Decided (2026-10-23): a group is keyed by the full project root (git root, or the folder outside git); the header is the folder name, with its parent folder when two groups share it; rejected: the folder name alone (two `app` projects merged).

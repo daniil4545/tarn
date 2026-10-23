@@ -62,37 +62,80 @@ struct AgentSessionTests {
         #expect(session(after: [prompt, subAsk, otherTool]).state == .permission)
     }
 
-    @Test(arguments: [
-        // The card's command is on screen: the key goes.
-        ("Bash command\n  make test\n❯ 1. Yes\n  2. No", true),
-        // Another command's dialog: no key.
-        ("Bash command\n  rm -rf build\n❯ 1. Yes\n  2. No", false),
-        // No dialog at all.
-        ("make test\n> ", false),
-        // The card's command is in the transcript far above another command's dialog.
-        ("⏺ Bash(make test)\n" + String(repeating: "  output\n", count: 14)
-            + "Bash command\n  rm -rf build\n❯ 1. Yes\n  2. No", false),
-        // The first option is not a plain yes.
-        ("Bash command\n  make test\n❯ 1. Yes, and always allow access to tmp/\n  2. No", false),
-    ])
-    func quickAnswerNeedsTheCardsDialogOnScreen(screen: String, sends: Bool) {
+    private func decision(_ data: Data?) -> [String: Any]? {
+        guard let data, data.last == UInt8(ascii: "\n"),
+              let output = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let specific = output["hookSpecificOutput"] as? [String: Any],
+              specific["hookEventName"] as? String == "PermissionRequest"
+        else { return nil }
+        return specific["decision"] as? [String: Any]
+    }
+
+    @Test func cardAllowsOrDeniesATool() {
         let request = AgentRequest(kind: .tool, tool: "Bash", detail: "make test", options: [])
-        #expect((SessionRegistry.key(answering: request, option: 0, screen: screen) != nil) == sends)
+        let allow = decision(SessionRegistry.decision(for: request, input: [:], option: 0))
+        let deny = decision(SessionRegistry.decision(for: request, input: [:], option: 1))
+        #expect(allow?["behavior"] as? String == "allow")
+        #expect(deny?["behavior"] as? String == "deny")
+        let message = deny?["message"] as? String
+        #expect(message?.isEmpty == false)
     }
 
-    @Test func questionAnswerNeedsTheQuestionsOwnDialog() {
-        let request = AgentRequest(kind: .question, tool: "AskUserQuestion", detail: "Ship it now?", options: ["Yes", "No"])
-        let question = "Ship it now?\n❯ 1. Yes\n  2. No"
-        // A permission dialog also has "1. Yes"; its "2." would approve for good.
-        let permission = "Bash command\n  make test\n❯ 1. Yes\n  2. Yes, and don't ask again\n  3. No"
-        #expect(SessionRegistry.key(answering: request, option: 1, screen: question) != nil)
-        #expect(SessionRegistry.key(answering: request, option: 1, screen: permission) == nil)
+    @Test func cardAnswersAQuestionWithTheChosenLabel() {
+        let request = AgentRequest(kind: .question, tool: "AskUserQuestion", detail: "Ship it now?", options: ["Yes", "Later"])
+        let input: [String: Any] = ["questions": [["question": "Ship it now?"]]]
+        let answer = decision(SessionRegistry.decision(for: request, input: input, option: 1))
+        let updated = answer?["updatedInput"] as? [String: Any]
+        #expect(answer?["behavior"] as? String == "allow")
+        #expect(updated?["answers"] as? [String: String] == ["Ship it now?": "Later"])
+        #expect(updated?["questions"] != nil)
+        #expect(SessionRegistry.decision(for: request, input: input, option: 2) == nil)
     }
 
-    @Test func absoluteCommandIsMatchedByItsStartNotItsLastWord() {
-        let request = AgentRequest(kind: .tool, tool: "Bash", detail: "/bin/rm -rf /x/data", options: [])
-        let other = "Bash command\n  cp data backup/data\n❯ 1. Yes\n  2. No"
-        #expect(SessionRegistry.key(answering: request, option: 0, screen: other) == nil)
+    private final class Hook {}
+    private let make: [String: Any] = ["command": "make test"]
+    private let remove: [String: Any] = ["command": "rm -rf build"]
+
+    private func waiting(_ inputs: [[String: Any]]) -> [PendingAnswer<Hook>] {
+        inputs.map {
+            PendingAnswer(request: AgentRequest(kind: .tool, tool: "Bash", detail: $0["command"] as? String ?? "", options: []),
+                          input: $0, reply: Hook())
+        }
+    }
+
+    @Test(arguments: [
+        // A finished call drops only its own request.
+        ("PostToolUse", ["tool_name": "Bash", "tool_input": ["command": "make test"]], ["rm -rf build"]),
+        ("PostToolUseFailure", ["tool_name": "Bash", "tool_input": ["command": "rm -rf build"]], ["make test"]),
+        // Another tool's call, or a parallel one, leaves both waiting.
+        ("PostToolUse", ["tool_name": "Bash", "tool_input": ["command": "ls"]], ["make test", "rm -rf build"]),
+        // The end of a turn drops all; a subagent's end or work left in the background does not.
+        ("Stop", [:], []),
+        ("Stop", ["background_tasks": [["id": "a1"]]], ["make test", "rm -rf build"]),
+        ("Stop", ["agent_id": "s1"], ["make test", "rm -rf build"]),
+        ("StopFailure", [:], []),
+        ("SessionEnd", [:], []),
+        ("UserPromptSubmit", [:], []),
+        ("Notification", ["notification_type": "permission_prompt"], ["make test", "rm -rf build"]),
+    ] as [(String, [String: Any], [String])])
+    func waitingHookEndsWithItsCallOrTheTurn(name: String, event: [String: Any], left: [String]) {
+        let rest = PendingAnswer.remaining(waiting([make, remove]), after: name, event)
+        #expect(rest.map(\.request.detail) == left)
+    }
+
+    @Test func waitingHookHoldsThePermissionCard() {
+        let first = AgentRequest(kind: .tool, tool: "Bash", detail: "make test", options: [])
+        var shown = session(after: [prompt, toolDone])
+        shown.show(waiting: first)
+        #expect(shown.state == .permission)
+        #expect(shown.request == first)
+        #expect(shown.answerable)
+
+        // Without a waiting hook the card shows no buttons; the agent's own dialog answers.
+        var dialog = session(after: [prompt, ask])
+        dialog.show(waiting: nil)
+        #expect(dialog.state == .permission)
+        #expect(!dialog.answerable)
     }
 
     @Test func permissionOwnerResetsWithTheNextTurn() {
@@ -101,20 +144,6 @@ struct AgentSessionTests {
         let subTool: [String: Any] = ["hook_event_name": "PostToolUse", "agent_id": "s1"]
         let late: [String: Any] = ["hook_event_name": "Notification", "notification_type": "permission_prompt"]
         #expect(session(after: [prompt, subAsk, subTool, prompt, late, toolDone]).state == .working)
-    }
-
-    @Test func jumpSkipsClosedSurfaces() {
-        // The closed one waits longer, so it would win if it counted.
-        let closed = AgentSession(surfaceID: UUID(), state: .waiting, since: .distantPast, seen: false)
-        let open = AgentSession(surfaceID: UUID(), state: .waiting, since: Date(), seen: false)
-        #expect(SessionRegistry.nextWaiting([closed, open], alive: [open.surfaceID]) == open.surfaceID)
-        #expect(SessionRegistry.nextWaiting([closed, open], alive: [closed.surfaceID, open.surfaceID]) == closed.surfaceID)
-    }
-
-    @Test func quickAnswerMatchesAFileByItsName() {
-        let request = AgentRequest(kind: .tool, tool: "Edit", detail: "/u/dev/tarn/docs/spec.md", options: [], detailIsPath: true)
-        let screen = "Edit file\n  docs/spec.md\n❯ 1. Yes\n  2. No"
-        #expect(SessionRegistry.key(answering: request, option: 0, screen: screen) != nil)
     }
 
     @Test func latePermissionPromptAfterAnsweredRequestIsIgnored() {

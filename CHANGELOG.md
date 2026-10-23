@@ -13,7 +13,7 @@ First preview, built from source. The sidebar and Claude Code session state work
 - Vertical sidebar in place of the native tab bar: tabs of a window with their shortcuts, close on hover, right-click menu, rename, resizable width, collapse to an icon strip.
 - Agent groups: a tab where `claude`, `codex` or `opencode` runs moves into the group of its project, keyed by the git root, with the agent's icon; it returns below the divider when the agent exits. Two projects with the same folder name show their parent folder.
 - Claude Code session state through the `tarn` plugin: working, needs permission, asks a question, done, done but not seen, stopped with an error, as a colored dot.
-- A card beside a tab answers a permission request or a single-choice question with one key; Cmd+Shift+U jumps to the session that needs you.
+- A card beside a tab answers a permission request or a single-choice question; the answer goes back through the waiting hook, so it reaches exactly that request.
 
 ### Setup
 

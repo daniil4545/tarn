@@ -41,26 +41,33 @@ struct AgentQuickActions: View {
                     .textSelection(.enabled)
             }
 
-            switch request.kind {
-            case .tool:
-                HStack(spacing: 6) {
-                    Button("Allow") { answer(0) }
-                        .buttonStyle(SidebarActionStyle(isPrimary: true))
-                    Button("Deny") { answer(1) }
-                        .buttonStyle(SidebarActionStyle())
-                }
-            case .question:
-                ForEach(Array(request.options.prefix(9).enumerated()), id: \.offset) { index, label in
-                    Button("\(index + 1). \(label)") { answer(index) }
-                        .buttonStyle(SidebarActionStyle(alignment: .leading))
-                }
+            // Without a waiting hook the agent shows its own dialog in the terminal.
+            if agent.answerable {
+                buttons
+            }
+        }
+    }
+
+    @ViewBuilder private var buttons: some View {
+        switch request.kind {
+        case .tool:
+            HStack(spacing: 6) {
+                Button("Allow") { answer(0) }
+                    .buttonStyle(SidebarActionStyle(isPrimary: true))
+                Button("Deny") { answer(1) }
+                    .buttonStyle(SidebarActionStyle())
+            }
+        case .question:
+            ForEach(Array(request.options.prefix(9).enumerated()), id: \.offset) { index, label in
+                Button("\(index + 1). \(label)") { answer(index) }
+                    .buttonStyle(SidebarActionStyle(alignment: .leading))
             }
         }
     }
 
     private func answer(_ option: Int) {
         onAnswer()
-        SessionRegistry.shared.answer(agent.surfaceID, option: option)
+        SessionRegistry.shared.answer(agent.surfaceID, request: request, option: option)
     }
 }
 

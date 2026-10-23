@@ -1,6 +1,6 @@
 {
   "name": "tarn",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reports agent state to the tarn sidebar: working, needs you, done",
   "author": {
     "name": "Daniil Sukhar"

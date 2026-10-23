@@ -32,7 +32,7 @@ flowchart LR
   user["User"] -->|"types, clicks sidebar"| app["tarn app"]
   cc["Claude Code"] -->|"hook event"| plug["Plugin hook.sh"]
   plug -->|"JSON line, unix socket"| app
-  app -->|"key press on prompt"| cc
+  app -->|"card answer, permission hook"| plug
   app -->|"reads foreground pid"| os["macOS process table"]
   classDef ours fill:#dbeafe,stroke:#2c5c86,color:#000
   classDef external fill:#f3f4f6,stroke:#6b7280,color:#000
@@ -42,7 +42,7 @@ flowchart LR
   class user person
 ```
 
-Blue: our code. Gray: external system. Yellow: person. Source: `plugin/hooks/hook.sh`, `ControlSocket.swift`, `AgentProcess.swift`.
+Blue: our code. Gray: external system. Yellow: person. Source: `plugin/hooks/hook.sh`, `plugin/hooks/permission.sh`, `ControlSocket.swift`, `AgentProcess.swift`.
 
 ### Modules
 
@@ -61,9 +61,9 @@ flowchart LR
 
 | Module | Responsibility | Location | Status |
 |---|---|---|---|
-| Plugin | forwards each hook event to the socket, never fails | `plugin/` (`hooks/hooks.json`, `hooks/hook.sh`, `.claude-plugin/`) | works |
-| ControlSocket | binds the unix socket, reads one JSON line per connection | `macos/Sources/Features/Tarn/ControlSocket.swift` | works |
-| SessionRegistry | owns session state, state machine, liveness check, answers, jump order | `macos/Sources/Features/Tarn/SessionRegistry.swift` | works |
+| Plugin | forwards each hook event to the socket, never fails; the permission hook waits for the card's answer | `plugin/` (`hooks/hooks.json`, `hooks/hook.sh`, `hooks/permission.sh`, `.claude-plugin/`) | works |
+| ControlSocket | binds the unix socket, reads one JSON line per connection, keeps a connection open as a `Reply` for the answer | `macos/Sources/Features/Tarn/ControlSocket.swift` | works |
+| SessionRegistry | owns session state, state machine, liveness check, pending answers | `macos/Sources/Features/Tarn/SessionRegistry.swift` | works |
 | AgentProcess | names the agent from a surface's foreground process | `macos/Sources/Features/Tarn/AgentProcess.swift` | works |
 | SidebarModel, SidebarLayout, Sidebar | builds groups per window, draws the sidebar | `macos/Sources/Features/Tarn/Sidebar.swift` | works |
 | AgentViews | agent badge, quick actions, card content | `macos/Sources/Features/Tarn/AgentViews.swift` | works |
@@ -79,9 +79,9 @@ flowchart LR
 | `src/` (Zig core) is not modified | no file under `src/` in the branch diff | review of `git diff --stat` |
 | Swift changes outside `Features/Tarn/` only at insertion points of section 9 | section 9 lists all of them | review of `git diff origin/main...HEAD` |
 | The registry is the only writer of session state | `SessionRegistry.sessions` is `private(set)`; sidebar only reads | review (not verified by a test) |
-| `hook.sh` never blocks or fails the agent: exit 0, no output | `exit 0` on every path; the agent's pipes are released first; `nc` runs in the background, the hook waits for it about 40 ms and then stops it | `python3 -I plugin/test/hook_test.py`: no surface, no app, an app that accepts and never reads, garbage input, a 200 KB event |
+| `hook.sh` never blocks or fails the agent: exit 0, no output; `permission.sh` waits only while the app holds the connection | `exit 0` on every path; the agent's pipes are released first; `nc` runs in the background, the hook waits for it about 40 ms and then stops it | `python3 -I plugin/test/hook_test.py`: no surface, no app, an app that accepts and never reads, garbage input, a 200 KB event |
 | Nothing edits `~/.claude/settings.json` | hooks ship as a plugin | review |
-| No agent command moves focus or presses Enter for the user | `answer` only sends a key for a visible prompt after a user click | review |
+| No agent command moves focus or presses Enter for the user | no key is sent; `answer` writes the hook decision after a user click | review |
 | No network calls in our code | none present | review |
 
 Invariants without a test are candidates for tracker tasks.
@@ -180,7 +180,7 @@ Liveness: Claude Code sends no event on Esc. For `working`: no progress report o
 
 `seen` is true at start; on a state change it is set to whether the surface is focused in the key window of the active app. `isUnseenDone` is `waiting` and not seen.
 
-Jump order (`focusNextWaiting`): failed and unseen first, then `permission`, then unseen finished; inside a group the oldest `since`.
+Pending answers: `PermissionRequest` from `permission.sh` carries `"reply":true`; the registry keeps its `Reply` per surface, oldest first, and while one waits the session shows `permission` with the oldest request and `answerable` (`AgentSession.show`). `answer` writes the decision (`decision(for:input:option:)`) to the request the card shows. `PendingAnswer.remaining` drops a request when `PostToolUse` of the same tool and input arrives and all of them at the end of a turn; the liveness check and a closed surface drop the rest. A dropped hook gets no answer, so Claude Code shows its dialog. A question the card cannot answer (several questions, multi-select) is dropped at once.
 
 ## 5. External systems and trust boundaries
 
@@ -221,9 +221,9 @@ One environment: the local macOS app. No config file of ours.
 | `TARN_SURFACE` | tells hooks which surface they run in | the app, for each surface shell |
 | socket path | `~/Library/Application Support/tarn/tarn.sock` | constant in `ControlSocket.path` |
 | sidebar width, collapsed, folded roots | layout | `UserDefaults` |
-| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.1.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`CHANGELOG.md`, Setup) |
+| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.2.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`CHANGELOG.md`, Setup) |
 
-Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s: `UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SessionEnd`.
+Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (`permission.sh`, 3600 s): `UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SessionEnd`.
 
 ## 9. Where to change
 
@@ -255,8 +255,8 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 | Add a hook event | `plugin/hooks/hooks.json`, `handle` | hook timeout, the invariant on `hook.sh` |
 | Change grouping or order | `SidebarModel.refresh`, `arrange`, `projectRoot` | group key is the full root path |
 | Change detection triggers | `SidebarModel.init` timer and observer | idle CPU (bench in spec; `tarn.mk` absent here) |
-| Change quick answers | `SessionRegistry.answer`, `AgentViews.swift` | depends on Claude Code dialog text ("1. Yes") |
-| Change the socket path or protocol | `ControlSocket`, `hook.sh`, registry `receive` | `version` field |
+| Change quick answers | `SessionRegistry.answer`, `decision`, `AgentViews.swift` | Claude Code `PermissionRequest` decision format |
+| Change the socket path or protocol | `ControlSocket`, `hook.sh`, `permission.sh`, registry `receive` | `version` field |
 | Change layout or width | `Sidebar.swift` | `Sidebar.occupiedWidth` used by the insertion point 2 |
 
 ## 10. Limits and open items
