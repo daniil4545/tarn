@@ -49,7 +49,13 @@ def main() -> int:
         with socket.socket(socket.AF_UNIX) as server:
             server.bind(str(folder / "tarn.sock"))
             server.listen(8)
-            for name, payload in [("hung app", STOP), ("hung app, garbage", b"\x00not json\n\n")]:
+            big = b'{"hook_event_name":"PostToolUse","tool_response":"' + b"x" * 200_000 + b'"}'
+            cases = [
+                ("hung app", STOP),
+                ("hung app, garbage", b"\x00not json\n\n"),
+                ("hung app, 200 KB", big),
+            ]
+            for name, payload in cases:
                 if failure := run(home, "x", payload):
                     failures.append(f"{name}: {failure}")
     finally:
