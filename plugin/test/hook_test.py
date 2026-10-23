@@ -4,55 +4,60 @@
 Run: python3 -I plugin/test/hook_test.py
 """
 
-import os
+import shutil
 import socket
 import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
 
-HOOK = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "hooks", "hook.sh")
+HOOK = Path(__file__).resolve().parent.parent / "hooks" / "hook.sh"
 LIMIT = 0.1
+STOP = b'{"hook_event_name":"Stop"}'
 
 
-def run(home: str, surface: str | None, payload: bytes) -> tuple[float, int, bytes]:
-    env = {"HOME": home, "PATH": "/usr/bin:/bin"}
+def run(home: Path, surface: str | None, payload: bytes) -> str | None:
+    """Runs the hook once and describes the failure, or returns None."""
+    env = {"HOME": str(home), "PATH": "/usr/bin:/bin"}
     if surface is not None:
         env["TARN_SURFACE"] = surface
     start = time.monotonic()
-    done = subprocess.run(["sh", HOOK], input=payload, env=env, capture_output=True)
-    return time.monotonic() - start, done.returncode, done.stdout + done.stderr
+    # Fixed arguments: our own script under /bin/sh, no user input.
+    done = subprocess.run(  # noqa: S603
+        ["/bin/sh", str(HOOK)], input=payload, env=env, capture_output=True, check=False
+    )
+    elapsed = time.monotonic() - start
+    output = done.stdout + done.stderr
+    if elapsed > LIMIT or done.returncode != 0 or output:
+        return f"{elapsed * 1000:.0f} ms, exit {done.returncode}, output {output!r}"
+    return None
 
 
 def main() -> int:
-    failures = []
     # A short path: a unix socket path is limited to 104 bytes.
-    home = tempfile.mkdtemp(dir="/tmp", prefix="th.")
-    folder = os.path.join(home, "Library", "Application Support", "tarn")
-    os.makedirs(folder)
+    home = Path(tempfile.mkdtemp(dir="/tmp", prefix="th."))
+    folder = home / "Library" / "Application Support" / "tarn"
+    folder.mkdir(parents=True)
+    failures: list[str] = []
+    try:
+        for name, surface in [("no surface", None), ("no app", "x")]:
+            if failure := run(home, surface, STOP):
+                failures.append(f"{name}: {failure}")
 
-    cases = [
-        ("no surface", None, b'{"hook_event_name":"Stop"}'),
-        ("no app", "x", b'{"hook_event_name":"Stop"}'),
-    ]
-    for name, surface, payload in cases:
-        elapsed, code, output = run(home, surface, payload)
-        if elapsed > LIMIT or code != 0 or output:
-            failures.append(f"{name}: {elapsed * 1000:.0f} ms, exit {code}, output {output!r}")
-
-    # A socket that accepts and never reads, as a hung app does.
-    server = socket.socket(socket.AF_UNIX)
-    server.bind(os.path.join(folder, "tarn.sock"))
-    server.listen(8)
-    for name, payload in [("hung app", b'{"hook_event_name":"Stop"}'), ("hung app, garbage", b"\x00not json\n\n")]:
-        elapsed, code, output = run(home, "x", payload)
-        if elapsed > LIMIT or code != 0 or output:
-            failures.append(f"{name}: {elapsed * 1000:.0f} ms, exit {code}, output {output!r}")
-    server.close()
+        # A socket that accepts and never reads, as a hung app does.
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(folder / "tarn.sock"))
+            server.listen(8)
+            for name, payload in [("hung app", STOP), ("hung app, garbage", b"\x00not json\n\n")]:
+                if failure := run(home, "x", payload):
+                    failures.append(f"{name}: {failure}")
+    finally:
+        shutil.rmtree(home)
 
     for failure in failures:
-        print("FAIL", failure)
-    print("ok" if not failures else f"{len(failures)} failed")
+        sys.stdout.write(f"FAIL {failure}\n")
+    sys.stdout.write("ok\n" if not failures else f"{len(failures)} failed\n")
     return 1 if failures else 0
 
 
