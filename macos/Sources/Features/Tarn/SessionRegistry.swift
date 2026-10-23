@@ -20,6 +20,16 @@ struct AgentRequest: Equatable {
     let detail: String
     /// Question options in order; the n-th is chosen by the digit key n.
     let options: [String]
+    /// `detail` is a file path, which a dialog shows relative, so only its name is matched.
+    var detailIsPath = false
+
+    /// The part of `detail` a dialog shows as is: a file name, or the start of a command or
+    /// question, since long ones wrap. Too short to tell dialogs apart gives "".
+    var screenMark: String {
+        let firstLine = detail.split(separator: "\n").first.map(String.init) ?? ""
+        let mark = detailIsPath ? (firstLine as NSString).lastPathComponent : String(firstLine.prefix(30))
+        return mark.count < 4 ? "" : mark
+    }
 }
 
 /// One agent session, keyed by its surface.
@@ -54,6 +64,7 @@ extension AgentSession {
             failed = false
             request = nil
             sawPermissionRequest = false
+            permissionAgent = nil
 
         case "PermissionRequest":
             state = .permission
@@ -73,6 +84,7 @@ extension AgentSession {
             switch event["notification_type"] as? String {
             case "permission_prompt" where state == .working && !sawPermissionRequest:
                 state = .permission
+                permissionAgent = nil
             case "idle_prompt" where state == .idle:
                 state = .waiting
             default:
@@ -119,8 +131,10 @@ extension AgentSession {
                 options: quick ? options : [])
         }
 
+        if input["command"] == nil, let path = input["file_path"] as? String {
+            return AgentRequest(kind: .tool, tool: tool, detail: path, options: [], detailIsPath: true)
+        }
         let detail = input["command"] as? String
-            ?? input["file_path"] as? String
             ?? input["url"] as? String
             ?? input["description"] as? String
             ?? ""
@@ -250,18 +264,28 @@ final class SessionRegistry {
     /// The key that gives `option` to the dialog of `request`, or nil when the screen does
     /// not show that dialog: another tool's request, a subagent's, or one already answered.
     nonisolated static func key(answering request: AgentRequest, option: Int, screen: String) -> Ghostty.Input.KeyEvent? {
+        // Menu lines without the selection cursor; a line must match a whole option, since
+        // "1. Yes, and always allow" also starts with "1. Yes".
+        let lines = screen.split(separator: "\n").map {
+            $0.trimmingCharacters(in: .whitespaces).trimmingPrefix("❯").trimmingCharacters(in: .whitespaces)
+        }
+        // The card's text must be in the dialog itself, the lines just above its first option,
+        // not in the transcript above it.
+        func dialogShowsCard(firstOption: String) -> Bool {
+            let mark = request.screenMark
+            guard !mark.isEmpty, let row = lines.lastIndex(of: firstOption) else { return false }
+            return lines[max(0, row - 12)..<row].contains { $0.contains(mark) }
+        }
+
         switch request.kind {
         case .tool:
-            // The card's command start or file name must be on screen, so a key never approves
-            // what the user did not see; long commands wrap and paths show relative.
-            let firstLine = request.detail.split(separator: "\n").first.map(String.init) ?? ""
-            let mark = firstLine.hasPrefix("/") ? (firstLine as NSString).lastPathComponent : String(firstLine.prefix(30))
-            guard screen.contains("1. Yes"), !mark.isEmpty, screen.contains(mark) else { return nil }
-            // Option 0 approves once ("1. Yes"); option 1 rejects like Esc.
+            guard dialogShowsCard(firstOption: "1. Yes") else { return nil }
+            // Option 0 approves once; option 1 rejects like Esc.
             return option == 0 ? .init(key: .digit1, text: "1") : .init(key: .escape)
         case .question:
             guard option < request.options.count, option < 9,
-                  screen.contains(request.options[option]) else { return nil }
+                  let first = request.options.first, dialogShowsCard(firstOption: "1. \(first)"),
+                  lines.contains("\(option + 1). \(request.options[option])") else { return nil }
             let digits: [Ghostty.Input.Key] = [.digit1, .digit2, .digit3, .digit4, .digit5,
                                                 .digit6, .digit7, .digit8, .digit9]
             return .init(key: digits[option], text: "\(option + 1)")
@@ -278,21 +302,27 @@ final class SessionRegistry {
     /// Focuses the session that needs the user most: failed, then permission, then an
     /// unseen finished turn; within a group the oldest first.
     func focusNextWaiting() {
+        // A closed tab's record stays until a check finds its surface gone; drop it here.
+        let alive = Set(sessions.keys.filter { Self.surfaceView($0) != nil })
+        for id in sessions.keys where !alive.contains(id) {
+            remove(id)
+        }
+        if let next = Self.nextWaiting(Array(sessions.values), alive: alive) { focus(next) }
+    }
+
+    /// The session the jump goes to; sessions of closed surfaces never count.
+    nonisolated static func nextWaiting(_ sessions: [AgentSession], alive: Set<UUID>) -> UUID? {
         func rank(_ s: AgentSession) -> Int? {
             if s.state == .waiting && s.failed && !s.seen { return 0 }
             if s.state == .permission { return 1 }
             if s.isUnseenDone { return 2 }
             return nil
         }
-        // A closed tab's record stays until a check finds its surface gone; drop it here,
-        // or the jump would keep picking a session that no longer exists.
-        for id in sessions.keys where Self.surfaceView(id) == nil {
-            remove(id)
-        }
-        let next = sessions.values
+        return sessions
+            .filter { alive.contains($0.surfaceID) }
             .compactMap { s in rank(s).map { (s, $0) } }
-            .min { ($0.1, $0.0.since) < ($1.1, $1.0.since) }
-        if let next { focus(next.0.surfaceID) }
+            .min { ($0.1, $0.0.since) < ($1.1, $1.0.since) }?
+            .0.surfaceID
     }
 
     // MARK: Store

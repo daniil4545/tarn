@@ -69,14 +69,50 @@ struct AgentSessionTests {
         ("Bash command\n  rm -rf build\n❯ 1. Yes\n  2. No", false),
         // No dialog at all.
         ("make test\n> ", false),
+        // The card's command is in the transcript far above another command's dialog.
+        ("⏺ Bash(make test)\n" + String(repeating: "  output\n", count: 14)
+            + "Bash command\n  rm -rf build\n❯ 1. Yes\n  2. No", false),
+        // The first option is not a plain yes.
+        ("Bash command\n  make test\n❯ 1. Yes, and always allow access to tmp/\n  2. No", false),
     ])
     func quickAnswerNeedsTheCardsDialogOnScreen(screen: String, sends: Bool) {
         let request = AgentRequest(kind: .tool, tool: "Bash", detail: "make test", options: [])
         #expect((SessionRegistry.key(answering: request, option: 0, screen: screen) != nil) == sends)
     }
 
+    @Test func questionAnswerNeedsTheQuestionsOwnDialog() {
+        let request = AgentRequest(kind: .question, tool: "AskUserQuestion", detail: "Ship it now?", options: ["Yes", "No"])
+        let question = "Ship it now?\n❯ 1. Yes\n  2. No"
+        // A permission dialog also has "1. Yes"; its "2." would approve for good.
+        let permission = "Bash command\n  make test\n❯ 1. Yes\n  2. Yes, and don't ask again\n  3. No"
+        #expect(SessionRegistry.key(answering: request, option: 1, screen: question) != nil)
+        #expect(SessionRegistry.key(answering: request, option: 1, screen: permission) == nil)
+    }
+
+    @Test func absoluteCommandIsMatchedByItsStartNotItsLastWord() {
+        let request = AgentRequest(kind: .tool, tool: "Bash", detail: "/bin/rm -rf /x/data", options: [])
+        let other = "Bash command\n  cp data backup/data\n❯ 1. Yes\n  2. No"
+        #expect(SessionRegistry.key(answering: request, option: 0, screen: other) == nil)
+    }
+
+    @Test func permissionOwnerResetsWithTheNextTurn() {
+        var subAsk = ask
+        subAsk["agent_id"] = "s1"
+        let subTool: [String: Any] = ["hook_event_name": "PostToolUse", "agent_id": "s1"]
+        let late: [String: Any] = ["hook_event_name": "Notification", "notification_type": "permission_prompt"]
+        #expect(session(after: [prompt, subAsk, subTool, prompt, late, toolDone]).state == .working)
+    }
+
+    @Test func jumpSkipsClosedSurfaces() {
+        // The closed one waits longer, so it would win if it counted.
+        let closed = AgentSession(surfaceID: UUID(), state: .waiting, since: .distantPast, seen: false)
+        let open = AgentSession(surfaceID: UUID(), state: .waiting, since: Date(), seen: false)
+        #expect(SessionRegistry.nextWaiting([closed, open], alive: [open.surfaceID]) == open.surfaceID)
+        #expect(SessionRegistry.nextWaiting([closed, open], alive: [closed.surfaceID, open.surfaceID]) == closed.surfaceID)
+    }
+
     @Test func quickAnswerMatchesAFileByItsName() {
-        let request = AgentRequest(kind: .tool, tool: "Edit", detail: "/u/dev/tarn/docs/spec.md", options: [])
+        let request = AgentRequest(kind: .tool, tool: "Edit", detail: "/u/dev/tarn/docs/spec.md", options: [], detailIsPath: true)
         let screen = "Edit file\n  docs/spec.md\n❯ 1. Yes\n  2. No"
         #expect(SessionRegistry.key(answering: request, option: 0, screen: screen) != nil)
     }
