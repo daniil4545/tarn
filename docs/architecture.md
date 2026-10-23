@@ -79,7 +79,7 @@ flowchart LR
 | `src/` (Zig core) is not modified | no file under `src/` in the branch diff | review of `git diff --stat` |
 | Swift changes outside `Features/Tarn/` only at insertion points of section 9 | section 9 lists all of them | review of `git diff origin/main...HEAD` |
 | The registry is the only writer of session state | `SessionRegistry.sessions` is `private(set)`; sidebar only reads | review (not verified by a test) |
-| `hook.sh` never blocks or fails the agent: exit 0, no output | `exit 0` on every path; `nc` runs in the background and the hook waits for it about 50 ms; output to `/dev/null` | `python3 -I plugin/test/hook_test.py`: no surface, no app, an app that accepts and never reads, garbage input |
+| `hook.sh` never blocks or fails the agent: exit 0, no output | `exit 0` on every path; the agent's pipes are released first; `nc` runs in the background, the hook waits for it about 40 ms and then stops it | `python3 -I plugin/test/hook_test.py`: no surface, no app, an app that accepts and never reads, garbage input, a 200 KB event |
 | Nothing edits `~/.claude/settings.json` | hooks ship as a plugin | review |
 | No agent command moves focus or presses Enter for the user | `answer` only sends a key for a visible prompt after a user click | review |
 | No network calls in our code | none present | review |
@@ -108,7 +108,7 @@ sequenceDiagram
 | Step | Module | What it does |
 |---|---|---|
 | 1 | Surface creation | the app puts `TARN_SURFACE=<surface uuid>` in the shell environment (insertion point 3 in section 9) |
-| 2 | `hook.sh` | exits at once if `TARN_SURFACE` or the socket is missing; else wraps stdin as `{"version":1,"surface":...,"event":...}` and sends it with `nc -U -w 1` in the background, waiting for it about 50 ms; a live app reads the line in a few ms, so events keep their order |
+| 2 | `hook.sh` | exits at once if `TARN_SURFACE` or the socket is missing; else wraps stdin as `{"version":1,"surface":...,"event":...}` and sends it with `nc -U -w 1` in the background, waiting for it about 40 ms and then stopping it; a live app reads the line in a few ms, so events keep their order |
 | 3 | ControlSocket | accepts, reads until newline, 1 s receive timeout, drops lines over 4 MB, passes the line to the main actor |
 | 4 | SessionRegistry | drops malformed lines (version must be 1) and events for unknown surfaces; applies `AgentSession.handle`; if state changed, resets `since` and sets `seen` from focus |
 | 5 | SessionRegistry | stores the session and posts `terminalTabsDidChange` |
