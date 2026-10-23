@@ -4,7 +4,7 @@
 
 tarn is an agent-first terminal for macOS, a fork of Ghostty. It keeps the Ghostty core and app and adds a narrow set of features for working with CLI coding agents, Claude Code first. The user decides; the canon for behavior is `docs/spec.md`, for structure `docs/architecture.md` (created in stage S0). The project is public: code, docs, commits and this file are in English.
 
-`AGENTS.md`, `macos/AGENTS.md`, `README.md` and `Makefile` belong to upstream Ghostty and stay untouched to keep upstream merges clean. Follow their build commands; never open issues or PRs against `ghostty-org/ghostty`.
+`AGENTS.md`, `macos/AGENTS.md` and `Makefile` belong to upstream Ghostty and stay untouched to keep upstream merges clean. `README.md` and `NOTICE.md` are ours, as in other hard forks of Ghostty (Tellurion); on an upstream merge `README.md` keeps our version. Follow their build commands; never open issues or PRs against `ghostty-org/ghostty`.
 
 ## Principles
 
