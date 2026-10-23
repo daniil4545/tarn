@@ -22,6 +22,8 @@ final class SidebarModel: ObservableObject {
         /// The 1-based position of the tab in its window.
         let index: Int
         let title: String
+        /// The agent the tab runs, as `AgentProcess` names it.
+        let agentProcess: String?
         let keyEquivalent: String?
         let color: TerminalTabColor
         let isSelected: Bool
@@ -33,9 +35,26 @@ final class SidebarModel: ObservableObject {
     }
 
     struct Group: Identifiable, Equatable {
-        /// The project name: the git root folder of the tab's focused surface, or its folder.
-        let id: String
+        /// The sections of the sidebar from top to bottom.
+        enum Section: Int, Comparable {
+            /// Tabs that run a coding agent, one group per project.
+            case agents
+            /// All other tabs, below a divider and without a header.
+            case terminals
+
+            static func < (lhs: Section, rhs: Section) -> Bool { lhs.rawValue < rhs.rawValue }
+        }
+
+        let section: Section
+        /// The project root: the git root above the agent's surface, or its folder.
+        /// Empty for the terminals section.
+        let path: String
+        /// The header: the root's folder name, with its parent folder when another
+        /// group has the same folder name.
+        let name: String
         let tabs: [Tab]
+
+        var id: String { "\(section.rawValue):\(path)" }
     }
 
     @Published private(set) var groups: [Group] = []
@@ -69,8 +88,9 @@ final class SidebarModel: ObservableObject {
 
     private var observer: NSObjectProtocol?
     private var closeObserver: NSObjectProtocol?
+    private var processTimer: Timer?
 
-    /// Project names by working directory, so a refresh does not walk the file system again.
+    /// Project roots by working directory, so a refresh does not walk the file system again.
     private var projects: [String: String] = [:]
 
     init() {
@@ -106,9 +126,22 @@ final class SidebarModel: ObservableObject {
                 DispatchQueue.main.async { self?.refresh() }
             }
         }
+
+        // The core has no event for a new foreground process. A title change catches most
+        // agent starts and exits; this timer catches the rest. Hidden and covered windows skip it.
+        let timer = Timer(timeInterval: 2, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.window?.occlusionState.contains(.visible) == true else { return }
+                self.refresh()
+            }
+        }
+        timer.tolerance = 0.5
+        RunLoop.main.add(timer, forMode: .common)
+        processTimer = timer
     }
 
     deinit {
+        processTimer?.invalidate()
         if let pressureMonitor {
             NSEvent.removeMonitor(pressureMonitor)
         }
@@ -150,36 +183,77 @@ final class SidebarModel: ObservableObject {
         // The window only carries a key equivalent label while it is in a tab group, so a
         // lone tab would have none. Look the shortcuts up from the keybinds instead.
         let config = (window?.windowController as? BaseTerminalController)?.ghostty.config
-        var order: [String] = []
-        var byProject: [String: [Tab]] = [:]
+        var placed: [(key: GroupKey, tab: Tab)] = []
 
         for (offset, tabWindow) in tabWindows.enumerated() {
             let index = offset + 1
             let shortcut = index <= 9 ? config?.keyboardShortcut(for: "goto_tab:\(index)") : nil
             let controller = tabWindow.windowController as? BaseTerminalController
-            let pwd = controller?.focusedSurface?.pwd
-            let name = project(for: pwd)
+            // A tab joins its project's group while any of its splits runs an agent.
+            let running = controller?.surfaceTree.lazy
+                .compactMap { view in
+                    view.surfaceModel?.foregroundPID
+                        .flatMap { pid_t(exactly: $0) }
+                        .flatMap(AgentProcess.agent)
+                        .map { (view: view, agent: $0) }
+                }
+                .first
+            let agentSurface = running?.view
+            let pwd = (agentSurface ?? controller?.focusedSurface)?.pwd
+            let root = projectRoot(for: pwd)
+            let key = agentSurface == nil
+                ? GroupKey(section: .terminals, path: "")
+                : GroupKey(section: .agents, path: root)
             let tab = Tab(
                 id: ObjectIdentifier(tabWindow),
                 index: index,
-                title: Self.displayTitle(tabWindow.title, pwd: pwd),
+                title: Self.displayTitle(tabWindow.title, pwd: pwd, agent: running?.agent),
+                agentProcess: running?.agent,
                 keyEquivalent: shortcut.map { "\($0)" },
                 color: (tabWindow as? TerminalWindow)?.tabColor ?? .none,
                 // Our window is only on screen while it is the selected tab.
                 isSelected: tabWindow === window,
                 agent: Self.agent(in: controller),
-                project: name,
+                project: root.isEmpty ? "" : (root as NSString).lastPathComponent,
                 folder: pwd.map { Self.displayTitle("/", pwd: $0) }
             )
 
-            if byProject[name] == nil { order.append(name) }
-            byProject[name, default: []].append(tab)
+            placed.append((key, tab))
         }
 
-        let newGroups = order.map { Group(id: $0, tabs: byProject[$0] ?? []) }
+        let newGroups = Self.arrange(placed)
         guard newGroups != groups else { return }
         groups = newGroups
         if cardTab != nil { updateCard() }
+    }
+
+    struct GroupKey: Hashable {
+        let section: Group.Section
+        let path: String
+    }
+
+    /// Groups tabs in tab order: sections in their fixed order, groups within a section
+    /// in the order of their first tab, tabs within a group in tab order.
+    nonisolated static func arrange(_ placed: [(key: GroupKey, tab: Tab)]) -> [Group] {
+        var order: [GroupKey] = []
+        var byGroup: [GroupKey: [Tab]] = [:]
+        for (key, tab) in placed {
+            if byGroup[key] == nil { order.append(key) }
+            byGroup[key, default: []].append(tab)
+        }
+        let folderCounts = Dictionary(order.map { (folderName($0.path), 1) }, uniquingKeysWith: +)
+        return order.enumerated()
+            .sorted { ($0.element.section, $0.offset) < ($1.element.section, $1.offset) }
+            .map { _, key in
+                let folder = folderName(key.path)
+                let parent = folderName((key.path as NSString).deletingLastPathComponent)
+                let name = folderCounts[folder, default: 0] > 1 ? "\(parent)/\(folder)" : folder
+                return Group(section: key.section, path: key.path, name: name, tabs: byGroup[key] ?? [])
+            }
+    }
+
+    private nonisolated static func folderName(_ path: String) -> String {
+        path.isEmpty ? "" : (path as NSString).lastPathComponent
     }
 
     /// Shows the card of `cardTab` beside its row, or closes it.
@@ -220,7 +294,16 @@ final class SidebarModel: ObservableObject {
     /// The tab title to show. A shell titles its window with a path, often cut with "…";
     /// such a title is replaced by the full working directory with the home folder as "~".
     /// Any other title, such as one set by a running program, is kept.
-    static func displayTitle(_ title: String, pwd: String?) -> String {
+    ///
+    /// An agent that leaves the shell's title in place (codex sets none) gets its own name.
+    nonisolated static func displayTitle(_ title: String, pwd: String?, agent: String? = nil) -> String {
+        if let agent, let name = AgentProcess.displayNames[agent] {
+            // Agents lead their titles with a spinner or a mark (`✳`, `⠏`); the icon and
+            // the state dot already show both.
+            let text = String(title.drop { !$0.isLetter && !$0.isNumber && !"/~…".contains($0) })
+            if isShellTitle(text, pwd: pwd) { return name }
+            if text != title { return text }
+        }
         guard let pwd, !pwd.isEmpty, let first = title.first, "/~…".contains(first) else { return title }
         let home = NSHomeDirectory()
         if pwd == home { return "~" }
@@ -228,24 +311,32 @@ final class SidebarModel: ObservableObject {
         return pwd
     }
 
-    /// The name of the git root above `pwd`, or the last folder of `pwd` outside git.
-    private func project(for pwd: String?) -> String {
+    /// A title a shell sets: empty, a path, or the name of the working folder.
+    private nonisolated static func isShellTitle(_ title: String, pwd: String?) -> Bool {
+        guard let first = title.first else { return true }
+        if "/~…".contains(first) { return true }
+        guard let pwd, !pwd.isEmpty else { return false }
+        return title == (pwd as NSString).lastPathComponent
+    }
+
+    /// The git root above `pwd`, or `pwd` itself outside git.
+    private func projectRoot(for pwd: String?) -> String {
         guard let pwd, !pwd.isEmpty else { return "" }
         if let cached = projects[pwd] { return cached }
 
         let fm = FileManager.default
         var url = URL(fileURLWithPath: pwd)
-        var name = url.lastPathComponent
+        var root = url.path
         while url.path != "/" {
             if fm.fileExists(atPath: url.appendingPathComponent(".git").path) {
-                name = url.lastPathComponent
+                root = url.path
                 break
             }
             url.deleteLastPathComponent()
         }
 
-        projects[pwd] = name
-        return name
+        projects[pwd] = root
+        return root
     }
 
     func newTab() {
@@ -332,6 +423,9 @@ struct SidebarLayout<Content: View>: View {
 
     /// The sidebar width when the current resize drag began.
     @State private var widthAtDragStart: Double?
+    /// The width during a resize drag. It is stored once the drag ends: a stored width
+    /// re-lays out every tab window, hidden ones included, which made the drag stutter.
+    @State private var dragWidth: Double?
 
     init(model: SidebarModel, ghostty: Ghostty.App, @ViewBuilder content: () -> Content) {
         self.model = model
@@ -342,7 +436,7 @@ struct SidebarLayout<Content: View>: View {
     var body: some View {
         HStack(spacing: 0) {
             Sidebar(model: model, isCollapsed: $isCollapsed)
-                .frame(width: isCollapsed ? Sidebar.collapsedWidth : width)
+                .frame(width: isCollapsed ? Sidebar.collapsedWidth : dragWidth ?? width)
                 .background(ghostty.config.backgroundColor.opacity(ghostty.config.backgroundOpacity))
                 .environment(\.colorScheme, NSColor(ghostty.config.backgroundColor).isLightColor ? .light : .dark)
                 .overlay(alignment: .trailing) {
@@ -379,9 +473,11 @@ struct SidebarLayout<Content: View>: View {
                 let start = widthAtDragStart ?? width
                 widthAtDragStart = start
                 let range = Sidebar.widthRange
-                width = min(max(start + value.translation.width, range.lowerBound), range.upperBound)
+                dragWidth = min(max((start + value.translation.width).rounded(), range.lowerBound), range.upperBound)
             }
             .onEnded { _ in
+                if let dragWidth { width = dragWidth }
+                dragWidth = nil
                 widthAtDragStart = nil
             }
     }
@@ -391,7 +487,7 @@ struct SidebarLayout<Content: View>: View {
 struct Sidebar: View {
     static let collapsedKey = "TarnSidebarCollapsed"
     static let widthKey = "TarnSidebarWidth"
-    static let foldedKey = "TarnSidebarFoldedProjects"
+    static let foldedKey = "TarnSidebarFoldedRoots"
     static let defaultWidth: Double = 200
     static let widthRange: ClosedRange<Double> = 120...400
     static let collapsedWidth: Double = 40
@@ -423,6 +519,9 @@ struct Sidebar: View {
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 2) {
                         ForEach(model.groups) { group in
+                            if isTerminalsBelowGroups(group) {
+                                sectionDivider
+                            }
                             ForEach(group.tabs) { tab in
                                 SidebarRow(model: model, tab: tab, isCompact: true)
                             }
@@ -441,8 +540,12 @@ struct Sidebar: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(model.groups) { group in
-                            let isFolded = folded.contains(group.id)
-                            if !group.id.isEmpty {
+                            let hasHeader = group.section == .agents && !group.path.isEmpty
+                            let isFolded = hasHeader && folded.contains(group.path)
+                            if isTerminalsBelowGroups(group) {
+                                sectionDivider
+                            }
+                            if hasHeader {
                                 header(group, isFolded: isFolded)
                             }
                             // A folded project still shows its selected tab, so the
@@ -466,13 +569,26 @@ struct Sidebar: View {
         }
     }
 
+    /// The terminals section gets a divider when agent groups are above it.
+    private func isTerminalsBelowGroups(_ group: SidebarModel.Group) -> Bool {
+        group.section == .terminals && model.groups.first?.id != group.id
+    }
+
+    private var sectionDivider: some View {
+        Rectangle()
+            .fill(Color.primary.opacity(0.12))
+            .frame(height: 1)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 6)
+    }
+
     /// A project header. A click folds or unfolds the project's tabs.
     private func header(_ group: SidebarModel.Group, isFolded: Bool) -> some View {
         HStack(spacing: 4) {
             Image(systemName: isFolded ? "chevron.right" : "chevron.down")
                 .font(.system(size: 8, weight: .bold))
                 .frame(width: 10)
-            Text(group.id)
+            Text(group.name)
                 .lineLimit(1)
             Spacer(minLength: 4)
             if isFolded {
@@ -486,12 +602,12 @@ struct Sidebar: View {
         .padding(.top, 8)
         .padding(.bottom, 2)
         .contentShape(Rectangle())
-        .onTapGesture { toggleFold(group.id) }
+        .onTapGesture { toggleFold(group.path) }
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(isFolded ? "Expand \(group.id)" : "Collapse \(group.id)")
+        .accessibilityLabel(isFolded ? "Expand \(group.name)" : "Collapse \(group.name)")
     }
 
-    /// Folded project names, one per line. Stored app-wide, so every window agrees.
+    /// Folded project roots, one per line. Stored app-wide, so every window agrees.
     @AppStorage(Sidebar.foldedKey) private var foldedList = ""
 
     private var folded: Set<String> {
@@ -615,8 +731,8 @@ private struct SidebarRow: View {
     @ViewBuilder
     private var content: some View {
         if isCompact {
-            Text(tab.keyEquivalent ?? "\(tab.index)")
-                .font(.system(size: 11))
+            // Only icons: the agent's logo, or a terminal for a plain tab. The title is in the tooltip.
+            icon(size: 14)
                 .frame(width: 30, height: 28)
                 .overlay(alignment: .topTrailing) {
                     if let agent = tab.agent { AgentBadge(agent: agent).scaleEffect(0.8) }
@@ -624,6 +740,19 @@ private struct SidebarRow: View {
         } else {
             row
         }
+    }
+
+    private func icon(size: CGFloat) -> some View {
+        Group {
+            if let name = tab.agentProcess.flatMap({ AgentProcess.icons[$0] }) {
+                Image(name).resizable()
+            } else {
+                Image(systemName: "terminal").resizable()
+            }
+        }
+        .scaledToFit()
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 
     private var row: some View {
@@ -642,6 +771,10 @@ private struct SidebarRow: View {
                 }
             }
             .frame(width: 18, height: 18)
+
+            if tab.agentProcess != nil {
+                icon(size: 12)
+            }
 
             Text(tab.title)
                 .lineLimit(1)
