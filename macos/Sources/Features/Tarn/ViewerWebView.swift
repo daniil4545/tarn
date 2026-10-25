@@ -6,9 +6,35 @@ import OSLog
 import WebKit
 
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
-/// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`.
+/// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`. The
+/// split and focus items of the menu reach it first in the responder chain, before the terminal
+/// controller, so Ghostty's split keys work while a viewer holds the keyboard (D8, S14).
 final class ViewerWebView: WKWebView {
+    /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
+    /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
+    static let keyTable: [Key] = [
+        Key("b", "tree", "Toggle File Viewer (also in the terminal: View menu)"),
+        Key("e", "mode", "View or source"),
+        Key("s", "save", "Save the file"),
+    ]
+
+    struct Key {
+        let key: String
+        let command: String
+        let help: String
+
+        init(_ key: String, _ command: String, _ help: String) {
+            self.key = key
+            self.command = command
+            self.help = help
+        }
+    }
+
+    /// The key text of a `keyTable` entry, as Help shows it.
+    static func keyText(_ entry: Key) -> String { "⌘" + entry.key.uppercased() }
+
     var onCommand: ((String) -> Void)?
+    var onLayout: ((ViewerLayoutCommand) -> Void)?
 
     /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
@@ -27,12 +53,8 @@ final class ViewerWebView: WKWebView {
             }
         }
         // The modifiers are exact: Cmd+Alt+B and Cmd+Shift+B are not Cmd+B.
-        switch (modifiers, letter) {
-        case (.command, "s"): return "save"
-        case (.command, "e"): return "mode"
-        case (.command, "b"): return "tree"
-        default: return nil
-        }
+        guard modifiers == .command else { return nil }
+        return keyTable.first { $0.key == letter }?.command
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -48,6 +70,17 @@ final class ViewerWebView: WKWebView {
     @objc func close(_ sender: Any?) {
         onCommand?("closeTab")
     }
+
+    @IBAction func splitRight(_ sender: Any?) { onLayout?(.split(.right)) }
+    @IBAction func splitLeft(_ sender: Any?) { onLayout?(.split(.left)) }
+    @IBAction func splitDown(_ sender: Any?) { onLayout?(.split(.bottom)) }
+    @IBAction func splitUp(_ sender: Any?) { onLayout?(.split(.top)) }
+    @IBAction func splitMoveFocusPrevious(_ sender: Any?) { onLayout?(.focus(.previous)) }
+    @IBAction func splitMoveFocusNext(_ sender: Any?) { onLayout?(.focus(.next)) }
+    @IBAction func splitMoveFocusAbove(_ sender: Any?) { onLayout?(.focus(.spatial(.up))) }
+    @IBAction func splitMoveFocusBelow(_ sender: Any?) { onLayout?(.focus(.spatial(.down))) }
+    @IBAction func splitMoveFocusLeft(_ sender: Any?) { onLayout?(.focus(.spatial(.left))) }
+    @IBAction func splitMoveFocusRight(_ sender: Any?) { onLayout?(.focus(.spatial(.right))) }
 }
 
 /// Owns the web view of one viewer pane: loads the page, serves its assets, forwards messages.
@@ -56,7 +89,7 @@ final class ViewerWebController: NSObject {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
     private static let pageURL = URL(string: "\(ViewerRules.scheme)://app/tarn-viewer.html")!
 
-    let container = NSView()
+    let container = ViewerPaneView()
     private weak var model: ViewerModel?
     private var webView: ViewerWebView?
     private var started = false
@@ -103,14 +136,14 @@ final class ViewerWebController: NSObject {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
 
         let view = ViewerWebView(frame: container.bounds, configuration: config)
-        view.autoresizingMask = [.width, .height]
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
+        view.onLayout = { [weak model] in model?.onLayout?($0) }
         view.underPageBackgroundColor = model.dark ? NSColor(srgbRed: 0.157, green: 0.165, blue: 0.212, alpha: 1) : .white
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif
-        container.addSubview(view)
+        container.install(view)
         webView = view
         view.load(URLRequest(url: Self.pageURL))
         if wantsFocus { DispatchQueue.main.async { [weak self] in self?.focus() } }

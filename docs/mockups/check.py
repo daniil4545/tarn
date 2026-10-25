@@ -480,6 +480,20 @@ with sync_playwright() as p:
         vis("[data-opt='font-size'] .set") and size == "16px",
         size,
     )
+    check(
+        "S8a only non-live options show when they apply",
+        "Restart needed" in pg.inner_text("[data-opt='background-opacity']")
+        and "Applies to new windows" in pg.inner_text("[data-opt='macos-titlebar-style']")
+        and count("[data-opt='font-size'] .applies") == 0,
+    )
+    pg.fill("#g-font-size", "13")
+    pg.press("#g-font-size", "Tab")
+    check(
+        "S8b a value equal to the default keeps its line",
+        "font-size = 13" in pg.evaluate("tarnConf()"),
+    )
+    pg.fill("#g-font-size", "16")
+    pg.press("#g-font-size", "Tab")
     pg.click("#setNav [data-sec='windows']")
     pg.select_option("#g-drag-handle", "never")
     conf = pg.inner_text("#tarnConf")

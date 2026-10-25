@@ -145,6 +145,8 @@ class TerminalWindowRestoration: NSObject, NSWindowRestoration {
             return
         }
 
+        let workspaceCoder = state
+
         // Decode the state. If we can't decode the state, then we can't restore.
         guard let state = TerminalRestorableState(coder: state) else {
             completionHandler(nil, TerminalRestoreError.stateDecodeFailed)
@@ -162,6 +164,8 @@ class TerminalWindowRestoration: NSObject, NSWindowRestoration {
             completionHandler(nil, TerminalRestoreError.windowDidNotLoad)
             return
         }
+
+        WorkspaceRestore.decode(workspaceCoder, for: window)
 
         // Restore our tab color and avoid unnecessary `invalidateRestorableState` calls
         if let tabColor = state.tabColor {
