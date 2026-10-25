@@ -329,7 +329,7 @@ function renderTabs() {
   const mode = path ? modes[path] || "view" : "view";
   $("vact").innerHTML =
     `<button class="ib" type="button" data-act="mode" ${isMd ? "" : "disabled"} aria-pressed="${isMd && mode === "source"}" title="View or source (⌘E)">${isMd && mode === "source" ? "Source" : "View"}</button>` +
-    `<button class="ib" type="button" data-act="tree" aria-pressed="${!!chrome.tree.visible}" title="Files tree (⌘B)">Files</button>` +
+    `<button class="ib" type="button" data-act="tree" aria-pressed="${!!chrome.tree.visible}" title="Files tree (Esc hides it)">Files</button>` +
     `<button class="ib" type="button" data-act="closePane" title="Close viewer">✕</button>`;
 }
 
