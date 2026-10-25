@@ -810,7 +810,6 @@ extension Ghostty {
             target: ghostty_target_s? = nil
         ) -> Bool {
             let action = Ghostty.Action.OpenURL(c: v)
-            ViewerRouter.trace(kind: String(describing: action.kind), url: action.url, surfaceTarget: target?.tag == GHOSTTY_TARGET_SURFACE)
 
             // tarn: a clicked path opens in the viewer pane of the clicked surface's window.
             if action.kind == .unknown,

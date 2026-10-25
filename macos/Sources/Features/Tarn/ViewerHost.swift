@@ -395,15 +395,8 @@ final class ViewerHost: ObservableObject {
 enum ViewerRouter {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
 
-    /// The `open_url` action as it reaches us, for diagnosing a click that does nothing. Debug level;
-    /// the URL is logged only for kind `unknown` (a path), never for links from terminal output.
-    /// Watch: `log stream --level debug --predicate 'subsystem == "tarn" AND category == "viewer"'`.
-    static func trace(kind: String, url: String, surfaceTarget: Bool) {
-        logger.debug("open_url kind=\(kind, privacy: .public) url=\(kind == "unknown" ? url : "-", privacy: .public) surfaceTarget=\(surfaceTarget)")
-    }
-
     /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
-    /// must be explainable from `log stream --predicate 'subsystem == "com.daniil4545.tarn"'`.
+    /// must be explainable from `log stream --predicate 'subsystem == "tarn"'`.
     enum Decision: Equatable {
         case open(OpenTarget)
         /// A pane that is already open reports the missing file; otherwise the default opener runs.
