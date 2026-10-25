@@ -16,6 +16,8 @@ extension Notification.Name {
 final class SidebarModel: ObservableObject {
     struct Tab: Identifiable, Equatable {
         let id: ObjectIdentifier
+        /// The registry's key of the tab window; drag payloads carry it.
+        let key: TabKey
 
         /// The 1-based position of the tab in its window.
         let index: Int
@@ -27,35 +29,28 @@ final class SidebarModel: ObservableObject {
         let isSelected: Bool
         /// The agent session of the tab that needs the user most, if any surface runs one.
         let agent: AgentSession?
-        let project: String
+        /// The name of the workspace the tab sits in.
+        let workspace: String
         /// The working directory of the focused surface, with the home folder as "~".
         let folder: String?
     }
 
+    /// A workspace and its tabs in tab order. A folded workspace still lists its tabs here;
+    /// the view hides them.
     struct Group: Identifiable, Equatable {
-        /// The sections of the sidebar from top to bottom.
-        enum Section: Int, Comparable {
-            /// Tabs that run a coding agent, one group per project.
-            case agents
-            /// All other tabs, below a divider and without a header.
-            case terminals
-
-            static func < (lhs: Section, rhs: Section) -> Bool { lhs.rawValue < rhs.rawValue }
-        }
-
-        let section: Section
-        /// The project root: the git root above the agent's surface, or its folder.
-        /// Empty for the terminals section.
-        let path: String
-        /// The header: the root's folder name, with its parent folder when another
-        /// group has the same folder name.
-        let name: String
+        let workspace: Workspace
         let tabs: [Tab]
 
-        var id: String { "\(section.rawValue):\(path)" }
+        var id: Workspace.ID { workspace.id }
+
+        /// The session among the tabs that needs the user most.
+        var worstAgent: AgentSession? { SidebarModel.mostUrgent(tabs.compactMap(\.agent)) }
     }
 
     @Published private(set) var groups: [Group] = []
+
+    /// Where a drop in progress would land; the rows draw a line there.
+    @Published var dropSlot: SidebarDropSlot?
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -87,9 +82,6 @@ final class SidebarModel: ObservableObject {
     private var observer: NSObjectProtocol?
     private var closeObserver: NSObjectProtocol?
     private var processTimer: Timer?
-
-    /// Project roots by working directory, so a refresh does not walk the file system again.
-    private var projects: [String: String] = [:]
 
     init() {
         SessionRegistry.shared.start()
@@ -178,80 +170,64 @@ final class SidebarModel: ObservableObject {
     }
 
     func refresh() {
-        // The window only carries a key equivalent label while it is in a tab group, so a
-        // lone tab would have none. Look the shortcuts up from the keybinds instead.
-        let config = (window?.windowController as? BaseTerminalController)?.ghostty.config
-        var placed: [(key: GroupKey, tab: Tab)] = []
-
-        for (offset, tabWindow) in tabWindows.enumerated() {
-            let index = offset + 1
-            let shortcut = index <= 9 ? config?.keyboardShortcut(for: "goto_tab:\(index)") : nil
-            let controller = tabWindow.windowController as? BaseTerminalController
-            // A tab joins its project's group while any of its splits runs an agent.
-            let running = controller?.surfaceTree.lazy
-                .compactMap { view in
-                    view.surfaceModel?.foregroundPID
-                        .flatMap { pid_t(exactly: $0) }
-                        .flatMap(AgentProcess.agent)
-                        .map { (view: view, agent: $0) }
-                }
-                .first
-            let agentSurface = running?.view
-            let pwd = (agentSurface ?? controller?.focusedSurface)?.pwd
-            let root = projectRoot(for: pwd)
-            let key = agentSurface == nil
-                ? GroupKey(section: .terminals, path: "")
-                : GroupKey(section: .agents, path: root)
-            let tab = Tab(
-                id: ObjectIdentifier(tabWindow),
-                index: index,
-                title: Self.displayTitle(tabWindow.title, pwd: pwd, agent: running?.agent),
-                agentProcess: running?.agent,
-                keyEquivalent: shortcut.map { "\($0)" },
-                color: (tabWindow as? TerminalWindow)?.tabColor ?? .none,
-                // Our window is only on screen while it is the selected tab.
-                isSelected: tabWindow === window,
-                agent: Self.agent(in: controller),
-                project: root.isEmpty ? "" : (root as NSString).lastPathComponent,
-                folder: pwd.map { Self.displayTitle("/", pwd: $0) }
-            )
-
-            placed.append((key, tab))
+        // The registry follows Ghostty's tab order first, so the runs below are current.
+        let registry = WorkspaceRegistry.shared
+        registry.sync()
+        guard let window else {
+            if !groups.isEmpty { groups = [] }
+            return
         }
 
-        let newGroups = Self.arrange(placed)
+        // The window only carries a key equivalent label while it is in a tab group, so a
+        // lone tab would have none. Look the shortcuts up from the keybinds instead.
+        let config = (window.windowController as? BaseTerminalController)?.ghostty.config
+        let positions = Dictionary(uniqueKeysWithValues: tabWindows.enumerated().map { (ObjectIdentifier($1), $0 + 1) })
+
+        let newGroups = registry.runs(for: window).map { run in
+            Group(workspace: run.workspace, tabs: run.windows.compactMap { tabWindow -> Tab? in
+                guard let index = positions[ObjectIdentifier(tabWindow)], let key = registry.tabKey(of: tabWindow)
+                else { return nil }
+                let shortcut = index <= 9 ? config?.keyboardShortcut(for: "goto_tab:\(index)") : nil
+                return makeTab(tabWindow, key: key, index: index, workspace: run.workspace.name, shortcut: shortcut.map { "\($0)" })
+            })
+        }
         guard newGroups != groups else { return }
         groups = newGroups
         if cardTab != nil { updateCard() }
     }
 
-    struct GroupKey: Hashable {
-        let section: Group.Section
-        let path: String
-    }
-
-    /// Groups tabs in tab order: sections in their fixed order, groups within a section
-    /// in the order of their first tab, tabs within a group in tab order.
-    nonisolated static func arrange(_ placed: [(key: GroupKey, tab: Tab)]) -> [Group] {
-        var order: [GroupKey] = []
-        var byGroup: [GroupKey: [Tab]] = [:]
-        for (key, tab) in placed {
-            if byGroup[key] == nil { order.append(key) }
-            byGroup[key, default: []].append(tab)
-        }
-        let folderCounts = Dictionary(order.map { (folderName($0.path), 1) }, uniquingKeysWith: +)
-        return order.enumerated()
-            .sorted { ($0.element.section, $0.offset) < ($1.element.section, $1.offset) }
-            .map { _, key in
-                let folder = folderName(key.path)
-                let parent = folderName((key.path as NSString).deletingLastPathComponent)
-                let name = folderCounts[folder, default: 0] > 1 ? "\(parent)/\(folder)" : folder
-                return Group(section: key.section, path: key.path, name: name, tabs: byGroup[key] ?? [])
+    private func makeTab(_ tabWindow: NSWindow, key: TabKey, index: Int, workspace: String, shortcut: String?) -> Tab {
+        let controller = tabWindow.windowController as? BaseTerminalController
+        let running = controller?.surfaceTree.lazy
+            .compactMap { view in
+                view.surfaceModel?.foregroundPID
+                    .flatMap { pid_t(exactly: $0) }
+                    .flatMap(AgentProcess.agent)
+                    .map { (view: view, agent: $0) }
             }
+            .first
+        let pwd = (running?.view ?? controller?.focusedSurface)?.pwd
+        return Tab(
+            id: ObjectIdentifier(tabWindow),
+            key: key,
+            index: index,
+            title: Self.displayTitle(tabWindow.title, pwd: pwd, agent: running?.agent),
+            agentProcess: running?.agent,
+            keyEquivalent: shortcut,
+            color: (tabWindow as? TerminalWindow)?.tabColor ?? .none,
+            // Our window is only on screen while it is the selected tab.
+            isSelected: tabWindow === window,
+            agent: Self.agent(in: controller),
+            workspace: workspace,
+            folder: pwd.map { Self.displayTitle("/", pwd: $0) }
+        )
     }
 
-    private nonisolated static func folderName(_ path: String) -> String {
-        path.isEmpty ? "" : (path as NSString).lastPathComponent
+    /// The session that needs the user most: permission, then working, then done and unseen.
+    nonisolated static func mostUrgent(_ sessions: [AgentSession]) -> AgentSession? {
+        sessions
+            .filter { $0.state != .idle }
+            .max { a, b in (a.state, a.isUnseenDone ? 1 : 0) < (b.state, b.isUnseenDone ? 1 : 0) }
     }
 
     /// Shows the card of `cardTab` beside its row, or closes it.
@@ -281,12 +257,7 @@ final class SidebarModel: ObservableObject {
     private static func agent(in controller: BaseTerminalController?) -> AgentSession? {
         guard let controller else { return nil }
         let sessions = SessionRegistry.shared.sessions
-        return controller.surfaceTree
-            .compactMap { sessions[$0.id] }
-            .filter { $0.state != .idle }
-            .max { a, b in
-                (a.state, a.isUnseenDone ? 1 : 0) < (b.state, b.isUnseenDone ? 1 : 0)
-            }
+        return mostUrgent(controller.surfaceTree.compactMap { sessions[$0.id] })
     }
 
     /// The tab title to show: a shell's path title becomes the full working directory with "~";
@@ -314,28 +285,53 @@ final class SidebarModel: ObservableObject {
         return title == (pwd as NSString).lastPathComponent
     }
 
-    /// The git root above `pwd`, or `pwd` itself outside git.
-    private func projectRoot(for pwd: String?) -> String {
-        guard let pwd, !pwd.isEmpty else { return "" }
-        if let cached = projects[pwd] { return cached }
+    // MARK: Commands
 
-        let fm = FileManager.default
-        var url = URL(fileURLWithPath: pwd)
-        var root = url.path
-        while url.path != "/" {
-            if fm.fileExists(atPath: url.appendingPathComponent(".git").path) {
-                root = url.path
-                break
-            }
-            url.deleteLastPathComponent()
+    private var registry: WorkspaceRegistry { .shared }
+
+    /// A tab in the current workspace (D2).
+    func newTab() {
+        guard let window else { return }
+        if let workspace = registry.workspace(of: window) {
+            registry.newTab(in: workspace.id, from: window)
+        } else {
+            (window.windowController as? TerminalController)?.newTab(nil)
         }
-
-        projects[pwd] = root
-        return root
     }
 
-    func newTab() {
-        (window?.windowController as? TerminalController)?.newTab(nil)
+    func newTab(in group: Group) {
+        guard let window else { return }
+        registry.newTab(in: group.workspace.id, from: window)
+    }
+
+    func newWorkspace() {
+        guard let window else { return }
+        WorkspacePrompt.askName(title: "New Workspace", message: "The workspace opens with one new tab.", initial: "", in: window) { [weak self] name in
+            guard let self, let window = self.window else { return }
+            self.registry.createWorkspace(named: name, from: window)
+        }
+    }
+
+    func rename(_ group: Group) {
+        guard let window else { return }
+        WorkspacePrompt.askName(title: "Rename Workspace", message: "", initial: group.workspace.name, in: window) { [weak self] name in
+            guard let self, let window = self.window else { return }
+            self.registry.rename(group.workspace.id, to: name, in: window)
+        }
+    }
+
+    func delete(_ group: Group) {
+        guard let window, let index = groups.firstIndex(where: { $0.id == group.id }), groups.count > 1 else { return }
+        let heir = groups[index > 0 ? index - 1 : index + 1].workspace.name
+        WorkspacePrompt.confirmDelete(group.workspace.name, tabCount: group.tabs.count, heir: heir, in: window) { [weak self] in
+            guard let self, let window = self.window else { return }
+            self.registry.delete(group.workspace.id, in: window)
+        }
+    }
+
+    func toggleFold(_ group: Group) {
+        guard let window else { return }
+        registry.setCollapsed(group.workspace.id, !group.workspace.collapsed, in: window)
     }
 
     func select(_ tab: Tab) {
@@ -346,26 +342,66 @@ final class SidebarModel: ObservableObject {
         controller(for: tab)?.closeTab(nil)
     }
 
+    /// Closes `tabs` as one undoable step. A tab with a running process asks first.
+    private func close(_ tabs: [Tab], title: String, from tab: Tab) {
+        let controllers = tabs.compactMap { controller(for: $0) }
+        guard let anchor = controller(for: tab), !controllers.isEmpty else { return }
+        let closeAll = {
+            anchor.undoManager?.beginUndoGrouping()
+            for controller in controllers { controller.closeTabImmediately(registerRedo: false) }
+            anchor.undoManager?.setActionName(title)
+            anchor.undoManager?.endUndoGrouping()
+        }
+        guard controllers.contains(where: { $0.surfaceTree.contains { $0.needsConfirmQuit } }) else {
+            closeAll()
+            return
+        }
+        anchor.confirmClose(
+            messageText: "\(title)?",
+            informativeText: "At least one of these tabs still has a running process. If you close the tab the process will be killed.",
+            completion: closeAll
+        )
+    }
+
+    /// The tabs of `tab`'s workspace (Q8: the close commands stay inside it).
+    private func siblings(of tab: Tab) -> [Tab] {
+        groups.first { $0.tabs.contains { $0.id == tab.id } }?.tabs ?? []
+    }
+
     /// The right-click menu for a tab, with the items of a native tab's menu.
     func contextMenu(for tab: Tab) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        let count = tabWindows.count
+        let siblings = siblings(of: tab)
+        let below = siblings.filter { $0.index > tab.index }
         menu.addItem(menuItem("Close Tab") { [weak self] in
             self?.close(tab)
         })
-        menu.addItem(menuItem("Close Other Tabs", isEnabled: count > 1) { [weak self] in
-            self?.select(tab)
-            self?.controller(for: tab)?.closeOtherTabs(nil)
+        menu.addItem(menuItem("Close Other Tabs", isEnabled: siblings.count > 1) { [weak self] in
+            self?.close(siblings.filter { $0.id != tab.id }, title: "Close Other Tabs", from: tab)
         })
-        menu.addItem(menuItem("Close Tabs Below", isEnabled: tab.index < count) { [weak self] in
-            self?.select(tab)
-            self?.controller(for: tab)?.closeTabsOnTheRight(nil)
+        menu.addItem(menuItem("Close Tabs Below", isEnabled: !below.isEmpty) { [weak self] in
+            self?.close(below, title: "Close Tabs Below", from: tab)
         })
-        menu.addItem(menuItem("Move Tab to New Window", isEnabled: count > 1) { [weak self] in
+        menu.addItem(menuItem("Move Tab to New Window", isEnabled: tabWindows.count > 1) { [weak self] in
             self?.tabWindow(for: tab)?.moveTabToNewWindow(nil)
         })
+        menu.addItem(.separator())
+
+        let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        for group in groups {
+            let isCurrent = group.tabs.contains { $0.id == tab.id }
+            submenu.addItem(menuItem(group.workspace.name, isEnabled: !isCurrent) { [weak self] in
+                guard let window = self?.tabWindow(for: tab) else { return }
+                self?.registry.moveTab(window, to: group.workspace.id)
+            })
+        }
+        moveTo.submenu = submenu
+        moveTo.isEnabled = groups.count > 1
+        menu.addItem(moveTo)
         menu.addItem(.separator())
         menu.addItem(menuItem("Rename Tab...") { [weak self] in
             self?.select(tab)
@@ -373,6 +409,89 @@ final class SidebarModel: ObservableObject {
         })
 
         return menu
+    }
+
+    /// The right-click menu for a workspace header.
+    func contextMenu(for group: Group) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        menu.addItem(menuItem("New Tab") { [weak self] in
+            self?.newTab(in: group)
+        })
+        menu.addItem(menuItem(group.workspace.collapsed ? "Expand" : "Collapse") { [weak self] in
+            self?.toggleFold(group)
+        })
+        menu.addItem(.separator())
+        menu.addItem(menuItem("Rename Workspace...") { [weak self] in
+            self?.rename(group)
+        })
+        menu.addItem(menuItem("Delete Workspace...", isEnabled: groups.count > 1) { [weak self] in
+            self?.delete(group)
+        })
+        return menu
+    }
+
+    // MARK: Drag and drop
+
+    /// A drag is over a row or header. True when the drop would do something.
+    func dragOver(_ kind: SidebarDragKind, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
+        let slot = Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
+        if dropSlot != slot { dropSlot = slot }
+        return slot != nil
+    }
+
+    func dragExit() {
+        if dropSlot != nil { dropSlot = nil }
+    }
+
+    /// Carries out a drop; `value` is the payload of the drag. A payload from another window
+    /// is refused: moving tabs between windows is Ghostty's.
+    func drop(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
+        guard let window, let id = UUID(uuidString: value),
+              let slot = Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
+        else { return false }
+
+        switch (kind, slot) {
+        case (.tab, .beforeTab(let key)):
+            guard let moving = tab(withKey: id).flatMap(tabWindow(for:)),
+                  let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
+                  let neighbour = group.tabs.first(where: { $0.key == key }).flatMap(tabWindow(for:))
+            else { return false }
+            if moving !== neighbour { registry.moveTab(moving, to: group.workspace.id, before: neighbour) }
+            return true
+
+        case (.tab, .endOfWorkspace(let workspace)):
+            guard let moving = tab(withKey: id).flatMap(tabWindow(for:)) else { return false }
+            registry.moveTab(moving, to: workspace)
+            return true
+
+        case (.workspace, .beforeWorkspace(let other)):
+            guard groups.contains(where: { $0.id == id }) else { return false }
+            if other != id { registry.moveWorkspace(id, before: other, in: window) }
+            return true
+
+        case (.workspace, .end):
+            guard groups.contains(where: { $0.id == id }) else { return false }
+            registry.moveWorkspace(id, before: nil, in: window)
+            return true
+
+        default:
+            return false
+        }
+    }
+
+    /// A tab drag ended. Nobody took it and it is outside every window: the tab leaves for a
+    /// window of its own (S21).
+    func dragEnded(_ tab: Tab, at screenPoint: NSPoint, accepted: Bool) {
+        dragExit()
+        guard !accepted, tabWindows.count > 1,
+              !NSApp.windows.contains(where: { $0.isVisible && $0.frame.contains(screenPoint) })
+        else { return }
+        tabWindow(for: tab)?.moveTabToNewWindow(nil)
+    }
+
+    private func tab(withKey key: TabKey) -> Tab? {
+        groups.lazy.flatMap(\.tabs).first { $0.key == key }
     }
 
     private func menuItem(_ title: String, isEnabled: Bool = true, handler: @escaping () -> Void) -> NSMenuItem {
@@ -491,7 +610,6 @@ struct SidebarLayout<Content: View>: View {
 struct Sidebar: View {
     static let collapsedKey = "TarnSidebarCollapsed"
     static let widthKey = "TarnSidebarWidth"
-    static let foldedKey = "TarnSidebarFoldedRoots"
     static let defaultWidth: Double = 200
     static let widthRange: ClosedRange<Double> = 120...400
     static let collapsedWidth: Double = 40
@@ -525,10 +643,8 @@ struct Sidebar: View {
 
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 2) {
+                        // The rail has no headers, so it lists every tab, folded or not.
                         ForEach(model.groups) { group in
-                            if isTerminalsBelowGroups(group) {
-                                sectionDivider
-                            }
                             ForEach(group.tabs) { tab in
                                 SidebarRow(model: model, tab: tab, isCompact: true)
                             }
@@ -539,6 +655,7 @@ struct Sidebar: View {
                 HStack {
                     collapseButton
                     Spacer()
+                    newWorkspaceButton
                     newTabButton
                 }
                 .padding(.horizontal, 6)
@@ -547,17 +664,8 @@ struct Sidebar: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 2) {
                         ForEach(model.groups) { group in
-                            let hasHeader = group.section == .agents && !group.path.isEmpty
-                            let isFolded = hasHeader && folded.contains(group.path)
-                            if isTerminalsBelowGroups(group) {
-                                sectionDivider
-                            }
-                            if hasHeader {
-                                header(group, isFolded: isFolded)
-                            }
-                            // A folded project still shows its selected tab, so the
-                            // current tab never disappears from the list.
-                            ForEach(group.tabs.filter { !isFolded || $0.isSelected }) { tab in
+                            WorkspaceHeader(model: model, group: group)
+                            ForEach(visibleTabs(of: group)) { tab in
                                 SidebarRow(model: model, tab: tab, isCompact: false)
                             }
                         }
@@ -570,64 +678,20 @@ struct Sidebar: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// The terminals section gets a divider when agent groups are above it.
-    private func isTerminalsBelowGroups(_ group: SidebarModel.Group) -> Bool {
-        group.section == .terminals && model.groups.first?.id != group.id
-    }
-
-    private var sectionDivider: some View {
-        Rectangle()
-            .fill(Color.primary.opacity(0.12))
-            .frame(height: 1)
-            .padding(.horizontal, 6)
-            .padding(.vertical, 6)
-    }
-
-    /// A project header. A click folds or unfolds the project's tabs.
-    private func header(_ group: SidebarModel.Group, isFolded: Bool) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: isFolded ? "chevron.right" : "chevron.down")
-                .font(.system(size: 8, weight: .bold))
-                .frame(width: 10)
-            Text(group.name)
-                .lineLimit(1)
-            Spacer(minLength: 4)
-            if isFolded {
-                Text("\(group.tabs.count)")
-                    .foregroundStyle(.tertiary)
-            }
-        }
-        .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 6)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
-        .contentShape(Rectangle())
-        .onTapGesture { toggleFold(group.path) }
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(isFolded ? "Expand \(group.name)" : "Collapse \(group.name)")
-    }
-
-    /// Folded project roots, one per line. Stored app-wide, so every window agrees.
-    @AppStorage(Sidebar.foldedKey) private var foldedList = ""
-
-    private var folded: Set<String> {
-        Set(foldedList.split(separator: "\n").map(String.init))
-    }
-
-    private func toggleFold(_ project: String) {
-        var names = folded
-        if names.contains(project) {
-            names.remove(project)
-        } else {
-            names.insert(project)
-        }
-        foldedList = names.sorted().joined(separator: "\n")
+    /// A folded workspace shows no tabs (D6); selecting one of them unfolds it (Q9).
+    private func visibleTabs(of group: SidebarModel.Group) -> [SidebarModel.Tab] {
+        group.workspace.collapsed ? [] : group.tabs
     }
 
     private var collapseButton: some View {
         SidebarButton(systemName: "sidebar.left", label: isCollapsed ? "Show Sidebar" : "Hide Sidebar") {
             isCollapsed.toggle()
+        }
+    }
+
+    private var newWorkspaceButton: some View {
+        SidebarButton(systemName: "folder.badge.plus", label: "New Workspace") {
+            model.newWorkspace()
         }
     }
 
@@ -679,13 +743,6 @@ private struct SidebarRow: View {
             .background(RoundedRectangle(cornerRadius: 5).fill(fill))
             .background(RowAnchor { model.rowAnchors[tab.id] = WeakView(view: $0) })
             .contentShape(Rectangle())
-            .onTapGesture {
-                if model.forceClicked {
-                    model.forceClicked = false
-                } else {
-                    model.select(tab)
-                }
-            }
             .onHover { hovering in
                 isHovering = hovering
                 if hovering {
@@ -696,11 +753,45 @@ private struct SidebarRow: View {
                 scheduleCard()
             }
             .help(isCompact ? tab.title : "")
-            .overlay(SidebarMenuArea { model.contextMenu(for: tab) })
+            .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeTab(tab.key)) }
+            .overlay(alignment: .bottom) { dropLine(endsHere) }
+            .overlay(interaction)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(tab.title)
             .accessibilityAddTraits(tab.isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { model.select(tab) }
+    }
+
+    /// The drop line goes under the last tab of a workspace dropped at its end.
+    private var endsHere: Bool {
+        guard case .endOfWorkspace(let id) = model.dropSlot,
+              let group = model.groups.first(where: { $0.id == id })
+        else { return false }
+        return group.tabs.last?.key == tab.key
+    }
+
+    private var interaction: some View {
+        SidebarInteraction(
+            payload: { (.tab, tab.key.uuidString) },
+            onClick: {
+                if model.forceClicked {
+                    model.forceClicked = false
+                } else {
+                    model.select(tab)
+                }
+            },
+            menu: { model.contextMenu(for: tab) },
+            dragOver: { kind, lowerHalf in
+                model.dragOver(kind, over: .tab(tab.key), lowerHalf: lowerHalf)
+            },
+            dragExit: { model.dragExit() },
+            drop: { kind, value, lowerHalf in
+                model.drop(kind, value: value, over: .tab(tab.key), lowerHalf: lowerHalf)
+            },
+            dragEnded: { point, accepted in model.dragEnded(tab, at: point, accepted: accepted) },
+            // The close button of an expanded row sits in its first 22 points.
+            excludedLeading: isCompact ? 0 : 22
+        )
     }
 
     /// Hover opens the card only for a tab with an agent; any tab's card opens with a force
@@ -853,43 +944,5 @@ private struct RowAnchor: NSViewRepresentable {
 
     func updateNSView(_ nsView: NSView, context: Context) {
         register(nsView)
-    }
-}
-
-/// Shows an AppKit menu when its area is right-clicked or control-clicked, and lets every
-/// other mouse event through to the SwiftUI views beneath it.
-private struct SidebarMenuArea: NSViewRepresentable {
-    let menu: () -> NSMenu
-
-    func makeNSView(context: Context) -> MenuAreaView {
-        let view = MenuAreaView()
-        view.menuProvider = menu
-        return view
-    }
-
-    func updateNSView(_ nsView: MenuAreaView, context: Context) {
-        nsView.menuProvider = menu
-    }
-
-    final class MenuAreaView: NSView {
-        var menuProvider: (() -> NSMenu)?
-
-        override func hitTest(_ point: NSPoint) -> NSView? {
-            // Only claim the clicks that open a context menu. Everything else, such as
-            // selecting the tab or pressing its close button, belongs to the row beneath.
-            guard let event = NSApp.currentEvent else { return nil }
-            switch event.type {
-            case .rightMouseDown, .rightMouseUp:
-                return super.hitTest(point)
-            case .leftMouseDown where event.modifierFlags.contains(.control):
-                return super.hitTest(point)
-            default:
-                return nil
-            }
-        }
-
-        override func menu(for event: NSEvent) -> NSMenu? {
-            menuProvider?()
-        }
     }
 }

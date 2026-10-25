@@ -60,6 +60,11 @@ final class WorkspaceRegistry {
         }
     }
 
+    /// The key of a tab window, if it has one yet.
+    func tabKey(of window: NSWindow) -> TabKey? {
+        entries[ObjectIdentifier(window)]?.window === window ? entries[ObjectIdentifier(window)]?.key : nil
+    }
+
     /// The workspace of a tab window (S12 asks for it).
     func workspace(of window: NSWindow) -> Workspace? {
         entries[ObjectIdentifier(window)].flatMap { book.workspace(of: $0.key) }
