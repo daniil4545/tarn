@@ -57,10 +57,11 @@ final class ViewerHost: ObservableObject {
 
     /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
     /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
-    /// only; a hidden pane comes back with its tabs; otherwise the model decides (an empty pane
-    /// closes, one with files toggles the tree).
+    /// only and the keyboard in the tree; a hidden pane comes back with its tabs; otherwise the
+    /// model decides (an empty pane closes and the terminal gets the keyboard, one with files
+    /// toggles the tree and the keyboard follows).
     func toggleFromKey(root: String?) {
-        guard let model else { return openTreeOnly(root: root) }
+        guard let model else { return openTreeOnly(root: root, focusTree: true) }
         if hidden { return show() }
         model.toggleTreeKey()
     }
@@ -71,6 +72,8 @@ final class ViewerHost: ObservableObject {
         guard let model else { return openTreeOnly(root: root) }
         if hidden { return show() }
         if model.snapshot.isEmpty { return closePane(saved: [], active: -1) }
+        // The page holds an edit back for 120 ms; send it before the page leaves the window.
+        model.flushPendingEdit()
         hidden = true
         returnFocusToTerminal()
     }
@@ -112,7 +115,6 @@ final class ViewerHost: ObservableObject {
 
     private func focusTreeSoon() {
         DispatchQueue.main.async { [weak self] in
-            self?.model?.onFocus?()
             self?.model?.focusTreeInPage()
         }
     }
@@ -123,8 +125,12 @@ final class ViewerHost: ObservableObject {
         if focusTree { focusTreeSoon() } else { keepFocus(responder) }
     }
 
+    /// Brings a hidden pane back. The layout change takes the first responder from the terminal;
+    /// give it back, as Ghostty's `moveFocus` does after a split change (SurfaceView.swift:1075).
     private func show() {
+        let responder = window?.firstResponder
         hidden = false
+        keepFocus(responder)
     }
 
     private func returnFocusToTerminal() {
@@ -158,10 +164,17 @@ final class ViewerHost: ObservableObject {
         let root = model.tree.root
         undoManager.setActionName("Close Viewer")
         undoManager.registerUndo(withTarget: self, expiresAfter: controller.undoExpiration) { host in
-            let reopened = host.model ?? host.makePane(root: root)
-            reopened.reopen(saved, active: active)
-            DispatchQueue.main.async { reopened.onFocus?() }
+            host.restore(saved, active: active, root: root)
         }
+    }
+
+    /// The undo of a close: the tabs come back, in a pane that is shown (a pane opened and hidden
+    /// since the close takes them too).
+    func restore(_ saved: [ViewerTab], active: Int, root: String) {
+        hidden = false
+        let reopened = model ?? makePane(root: root)
+        reopened.reopen(saved, active: active)
+        DispatchQueue.main.async { reopened.onFocus?() }
     }
 }
 

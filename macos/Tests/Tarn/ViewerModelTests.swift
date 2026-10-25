@@ -733,5 +733,108 @@ struct ViewerPaneKeysTests {
         // Dvorak: the B key types "x"; the typed letter wins and no pane command results.
         #expect(key("x", kVK_ANSI_B, [.command, .option]) == nil)
     }
+
+    // MARK: Review round: focus, stale tree focus, undo, pending edit
+
+    private final class Responder: NSView {
+        override var acceptsFirstResponder: Bool { true }
+    }
+
+    private func spin(_ seconds: TimeInterval) async throws {
+        try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+    }
+
+    @Test func showingAHiddenPaneGivesTheFirstResponderBackToTheTerminal() async throws {
+        let (host, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
+        let terminal = Responder()
+        window.contentView = NSView()
+        window.contentView?.addSubview(terminal)
+        host.window = window
+        host.togglePane(root: nil)
+        window.makeFirstResponder(terminal)
+        host.togglePane(root: nil)
+        // SwiftUI swaps the layout and the terminal loses the first responder.
+        window.makeFirstResponder(nil)
+        try await spin(0.4)
+        #expect(window.firstResponder === terminal)
+    }
+
+    @Test func focusWaitsForTheWebViewToJoinAWindow() async throws {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        let web = ViewerWebController(model: model)
+        web.start()
+        for _ in 0..<100 where web.container.subviews.isEmpty { try await spin(0.1) }
+        let view = try #require(web.container.subviews.first)
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
+        web.focus()
+        // The layout puts the container into the window after the request.
+        window.contentView = web.container
+        try await spin(0.4)
+        #expect(window.firstResponder === view)
+    }
+
+    @Test func aHiddenTreeCannotHoldTheFocusWhateverThePageSaid() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.hasFocus = { true }
+        model.handle(["t": "treeFocus", "on": true])
+        #expect(!model.treeInFocus)
+        model.revealTree()
+        #expect(model.treeInFocus)
+    }
+
+    @Test func undoWhileAnotherPaneIsHiddenShowsItWithTheTabs() throws {
+        let (host, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        host.togglePane(root: nil)
+        host.restore([ViewerTab(path: dir + "/b.md", preview: false, line: nil, jump: 0)], active: 0, root: dir)
+        #expect(!host.hidden)
+        #expect(host.model?.snapshot.map(\.path).contains(dir + "/b.md") == true)
+    }
+
+    @Test func hidingThePaneSendsThePendingEditFirst() throws {
+        let (host, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var calls: [String] = []
+        host.model?.handle(["t": "ready"])
+        host.model?.script = { calls.append($0) }
+        host.togglePane(root: nil)
+        #expect(calls.contains("tarn.flush()"))
+    }
+
+    // MARK: Cmd+B moves the keyboard with the tree
+
+    @Test func treeKeyOpeningThePaneFocusesTheTree() async throws {
+        let host = ViewerHost()
+        host.toggleFromKey(root: NSTemporaryDirectory())
+        var calls: [String] = []
+        host.model?.handle(["t": "ready"])
+        host.model?.script = { calls.append($0) }
+        try await spin(0.2)
+        #expect(calls.contains("tarn.focusTree()"))
+    }
+
+    @Test func treeKeyInAPaneWithFilesFocusesTheTreeWhenShownAndTheFileWhenHidden() throws {
+        let (host, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var calls: [String] = []
+        var grabs = 0
+        host.model?.handle(["t": "ready"])
+        host.model?.script = { calls.append($0) }
+        host.model?.onFocus = { grabs += 1 }
+        host.toggleFromKey(root: nil)
+        #expect(host.model?.treeVisible == true && calls.last == "tarn.focusTree()" && grabs == 1)
+        host.toggleFromKey(root: nil)
+        #expect(host.model?.treeVisible == false && calls.last == "tarn.focusContent()" && grabs == 2)
+    }
+
+    @Test func treeKeyClosingAnEmptyPaneLeavesNoPane() {
+        let host = ViewerHost()
+        host.toggleFromKey(root: NSTemporaryDirectory())
+        host.toggleFromKey(root: nil)
+        #expect(host.model == nil)
+    }
 }
 

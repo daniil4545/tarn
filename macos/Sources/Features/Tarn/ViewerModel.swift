@@ -35,7 +35,9 @@ final class ViewerModel {
     private var treeFocused = false
 
     /// The tree has the keyboard right now: the page says so and the web view is the first responder.
-    var treeInFocus: Bool { treeFocused && hasFocus() }
+    /// A hidden tree cannot hold the focus, whatever the page last said: WebKit does not always send
+    /// the focusout of an element that is hidden or replaced.
+    var treeInFocus: Bool { treeFocused && treeVisible && hasFocus() }
 
     init(root: String) {
         tree = FileTree(root: root)
@@ -112,7 +114,12 @@ final class ViewerModel {
         return true
     }
 
+    func flushPendingEdit() {
+        runScript("tarn.flush()")
+    }
+
     func focusTreeInPage() {
+        onFocus?()
         runScript("tarn.focusTree()")
     }
 
@@ -127,11 +134,12 @@ final class ViewerModel {
         pushChrome()
     }
 
-    /// Cmd+B in the pane: with files it toggles the tree; with no file the pane has nothing else to
-    /// show, so it closes.
+    /// Cmd+B: with files it toggles the tree and moves the keyboard with it (shown: into the tree,
+    /// hidden: back to the file); with no file the pane has nothing else to show, so it closes.
     func toggleTreeKey() {
         if closeIfEmpty() { return }
         toggleTree()
+        if treeVisible { focusTreeInPage() } else { focusContentInPage() }
     }
 
     func closeTab(at index: Int) {

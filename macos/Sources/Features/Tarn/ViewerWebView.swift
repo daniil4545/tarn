@@ -118,11 +118,19 @@ final class ViewerWebController: NSObject {
         if wantsFocus { DispatchQueue.main.async { [weak self] in self?.focus() } }
     }
 
-    /// Gives the page the keyboard; before the web view exists the request waits for it.
-    func focus() {
+    /// Gives the page the keyboard; before the web view exists the request waits for it. While the
+    /// view is not in a window yet (a hidden pane that SwiftUI is putting back) it retries with a
+    /// doubling delay, as `Ghostty.moveFocus` does (SurfaceView.swift:1075), and gives up at 0.5 s.
+    func focus(after delay: TimeInterval? = nil) {
         guard let webView else { wantsFocus = true; return }
         wantsFocus = false
-        webView.window?.makeFirstResponder(webView)
+        guard let window = webView.window else {
+            let next = delay.map { $0 * 2 } ?? 0.05
+            guard next < 0.5 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + next) { [weak self] in self?.focus(after: next) }
+            return
+        }
+        window.makeFirstResponder(webView)
     }
 
     func stop() {

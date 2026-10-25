@@ -397,6 +397,7 @@ window.tarn = {
     if (name === "save" && path) { flushEdit(); post({ t: "save", path }); }
   },
   toast,
+  flush() { flushEdit(); },
   focusTree() { const tree = $("vtree").querySelector(".tree"); if (tree) tree.focus(); },
   focusContent() {
     if (cm) return cm.view.focus();
@@ -505,7 +506,7 @@ $("vtree").addEventListener("keydown", e => {
 window.addEventListener("error", e => post({ t: "error", message: String(e.message), at: `${e.filename}:${e.lineno}` }));
 window.addEventListener("unhandledrejection", e => post({ t: "error", message: String(e.reason) }));
 window.addEventListener("focus", () => window.tarn.setFocus(true));
-window.addEventListener("blur", () => window.tarn.setFocus(false));
+window.addEventListener("blur", () => { flushEdit(); window.tarn.setFocus(false); });
 $("vtree").addEventListener("focusin", () => post({ t: "treeFocus", on: true }));
 $("vtree").addEventListener("focusout", () => post({ t: "treeFocus", on: false }));
 post({ t: "ready" });
