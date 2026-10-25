@@ -118,6 +118,13 @@ private struct ViewerPane: NSViewRepresentable {
 enum ViewerRouter {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
 
+    /// The `open_url` action as it reaches us, for diagnosing a click that does nothing. Debug level;
+    /// the URL is logged only for kind `unknown` (a path), never for links from terminal output.
+    /// Watch: `log stream --level debug --predicate 'subsystem == "tarn" AND category == "viewer"'`.
+    static func trace(kind: String, url: String, surfaceTarget: Bool) {
+        logger.debug("open_url kind=\(kind, privacy: .public) url=\(kind == "unknown" ? url : "-", privacy: .public) surfaceTarget=\(surfaceTarget)")
+    }
+
     /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
     /// must be explainable from `log stream --predicate 'subsystem == "com.mitchellh.ghostty"'`.
     enum Decision: Equatable {
@@ -148,16 +155,16 @@ enum ViewerRouter {
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
         guard let surface else {
-            Ghostty.logger.info("viewer: click on \(raw, privacy: .public) refused: no surface")
+            logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
         }
         guard let controller = surface.window?.windowController as? TerminalController else {
-            Ghostty.logger.info("viewer: click on \(raw, privacy: .public) refused: the surface has no terminal window")
+            logger.debug("click on \(raw, privacy: .public) refused: the surface has no terminal window")
             return false
         }
-        let cwd = surface.pwd ?? surface.surfaceModel?.foregroundPID.flatMap { ViewerPaths.cwd(ofPid: pid_t($0)) }
+        let cwd = surface.workingDirectory
         let decision = decide(raw, cwd: cwd)
-        Ghostty.logger.info("viewer: click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
+        logger.debug("click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
         switch decision {
         case let .open(target):
             _ = controller.viewerHost.open(target, root: cwd, focus: true)
@@ -205,7 +212,7 @@ enum ViewerRouter {
         case .text where ViewerPaths.isBinary(path): return "tarn: not a text file: \(path)"
         case .text:
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
-            return controller.viewerHost.open(target, root: surface.pwd, focus: false) ? nil : "tarn: cannot open: \(path)"
+            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
         }
     }
 }

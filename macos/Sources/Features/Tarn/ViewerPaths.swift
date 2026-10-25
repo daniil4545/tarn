@@ -1,5 +1,12 @@
 import Foundation
 
+extension Ghostty.SurfaceView {
+    /// The reported working directory (OSC 7), or the foreground process's when the shell reports none.
+    var workingDirectory: String? {
+        pwd ?? surfaceModel?.foregroundPID.flatMap { ViewerPaths.cwd(ofPid: pid_t($0)) }
+    }
+}
+
 /// A file a path click or `tarn open` asks for.
 struct OpenTarget: Equatable {
     var path: String
