@@ -403,7 +403,7 @@ enum ViewerRouter {
     }
 
     /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
-    /// must be explainable from `log stream --predicate 'subsystem == "com.mitchellh.ghostty"'`.
+    /// must be explainable from `log stream --predicate 'subsystem == "com.daniil4545.tarn"'`.
     enum Decision: Equatable {
         case open(OpenTarget)
         /// A pane that is already open reports the missing file; otherwise the default opener runs.
