@@ -6,6 +6,9 @@
 # Builds run under nice and with 4 jobs: the machine is shared with other work.
 # Deviation from macos/build.nu: it passes no -jobs limit, so xcodebuild is called directly.
 
+SHELL    := /bin/bash
+.SHELLFLAGS := -o pipefail -c
+
 XCB      := nice -n 10 env -i HOME=$(HOME) PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild
 PROJECT  := macos/Ghostty.xcodeproj
 SYMROOT  := $(CURDIR)/macos/build
