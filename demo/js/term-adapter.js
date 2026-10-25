@@ -115,7 +115,9 @@ class Term {
 
   write(data) { this.#t.write(data); }
   paste(text) { this.#t.paste(text); }
-  focus() { this.#t.focus(); }
+  // The engine's own focus() repeats itself on a timer, which pulls the focus back from a pane the
+  // user already left; focus the element once.
+  focus() { this.#t.element.focus(); }
   fit() { this.#fit.fit(); }
   // The engine counts scrollToLine from the bottom, not from the top as its docs say.
   scrollToRow(row) { this.#t.scrollToLine(Math.max(0, this.#t.getScrollbackLength() - row)); }

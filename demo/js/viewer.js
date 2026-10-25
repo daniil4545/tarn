@@ -122,9 +122,11 @@ export function createViewerPane(id) {
     home,
     root,
     ui: {
-      setDoc: (doc) => frame.contentWindow.tarn.setDoc(doc),
-      setChrome: (chrome) => frame.contentWindow.tarn.setChrome(chrome),
-      toast: (text) => frame.contentWindow.tarn.toast(text),
+      // A frame moved in the DOM reloads and has no `tarn` until its page says "ready"; the model
+      // then sends everything again, so a push in between is safely dropped.
+      setDoc: (doc) => frame.contentWindow.tarn?.setDoc(doc),
+      setChrome: (chrome) => frame.contentWindow.tarn?.setChrome(chrome),
+      toast: (text) => frame.contentWindow.tarn?.toast(text),
       write: (path, text) => bus.cmd("vfs.write", { path, text, by: `viewer:${id}` }),
       closePane: () => bus.cmd("pane.close", { id }),
       focus: () => frame.contentWindow.focus(),
@@ -137,7 +139,12 @@ export function createViewerPane(id) {
   frame.addEventListener("load", () => {
     forwardKeys(frame);
     makeTabsDraggable(frame, id, model);
-    frame.contentWindow.addEventListener("focus", () => { focused = id; bus.emit("pane:focused", { pane: id }); });
+    // A late focus event of a frame the user already left must not take the focus back.
+    frame.contentWindow.addEventListener("focus", () => {
+      if (document.activeElement !== frame) return;
+      focused = id;
+      bus.emit("pane:focused", { pane: id });
+    });
   });
   frame.src = new URL("../viewer/tarn-viewer.html", import.meta.url).href;
 

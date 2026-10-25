@@ -1,7 +1,7 @@
 """Slice B checks: layouts and splits, undo, workspaces, sidebar, top tabs, tab card, drop zones, keys.
 
 Ported from docs/mockups/check.py under the same names (1, 13-26, 38-42, W*, S2-S5, C*, O*, V*, A*);
-names that start with N or K are new. The page is test/b.html: stub terminals and a stub viewer.
+names that start with N or K are new. The page is the real index.html: terminal panes, viewer and chrome together.
 Run: nice -n 10 uv run --with playwright python -I demo/test/check_b.py
 """
 
@@ -10,20 +10,36 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import Checks, browser_page, server
+from lib import Checks, app_page, cmd, server
 
 check = Checks()
 
 TERM = '.tabview:not([hidden]) .leaf[data-kind="term"]'
 VIEWER = '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
+FRAME = f"{VIEWER} iframe"  # the viewer page: file tabs live inside it
 LEAF = ".tabview:not([hidden]) .leaf"
 TAB = ".sidebar .tab[data-tabid]"
 
 
 def run(base):
-    with browser_page(base, "test/b.html") as (pg, errors, requests):
-        pg.wait_for_function("document.documentElement.dataset.ready")
+    with app_page(base, accept_dialogs=False) as (pg, errors, requests):
         n = pg.locator
+        dialogs = []
+        reply = {"answers": iter(()), "dismiss": 0}
+
+        def on_dialog(d):
+            """Confirms are accepted (a seeded Claude pane asks before it closes); a check can
+            queue prompt answers or a refusal."""
+            dialogs.append(d.message)
+            if d.type == "prompt":
+                d.accept(next(reply["answers"], ""))
+            elif reply["dismiss"]:
+                reply["dismiss"] -= 1
+                d.dismiss()
+            else:
+                d.accept()
+
+        pg.on("dialog", on_dialog)
         vis = pg.is_visible
 
         def count(sel):
@@ -32,14 +48,8 @@ def run(base):
         def snap():
             return pg.evaluate("__tarn.snapshot().workspaces")
 
-        def cmd(name, payload=None):
-            return pg.evaluate(
-                "async ([n, p]) => { const { bus } = await import('/js/bus.js'); const r = bus.cmd(n, p); return r === undefined ? null : r; }",
-                [name, payload or {}],
-            )
-
         def set_config(key, value):
-            cmd("config.set", {"key": key, "value": value})
+            cmd(pg, "config.set", {"key": key, "value": value})
 
         def layout(expr):
             """Evaluate an expression over layout.js `L` and the current tab `tab`."""
@@ -49,6 +59,26 @@ def run(base):
                 f" return ({expr}); }}"
             )
 
+        def ftabs(i=0):
+            """File tabs of the i-th viewer, read inside its page."""
+            return pg.frame_locator(FRAME).nth(i).locator(".ftab")
+
+        def settle():
+            """Wait until every viewer page has loaded (a pane moved in the DOM reloads its frame)."""
+            pg.wait_for_function(
+                "[...document.querySelectorAll('.viewer-pane iframe')].every("
+                "(f) => f.contentDocument?.readyState === 'complete' && f.contentWindow.tarn)"
+            )
+
+        def start_drag(src):
+            """Press on a locator and start an HTML5 drag; return the data transfer for the target."""
+            settle()
+            src.dispatch_event("pointerdown")
+            src.dispatch_event(
+                "dragstart", {"dataTransfer": src.evaluate_handle("() => new DataTransfer()")}
+            )
+            return pg.evaluate_handle("new DataTransfer()")
+
         def drag(src, dst, fx, fy):
             """HTML5 drag from a locator to a point of another, given as fractions of its box."""
             box = dst.bounding_box()
@@ -56,8 +86,7 @@ def run(base):
                 "clientX": box["x"] + box["width"] * fx,
                 "clientY": box["y"] + box["height"] * fy,
             }
-            dt = pg.evaluate_handle("new DataTransfer()")
-            src.dispatch_event("dragstart", {"dataTransfer": dt})
+            dt = start_drag(src)
             dst.dispatch_event("dragover", {"dataTransfer": dt, **pos})
             dst.dispatch_event("drop", {"dataTransfer": dt, **pos})
             pg.evaluate("document.dispatchEvent(new Event('dragend'))")
@@ -84,14 +113,13 @@ def run(base):
             and pg.title() == "Claude · spec · tarn",
         )
 
-        cmd("viewer.open", {"path": "docs/spec.md"})
-        cmd("viewer.open", {"path": "docs/plans/s2-files.md"})
-        cmd("viewer.open", {"path": "docs/architecture.md"})
+        for path in ("docs/spec.md", "docs/plans/s2-files.md", "docs/architecture.md"):
+            cmd(pg, "viewer.open", {"path": path, "background": True})
         check(
             "N2 viewer:needed puts a viewer right of the terminal block",
             count(VIEWER) == 1
             and n(VIEWER).bounding_box()["x"] > n(TERM).bounding_box()["x"]
-            and count(f"{VIEWER} .ftab") == 3,
+            and ftabs().count() == 3,
         )
 
         pg.click(TERM)
@@ -122,6 +150,7 @@ def run(base):
         )
         pg.keyboard.press("Meta+w")
         n(TERM).last.click()
+        settle()
 
         pg.keyboard.press("Meta+Alt+ArrowRight")
         check("17 cmd+alt+right moves focus to the viewer", focused_kind() == "viewer")
@@ -150,12 +179,12 @@ def run(base):
             and layout("L.terminals(tab.layout).length") == 2,
         )
 
-        drag(n(f"{VIEWER} .ftab").nth(0), n(VIEWER), 0.5, 0.95)
+        drag(ftabs().nth(0), n(VIEWER), 0.5, 0.95)
         check(
             "22 drag a tab to the viewer bottom edge splits the viewer",
             count(VIEWER) == 2 and count(".tabview:not([hidden]) .split.col") >= 1,
         )
-        drag(n(f"{VIEWER} .ftab").first, n(TERM).first, 0.02, 0.5)
+        drag(ftabs(0).first, n(TERM).first, 0.02, 0.5)
         first = pg.evaluate(
             "document.querySelector('.tabview:not([hidden]) .leaf').dataset.kind"
         )
@@ -166,9 +195,9 @@ def run(base):
             and layout("L.viewers(L.at(tab.layout, L.blockPath(tab.layout))).length")
             == 0,
         )
-        drag(n(f"{VIEWER} .ftab").first, n(VIEWER).nth(1), 0.5, 0.6)
+        drag(ftabs(0).first, n(VIEWER).nth(1), 0.5, 0.6)
         check("25 drop the only tab in a viewer center merges", count(VIEWER) == 2)
-        cmd("pane.close", {"id": layout("L.viewers(tab.layout)[0].viewer")})
+        cmd(pg, "pane.close", {"id": layout("L.viewers(tab.layout)[0].viewer")})
         pg.keyboard.press("Meta+z")
         check("25a cmd+Z brings back a closed viewer", count(VIEWER) == 2)
 
@@ -189,7 +218,7 @@ def run(base):
         pg.mouse.move(5, 5)
         pg.wait_for_timeout(250)
         check("N4 drag-handle always shows the dots everywhere", dots() == "0.6")
-        cmd("config.reset", {"key": "drag-handle"})
+        cmd(pg, "config.reset", {"key": "drag-handle"})
 
         sd = n(".tabview:not([hidden]) .sdiv.row").first.bounding_box()
         w0 = n(LEAF).first.bounding_box()["width"]
@@ -211,7 +240,7 @@ def run(base):
         # ---- tabs ----
         pg.click(f"{TAB}[data-tabid='t2']")
         check("38 tab 2 has its own layout", count(VIEWER) == 0 and count(TERM) == 1)
-        cmd("viewer.open", {"path": "README.md"})
+        cmd(pg, "viewer.open", {"path": "README.md"})
         check("39 path in tab 2 opens a viewer there", count(VIEWER) == 1)
         pg.click(f"{TAB}[data-tabid='t1']")
         check("40 tab 1 keeps its layout", count(VIEWER) == 2 and count(TERM) == 2)
@@ -330,25 +359,25 @@ def run(base):
             "N13 macos-titlebar-style hidden hides the title bar",
             not vis(".titlebar") and n("#main.tb-hidden").count() == 1,
         )
-        cmd("config.reset", {"key": "macos-titlebar-style"})
-        cmd("config.reset", {"key": "unfocused-split-opacity"})
+        cmd(pg, "config.reset", {"key": "macos-titlebar-style"})
+        cmd(pg, "config.reset", {"key": "unfocused-split-opacity"})
         pg.evaluate(
-            "import('/js/workspace.js').then((m) => { m.paneOf(document.querySelector('.tabview:not([hidden]) .leaf.focus').dataset.leaf).busy = () => true; })"
+            "import('/js/workspace.js').then((m) => { Object.defineProperty(m.paneOf(document.querySelector('.tabview:not([hidden]) .leaf.focus').dataset.leaf), 'busy', { get: () => 'claude' }); })"
         )
-        dialogs = []
-        pg.once("dialog", lambda d: (dialogs.append(d.message), d.dismiss()))
+        dialogs.clear()
+        reply["dismiss"] = 1
         k = count(TERM)
         pg.keyboard.press("Meta+w")
         check("N14 closing a busy pane asks first", dialogs and count(TERM) == k)
         set_config("confirm-close-surface", "false")
         pg.keyboard.press("Meta+w")
         check("N15 confirm-close-surface false closes at once", count(TERM) == k - 1)
-        cmd("config.reset", {"key": "confirm-close-surface"})
+        cmd(pg, "config.reset", {"key": "confirm-close-surface"})
 
         # ---- workspaces ----
         pg.reload()
         pg.wait_for_function("document.documentElement.dataset.ready")
-        cmd("pane.undo")
+        cmd(pg, "pane.undo")
         pg.evaluate("localStorage.clear()")
         pg.reload()
         pg.wait_for_function("document.documentElement.dataset.ready")
@@ -370,7 +399,7 @@ def run(base):
         pg.click(".wsh[data-wsh='w1']")
         check("W3 unfold shows them again", len(side_tabs()) == 6)
         pg.click(".wsh[data-wsh='w2']")
-        cmd("tab.new", {"pane": "p5", "select": False})
+        cmd(pg, "tab.new", {"pane": "p5", "select": False})
         check(
             "W4 an agent's new tab joins the agent's workspace, folded header shows it",
             len(ws_tabs("w2")) == 2
@@ -407,8 +436,7 @@ def run(base):
         check(
             "W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order)
         )
-        answers = iter(["home"])
-        pg.on("dialog", lambda d: d.accept(next(answers, "")))
+        reply["answers"] = iter(["home"])
         pg.click("#wsNew")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
         check(
@@ -553,24 +581,20 @@ def run(base):
         pg.reload()
         pg.wait_for_selector("#topTabs [data-toptab]")
         check("S5 the tab style survives a reload", not vis("#sidebar"))
-        cmd("config.reset", {"key": "tab-style"})
+        cmd(pg, "config.reset", {"key": "tab-style"})
         check(
             "N16 sidebar style brings the sidebar back",
             vis("#sidebar") and not vis("#topTabs"),
         )
 
         # ---- tab card ----
-        cmd(
-            "hook",
-            {
-                "pane": "p1",
-                "name": "PermissionRequest",
-                "event": {"request": "Edit: docs/spec.md", "answerable": True},
-            },
-        )
-        pg.evaluate(
-            "import('/js/bus.js').then(({ bus }) => bus.handle('card.answer', ({ pane }) =>"
-            " bus.cmd('hook', { pane, name: 'PostToolUse', event: {} })))"
+        # The seeded session of p1 gets a request; its script asks for permission after a few seconds.
+        cmd(pg, "tab.go", {"id": "t1"})
+        n('[data-pane="p1"] canvas').first.click()
+        pg.keyboard.type("go")
+        pg.keyboard.press("Enter")
+        pg.wait_for_function(
+            "__tarn.snapshot().registry.p1.state === 'permission'", timeout=10000
         )
         pg.hover(f"{TAB}[data-tabid='t1']")
         pg.wait_for_timeout(700)
@@ -615,7 +639,7 @@ def run(base):
         check("O3 cmd+Z brings the workspace back", count(".wsh:has-text('work')") == 1)
         for ws in snap()["wss"]:
             if ws.get("collapsed"):
-                cmd("ws.fold", {"id": ws["id"]})
+                cmd(pg, "ws.fold", {"id": ws["id"]})
         while count(f"{TAB}"):
             pg.click(f"{TAB} >> nth=0 >> .x")
         check(
@@ -631,8 +655,15 @@ def run(base):
         )
 
         # ---- viewer drags and drop zones ----
-        cmd("viewer.open", {"path": "docs/spec.md"})
-        cmd(
+        def all_files():
+            settle()
+            pg.wait_for_function(
+                "[...document.querySelectorAll('.viewer-pane iframe')].every((f) => f.contentDocument.querySelector('.ftab'))"
+            )
+            return sorted(t for i in range(count(VIEWER)) for t in ftabs(i).all_inner_texts())
+
+        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
+        cmd(pg, 
             "pane.split",
             {
                 "id": layout("L.viewers(tab.layout)[0].viewer"),
@@ -645,15 +676,15 @@ def run(base):
             "V1 every viewer has a grab handle",
             count(f"{VIEWER} .grip") == count(VIEWER) == 2,
         )
-        files = sorted(pg.locator(f"{VIEWER} .ftab").all_inner_texts())
+        files = all_files()
         drag(n(f"{VIEWER} .grip").nth(0), n(VIEWER).nth(1), 0.5, 0.5)
-        merged = sorted(pg.locator(f"{VIEWER} .ftab").all_inner_texts())
+        merged = all_files()
         check(
             "V2 a viewer dropped in the middle of another hands over all its files",
             count(VIEWER) == 1 and set(files) <= set(merged),
             str(merged),
         )
-        cmd(
+        cmd(pg, 
             "pane.split",
             {
                 "id": layout("L.viewers(tab.layout)[0].viewer"),
@@ -684,10 +715,9 @@ def run(base):
         check(
             "V5 a lone terminal dropped at a viewer's bottom edge goes below it", below
         )
-        dt = pg.evaluate_handle("new DataTransfer()")
         vb = n(VIEWER).first.bounding_box()
-        n(f"{VIEWER} .ftab").first.dispatch_event("dragstart", {"dataTransfer": dt})
-        n(f"{VIEWER} .scroll").first.dispatch_event(
+        dt = start_drag(ftabs(0).first)
+        n(VIEWER).first.dispatch_event(
             "dragover",
             {
                 "dataTransfer": dt,
@@ -706,10 +736,9 @@ def run(base):
 
         def area_over(src, x, y):
             """Start a drag at src and hover a point of the tab area, in pixels from its corner."""
-            dt = pg.evaluate_handle("new DataTransfer()")
+            dt = start_drag(src.first)
             box = n("#ws").bounding_box()
             pos = {"dataTransfer": dt, "clientX": box["x"] + x, "clientY": box["y"] + y}
-            src.first.dispatch_event("dragstart", {"dataTransfer": dt})
             n("#ws").dispatch_event("dragover", pos)
             pg.wait_for_timeout(250)
             return box, dt, pos
@@ -719,8 +748,8 @@ def run(base):
             pg.evaluate("document.dispatchEvent(new Event('dragend'))")
 
         pg.click("#sbNew")
-        cmd("viewer.open", {"path": "docs/spec.md"})
-        box, dt, pos = area_over(n(f"{VIEWER} .ftab"), 10, 300)
+        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
+        box, dt, pos = area_over(ftabs(0), 10, 300)
         frame = n("#ws > .drop").bounding_box()
         check(
             "A1 a file at the left edge of the tab area frames the left half of the area",
@@ -732,8 +761,8 @@ def run(base):
             "A2 dropped there it opens left of everything",
             layout("tab.layout.dir === 'row' && 'viewer' in tab.layout.a"),
         )
-        cmd("viewer.open", {"path": "README.md"})
-        box, dt, pos = area_over(n(f"{VIEWER} .ftab"), 10, 10)
+        cmd(pg, "viewer.open", {"path": "README.md"})
+        box, dt, pos = area_over(ftabs(0), 10, 10)
         frame = n("#ws > .drop").bounding_box()
         ratio = layout("tab.layout.ratio")
         check(

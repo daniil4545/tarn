@@ -70,11 +70,12 @@ SPY = """async () => {
 
 
 @contextmanager
-def app_page(base, **kwargs):
+def app_page(base, accept_dialogs=True, **kwargs):
     """The real index.html once it is ready, with `window.bus` and `window.calls` (every command
-    sent after this point). Browser dialogs are accepted."""
+    sent after this point). Browser dialogs are accepted unless the check answers them itself."""
     with browser_page(base, "index.html", **kwargs) as (page, errors, requests):
-        page.on("dialog", lambda d: d.accept())
+        if accept_dialogs:
+            page.on("dialog", lambda d: d.accept())
         page.wait_for_selector("html[data-ready=true]")
         page.evaluate(SPY)
         yield page, errors, requests
@@ -82,7 +83,8 @@ def app_page(base, **kwargs):
 
 def cmd(page, name, payload=None):
     return page.evaluate(
-        "([n, p]) => window.bus.cmd(n, p)", [name, payload if payload is not None else {}]
+        "async ([n, p]) => { const { bus } = await import('/js/bus.js'); return bus.cmd(n, p) ?? null; }",
+        [name, payload if payload is not None else {}],
     )
 
 
