@@ -26,9 +26,11 @@ export function startFind() {
     const button = e.target.closest("[data-find]");
     if (button) { const n = Number(button.dataset.find); if (n) step(n); else close(); }
   });
-  bus.handle("find.open", open);
-  bus.handle("find.next", () => (input.value ? step(1) : open()));
-  bus.handle("find.prev", () => (input.value ? step(-1) : open()));
+  // With the window closed there is no terminal to search.
+  const guarded = (fn) => () => (currentTab() ? fn() : undefined);
+  bus.handle("find.open", guarded(open));
+  bus.handle("find.next", guarded(() => (input.value ? step(1) : open())));
+  bus.handle("find.prev", guarded(() => (input.value ? step(-1) : open())));
 }
 
 function open() {

@@ -3,7 +3,7 @@
 // ExpiringUndoManager). Views read snapshots and send the commands registered here.
 import { bus } from "./bus.js";
 import { register, read } from "./state.js";
-import { load, save } from "./storage.js";
+import { isObject, load, save } from "./storage.js";
 import { clock } from "./clock.js";
 import { WORKSPACES } from "./seed.js";
 import { ask } from "./ask-dialog.js";
@@ -34,6 +34,17 @@ export function focusArea() {
   return tree.isTerm(tree.at(tab.layout, tree.pathOf(tab.layout, tab.focus))) ? "terminal" : "viewer";
 }
 
+// Shape of saved workspaces: anything else (hand-edited storage) is dropped before it can throw.
+const isNode = (n) => isObject(n) && (typeof n.pane === "string" || typeof n.viewer === "string"
+  || (["row", "col"].includes(n.dir) && typeof n.ratio === "number" && isNode(n.a) && isNode(n.b)));
+const hasTerminal = (n) => typeof n.pane === "string" || (n.a !== undefined && (hasTerminal(n.a) || hasTerminal(n.b)));
+const isTab = (t) => isObject(t) && typeof t.id === "string" && typeof t.title === "string" && typeof t.cwd === "string"
+  && isNode(t.layout) && hasTerminal(t.layout);
+const isWs = (w) => isObject(w) && typeof w.id === "string" && typeof w.name === "string"
+  && Array.isArray(w.tabs) && w.tabs.every((id) => typeof id === "string");
+const hasShape = (s) => isObject(s) && isObject(s.tabs) && Object.values(s.tabs).every(isTab)
+  && Array.isArray(s.wss) && s.wss.every(isWs) && (s.cur === null || typeof s.cur === "string");
+
 function usable(state) {
   const ok = state?.tabs && Array.isArray(state.wss)
     && (state.cur === null ? state.wss.length === 0 : state.tabs[state.cur] !== undefined)
@@ -54,7 +65,7 @@ function scanIds(state) {
 export function startWorkspaces({ createPane, createViewer }) {
   makePane = createPane;
   makeViewer = createViewer;
-  const stored = cfg("window-save-state") === "never" ? WORKSPACES : load("workspaces", WORKSPACES);
+  const stored = cfg("window-save-state") === "never" ? WORKSPACES : load("workspaces", WORKSPACES, hasShape);
   const initial = structuredClone(usable(stored) ? stored : WORKSPACES);
   scanIds(initial);
   for (const tab of Object.values(initial.tabs)) {
@@ -266,7 +277,12 @@ const COMMANDS = {
       return;
     }
     const viewer = target.startsWith("v");
-    if (viewer || allowClose([target])) update((d) => closeLeaf(d, target));
+    if (viewer) return update((d) => closeLeaf(d, target));
+    if (!allowClose([target])) return;
+    // The last terminal takes the tab with it, so unsaved viewer text is asked about first.
+    const lastTerminal = tree.terminals(tab.layout).length === 1;
+    if (lastTerminal) settleViewers([tab], () => update((d) => closeLeaf(d, target)));
+    else update((d) => closeLeaf(d, target));
   },
 
   "pane.focus": ({ id }) => {

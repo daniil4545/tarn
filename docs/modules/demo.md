@@ -65,6 +65,7 @@ Keys: rows are data in `keys/*.js`; `keymap.js` runs in the capture phase and ma
 | --- | --- |
 | Sidebar and agent states | built (PR #3-#5) |
 | Viewer (markdown, mermaid, code, save) | built (PR #3-#5) |
+| Cmd+B from the terminal (Ctrl+Alt+B fallback) | built (PR #3): no viewer opens a pane with the tree only, an empty viewer closes, a viewer with files toggles its tree |
 | Workspaces, splits, layout | built (PR #3-#5) |
 | Settings | built (PR #3-#5) |
 | `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`) | planned: the app only has the socket command that opens a file, and a click on a path does the same. The demo keeps the commands to try the idea and prints "planned: not in the app yet" on `tarn --help` and on the first run of each subcommand |

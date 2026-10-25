@@ -250,6 +250,22 @@ def storage1_bad_data(base):
         "history": ["5", '{"a":1}', "[1,2]"],
         "vfs": ['{"files":null}', "null", '{"x":1}'],
         "sidebar": ["5", "[]"],
+        "workspaces": [
+            '{"tabs":{},"wss":[null],"cur":null}',
+            '{"tabs":{},"wss":{},"cur":null}',
+            (
+                '{"tabs":{"t1":{"id":"t1","title":"x","cwd":"~"}},'
+                '"wss":[{"id":"w1","name":"a","tabs":["t1"]}],"cur":"t1"}'
+            ),
+            (
+                '{"tabs":{"t1":{"id":"t1","title":"x","cwd":"~","layout":{"dir":"row"}}},'
+                '"wss":[{"id":"w1","name":"a","tabs":["t1"]}],"cur":"t1"}'
+            ),
+            (
+                '{"tabs":{"t1":{"id":"t1","title":"x","cwd":"~","layout":{"viewer":"v1"}}},'
+                '"wss":[{"id":"w1","name":"a","tabs":["t1"]}],"cur":"t1"}'
+            ),
+        ],
     }
     failed = []
     for part, values in bad.items():
@@ -425,7 +441,136 @@ def exit1_no_undo_after_exit(base):
         )
 
 
+def dirty_viewer(pg, tab="t3"):
+    """Open spec.md in a viewer of the tab and type unsaved text into it."""
+    cmd(pg, "tab.go", {"id": tab})
+    cmd(pg, "viewer.open", {"path": "docs/spec.md", "pane": None})
+    pg.wait_for_selector(VIEWER)
+    pg.wait_for_function(LOADED)
+    frame = pg.frame_locator(f"{VIEWER} iframe").first
+    frame.locator(".ftab.on").click()
+    pg.keyboard.press("Meta+e")
+    frame.locator(".cm-content").click()
+    pg.keyboard.type("dirty text")
+    frame.locator(".ftab.on .dirty").wait_for()
+    time.sleep(0.5)  # the page sends its text in steps
+
+
+def close_paths_ask(base):
+    paths = {
+        "tab.close": lambda pg: cmd(pg, "tab.close", {"id": "t3"}),
+        "Cmd+W on the last terminal": lambda pg: (
+            cmd(pg, "pane.focus", {"id": "p3"}),
+            pg.keyboard.press("Meta+w"),
+        ),
+        "window.close": lambda pg: cmd(pg, "window.close", {}),
+    }
+    for name, close in paths.items():
+        with app_page(base) as (pg, _e, _r):
+            dirty_viewer(pg)
+            close(pg)
+            buttons = pg.locator(".ask-dialog button").all_inner_texts()
+            alive = "t3" in ws(pg)["tabs"]
+            if buttons:
+                pg.click(".ask-dialog button:has-text('Cancel')")
+            check(
+                f"M1 {name} with a dirty viewer asks first and Cancel keeps the tab",
+                buttons == ["Save", "Don't Save", "Cancel"]
+                and alive
+                and "t3" in ws(pg)["tabs"],
+                f"{buttons} alive={alive}",
+            )
+
+
+def closed_window_keys_do_not_throw(base):
+    with app_page(base) as (pg, errors, _r):
+        for _ in range(6):
+            cmd(pg, "tab.close", {})
+        rows = pg.evaluate(
+            """async () => {
+              const mods = await Promise.all(['tabs', 'splits', 'find', 'terminal', 'viewer', 'help']
+                .map((n) => import(`/js/keys/${n}.js`)));
+              return mods.flatMap((m) => Object.values(m).flat())
+                .filter((r) => r.when === 'terminal').map((r) => [r.cmd, r.payload ?? {}]);
+            }"""
+        )
+        for name, payload in rows:
+            cmd(pg, name, payload)
+            if (
+                ws(pg)["cur"] is not None
+            ):  # a row such as Cmd+T opened a window: close it again
+                cmd(pg, "window.close", {})
+        for chord in ("Meta+f", "Meta+g", "Meta+Shift+g", "Meta+k"):
+            pg.keyboard.press(chord)
+        bus_errors = pg.evaluate("[...__tarn.errors]")
+        check(
+            "S1 with the window closed no terminal key throws",
+            not bus_errors and not errors and len(rows) > 10,
+            f"{bus_errors[:3]} {errors[:2]} rows={len(rows)}",
+        )
+
+
+def vtree_states(base):
+    with app_page(base) as (pg, _e, _r):
+
+        def state():
+            return pg.evaluate("__tarn.viewer().state()")
+
+        def panes():
+            return pg.locator(
+                '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
+            ).count()
+
+        def to_terminal():
+            cmd(pg, "pane.focus", {"id": "p1"})
+
+        check("V0 no viewer at the start", panes() == 0)
+        pg.keyboard.press("Meta+b")
+        pg.wait_for_selector(VIEWER)
+        pg.wait_for_function(LOADED)
+        first = state()["panes"]
+        only = next(iter(first.values()))
+        check(
+            "V1 Cmd+B from the terminal with no viewer opens a pane with the tree only",
+            panes() == 1 and only["treeVisible"] and not only["tabs"],
+            str(only),
+        )
+        to_terminal()
+        pg.keyboard.press("Meta+b")
+        pg.wait_for_function("document.querySelectorAll('.viewer-pane').length === 0")
+        check("V2 Cmd+B with an empty viewer closes it", panes() == 0)
+        pg.keyboard.press("Control+Alt+b")
+        pg.wait_for_selector(VIEWER)
+        check("V3 the Ctrl+Alt+B fallback opens it too", panes() == 1)
+        pg.wait_for_function(LOADED)
+        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
+        pg.wait_for_function(
+            "Object.values(__tarn.viewer().state().panes).some((p) => p.tabs.length)"
+        )
+        time.sleep(0.5)
+        to_terminal()
+
+        def with_file():  # a closed pane stays for undo, so pick the one that holds the file
+            return next(p for p in state()["panes"].values() if p["tabs"])[
+                "treeVisible"
+            ]
+
+        before = with_file()
+        pg.keyboard.press("Meta+b")
+        time.sleep(0.5)
+        after = with_file()
+
+        check(
+            "V4 Cmd+B with a file toggles the tree and keeps the pane",
+            panes() == 1 and before != after,
+            f"{before} {after}",
+        )
+
+
 SUITES = [
+    close_paths_ask,
+    closed_window_keys_do_not_throw,
+    vtree_states,
     exit1_no_undo_after_exit,
     privacy1_no_personal_data,
     model1_workspace_rules,
