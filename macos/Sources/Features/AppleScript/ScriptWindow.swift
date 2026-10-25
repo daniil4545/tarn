@@ -196,7 +196,12 @@ final class ScriptWindow: NSObject {
         guard NSApp.validateScript(command: command) else { return nil }
 
         if let managedTerminalController = preferredController as? TerminalController {
-            managedTerminalController.closeWindowImmediately()
+            let controller = managedTerminalController
+            let group = ViewerClose.members(of: controller.window).compactMap { $0.windowController as? TerminalController }
+            if ViewerClose.intercept(group, window: controller.window, proceed: { controller.closeWindowImmediately() }) {
+                return nil
+            }
+            controller.closeWindowImmediately()
             return nil
         }
 

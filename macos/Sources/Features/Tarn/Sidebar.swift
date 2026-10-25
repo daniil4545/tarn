@@ -197,7 +197,7 @@ final class SidebarModel: ObservableObject {
                 }
                 .first
             let agentSurface = running?.view
-            let pwd = (agentSurface ?? controller?.focusedSurface)?.pwd
+            let pwd = (agentSurface ?? controller?.focusedSurface)?.workingDirectory
             let root = projectRoot(for: pwd)
             let key = agentSurface == nil
                 ? GroupKey(section: .terminals, path: "")
@@ -415,6 +415,7 @@ struct SidebarLayout<Content: View>: View {
 
     @AppStorage(Sidebar.collapsedKey) private var isCollapsed = false
     @AppStorage(Sidebar.widthKey) private var width = Sidebar.defaultWidth
+    @AppStorage(TabStyle.key) private var tabStyle: TabStyle = .sidebar
 
     /// The sidebar width when the current resize drag began.
     @State private var widthAtDragStart: Double?
@@ -429,6 +430,14 @@ struct SidebarLayout<Content: View>: View {
     }
 
     var body: some View {
+        if tabStyle == .top {
+            content
+        } else {
+            sidebarAndContent
+        }
+    }
+
+    private var sidebarAndContent: some View {
         HStack(spacing: 0) {
             Sidebar(model: model, isCollapsed: $isCollapsed)
                 .frame(width: isCollapsed ? Sidebar.collapsedWidth : dragWidth ?? width)
@@ -491,6 +500,9 @@ struct Sidebar: View {
     /// The width the sidebar and its divider currently take out of a window's content.
     static var occupiedWidth: CGFloat {
         let defaults = UserDefaults.standard
+        if TabStyle.current == .top {
+            return 0
+        }
         if defaults.bool(forKey: collapsedKey) {
             return collapsedWidth + dividerWidth
         }
@@ -732,16 +744,7 @@ private struct SidebarRow: View {
     }
 
     private func icon(size: CGFloat) -> some View {
-        Group {
-            if let name = tab.agentProcess.flatMap({ AgentProcess.icons[$0] }) {
-                Image(name).resizable()
-            } else {
-                Image(systemName: "terminal").resizable()
-            }
-        }
-        .scaledToFit()
-        .frame(width: size, height: size)
-        .accessibilityHidden(true)
+        TabIcon(agentProcess: tab.agentProcess, size: size)
     }
 
     private var row: some View {
@@ -784,6 +787,53 @@ private struct SidebarRow: View {
         .padding(.leading, 4)
         .padding(.trailing, 8)
         .frame(height: 26)
+    }
+}
+
+/// A tab's agent logo, or a terminal for a plain tab.
+struct TabIcon: View {
+    let agentProcess: String?
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let name = agentProcess.flatMap({ AgentProcess.icons[$0] }) {
+                Image(name).resizable()
+            } else {
+                Image(systemName: "terminal").resizable()
+            }
+        }
+        .scaledToFit()
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
+    }
+}
+
+/// The state dot and agent logo of a native tab, used when tabs are at the top.
+/// It reads the same `SidebarModel` the sidebar draws from.
+struct NativeTabMark: View {
+    @ObservedObject var model: SidebarModel
+    let id: ObjectIdentifier
+
+    @AppStorage(TabStyle.key) private var tabStyle: TabStyle = .sidebar
+
+    var body: some View {
+        if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }),
+           tab.agentProcess != nil {
+            HStack(spacing: 6) {
+                if let agent = tab.agent {
+                    AgentBadge(agent: agent)
+                }
+                TabIcon(agentProcess: tab.agentProcess, size: 12)
+            }
+            .padding(.horizontal, 4)
+        }
+    }
+
+    /// Puts the mark first in the accessory stack Ghostty gives every native tab.
+    @MainActor static func install(in window: NSWindow, model: SidebarModel) {
+        guard let stack = window.tab.accessoryView as? NSStackView else { return }
+        stack.insertArrangedSubview(NSHostingView(rootView: NativeTabMark(model: model, id: ObjectIdentifier(window))), at: 0)
     }
 }
 

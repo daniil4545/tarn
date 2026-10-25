@@ -1,0 +1,1604 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tarn mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Living mockup of a tarn window: sessions sidebar | workspace. The workspace is a layout of
+   up to four panes. Terminal panes form one block (the Ghostty split tree); viewer panes sit
+   beside that block. */
+:root {
+  color-scheme: dark;
+  --desk: #17181f; --chrome: #21222c; --term: #282a36; --line: #3a3c4e; --div: #000;
+  --fg: #e6e6ef; --muted: #9a9cb3; --accent: #8be9fd; --deny: #ff5555;
+  --blue: #4f8cff; --green: #50fa7b; --orange: #ffb86c; --purple: #bd93f9; --yellow: #f1fa8c;
+  --sans: "IBM Plex Sans", -apple-system, "Helvetica Neue", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+.vpane { --p-bg: #282a36; --p-bar: #21222c; --p-fg: #e6e6ef; --p-muted: #9a9cb3; --p-line: #3a3c4e; --p-code: #1f2029; --p-accent: #bd93f9; }
+.vpane.light { --p-bg: #fbfbfd; --p-bar: #f0f1f6; --p-fg: #1d1f2b; --p-muted: #5f6378; --p-line: #dfe0ea; --p-code: #f1f2f7; --p-accent: #6b46c1; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--desk); color: var(--fg); font: 14px/1.5 var(--sans); padding: 14px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 10px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.mock { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 13px; color: var(--muted); }
+.mock b { color: var(--fg); font-weight: 600; }
+.built { color: var(--green); } .planned { color: var(--orange); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 3px 10px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--line); color: var(--fg); }
+.act { background: #2f3142; border: 1px solid var(--line); border-radius: 7px; padding: 3px 10px; }
+.act:hover { border-color: var(--muted); }
+kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--fg); }
+.keys { font-size: 12px; }
+
+.win { flex: 1; min-height: 540px; display: flex; flex-direction: column; border: 1px solid #000; border-radius: 12px; overflow: hidden; background: var(--term); box-shadow: 0 20px 60px rgba(0,0,0,.45); }
+.titlebar { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 12px; background: var(--chrome); border-bottom: 1px solid #000; font-size: 12px; color: var(--muted); }
+.lights { display: flex; gap: 7px; margin-right: 10px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.ttl-btn { margin-left: auto; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 9px; color: var(--muted); font-size: 12px; }
+.ttl-btn[aria-pressed="true"] { color: var(--fg); background: var(--line); }
+.body { flex: 1; display: flex; min-height: 0; }
+.sidebar { width: 190px; flex: none; background: var(--chrome); border-right: 1px solid #000; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.group { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 5px; background: none; border: 0; text-align: left; color: var(--muted); width: 100%; }
+.tab:hover { background: rgba(255,255,255,.05); }
+.tab[aria-selected="true"] { background: rgba(255,255,255,.1); color: var(--fg); }
+.tab .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.agent { width: 13px; height: 13px; flex: none; }
+.key { font-size: 11px; color: #6c6f85; }
+.sep { height: 1px; background: var(--line); margin: 8px 4px; }
+.sidebar { width: 210px; overflow: auto; }
+.wsh { display: flex; align-items: center; gap: 6px; padding: 5px 6px; margin-top: 6px; border-radius: 5px; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); cursor: pointer; user-select: none; }
+.wsh:hover { background: rgba(255,255,255,.05); color: var(--fg); }
+.wsh .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsh .ib { opacity: 0; background: none; border: 0; padding: 0 5px; color: var(--muted); font-size: 14px; line-height: 1; }
+.wsh:hover .ib { opacity: 1; }
+.wsh .cnt { font-size: 11px; color: #6c6f85; text-transform: none; }
+.chev { width: 10px; color: var(--muted); font-size: 10px; }
+.tab { cursor: pointer; }
+/* Tabs sit indented under their workspace header. */
+.sidebar .tab[data-tabid] { margin-left: 12px; width: calc(100% - 12px); }
+.tab .x { opacity: 0; background: none; border: 0; padding: 0 3px; color: var(--muted); font-size: 11px; }
+.tab:hover .x { opacity: 1; }
+.tab:hover .key { display: none; }
+.tab.add { color: #6c6f85; margin-top: 4px; }
+.sidebar { position: relative; }
+.wscol { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* Tab style "top": Ghostty's native tab bar replaces the sidebar; no agent state on tabs. */
+.toptabs { display: none; flex: none; height: 28px; background: #1c1d26; border-bottom: 1px solid #000; }
+.ttab { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; padding: 0 8px 0 6px; border-right: 1px solid #000; color: var(--muted); font-size: 12px; cursor: default; user-select: none; }
+.ttab:hover { background: rgba(255,255,255,.04); }
+.ttab[aria-selected="true"] { background: var(--chrome); color: var(--fg); }
+.ttab .tt { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ttab .tk { flex: none; min-width: 22px; text-align: right; font-size: 11px; color: #6c6f85; }
+.ttab .tx { flex: none; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: 9px; opacity: 0; }
+.ttab:hover .tx { opacity: 1; }
+.ttab .tx:hover { background: rgba(255,255,255,.12); color: var(--fg); }
+.tplus { flex: none; width: 30px; background: none; border: 0; color: var(--muted); font-size: 16px; }
+.tplus:hover { color: var(--fg); background: rgba(255,255,255,.04); }
+.win.top .sidebar, .win.top .sbgrip { display: none; }
+.win.top .toptabs { display: flex; }
+.setwrap { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,0,0,.35); padding: 16px; }
+.setwin { width: min(720px, 100%); height: min(480px, 100%); display: flex; background: #2b2d3a; border: 1px solid #000; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); font-size: 13px; }
+.setside { width: 170px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--chrome); border-right: 1px solid #000; }
+.setside .lights { margin: 0 0 14px 4px; }
+.setside .lights i:first-child { cursor: pointer; }
+#setNav { display: flex; flex-direction: column; gap: 2px; }
+.setitem { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.setitem.on { background: var(--blue); color: #fff; }
+.setgroup + .setgroup, .setgroup + h4 { margin-top: 14px; }
+.setmain h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.setnote { margin: 10px 2px 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.setnote code { font-family: var(--mono); font-size: 11px; }
+.opt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 7px 0; }
+.opt + .opt { border-top: 1px solid var(--line); }
+.opt label { font-family: var(--mono); font-size: 12px; }
+.opt small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.opt .ctl { display: flex; align-items: center; gap: 6px; }
+.opt select, .opt input[type=text], .opt input[type=number] { background: var(--term); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; font: 12px var(--mono); padding: 2px 6px; }
+.opt input[type=number] { width: 64px; } .opt input[type=text] { width: 150px; } .opt input[type=range] { width: 110px; accent-color: var(--blue); }
+.opt input[type=checkbox] { accent-color: var(--blue); }
+.opt .val { font: 11px var(--mono); color: var(--muted); min-width: 28px; }
+.opt .set { font-size: 10.5px; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.opt .reset { background: none; border: 0; color: var(--accent); font: inherit; font-size: 11.5px; cursor: pointer; padding: 0; }
+.keys { width: 100%; border-collapse: collapse; }
+.keys td { padding: 4px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.keys tr:first-child td { border-top: 0; }
+.keys td:first-child { width: 120px; font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+.keys .src { color: var(--muted); font-size: 11px; text-align: right; }
+#tarnConf { margin: 6px 0 0; padding: 8px 10px; background: var(--term); border: 1px solid var(--line); border-radius: 6px; font: 11.5px/1.5 var(--mono); white-space: pre-wrap; color: var(--fg); }
+.setcfg { margin-top: auto; background: none; border: 0; text-align: left; padding: 4px 8px; color: var(--accent); }
+.setmain { flex: 1; min-width: 0; padding: 14px 20px; overflow: auto; }
+.setmain h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; text-align: center; }
+.setgroup { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.setrow { display: flex; gap: 16px; }
+.setrow > span { flex: none; padding-top: 1px; }
+.radios { display: flex; flex-direction: column; gap: 8px; }
+.radios label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.radios input { margin: 3px 0 0; accent-color: var(--blue); }
+.radios b { font-weight: 400; display: block; }
+.radios small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+@media (max-width: 760px) { .setside { width: 120px; } .setrow { flex-direction: column; gap: 8px; } }
+/* Invisible strip on the sidebar's right edge: resizes it (120-400, default 200), folds it to the rail and back. */
+.sbgrip { flex: none; width: 10px; margin-left: -10px; cursor: col-resize; position: relative; z-index: 4; }
+.sbgrip.drag, .sbgrip:hover { box-shadow: inset -2px 0 0 var(--accent); }
+.card { position: fixed; z-index: 15; width: 280px; padding: 12px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.card b { font-size: 13px; font-weight: 600; }
+.card .dim { color: var(--muted); font-size: 11px; }
+.card .mono { font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.card .st { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.card .req { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.card .req code { font: 11.5px var(--mono); background: var(--term); padding: 4px 6px; border-radius: 5px; }
+.card .btns { display: flex; gap: 6px; }
+.card .btns button { background: var(--line); border: 0; border-radius: 5px; padding: 2px 12px; }
+.sbtop { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 4px; }
+.sbtop .ib { display: grid; place-items: center; width: 26px; height: 24px; padding: 0; font-size: 16px; color: var(--muted); }
+.sidebar.rail { width: 44px; padding: 8px 4px; align-items: center; }
+.sidebar.rail .sbtop { flex-direction: column; gap: 4px; padding: 0 0 6px; }
+.sidebar.rail .tab[data-tabid] { margin: 0; width: 34px; height: 30px; justify-content: center; position: relative; padding: 0; }
+.sidebar.rail .tab .dot { position: absolute; top: 5px; right: 5px; }
+.sidebar.rail .sep { width: 24px; margin: 6px auto; }
+.wsline { position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
+.dropmark { box-shadow: inset 0 2px 0 var(--accent); background: rgba(139,233,253,.08); }
+.ctx { position: fixed; z-index: 20; min-width: 200px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.ctx button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 5px 10px; border-radius: 5px; font-size: 13px; }
+.ctx button:hover { background: var(--line); }
+
+/* workspace layout */
+.ws { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+.split { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.split.col { flex-direction: column; }
+.pane { min-width: 0; min-height: 0; display: flex; flex-basis: 0; }
+.sdiv { flex: none; background: var(--div); position: relative; z-index: 2; }
+.sdiv.row { width: 2px; cursor: col-resize; }
+.sdiv.col { height: 2px; cursor: row-resize; }
+.sdiv::after { content: ""; position: absolute; inset: -3px; }
+.sdiv:hover, .sdiv.drag { background: var(--accent); }
+.block { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+.drop { transition: top .14s ease, right .14s ease, bottom .14s ease, left .14s ease; }
+/* The frame only shows the place, like Rectangle's footprint: neutral, in the text color of what
+   it covers, so it reads on dark and light panes. Red is the only meaning: refused. */
+.drop { position: absolute; z-index: 5; background: color-mix(in srgb, currentColor 12%, transparent); border: 2px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 8px; pointer-events: none; }
+.drop.deny { background: color-mix(in srgb, var(--deny) 18%, transparent); border-color: var(--deny); }
+.drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: var(--chrome); padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
+
+.tpane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+/* Ghostty's SurfaceGrabHandle: an 80x12 grab area at the top center with an ellipsis.
+   drag-handle auto shows it while the pointer is in the top 20% of the pane; always and never as named. */
+.grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 12px; z-index: 3; display: grid; place-items: center; cursor: grab; color: var(--fg); }
+.grip svg { opacity: 0; transition: opacity .12s; margin-top: -3px; }
+/* Brighter than Ghostty's 0.3 / 0.8: at 0.3 the dots were hard to see. */
+.tpane.near .grip svg, .vpane.near .grip svg, .ws.h-always .grip svg { opacity: .6; }
+/* The same handle drags a whole viewer; it sits over the top edge of the file tab bar. */
+.vpane .grip { color: var(--p-fg); height: 12px; }
+.vpane .grip svg { margin-top: 0; }
+.grip:hover svg { opacity: 1; }
+.ws.h-never .grip { display: none; }
+/* Ghostty dims an unfocused split (unfocused-split-opacity 0.7). */
+.tpane:not(.focus) .term { opacity: var(--g-unfocused, .7); }
+.term { flex: 1; min-width: 0; padding: 10px 12px; font: var(--g-font-size, 13px)/1.55 var(--mono); overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.term .p { color: var(--green); } .term .dim { color: var(--muted); } .term .tool { color: var(--purple); }
+.path { color: var(--accent); text-decoration: underline; text-decoration-color: rgba(139,233,253,.35); text-underline-offset: 2px; cursor: pointer; }
+.path:hover { text-decoration-color: var(--accent); background: rgba(139,233,253,.08); }
+/* Shell integration shows a bar cursor at the prompt; an unfocused split shows a hollow block. */
+.cursor { display: inline-block; width: 2px; height: 15px; background: var(--fg); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+.tpane:not(.focus) .cursor { width: 8px; background: none; outline: 1px solid var(--muted); outline-offset: -1px; animation: none; }
+.term .u { color: var(--accent); } .term .h { color: var(--purple); } .term .cwd { color: var(--green); }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* viewer pane */
+.vpane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; background: var(--p-bg); color: var(--p-fg); }
+.vh { flex: none; display: flex; align-items: stretch; background: var(--p-bar); border-bottom: 1px solid var(--p-line); font-size: 12.5px; min-height: 31px; }
+.vpane.focus .vh { box-shadow: inset 0 2px 0 var(--p-accent); }
+.vtabs { flex: 1; min-width: 0; display: flex; overflow-x: auto; scrollbar-width: none; }
+.ftab { display: flex; align-items: center; gap: 5px; padding: 0 4px 0 10px; border-right: 1px solid var(--p-line); color: var(--p-muted); white-space: nowrap; cursor: pointer; user-select: none; }
+.ftab.on { color: var(--p-fg); background: var(--p-bg); }
+.ftab.preview .nm { font-style: italic; }
+.ftab .x { opacity: 0; padding: 0 4px; border-radius: 3px; border: 0; background: none; color: inherit; font-size: 11px; }
+.ftab:hover .x, .ftab.on .x { opacity: .6; }
+.ftab .x:hover { opacity: 1; background: color-mix(in srgb, var(--p-fg) 12%, transparent); }
+.ftab.dragging { opacity: .4; }
+.dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--p-fg); flex: none; }
+.vact { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px; }
+.ib { background: none; border: 0; padding: 2px 6px; border-radius: 5px; color: var(--p-muted); font-size: 12px; }
+.ib:hover { background: color-mix(in srgb, var(--p-fg) 9%, transparent); color: var(--p-fg); }
+.ib[aria-pressed="true"] { color: var(--p-fg); background: color-mix(in srgb, var(--p-fg) 12%, transparent); }
+.ib:disabled { opacity: .35; cursor: default; }
+.banner { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12.5px; background: color-mix(in srgb, var(--orange) 22%, var(--p-bg)); border-bottom: 1px solid var(--p-line); }
+.banner button { background: var(--p-bg); border: 1px solid var(--p-line); border-radius: 5px; padding: 1px 8px; color: var(--p-fg); }
+.vbody { flex: 1; min-height: 0; display: flex; }
+.vcontent { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.vtree { width: 210px; max-width: 45%; flex: none; display: flex; flex-direction: column; background: var(--p-bar); border-left: 1px solid var(--p-line); min-height: 0; }
+
+.tree { flex: 1; min-height: 0; overflow: auto; padding: 6px 4px; font-size: 12.5px; outline: none; }
+.th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--p-muted); padding: 4px 8px 6px; display: flex; gap: 8px; }
+.th span { margin-left: auto; text-transform: none; letter-spacing: 0; white-space: nowrap; }
+.tr { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; user-select: none; }
+.tr:hover { background: color-mix(in srgb, var(--p-fg) 7%, transparent); }
+.tr.cur { color: var(--p-accent); }
+.tr.sel { background: color-mix(in srgb, var(--p-accent) 24%, transparent); }
+.tr.off { color: var(--p-muted); cursor: default; }
+.chev { width: 10px; flex: none; color: var(--p-muted); font-size: 10px; }
+.mod { margin-left: auto; color: var(--orange); font: 11px var(--mono); }
+
+.scroll { flex: 1; min-width: 0; overflow: auto; }
+.doc { max-width: 72ch; margin: 0 auto; padding: 18px 26px 60px; font-size: 14.5px; line-height: 1.65; }
+.doc h1, .doc h2 { line-height: 1.25; text-wrap: balance; }
+.doc h1 { font-size: 1.6em; margin: .2em 0 .6em; }
+.doc h2 { font-size: 1.25em; margin: 1.5em 0 .5em; padding-bottom: .25em; border-bottom: 1px solid var(--p-line); }
+.doc code { font: .88em var(--mono); background: var(--p-code); padding: .1em .35em; border-radius: 4px; }
+.doc pre { position: relative; background: var(--p-code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.55 var(--mono); }
+.doc pre code { background: none; padding: 0; font: inherit; }
+.copy { position: absolute; top: 6px; right: 6px; font: 11px var(--sans); background: var(--p-bg); border: 1px solid var(--p-line); border-radius: 5px; padding: 1px 7px; color: var(--p-muted); opacity: 0; }
+.doc pre:hover .copy, .copy:focus-visible { opacity: 1; }
+.doc table { border-collapse: collapse; display: block; overflow-x: auto; font-size: .92em; }
+.doc th, .doc td { border: 1px solid var(--p-line); padding: 5px 10px; text-align: left; }
+.doc th { background: var(--p-code); }
+.doc blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--p-line); color: var(--p-muted); }
+.doc li.task { list-style: none; margin-left: -1.3em; }
+.doc li.task input { margin-right: 8px; accent-color: var(--p-accent); }
+.mm { background: var(--p-code); border-radius: 8px; padding: 30px 12px 12px; overflow-x: auto; position: relative; text-align: center; min-height: 60px; }
+.mm .mtoggle { position: absolute; top: 6px; right: 6px; font: 11px var(--sans); background: var(--p-bg); border: 1px solid var(--p-line); border-radius: 5px; padding: 1px 7px; color: var(--p-muted); }
+.mm pre { text-align: left; margin: 0; padding: 0; }
+.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--yellow) 30%, transparent); } to { background: transparent; } }
+.raw { flex: 1; min-width: 0; display: flex; font: 13px/1.6 var(--mono); }
+.gut { flex: none; padding: 14px 8px 14px 12px; color: var(--p-muted); text-align: right; user-select: none; white-space: pre; overflow: hidden; opacity: .6; }
+.raw textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--p-fg); font: inherit; padding: 14px 14px 60px 4px; white-space: pre; overflow: auto; tab-size: 4; }
+.codeview { margin: 0; padding: 14px 0 60px; font: 13px/1.6 var(--mono); }
+.codeview .row { display: flex; padding-right: 14px; }
+.codeview .row.hl { background: color-mix(in srgb, var(--yellow) 16%, transparent); }
+.codeview .ln { flex: none; width: 5ch; text-align: right; padding-right: 1.5ch; color: var(--p-muted); opacity: .6; user-select: none; }
+.codeview code { white-space: pre; }
+.empty { margin: auto; color: var(--p-muted); font-size: 13px; text-align: center; padding: 20px; }
+.toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: #44475a; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 13px; pointer-events: none; z-index: 10; }
+
+.hljs-keyword, .hljs-built_in, .hljs-type { color: #d63384; }
+.hljs-string, .hljs-attr { color: #2f855a; }
+.hljs-comment { color: var(--p-muted); font-style: italic; }
+.hljs-number, .hljs-literal { color: #b7791f; }
+.hljs-title { color: #3b6fd8; }
+.vpane:not(.light) .hljs-keyword, .vpane:not(.light) .hljs-type, .vpane:not(.light) .hljs-built_in { color: #ff79c6; }
+.vpane:not(.light) .hljs-string { color: var(--yellow); }
+.vpane:not(.light) .hljs-number, .vpane:not(.light) .hljs-literal { color: var(--purple); }
+.vpane:not(.light) .hljs-title { color: var(--green); }
+
+@media (max-width: 760px) {
+  .sidebar, .sbgrip { display: none !important; }
+  .vtree { width: 140px; }
+  .doc { padding: 12px 14px 40px; }
+}
+@media (prefers-reduced-motion: reduce) { .cursor, .flash { animation: none; } }
+</style>
+
+<div class="mock" role="group" aria-label="Mockup controls">
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, settings window with the tab style, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo, settings sections for Ghostty options and Help.</span>
+  <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
+  <span>Terminal grab handle (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="false">always</button><button data-v="auto" aria-pressed="true">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
+  <button class="act" id="agentTab" title="Mock of tarn new from the agent in Claude · bot">Agent in Claude · bot opens a tab</button>
+  <button class="act" id="openSettings">Settings ⌘,</button>
+  <button class="act" id="resetDemo">Reset demo</button>
+  <button class="act" id="agentEdit">Agent edits the file</button>
+  <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> open or hide the viewer · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
+</div>
+
+<div class="win">
+  <div class="titlebar"><span class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span><span id="wtitle"></span><button class="ttl-btn" id="toggleFiles" aria-pressed="false">Files ⌘B</button></div>
+  <div class="body">
+    <nav class="sidebar" id="sidebar" aria-label="Tabs"></nav>
+    <div class="sbgrip" id="sbGrip" aria-hidden="true"></div>
+    <div class="wscol">
+      <div class="toptabs" id="topTabs" role="tablist" aria-label="Tabs"></div>
+      <main class="ws" id="ws"></main>
+    </div>
+  </div>
+</div>
+
+<!-- Settings window, as TarnSettings.swift: cmd+, opens it, Escape closes it. -->
+<div class="setwrap" id="settings" hidden>
+  <div class="setwin" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="setside">
+      <div class="lights"><i style="background:#ff5f57" id="settingsClose" title="Close"></i><i style="background:#56586a"></i><i style="background:#56586a"></i></div>
+      <nav id="setNav" aria-label="Settings sections">
+        <button class="setitem on" data-sec="tabs">Tabs</button>
+        <button class="setitem" data-sec="appearance">Appearance</button>
+        <button class="setitem" data-sec="terminal">Terminal</button>
+        <button class="setitem" data-sec="windows">Windows</button>
+        <button class="setitem" data-sec="help">Help</button>
+      </nav>
+      <button class="setcfg" id="ghosttyConfig" title="All Ghostty options, keys included. Opens the Ghostty config file.">Ghostty Config…</button>
+    </div>
+    <div class="setmain" id="setMain">
+      <section data-pane="tabs">
+      <h3>Tabs</h3>
+      <div class="setgroup">
+        <div class="setrow"><span>Tab style</span>
+          <div class="radios">
+            <label><input type="radio" name="tabstyle" value="sidebar"><span><b>Sidebar</b><small>Tabs grouped in workspaces with agent state, on the left of the window.</small></span></label>
+            <label><input type="radio" name="tabstyle" value="top"><span><b>Tabs at the top</b><small>The native tab bar, as in Ghostty. Workspaces and agent state are not shown.</small></span></label>
+          </div>
+        </div>
+      </div>
+      <p class="setnote">Applies to every open window at once.</p>
+      </section>
+      <div id="setGen"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.2/markdown-it.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+"use strict";
+const FILES = {
+"docs/spec.md": `# Spec: tarn, an agent-first terminal
+
+tarn is a fork of Ghostty for macOS. It keeps the Ghostty core and adds a narrow set of features for CLI coding agents.
+
+## Goal and scope
+
+| ID | Requirement | Wave |
+| --- | --- | --- |
+| R5 | Markdown viewer next to the terminal, mermaid rendered, no network | first |
+| R6 | File editing in the viewer | first |
+| R9 | Click on a file path opens it in the viewer | first |
+
+## State model
+
+\`\`\`mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> working: UserPromptSubmit
+  working --> permission: PermissionRequest
+  permission --> working: PostToolUse
+  working --> waiting: Stop
+  waiting --> working: UserPromptSubmit
+  waiting --> idle: SessionEnd
+\`\`\`
+
+## Viewer checklist
+
+- [x] Rendered and raw views, switched with cmd+E
+- [x] Mermaid without network
+- [ ] Scroll kept when the agent edits the file
+- [ ] Tabs split by drag and drop
+
+> No network: a content rule list blocks every load except \`tarn-md://\`.
+`,
+"docs/architecture.md": `# Architecture of tarn
+
+One process: the Ghostty macOS app. State lives in memory.
+
+## Map
+
+\`\`\`mermaid
+flowchart LR
+  hook["hook.sh"] --> sock["ControlSocket"]
+  sock --> reg["SessionRegistry"]
+  proc["AgentProcess"] --> model["SidebarModel"]
+  reg --> model
+  model --> views["Sidebar views"]
+  click["path click"] --> viewer["Viewer pane"]
+\`\`\`
+
+## Hook flow
+
+\`\`\`mermaid
+sequenceDiagram
+  participant H as hook.sh
+  participant S as ControlSocket
+  participant R as SessionRegistry
+  H->>S: event JSON
+  S->>R: receive
+  R-->>S: answer
+\`\`\`
+`,
+"docs/plans/s2-files.md": `# Plan: s2-files
+
+## Steps
+
+1. Workspace layout: terminal block and viewer panes
+2. Viewer pane with file tabs and a files tree
+3. Drag a file tab to a pane edge to split
+
+\`\`\`sh
+make -f tarn.mk check
+\`\`\`
+`,
+"README.md": `# tarn
+
+An agent-first terminal for macOS, built on Ghostty.
+
+- Sidebar with every Claude Code session and its state
+- One notification when a session needs you
+- Markdown and code open beside the terminal
+`,
+"macos/Sources/Features/Tarn/Sidebar.swift": `/// Places the sidebar beside a terminal window's content.
+struct SidebarLayout<Content: View>: View {
+    @ObservedObject var model: SidebarModel
+    @ObservedObject var ghostty: Ghostty.App
+    let content: Content
+
+    @AppStorage(Sidebar.collapsedKey) private var isCollapsed = false
+    @AppStorage(Sidebar.widthKey) private var width = Sidebar.defaultWidth
+    @AppStorage(TabStyle.key) private var tabStyle: TabStyle = .sidebar
+
+    var body: some View {
+        if tabStyle == .top {
+            content
+        } else {
+            sidebarAndContent
+        }
+    }
+
+    private var sidebarAndContent: some View {
+        HStack(spacing: 0) {
+            Sidebar(model: model, isCollapsed: $isCollapsed)
+                .frame(width: isCollapsed ? Sidebar.collapsedWidth : width)
+            content
+        }
+    }
+}
+`,
+"macos/Sources/Features/Tarn/TarnSettings.swift": `/// Where a terminal window lists its tabs.
+enum TabStyle: String, CaseIterable, Identifiable {
+    case sidebar
+    case top
+
+    static let key = "TarnTabStyle"
+    var id: String { rawValue }
+}
+`
+};
+const TREE = ["README.md", "docs/architecture.md", "docs/plans/s2-files.md", "docs/spec.md",
+  "macos/Sources/Features/Tarn/AgentProcess.swift", "macos/Sources/Features/Tarn/Sidebar.swift",
+  "macos/Sources/Features/Tarn/TarnSettings.swift", "plugin/hooks/hook.sh"];
+const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
+const TERM_ICON = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
+const lnk = (path, line) => `<span class="path" data-path="${path}"${line ? ` data-line="${line}"` : ""}>${path}${line ? ":" + line : ""}</span>`;
+const short = cwd => cwd.replace("~/Dev/self-projects/", "~/D/s/").replace("~/Dev/", "~/D/");
+const promptLine = cwd => `<span class="u">daniil</span>@<span class="h">MacBook</span> <span class="cwd">${short(cwd)}</span>>`;
+const PROMPT = promptLine("~/Dev/self-projects/tarn");
+// Each split runs its own login shell on its own tty, in the working directory of the split it came from.
+const shell = (tty, cwd) => `<span class="dim">Last login: Sun Oct 25 12:34:44 on ttys0${String(tty).padStart(2, "0")}</span>\n${promptLine(cwd || "~/Dev/self-projects/tarn")} <span class="cursor"></span>`;
+// Agent states, most urgent first; a workspace shows the most urgent state of its tabs.
+const STATE = { waiting: { color: "var(--orange)", label: "needs you", rank: 3 }, working: { color: "var(--blue)", label: "working", rank: 2 }, done: { color: "var(--green)", label: "done", rank: 1 } };
+const SEED_TERM = {
+  t1: `<span class="dim">╭─ Claude Code ─────────────────────────╮</span>
+<span class="p">></span> update the spec and the plan for the viewer
+
+<span class="tool">● Update</span>(${lnk("docs/spec.md")})
+<span class="tool">● Write</span>(${lnk("docs/plans/s2-files.md")})
+<span class="tool">● Read</span>(${lnk("macos/Sources/Features/Tarn/Sidebar.swift", 9)})
+
+Done. Changes:
+- ${lnk("docs/spec.md")}: R6 and the network rule
+- ${lnk("docs/plans/s2-files.md")}: stage steps
+- ${lnk("docs/architecture.md")}: viewer module
+- ${lnk("macos/Sources/Features/Tarn/Sidebar.swift", 9)}: insertion point
+
+Allow edits to docs/spec.md? <span class="dim">(waiting for you)</span>`,
+  t2: `<span class="p">></span> check the README
+
+<span class="tool">● Read</span>(${lnk("README.md")})
+
+The README is fine. The module map in ${lnk("docs/architecture.md")} matches the code.
+
+<span class="dim">✻ Working… (esc to interrupt)</span>`,
+  t3: `${PROMPT} git status -s
+ M ${lnk("docs/spec.md")}
+ M ${lnk("macos/Sources/Features/Tarn/TarnSettings.swift")}
+${PROMPT} <span class="cursor"></span>`,
+  t4: `${promptLine("~")} ssh prod
+<span class="dim">Welcome to Ubuntu 24.04 LTS</span>
+root@prod:~# <span class="cursor"></span>`,
+  t5: `<span class="p">></span> fix the reminder schedule in the bot
+
+<span class="tool">● Edit</span>(bot/schedule.py)
+
+<span class="dim">✻ Working… (esc to interrupt)</span>`,
+  t6: `${promptLine("~")} <span class="cursor"></span>`,
+};
+const SEED = {
+  tabs: {
+    t1: { title: "Claude · spec", agent: true, state: "waiting", cwd: "~/Dev/self-projects/tarn" },
+    t2: { title: "Claude · review", agent: true, state: "working", cwd: "~/Dev/self-projects/tarn" },
+    t3: { title: "git · tarn", agent: false, cwd: "~/Dev/self-projects/tarn" },
+    t4: { title: "ssh prod", agent: false, cwd: "root@prod:~" },
+    t5: { title: "Claude · bot", agent: true, state: "working", cwd: "~/Dev/Galera" },
+    t6: { title: "~", agent: false, cwd: "~" },
+  },
+  wss: [
+    { id: "w1", name: "tarn", tabs: ["t1", "t2", "t3", "t4"] },
+    { id: "w2", name: "galera", tabs: ["t5"] },
+    { id: "w0", name: "Default", tabs: ["t6"] },
+  ],
+  cur: "t1",
+};
+
+// ---- state ----
+// Documents are shared, as files on disk are. Each sidebar tab has its own layout:
+// a tree of splits whose leaves are viewer panes and one terminal block; the block holds
+// its own split tree of terminal panes (the Ghostty split tree in the app).
+const docs = {};
+for (const k in FILES) docs[k] = { text: FILES[k], saved: FILES[k], v: 0, banner: false, disk: null, edits: 0 };
+const opt = { theme: "dark", header: "auto" };
+const folded = new Set(["plugin"]);
+let seq = 0;
+const nid = p => p + (++seq);
+const newViewer = tree => ({ type: "viewer", id: nid("v"), tabs: [], active: -1, tree, sel: null, scroll: {}, modeOf: {} });
+const newTerm = n => ({ type: "term", id: nid("t"), n });
+const newLayout = () => { const t = newTerm(0); return { root: { type: "block", id: nid("b"), root: t }, focus: t.id, lastViewer: null, terms: 1 }; };
+// Workspaces and tab membership persist across reloads, as tarn keeps them across restarts;
+// the layout inside a tab comes back through Ghostty's window restore in the app.
+const STORE = "tarn-mockup-workspaces-v2";
+let tabs = {}, wss = [], cur = null, drag = null, tabSeq = 10;
+function loadState() {
+  let st = null;
+  try { st = JSON.parse(localStorage.getItem(STORE)); } catch (e) { st = null; }
+  if (!st) st = JSON.parse(JSON.stringify(SEED));
+  tabs = {};
+  for (const [id, t] of Object.entries(st.tabs)) tabs[id] = { ...t, id, layout: newLayout() };
+  wss = st.wss;
+  tabSeq = Math.max(10, ...Object.keys(tabs).map(id => +id.slice(1) || 0));
+  cur = tabs[st.cur] ? st.cur : flat()[0] || null;
+}
+function saveState() {
+  const meta = {};
+  for (const [id, t] of Object.entries(tabs)) { const { layout, ...rest } = t; meta[id] = rest; }
+  try { localStorage.setItem(STORE, JSON.stringify({ tabs: meta, wss, cur })); } catch (e) { /* the mockup still works without storage */ }
+}
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const isMd = p => p.endsWith(".md");
+const L = () => tabs[cur].layout;
+// The workspace of the tab on screen; new tabs from cmd+T go there.
+const W = () => wss.find(w => w.tabs.includes(cur)) || wss[0];
+const wsById = id => wss.find(w => w.id === id);
+const name = p => p.split("/").pop();
+function toast(text) { const el = document.createElement("div"); el.className = "toast"; el.textContent = text; document.body.appendChild(el); setTimeout(() => el.remove(), 1700); }
+
+function leaves(n, out = []) {
+  if (n.type === "split") { leaves(n.a, out); leaves(n.b, out); }
+  else if (n.type === "block") leaves(n.root, out);
+  else out.push(n);
+  return out;
+}
+const all = () => leaves(L().root);
+const viewers = () => all().filter(x => x.type === "viewer");
+const terms = () => all().filter(x => x.type === "term");
+const byId = id => all().find(x => x.id === id);
+const findBlock = n => n.type === "block" ? n : n.type === "split" ? (findBlock(n.a) || findBlock(n.b)) : null;
+const findSplit = (n, id) => n.type === "block" ? findSplit(n.root, id) : n.type !== "split" ? null : n.id === id ? n : findSplit(n.a, id) || findSplit(n.b, id);
+// parentIn stays on one level: it does not enter the terminal block.
+function parentIn(root, id) {
+  if (root.type !== "split") return null;
+  if (root.a.id === id || root.b.id === id) return root;
+  return parentIn(root.a, id) || parentIn(root.b, id);
+}
+function replaceIn(holder, oldId, node) {
+  L().zoom = null;
+  const par = parentIn(holder.root, oldId);
+  if (!par) { holder.root = node; return; }
+  if (par.a.id === oldId) par.a = node; else par.b = node;
+}
+function removeFrom(holder, id) {
+  const par = parentIn(holder.root, id); if (!par) return false;
+  replaceIn(holder, par.id, par.a.id === id ? par.b : par.a);
+  return true;
+}
+function splitNode(target, node, zone) {
+  const first = zone === "left" || zone === "top";
+  return { type: "split", id: nid("s"), dir: zone === "left" || zone === "right" ? "row" : "col", ratio: 0.5, a: first ? node : target, b: first ? target : node };
+}
+// A closed pane can be brought back with cmd+Z for 5 s, as Ghostty's undo-timeout does for splits.
+let undo = null;
+const keepUndo = what => { undo = { tab: cur, state: JSON.stringify(L()), at: Date.now(), what }; };
+function restoreClosed() {
+  if (undo && undo.closedTab && Date.now() - undo.at <= 5000) {
+    const t = undo.closedTab, saved = undo.ws;
+    let w = wsById(saved.id);
+    if (!w) { w = { ...saved, tabs: [] }; wss.splice(Math.min(undo.wsAt, wss.length - 1), 0, w); }
+    w.tabs = saved.tabs.filter(x => x === t.id || tabs[x]);
+    tabs[t.id] = t; cur = t.id; undo = null;
+    toast(`Restored: ${t.title}`); saveState(); renderSidebar(); renderWorkspace(); return;
+  }
+  if (!undo || undo.tab !== cur || Date.now() - undo.at > 5000) { toast("Nothing to undo"); return; }
+  tabs[cur].layout = JSON.parse(undo.state); toast(`Restored: ${undo.what}`); undo = null; renderWorkspace();
+}
+const activePath = v => v && v.tabs[v.active] ? v.tabs[v.active].path : null;
+const modeFor = (v, path) => isMd(path) ? (v.modeOf[path] || "rendered") : "code";
+const focused = () => byId(L().focus);
+const lastViewer = () => { const v = byId(L().lastViewer); return v && v.type === "viewer" ? v : viewers()[0] || null; };
+function focusPane(id) {
+  L().focus = id;
+  if (byId(id).type === "viewer") L().lastViewer = id;
+  document.querySelectorAll("[data-pid]").forEach(el => el.classList.toggle("focus", el.dataset.pid === id));
+  updateTitleButton();
+}
+
+// ---- markdown ----
+const md = window.markdownit ? window.markdownit({ html: false, linkify: true, highlight: (s, lang) => {
+  if (window.hljs && lang && hljs.getLanguage(lang)) { try { return hljs.highlight(s, { language: lang }).value; } catch (e) { /* plain */ } }
+  return esc(s);
+} }) : null;
+const hl = text => window.hljs ? hljs.highlight(text, { language: "swift" }).value.split("\n") : text.split("\n").map(esc);
+const cache = new Map();
+let mmCount = 0;
+function renderMarkdown(text) {
+  if (!md) return `<pre>${esc(text)}</pre>`;
+  let ti = 0;
+  return md.render(text)
+    .replace(/<li>\[( |x)\] /g, (_, x) => `<li class="task"><input type="checkbox" data-task="${ti++}" ${x === "x" ? "checked" : ""} aria-label="Task">`)
+    .replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, (_, src) => `<div class="mm" data-src="${src.replace(/"/g, "&quot;")}"></div>`)
+    .replace(/<pre><code/g, '<pre><button class="copy">Copy</button><code');
+}
+async function drawMermaid(box, raw) {
+  const t = document.createElement("textarea"); t.innerHTML = box.dataset.src; const src = t.value;
+  const tog = `<button class="mtoggle" data-mraw="${raw ? 0 : 1}">${raw ? "Diagram" : "Source"}</button>`;
+  if (raw || !window.mermaid) { box.innerHTML = tog + `<pre><code>${esc(src)}</code></pre>`; return; }
+  try {
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: opt.theme === "light" ? "default" : "dark" });
+    const { svg } = await mermaid.render("mm" + (mmCount++), src);
+    box.innerHTML = tog + svg;
+  } catch (e) { box.innerHTML = tog + `<pre><code>${esc(src)}</code></pre>`; }
+}
+
+// ---- tree ----
+function treeRows() {
+  const rows = [], seen = new Set();
+  const hiddenBy = p => [...folded].some(x => p !== x && p.startsWith(x + "/"));
+  for (const f of TREE) {
+    const parts = f.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      const dir = parts.slice(0, i).join("/");
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      if (!hiddenBy(dir)) rows.push({ kind: "dir", path: dir, depth: i - 1, label: parts[i - 1] });
+    }
+    if (!hiddenBy(f)) rows.push({ kind: "file", path: f, depth: parts.length - 1, label: parts[parts.length - 1] });
+  }
+  return rows;
+}
+function treeHtml(v) {
+  const current = activePath(v);
+  if (!v.sel) v.sel = current || "docs/spec.md";
+  const rows = treeRows().map(r => {
+    const d = docs[r.path], cls = ["tr", r.path === v.sel ? "sel" : "", r.path === current ? "cur" : "", r.kind === "file" && !d ? "off" : ""].join(" ");
+    const chev = r.kind === "dir" ? (folded.has(r.path) ? "▸" : "▾") : "";
+    return `<div class="${cls}" data-tpath="${r.path}" data-tkind="${r.kind}" data-vid="${v.id}" ${r.kind === "file" && d ? 'draggable="true"' : ""} style="padding-left:${6 + r.depth * 12}px" title="${r.kind === "file" && !d ? "No content in the mockup" : r.path}"><span class="chev">${chev}</span>${r.label}${d && d.text !== d.saved ? '<span class="mod">M</span>' : ""}</div>`;
+  });
+  return `<div class="tree" tabindex="0"><div class="th">tarn<span>Enter open · Esc hide</span></div>${rows.join("")}</div>`;
+}
+
+// ---- render ----
+const dotOf = s => s ? `<span class="dot" style="background:${STATE[s].color}" title="${STATE[s].label}"></span>` : "";
+function rollup(w) {
+  let best = null;
+  for (const id of w.tabs) { const s = tabs[id].state; if (s && (!best || STATE[s].rank > STATE[best].rank)) best = s; }
+  return best;
+}
+// Pinned tabs first, then the user's order. cmd+1..9 count tabs down the whole sidebar,
+// collapsed workspaces included, so a number never changes when a group folds.
+const flat = () => wss.flatMap(w => w.tabs);
+const SB_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
+let sbRail = false;
+try { sbRail = localStorage.getItem("tarn-mockup-rail") === "1"; } catch (err) { /* ignore */ }
+let tabStyle = "sidebar";
+try { tabStyle = localStorage.getItem("tarn-mockup-tabstyle") || "sidebar"; } catch (err) { /* ignore */ }
+let sbWidth = 200;
+try { sbWidth = +localStorage.getItem("tarn-mockup-sbw") || 200; } catch (err) { /* ignore */ }
+function renderSidebar() {
+  const all = flat();
+  const row = id => {
+    const t = tabs[id], i = all.indexOf(id);
+    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
+  };
+  document.querySelector(".win").classList.toggle("top", tabStyle === "top");
+  // Native macOS tab: close on hover at the left, title centered, Ghostty's goto_tab key at the right.
+  $("topTabs").innerHTML = all.map((id, i) => `<div class="ttab" role="tab" aria-selected="${id === cur}" data-toptab="${id}" title="${esc(tabs[id].cwd)}"><button class="tx" data-tabclose="${id}" aria-label="Close tab">✕</button><span class="tt">${esc(tabs[id].title)}</span><span class="tk">${i < 9 ? "⌘" + (i + 1) : ""}</span></div>`).join("") + `<button class="tplus" id="topNew" aria-label="New tab" title="New tab">+</button>`;
+  const sb = $("sidebar");
+  sb.classList.toggle("rail", sbRail);
+  sb.style.width = sbRail ? "" : `${sbWidth}px`;
+  $("wtitle").textContent = cur ? `${W().name} · ${tabs[cur].title}` : "";
+  const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${sbRail ? "Show Sidebar" : "Hide Sidebar"}" aria-label="${sbRail ? "Show Sidebar" : "Hide Sidebar"}">${SB_ICON}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
+  // Collapsed rail, as in the app: icons only, a divider between workspaces.
+  if (sbRail) {
+    sb.innerHTML = top + wss.filter(w => w.tabs.length).map(w => w.tabs.map(id => {
+      const t = tabs[id];
+      return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.title)}">${t.agent ? AGENT : TERM_ICON}${dotOf(t.state)}</div>`;
+    }).join("")).join('<div class="sep"></div>');
+    return;
+  }
+  let h = top;
+  for (const w of wss) {
+    const n = w.tabs.length;
+    // A folded workspace still shows how many tabs it has and its most urgent state.
+    h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
+    if (!w.collapsed) h += w.tabs.map(row).join("");
+  }
+  h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
+  sb.innerHTML = h;
+}
+function updateTitleButton() { const v = lastViewer(); $("toggleFiles").setAttribute("aria-pressed", String(!!(v && v.tree))); }
+function renderWorkspace() {
+  // Only after the last tab of the last workspace: the real window is gone, the mockup keeps a stub.
+  if (!cur) {
+    $("ws").className = "ws";
+    $("ws").innerHTML = `<div class="empty">The window closed with its last tab<br><button class="act" id="emptyNew">New window (⌘N)</button></div>`;
+    $("toggleFiles").setAttribute("aria-pressed", "false");
+    return;
+  }
+  const z = L().zoom && byId(L().zoom);
+  $("ws").className = "ws h-" + opt.header;
+  $("ws").innerHTML = z ? nodeHtml(z) : nodeHtml(L().root);
+  viewers().forEach(fillViewer);
+  updateTitleButton();
+}
+function moveFocus(key) {
+  const rect = id => document.querySelector(`[data-pid="${id}"]`).getBoundingClientRect();
+  const c = r => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+  const from = c(rect(L().focus));
+  const ok = { ArrowLeft: p => p.x < from.x - 1, ArrowRight: p => p.x > from.x + 1, ArrowUp: p => p.y < from.y - 1, ArrowDown: p => p.y > from.y + 1 }[key];
+  let best = null, dist = Infinity;
+  for (const el of document.querySelectorAll("[data-pid]")) {
+    const p = c(el.getBoundingClientRect()), dd = Math.hypot(p.x - from.x, p.y - from.y);
+    if (el.dataset.pid !== L().focus && ok(p) && dd < dist) { best = el.dataset.pid; dist = dd; }
+  }
+  if (best) focusPane(best);
+}
+function nodeHtml(n) {
+  if (n.type === "split") return `<div class="split ${n.dir}"><div class="pane" style="flex-grow:${n.ratio}">${nodeHtml(n.a)}</div><div class="sdiv ${n.dir}" data-sdiv="${n.id}" role="separator"></div><div class="pane" style="flex-grow:${1 - n.ratio}">${nodeHtml(n.b)}</div></div>`;
+  if (n.type === "block") return `<div class="block" data-bid="${n.id}">${nodeHtml(n.root)}</div>`;
+  if (n.type === "term") {
+    const t = tabs[cur], main = n.n === 0, agent = main && t.agent;
+    const head = `<div class="grip" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${GRIP_DOTS}</div>`;
+    return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? (SEED_TERM[t.id] || shell(1, t.cwd)) : shell(n.n + 1, t.cwd)}</div></section>`;
+  }
+  return viewerHtml(n);
+}
+const GRIP_DOTS = '<svg width="22" height="6" viewBox="0 0 22 6" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="2.2"/><circle cx="11" cy="3" r="2.2"/><circle cx="19" cy="3" r="2.2"/></svg>';
+function viewerHtml(v) {
+  const path = activePath(v), d = path && docs[path], m = path ? modeFor(v, path) : null;
+  const tabs = v.tabs.map((t, i) => { const dd = docs[t.path]; return `<div class="ftab${i === v.active ? " on" : ""}${t.preview ? " preview" : ""}" draggable="true" data-vid="${v.id}" data-idx="${i}" title="${t.path}${t.preview ? " (preview: the next file replaces this tab)" : ""}"><span class="nm">${name(t.path)}</span>${dd.text !== dd.saved ? '<span class="dirty"></span>' : ""}<button class="x" data-close="${i}" data-vid="${v.id}" aria-label="Close tab">✕</button></div>`; }).join("");
+  let h = `<section class="vpane${L().focus === v.id ? " focus" : ""}${opt.theme === "light" ? " light" : ""}" data-pid="${v.id}" aria-label="Viewer"><div class="grip" draggable="true" data-vdrag="${v.id}" title="Drag the viewer with its files">${GRIP_DOTS}</div><div class="vh"><div class="vtabs">${tabs}</div><span class="vact">`;
+  h += `<button class="ib" data-vmode="${v.id}" ${!path || !isMd(path) ? "disabled" : ""} aria-pressed="${m === "raw"}" title="View or source (⌘E)">${m === "raw" ? "Source" : "View"}</button>`;
+  h += `<button class="ib" data-vtree="${v.id}" aria-pressed="${v.tree}" title="Files tree (Esc hides it)">Files</button>`;
+  h += `<button class="ib" data-vclose="${v.id}" title="Close viewer">✕</button></span></div>`;
+  if (d && d.banner) h += `<div class="banner"><span>The agent changed this file and you have unsaved edits.</span><button data-take="${path}">Take the agent version</button><button data-keep="${path}">Keep mine</button></div>`;
+  h += `<div class="vbody"><div class="vcontent" id="vc-${v.id}"></div>${v.tree ? `<aside class="vtree" aria-label="Files">${treeHtml(v)}</aside>` : ""}</div></section>`;
+  return h;
+}
+async function fillViewer(v) {
+  const box = $("vc-" + v.id); if (!box) return;
+  const path = activePath(v);
+  if (!path) { box.innerHTML = `<div class="empty">Pick a file in the tree<br>or click a path in a terminal</div>`; return; }
+  const d = docs[path], m = modeFor(v, path), key = path + m;
+  if (m === "code") {
+    const line = v.tabs[v.active].line;
+    box.innerHTML = `<div class="scroll"><pre class="codeview">${hl(d.text).map((l, i) => `<div class="row${line === i + 1 ? " hl" : ""}"><span class="ln">${i + 1}</span><code>${l || " "}</code></div>`).join("")}</pre></div>`;
+  } else if (m === "raw") {
+    box.innerHTML = `<div class="raw"><div class="gut">${Array.from({ length: d.text.split("\n").length }, (_, i) => i + 1).join("\n")}</div><textarea spellcheck="false" data-src="${path}" aria-label="Source of ${name(path)}">${esc(d.text)}</textarea></div>`;
+  } else {
+    const ck = `${path}|${d.v}|${opt.theme}`;
+    if (cache.has(ck)) box.innerHTML = `<div class="scroll"><article class="doc">${cache.get(ck)}</article></div>`;
+    else {
+      box.innerHTML = `<div class="scroll"><article class="doc">${renderMarkdown(d.text)}</article></div>`;
+      for (const mm of box.querySelectorAll(".mm")) { await drawMermaid(mm, false); if (!box.isConnected) return; }
+      cache.set(ck, box.querySelector(".doc").innerHTML);
+    }
+  }
+  const sc = box.querySelector(".scroll, textarea");
+  if (!sc) return;
+  const hlRow = box.querySelector(".row.hl"), tab = v.tabs[v.active];
+  if (hlRow && tab.jump) { sc.scrollTop = hlRow.offsetTop - 120; tab.jump = false; }
+  else sc.scrollTop = v.scroll[key] || 0;
+  sc.addEventListener("scroll", () => { v.scroll[key] = sc.scrollTop; }, { passive: true });
+}
+function rerenderViewer(v) {
+  const el = document.querySelector(`.vpane[data-pid="${v.id}"]`);
+  if (!el) return renderWorkspace();
+  el.outerHTML = viewerHtml(v); fillViewer(v); updateTitleButton();
+}
+function refreshMarks() {
+  // Dirty dots and tree marks without touching the content (keeps the editor caret).
+  viewers().forEach(v => v.tabs.forEach((t, i) => {
+    const el = document.querySelector(`.ftab[data-vid="${v.id}"][data-idx="${i}"]`); if (!el) return;
+    const dirty = docs[t.path].text !== docs[t.path].saved, dot = el.querySelector(".dirty");
+    if (dirty && !dot) el.insertBefore(Object.assign(document.createElement("span"), { className: "dirty" }), el.querySelector(".x"));
+    if (!dirty && dot) dot.remove();
+  }));
+  document.querySelectorAll(".tr[data-tkind='file']").forEach(el => {
+    const d = docs[el.dataset.tpath]; if (!d) return;
+    const dirty = d.text !== d.saved, m = el.querySelector(".mod");
+    if (dirty && !m) el.insertAdjacentHTML("beforeend", '<span class="mod">M</span>');
+    if (!dirty && m) m.remove();
+  });
+}
+
+// ---- actions ----
+function openIn(v, path, { pin = false, line = null } = {}) {
+  if (!docs[path]) return;
+  let i = v.tabs.findIndex(t => t.path === path);
+  if (i < 0) {
+    const pv = v.tabs.findIndex(t => t.preview);
+    const tab = { path, preview: !pin, line, jump: !!line };
+    if (pv >= 0 && !pin) { v.tabs[pv] = tab; i = pv; } else { v.tabs.splice(v.active + 1, 0, tab); i = v.active + 1; }
+  } else {
+    if (pin) v.tabs[i].preview = false;
+    if (line) { v.tabs[i].line = line; v.tabs[i].jump = true; }
+  }
+  v.active = i; v.sel = path;
+}
+// A new viewer opens to the right of the terminal block.
+function addViewer(tree) {
+  const v = newViewer(tree), b = findBlock(L().root);
+  replaceIn(L(), b.id, splitNode(b, v, "right"));
+  return v;
+}
+function openLink(path, line) {
+  const v = lastViewer() || addViewer(false);
+  if (!v) return;
+  openIn(v, path, { line });
+  L().focus = v.id; L().lastViewer = v.id;
+  renderWorkspace();
+}
+function toggleFiles() {
+  const v = lastViewer();
+  if (!v) { const nv = addViewer(true); if (!nv) return; L().focus = nv.id; L().lastViewer = nv.id; return renderWorkspace(); }
+  v.tree = !v.tree; L().focus = v.id; L().lastViewer = v.id;
+  renderWorkspace();
+}
+function closeViewer(v, snap = true) {
+  if (snap) keepUndo("viewer");
+  removeFrom(L(), v.id);
+  const rest = viewers();
+  L().lastViewer = rest.length ? rest[0].id : null;
+  if (L().focus === v.id) L().focus = rest.length ? rest[0].id : terms()[0].id;
+}
+function closeTab(v, i) {
+  if (v.tabs.length === 1 && !v.tree) keepUndo("viewer");
+  v.tabs.splice(i, 1);
+  if (v.active >= v.tabs.length) v.active = v.tabs.length - 1;
+  if (!v.tabs.length && !v.tree) closeViewer(v, false);
+  renderWorkspace();
+}
+function splitTerm(t, zone) {
+  const b = findBlock(L().root), nt = newTerm(L().terms++);
+  replaceIn(b, t.id, splitNode(t, nt, zone));
+  L().focus = nt.id;
+  renderWorkspace();
+}
+function closeTerm(t) {
+  const b = findBlock(L().root);
+  if (b.root.id !== t.id) keepUndo("terminal");
+  if (!removeFrom(b, t.id)) return closeSidebarTab(cur);
+  L().focus = terms()[0].id;
+  renderWorkspace();
+}
+function setMode(v, m) {
+  const path = activePath(v); if (!path || !isMd(path)) return;
+  v.modeOf[path] = m || (modeFor(v, path) === "raw" ? "rendered" : "raw");
+  rerenderViewer(v);
+  if (v.modeOf[path] === "raw") { const ta = document.querySelector(`#vc-${v.id} textarea`); if (ta) ta.focus(); }
+}
+function save(v) {
+  const path = activePath(v); if (!path) return;
+  const d = docs[path]; if (d.text === d.saved) { toast("No changes"); return; }
+  d.saved = d.text; d.banner = false; d.v++; refreshMarks(); toast("Saved");
+  viewers().filter(x => activePath(x) === path && modeFor(x, path) !== "raw").forEach(rerenderViewer);
+}
+function agentEdit() {
+  const path = activePath(lastViewer());
+  if (!path) { toast("Open a file in a viewer first"); return; }
+  const d = docs[path], n = ++d.edits;
+  const disk = d.saved + (isMd(path) ? `\n- [ ] Agent note ${n}: measure viewer memory\n` : `\n// agent edit ${n}\n`);
+  if (d.text !== d.saved) { d.disk = disk; d.banner = true; viewers().filter(x => activePath(x) === path).forEach(rerenderViewer); return; }
+  d.text = disk; d.saved = disk; d.v++;
+  viewers().filter(x => activePath(x) === path).forEach(x => { rerenderViewer(x); setTimeout(() => { const el = document.querySelector(`#vc-${x.id} .doc, #vc-${x.id} .codeview, #vc-${x.id} textarea`); if (el) el.classList.add("flash"); }, 80); });
+  toast("The agent changed the file: open tabs updated, scroll kept");
+}
+function selectTab(id) {
+  const w = wss.find(x => x.tabs.includes(id));
+  if (w.collapsed) w.collapsed = false;
+  cur = id; saveState(); renderSidebar(); renderWorkspace();
+}
+function addTab(w, t) {
+  const id = "t" + (++tabSeq);
+  tabs[id] = { id, layout: newLayout(), agent: false, ...t };
+  w.tabs.push(id);
+  return id;
+}
+// A new tab starts in the focused tab's folder, as Ghostty's window-inherit-working-directory.
+function newTab(w = W()) {
+  if (!w) return newWindow();
+  const cwd = cur && tabs[cur] ? tabs[cur].cwd : "~";
+  w.collapsed = false;
+  cur = addTab(w, { title: "zsh · " + short(cwd), cwd });
+  saveState(); renderSidebar(); renderWorkspace();
+}
+function removeFromWs(id) {
+  const w = wss.find(x => x.tabs.includes(id)); if (w) w.tabs = w.tabs.filter(x => x !== id);
+}
+// Move a tab to a workspace, before another tab or at the end.
+function moveTab(id, to, before = null) {
+  const w = wsById(to), from = wss.find(x => x.tabs.includes(id));
+  if (!w) return;
+  removeFromWs(id);
+  const at = before ? w.tabs.indexOf(before) : -1;
+  if (at >= 0) w.tabs.splice(at, 0, id); else w.tabs.push(id);
+  if (from !== w) {
+    w.collapsed = false;
+    toast(`Moved to ${w.name}`);
+  }
+  saveState(); renderSidebar(); renderWorkspace();
+}
+// The last tab of a workspace closes the workspace; the last workspace closes the window, as
+// Ghostty closes a window with its last tab. cmd+Z within 5 s brings back the tab and workspace.
+function closeSidebarTab(id) {
+  const next = flat()[flat().indexOf(id) + 1] || flat()[flat().indexOf(id) - 1] || null;
+  const w = wss.find(x => x.tabs.includes(id));
+  undo = { closedTab: tabs[id], ws: { ...w, tabs: [...w.tabs] }, wsAt: wss.indexOf(w), at: Date.now() };
+  removeFromWs(id); delete tabs[id];
+  const gone = !w.tabs.length;
+  if (gone) wss = wss.filter(x => x !== w);
+  if (cur === id) cur = next;
+  toast(!wss.length ? "Last tab closed: the window closes · ⌘Z restores" : gone ? `Workspace ${w.name} closed with its last tab · ⌘Z restores` : "Tab closed · ⌘Z restores");
+  saveState(); renderSidebar(); renderWorkspace();
+}
+// A new window starts with Default and one tab (D1, D10).
+function newWindow() {
+  const w = { id: "w" + Date.now(), name: "Default", tabs: [] };
+  wss = [w];
+  cur = addTab(w, { title: "zsh · ~", cwd: "~" });
+  saveState(); renderSidebar(); renderWorkspace();
+}
+// A workspace has a name only and starts with one tab, so no workspace is ever empty (D3, S4).
+function newWorkspace() {
+  const name = prompt("Workspace name");
+  if (!name || !name.trim()) return;
+  const w = { id: "w" + Date.now(), name: name.trim(), tabs: [] };
+  wss.push(w);
+  cur = addTab(w, { title: "zsh · ~", cwd: "~" });
+  saveState(); renderSidebar(); renderWorkspace();
+}
+function renameWorkspace(id) {
+  const w = wsById(id), name = prompt("Workspace name", w.name);
+  if (name && name.trim()) { w.name = name.trim(); saveState(); renderSidebar(); }
+}
+// Any workspace but the last can go; its tabs move to the one above, or below if it is first (D13).
+function deleteWorkspace(id) {
+  const w = wsById(id), i = wss.indexOf(w);
+  if (!w || wss.length < 2) return;
+  const to = wss[i > 0 ? i - 1 : 1];
+  if (!confirm(`Delete workspace ${w.name}? Its ${w.tabs.length} tab(s) move to ${to.name}.`)) return;
+  to.tabs.push(...w.tabs);
+  to.collapsed = false;
+  wss = wss.filter(x => x !== w);
+  saveState(); renderSidebar(); renderWorkspace();
+}
+// Mock of `tarn new` from the agent in "Claude · bot": the tab joins that agent's workspace (S12).
+function agentOpensTab() {
+  const from = tabs.t5 ? "t5" : cur, w = wss.find(x => x.tabs.includes(from)) || W();
+  if (!w) return;
+  addTab(w, { title: "Claude · tests", agent: true, state: "waiting", cwd: tabs[from] ? tabs[from].cwd : "~" });
+  toast(`New agent tab went to workspace ${w.name}`);
+  saveState(); renderSidebar();
+}
+function showMenu(items, x, y) {
+  closeMenu();
+  const m = document.createElement("div");
+  m.className = "ctx"; m.id = "ctx"; m.innerHTML = items.join("");
+  m.style.left = Math.min(x, innerWidth - 230) + "px"; m.style.top = Math.min(y, innerHeight - 34 * items.length) + "px";
+  document.body.appendChild(m);
+}
+function tabMenu(id, x, y) {
+  const here = wss.find(w => w.tabs.includes(id));
+  showMenu([]
+    .concat(wss.filter(w => w !== here).map(w => `<button data-mmove="${id}" data-to="${w.id}">Move to ${esc(w.name)}</button>`))
+    .concat([`<button data-tabclose="${id}">Close tab</button>`]), x, y);
+}
+function wsMenu(id, x, y) {
+  showMenu([`<button data-wsnewtab="${id}">New tab</button>`, `<button data-wsren="${id}">Rename…</button>`]
+    .concat(wss.length < 2 ? [] : [`<button data-wsdel="${id}">Delete workspace</button>`]), x, y);
+}
+const closeMenu = () => { const m = $("ctx"); if (m) m.remove(); };
+function treeMove(v, delta) {
+  const rows = treeRows(), i = Math.max(0, rows.findIndex(r => r.path === v.sel));
+  v.sel = rows[Math.min(rows.length - 1, Math.max(0, i + delta))].path;
+  rerenderViewer(v);
+}
+function treeEnter(v, path, kind, pin) {
+  v.sel = path;
+  if (kind === "dir") { folded.has(path) ? folded.delete(path) : folded.add(path); return rerenderViewer(v); }
+  if (!docs[path]) { toast("No content in the mockup"); return; }
+  openIn(v, path, { pin });
+  rerenderViewer(v);
+}
+
+// ---- events ----
+document.addEventListener("click", async e => {
+  if (!e.target.closest("#ctx")) closeMenu();
+  const sb = e.target.closest("[data-tabclose], [data-mmove], [data-wsdel], [data-wsren], [data-wsnewtab], .wsh[data-wsh], #wsNew, #sbToggle, #sbNew, #emptyNew, #agentTab, #resetDemo, .tab[data-tabid]");
+  if (sb) {
+    closeMenu();
+    if (sb.dataset.tabclose) return closeSidebarTab(sb.dataset.tabclose);
+    if (sb.dataset.mmove) return moveTab(sb.dataset.mmove, sb.dataset.to);
+    if (sb.dataset.wsdel) return deleteWorkspace(sb.dataset.wsdel);
+    if (sb.dataset.wsren) return renameWorkspace(sb.dataset.wsren);
+    if (sb.dataset.wsnewtab) return newTab(wsById(sb.dataset.wsnewtab));
+    if (sb.dataset.wsh) { const w = wsById(sb.dataset.wsh); w.collapsed = !w.collapsed; saveState(); return renderSidebar(); }
+    if (sb.id === "wsNew") return newWorkspace();
+    if (sb.id === "sbToggle") { sbRail = !sbRail; try { localStorage.setItem("tarn-mockup-rail", sbRail ? "1" : "0"); } catch (err) { /* ignore */ } return renderSidebar(); }
+    if (sb.id === "emptyNew" || sb.id === "sbNew") return newTab();
+    if (sb.id === "agentTab") return agentOpensTab();
+    if (sb.id === "resetDemo") { try { localStorage.removeItem(STORE); localStorage.removeItem("tarn-mockup-ghostty"); } catch (err) { /* ignore */ } return location.reload(); }
+    return selectTab(sb.dataset.tabid);
+  }
+  if (!cur) return;
+  const pane = e.target.closest("[data-pid]");
+  if (pane && L().focus !== pane.dataset.pid) focusPane(pane.dataset.pid);
+  const t = e.target.closest("button, .path, .tr, .ftab, input[type=checkbox]");
+  if (!t) return;
+  if (t.classList.contains("path")) return openLink(t.dataset.path, +t.dataset.line || null);
+  if (t.dataset.close) { e.stopPropagation(); return closeTab(byId(t.dataset.vid), +t.dataset.close); }
+  // A click re-renders the element, so a double click is read from e.detail, not from dblclick.
+  if (t.classList.contains("ftab")) { const v = byId(t.dataset.vid); v.active = +t.dataset.idx; if (e.detail > 1) v.tabs[v.active].preview = false; return rerenderViewer(v); }
+  if (t.classList.contains("tr")) { if (t.classList.contains("off")) { toast("No content in the mockup"); return; } return treeEnter(byId(t.dataset.vid), t.dataset.tpath, t.dataset.tkind, e.detail > 1); }
+  if (t.dataset.vmode) return setMode(byId(t.dataset.vmode));
+  if (t.dataset.vtree) { const v = byId(t.dataset.vtree); v.tree = !v.tree; return rerenderViewer(v); }
+  if (t.dataset.tclose) return closeTerm(byId(t.dataset.tclose));
+  if (t.dataset.vclose) { closeViewer(byId(t.dataset.vclose)); return renderWorkspace(); }
+  if (t.dataset.take) { const d = docs[t.dataset.take]; d.text = d.disk; d.saved = d.disk; d.banner = false; d.v++; return renderWorkspace(); }
+  if (t.dataset.keep) { docs[t.dataset.keep].banner = false; return renderWorkspace(); }
+  if (t.dataset.mraw !== undefined) return drawMermaid(t.closest(".mm"), t.dataset.mraw === "1");
+  if (t.dataset.task !== undefined) {
+    const path = activePath(byId(t.closest("[data-pid]").dataset.pid)), d = docs[path]; let n = -1;
+    d.text = d.text.replace(/^(\s*- )\[( |x)\]/gm, (m, a, x) => (++n === +t.dataset.task) ? `${a}[${x === "x" ? " " : "x"}]` : m);
+    d.saved = d.text; d.v++; toast("Checkbox written to the file"); return;
+  }
+  if (t.classList.contains("copy")) { const code = t.parentElement.querySelector("code").textContent; try { await navigator.clipboard.writeText(code); } catch (err) { /* ignore */ } t.textContent = "Copied"; setTimeout(() => { t.textContent = "Copy"; }, 1200); return; }
+  const seg = t.closest(".seg");
+  if (seg) {
+    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === t)));
+    opt[seg.dataset.seg] = t.dataset.v;
+    return renderWorkspace();
+  }
+  if (t.id === "toggleFiles") return toggleFiles();
+  if (t.id === "agentEdit") return agentEdit();
+});
+document.addEventListener("mousemove", e => {
+  document.querySelectorAll(".tpane, .vpane").forEach(p => {
+    const r = p.getBoundingClientRect(), band = Math.max(12, r.height * 0.2);
+    p.classList.toggle("near", e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.top + band);
+  });
+});
+document.addEventListener("input", e => {
+  const ta = e.target.closest("textarea[data-src]"); if (!ta) return;
+  const d = docs[ta.dataset.src]; d.text = ta.value; d.v++;
+  ta.previousElementSibling.textContent = Array.from({ length: d.text.split("\n").length }, (_, i) => i + 1).join("\n");
+  viewers().forEach(v => v.tabs.forEach((t, i) => { if (t.path === ta.dataset.src && t.preview) { t.preview = false; const el = document.querySelector(`.ftab[data-vid="${v.id}"][data-idx="${i}"]`); if (el) el.classList.remove("preview"); } }));
+  refreshMarks();
+});
+document.addEventListener("scroll", e => { if (e.target.matches && e.target.matches("textarea[data-src]")) e.target.previousElementSibling.scrollTop = e.target.scrollTop; }, true);
+document.addEventListener("contextmenu", e => {
+  const row = e.target.closest(".tab[data-tabid]"), head = e.target.closest(".wsh[data-wsh]");
+  if (row) { e.preventDefault(); tabMenu(row.dataset.tabid, e.clientX, e.clientY); }
+  else if (head) { e.preventDefault(); wsMenu(head.dataset.wsh, e.clientX, e.clientY); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeMenu();
+  if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) { e.preventDefault(); const id = flat()[+e.key - 1]; if (id) selectTab(id); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") { e.preventDefault(); return newTab(); }
+  if (!cur && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); return restoreClosed(); }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") { e.preventDefault(); return wss.length ? toast("⌘N opens another window with its own Default") : newWindow(); }
+  if (!cur) return;
+  const p = focused(), inText = e.target.matches && e.target.matches("textarea");
+  const isV = p && p.type === "viewer";
+  if (e.metaKey || e.ctrlKey) {
+    const k = e.key.toLowerCase();
+    const run = f => { e.preventDefault(); f(); };
+    // Ghostty's split keys, extended to viewer panes.
+    if (e.altKey && e.key.startsWith("Arrow")) return run(() => moveFocus(e.key));
+    if (k === "[" || k === "]") return run(() => { const ps = all(), i = ps.findIndex(x => x.id === L().focus); focusPane(ps[(i + (k === "]" ? 1 : ps.length - 1)) % ps.length].id); });
+    if (k === "enter" && e.shiftKey) return run(() => { L().zoom = L().zoom ? null : L().focus; renderWorkspace(); });
+    if (k === "z" && !e.shiftKey && !(isV && inText)) return run(restoreClosed);
+    if (k === "b") return run(toggleFiles);
+    if (k === "d") return run(() => {
+      if (!isV) return splitTerm(p, e.shiftKey ? "bottom" : "right");
+      const tab = p.tabs[p.active]; if (!tab) return;
+      const v = newViewer(false); v.tabs = [{ ...tab, preview: false }]; v.active = 0;
+      replaceIn(L(), p.id, splitNode(p, v, e.shiftKey ? "bottom" : "right")); L().focus = v.id; L().lastViewer = v.id; renderWorkspace();
+    });
+    if (k === "w") return run(() => { if (!isV) return closeTerm(p); if (p.active >= 0) closeTab(p, p.active); else { closeViewer(p); renderWorkspace(); } });
+    if (isV && k === "e") return run(() => setMode(p));
+    if (isV && k === "s") return run(() => save(p));
+    return;
+  }
+  if (!isV) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    if (inText) { e.target.blur(); toast("Editing done"); return; }
+    if (p.tree) { p.tree = false; rerenderViewer(p); }
+    return;
+  }
+  if (inText || !p.tree) return;
+  if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); treeMove(p, 1); }
+  else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); treeMove(p, -1); }
+  else if (e.key === "Enter") { e.preventDefault(); const r = treeRows().find(x => x.path === p.sel); if (r) treeEnter(p, r.path, r.kind, e.altKey); }
+});
+
+// Drag a file tab or a tree file. Over a viewer: the middle moves the tab there, an edge splits
+// that viewer. Over a terminal: an edge of the whole terminal block, since viewers do not go
+// inside the Ghostty split tree. A terminal header drags within the block only, as in Ghostty.
+function edgeOf(el, x, y) {
+  const r = el.getBoundingClientRect(), fx = (x - r.left) / r.width, fy = (y - r.top) / r.height;
+  const edge = Math.min(fx, 1 - fx, fy, 1 - fy);
+  return { edge, zone: edge === fx ? "left" : edge === 1 - fx ? "right" : edge === fy ? "top" : "bottom" };
+}
+// Rectangle-style zones of the whole tab area: a 24 px strip at an edge gives that half of the
+// area; a 48 px corner gives that quarter when the area is split in two on that axis (the new
+// pane halves the half), otherwise the nearest half. Panes only split in two, so a corner of an
+// unsplit area cannot be a quarter.
+const EDGE = 24, CORNER = 48;
+function areaTarget(e) {
+  const ws = $("ws"), r = ws.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  if (x < 0 || y < 0 || x > r.width || y > r.height) return null;
+  const v = y < CORNER ? "top" : y > r.height - CORNER ? "bottom" : null;
+  const h = x < CORNER ? "left" : x > r.width - CORNER ? "right" : null;
+  const near = Math.min(x, r.width - x) < Math.min(y, r.height - y) ? h || (x < r.width / 2 ? "left" : "right") : v || (y < r.height / 2 ? "top" : "bottom");
+  let edge = null;
+  if (!(v && h)) edge = x < EDGE ? "left" : x > r.width - EDGE ? "right" : y < EDGE ? "top" : y > r.height - EDGE ? "bottom" : null;
+  if (!(v && h) && !edge) return null;
+  // What moves and inside which tree: terminals stay in their Ghostty block.
+  let holder = L(), nodeId = drag.viewer || null, deny = null;
+  if (drag.term) {
+    const b = findBlock(L().root);
+    if (L().root === b) { holder = b; nodeId = drag.term; }
+    else if (terms().length === 1) nodeId = b.id;
+    else deny = "Split terminals stay together: drag them inside the block";
+  }
+  let root = holder.root;
+  if (nodeId && root.type === "split" && (root.a.id === nodeId || root.b.id === nodeId)) root = root.a.id === nodeId ? root.b : root.a;
+  else if (nodeId && root.id === nodeId) deny = "Nothing to drop beside";
+  const half = { left: { l: 0, t: 0, w: 0.5, h: 1 }, right: { l: 0.5, t: 0, w: 0.5, h: 1 }, top: { l: 0, t: 0, w: 1, h: 0.5 }, bottom: { l: 0, t: 0.5, w: 1, h: 0.5 } };
+  let plan = { edge: edge || near }, frame = half[plan.edge];
+  if (v && h && root.type === "split") {
+    const row = root.dir === "row", side = row ? (h === "left" ? "a" : "b") : (v === "top" ? "a" : "b");
+    const start = side === "a" ? 0 : root.ratio, size = side === "a" ? root.ratio : 1 - root.ratio;
+    plan = { side, sub: row ? v : h };
+    frame = row ? { l: start, w: size, t: v === "top" ? 0 : 0.5, h: 0.5 } : { t: start, h: size, l: h === "left" ? 0 : 0.5, w: 0.5 };
+  }
+  return { el: ws, area: true, holder, nodeId, plan, frame, deny };
+}
+function dropArea(d, tgt) {
+  const { holder, nodeId, plan } = tgt;
+  let node, src = null;
+  if (d.term) node = nodeId === d.term ? byId(d.term) : findBlock(L().root);
+  else if (d.viewer) node = byId(d.viewer);
+  else {
+    src = d.vid !== undefined ? byId(d.vid) : null;
+    const tab = src ? { ...src.tabs[d.idx], preview: false, jump: false } : { path: d.path, preview: false };
+    if (src) { src.tabs.splice(d.idx, 1); if (src.active >= src.tabs.length) src.active = src.tabs.length - 1; }
+    node = newViewer(false); node.tabs = [tab]; node.active = 0;
+  }
+  if (nodeId) removeFrom(holder, nodeId);
+  L().zoom = null;
+  if (plan.edge) holder.root = splitNode(holder.root, node, plan.edge);
+  else { const part = holder.root[plan.side]; replaceIn(holder, part.id, splitNode(part, node, plan.sub)); }
+  if (src && !src.tabs.length && !src.tree) closeViewer(src, false);
+  L().focus = d.term || node.id;
+  if (node.type === "viewer") L().lastViewer = node.id;
+  renderWorkspace();
+}
+function dropTarget(e) {
+  if (drag && (drag.tabRow || drag.wsRow)) return null;
+  const area = drag && areaTarget(e);
+  if (area) return area;
+  const vp = e.target.closest(".vpane"), tp = e.target.closest(".tpane");
+  if (drag && drag.term) {
+    // The block is one Ghostty split tree, so only a lone terminal can leave it: the block moves.
+    if (vp) {
+      const { zone } = edgeOf(vp, e.clientX, e.clientY);
+      const deny = terms().length > 1 ? "Split terminals stay together: drag the viewer to the block edge" : null;
+      return { el: vp, id: vp.dataset.pid, zone, deny, block: true };
+    }
+    if (tp) return { el: tp, id: tp.dataset.pid, zone: edgeOf(tp, e.clientX, e.clientY).zone, deny: tp.dataset.pid === drag.term ? "Drop on another terminal" : null };
+    return null;
+  }
+  if (vp) {
+    // The half under the pointer; the tab bar and a small box in the middle mean "into this viewer".
+    const r = vp.getBoundingClientRect(), { zone } = edgeOf(vp, e.clientX, e.clientY);
+    const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    const center = e.clientY - r.top < 32 || (Math.abs(fx - 0.5) < 0.15 && Math.abs(fy - 0.5) < 0.15);
+    const deny = drag && drag.viewer === vp.dataset.pid ? "Drop on another pane" : null;
+    return { el: vp, id: vp.dataset.pid, zone: center ? "center" : zone, deny };
+  }
+  if (tp) { const bl = tp.closest(".block"); return { el: bl, id: bl.dataset.bid, zone: edgeOf(bl, e.clientX, e.clientY).zone }; }
+  return null;
+}
+function showDrop(tgt, deny) {
+  let d = tgt.el.querySelector(":scope > .drop");
+  if (!d) { d = document.createElement("div"); d.className = "drop"; tgt.el.appendChild(d); }
+  d.classList.toggle("deny", !!deny);
+  d.innerHTML = deny ? `<span>${deny}</span>` : "";
+  if (tgt.frame) {
+    const f = tgt.frame, pc = n => `calc(${(n * 100).toFixed(2)}% + 4px)`;
+    return Object.assign(d.style, { top: pc(f.t), left: pc(f.l), right: pc(1 - f.l - f.w), bottom: pc(1 - f.t - f.h) });
+  }
+  // Always the same four sides, so the frame slides between halves instead of jumping.
+  const top = tgt.el.classList.contains("vpane") ? 31 : 4, mid = `calc(50% + ${top / 2 - 2}px)`;
+  const [t, r, b, l] = { center: [`${top}px`, "4px", "4px", "4px"], left: [`${top}px`, "50%", "4px", "4px"], right: [`${top}px`, "4px", "4px", "50%"], top: [`${top}px`, "4px", mid, "4px"], bottom: [mid, "4px", "4px", "4px"] }[tgt.zone];
+  Object.assign(d.style, { top: t, right: r, bottom: b, left: l });
+}
+const clearDrop = () => document.querySelectorAll(".drop").forEach(d => d.remove());
+document.addEventListener("dragstart", e => {
+  const ft = e.target.closest(".ftab"), tr = e.target.closest(".tr[draggable]"), th = e.target.closest("[data-tdrag]"), vg = e.target.closest("[data-vdrag]");
+  if (th) drag = { term: th.dataset.tdrag };
+  else if (vg) drag = { viewer: vg.dataset.vdrag };
+  else if (ft) { drag = { vid: ft.dataset.vid, idx: +ft.dataset.idx }; ft.classList.add("dragging"); }
+  else if (tr) drag = { path: tr.dataset.tpath };
+  else return;
+  e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn");
+});
+document.addEventListener("dragover", e => {
+  if (!drag) return;
+  const tgt = dropTarget(e); if (!tgt) { clearDrop(); return; }
+  e.preventDefault();
+  document.querySelectorAll(".drop").forEach(d => { if (d.parentElement !== tgt.el) d.remove(); });
+  showDrop(tgt, tgt.deny);
+});
+// A whole viewer: the middle of another viewer takes its files, an edge puts it beside that
+// viewer or beside the terminal block.
+function moveViewer(id, tgt) {
+  const src = byId(id);
+  if (tgt.zone === "center") {
+    const dest = byId(tgt.id), act = activePath(src);
+    src.tabs.forEach(t => { if (!dest.tabs.some(x => x.path === t.path)) dest.tabs.push({ ...t, preview: false }); });
+    if (act) dest.active = dest.tabs.findIndex(t => t.path === act);
+    closeViewer(src, false);
+    L().focus = dest.id; L().lastViewer = dest.id;
+    return renderWorkspace();
+  }
+  removeFrom(L(), id);
+  const target = tgt.el.classList.contains("block") ? findBlock(L().root) : byId(tgt.id);
+  replaceIn(L(), target.id, splitNode(target, src, tgt.zone));
+  L().focus = id; L().lastViewer = id;
+  renderWorkspace();
+}
+function moveTerm(id, tgt) {
+  const b = findBlock(L().root), node = byId(id);
+  removeFrom(b, id);
+  replaceIn(b, tgt.id, splitNode(byId(tgt.id), node, tgt.zone));
+  L().focus = id;
+  renderWorkspace();
+}
+document.addEventListener("drop", e => {
+  const tgt = dropTarget(e); clearDrop();
+  if (!drag || !tgt) return;
+  e.preventDefault();
+  const d = drag; drag = null;
+  if (tgt.deny) return;
+  if (tgt.area) return dropArea(d, tgt);
+  if (d.term && tgt.block) {
+    const b = findBlock(L().root);
+    removeFrom(L(), b.id);
+    replaceIn(L(), tgt.id, splitNode(byId(tgt.id), b, tgt.zone));
+    L().focus = d.term;
+    return renderWorkspace();
+  }
+  if (d.term) return moveTerm(d.term, tgt);
+  if (d.viewer) return moveViewer(d.viewer, tgt);
+  let tab;
+  const src = d.vid !== undefined ? byId(d.vid) : null;
+  if (src) {
+    if (src.id === tgt.id && (tgt.zone === "center" || src.tabs.length === 1)) return;
+    tab = { ...src.tabs[d.idx], preview: false, jump: false };
+    src.tabs.splice(d.idx, 1);
+    if (src.active >= src.tabs.length) src.active = src.tabs.length - 1;
+  } else tab = { path: d.path, preview: false };
+  let dest;
+  if (tgt.zone === "center") {
+    dest = byId(tgt.id);
+    const at = dest.tabs.findIndex(t => t.path === tab.path);
+    if (at >= 0) dest.active = at; else { dest.tabs.push(tab); dest.active = dest.tabs.length - 1; }
+  } else {
+    dest = newViewer(false); dest.tabs = [tab]; dest.active = 0;
+    const target = tgt.el.classList.contains("block") ? findBlock(L().root) : byId(tgt.id);
+    replaceIn(L(), target.id, splitNode(target, dest, tgt.zone));
+  }
+  if (src && !src.tabs.length && !src.tree) closeViewer(src, false);
+  L().focus = dest.id; L().lastViewer = dest.id;
+  renderWorkspace();
+});
+// Ghostty opens a split dropped outside every window in a new window; file tabs do the same.
+document.addEventListener("dragend", e => {
+  const out = e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
+  if (drag && out && (drag.term || drag.vid || drag.viewer)) toast(drag.term ? "Terminal moves to a new window" : drag.viewer ? "Viewer moves to a new window" : "File opens in a new window");
+  drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
+
+document.addEventListener("dragstart", e => {
+  const row = e.target.closest(".tab[data-tabid]"), head = e.target.closest(".wsh[data-wsh]");
+  if (row) drag = { tabRow: row.dataset.tabid };
+  else if (head) drag = { wsRow: head.dataset.wsh };
+  else return;
+  e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn-tab");
+}, true);
+// A dragged workspace goes into the gap between groups nearest the pointer; a line marks the gap.
+// Slot i is the gap before group i; a group spans from its header to the next header.
+function wsSlot(y) {
+  const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]")];
+  const tops = heads.map(h => h.getBoundingClientRect().top).concat(document.getElementById("wsNew").getBoundingClientRect().top);
+  const slot = heads.filter((_, i) => (tops[i] + tops[i + 1]) / 2 < y).length;
+  return { before: heads[slot] ? heads[slot].dataset.wsh : null, y: tops[slot] - sb.getBoundingClientRect().top + sb.scrollTop };
+}
+const clearWsLine = () => document.querySelectorAll(".wsline").forEach(x => x.remove());
+document.addEventListener("dragover", e => {
+  if (!drag || !drag.wsRow) return;
+  const sb = document.getElementById("sidebar");
+  if (!sb.contains(e.target)) return clearWsLine();
+  e.preventDefault();
+  const { y } = wsSlot(e.clientY);
+  let line = sb.querySelector(".wsline");
+  if (!line) { line = document.createElement("div"); line.className = "wsline"; sb.appendChild(line); }
+  line.style.top = `${y - 4}px`;
+});
+document.addEventListener("drop", e => {
+  if (!drag || !drag.wsRow) return;
+  e.preventDefault(); clearWsLine();
+  const id = drag.wsRow; drag = null;
+  if (!document.getElementById("sidebar").contains(e.target)) return;
+  // Hidden empty Default is not a header, so the gap is named by the workspace after it.
+  const w = wsById(id), { before } = wsSlot(e.clientY);
+  if (before === id) return;
+  wss = wss.filter(x => x !== w);
+  const at = before ? wss.indexOf(wsById(before)) : wss.length;
+  wss.splice(at, 0, w);
+  saveState(); renderSidebar();
+});
+document.addEventListener("dragend", clearWsLine);
+
+// Tab card, as TabCard in the app: hover an agent row for 0.5 s, the card opens to its right;
+// while it is open it jumps at once to the next agent row and stays while the pointer is on it.
+const CARD_TEXT = { waiting: "Needs permission", working: "Working", done: "Done, not seen" };
+const loadedAt = Date.now(), SINCE = { t1: 190, t2: 75, t5: 720 };
+let cardTab = null, cardTimer = 0, closeTimer = 0;
+function elapsed(id) {
+  const s = Math.floor((Date.now() - loadedAt) / 1000) + (SINCE[id] || 0);
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
+}
+function showCard(id) {
+  const row = document.querySelector(`#sidebar .tab[data-tabid="${id}"]`), t = tabs[id];
+  if (!row || !t) return;
+  let card = $("tabcard");
+  if (!card) { card = document.createElement("div"); card.id = "tabcard"; card.className = "card"; document.body.appendChild(card); }
+  const ask = t.state === "waiting" ? `<div class="req"><code>Edit: docs/spec.md</code><div class="btns"><button data-answer="${id}">Allow</button><button data-answer="${id}">Deny</button></div></div>` : "";
+  card.innerHTML = `<b>${esc(t.title)}</b><div class="dim">${esc(wss.find(w => w.tabs.includes(id)).name)}</div><div class="dim mono"><bdi>${esc(t.cwd)}</bdi></div><div class="st">${AGENT}${dotOf(t.state)}<span>${t.state ? CARD_TEXT[t.state] : "No agent"}</span><span class="dim">${elapsed(id)}</span></div>${ask}`;
+  const r = row.getBoundingClientRect();
+  card.style.left = `${r.right + 8}px`;
+  card.style.top = `${Math.max(8, Math.min(r.top - 6, innerHeight - card.offsetHeight - 8))}px`;
+  cardTab = id;
+}
+function hideCard() { clearTimeout(cardTimer); cardTab = null; const c = $("tabcard"); if (c) c.remove(); }
+document.addEventListener("mouseover", e => {
+  if (drag) return;
+  if (e.target.closest("#tabcard")) { clearTimeout(closeTimer); return; }
+  const row = e.target.closest("#sidebar .tab[data-tabid]");
+  if (!row || !tabs[row.dataset.tabid].agent) return;
+  const id = row.dataset.tabid;
+  clearTimeout(closeTimer); clearTimeout(cardTimer);
+  if (cardTab && cardTab !== id) return showCard(id);
+  if (!cardTab) cardTimer = setTimeout(() => showCard(id), 500);
+});
+document.addEventListener("mouseout", e => {
+  const from = e.target.closest("#sidebar .tab[data-tabid], #tabcard");
+  if (!from || (e.relatedTarget && from.contains(e.relatedTarget))) return;
+  clearTimeout(cardTimer);
+  closeTimer = setTimeout(hideCard, 200);
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-answer]"); if (!b) return;
+  const t = tabs[b.dataset.answer];
+  t.state = "working"; SINCE[b.dataset.answer] = -Math.floor((Date.now() - loadedAt) / 1000);
+  toast(`${b.textContent}: answer sent to the agent`); hideCard(); saveState(); renderSidebar();
+});
+document.addEventListener("dragstart", hideCard, true);
+document.addEventListener("dragover", e => {
+  if (!drag || !drag.tabRow) return;
+  document.querySelectorAll(".dropmark").forEach(x => x.classList.remove("dropmark"));
+  const target = e.target.closest(".wsh[data-wsh], .tab[data-tabid]");
+  if (target) { e.preventDefault(); target.classList.add("dropmark"); }
+});
+// Drop on a workspace header: the tab goes to the end of it; on a tab: before that tab.
+document.addEventListener("drop", e => {
+  if (!drag || !drag.tabRow) return;
+  e.preventDefault();
+  const id = drag.tabRow, head = e.target.closest(".wsh[data-wsh]"), row = e.target.closest(".tab[data-tabid]");
+  drag = null;
+  if (head) return moveTab(id, head.dataset.wsh);
+  if (row && row.dataset.tabid !== id) moveTab(id, wss.find(w => w.tabs.includes(row.dataset.tabid)).id, row.dataset.tabid);
+});
+
+// Resize splits on both levels.
+// Ghostty options the window edits; names, values and defaults from src/config/Config.zig.
+// Changed values go to tarn's own file, loaded after the user's Ghostty config.
+const GHOSTTY = {
+  appearance: [
+    { key: "theme", type: "select", def: "", values: ["", "Dracula", "Catppuccin Mocha", "Nord"], help: "Color theme. The app lists the installed themes." },
+    { key: "window-theme", type: "select", def: "auto", values: ["auto", "system", "light", "dark", "ghostty"], help: "Window chrome: follow the system or the terminal colors." },
+    { key: "font-family", type: "text", def: "", help: "Empty uses the built-in JetBrains Mono." },
+    { key: "font-size", type: "number", def: 13, min: 6, max: 32, help: "Points; cmd+= and cmd+- change it for one terminal." },
+    { key: "background-opacity", type: "range", def: 1, min: 0.3, max: 1, step: 0.05, help: "Below 1 the desktop shows through." },
+    { key: "background-blur", type: "bool", def: false, help: "Blurs what shows through a transparent background." },
+    { key: "window-padding-x", type: "number", def: 2, min: 0, max: 40, help: "Space between the window edge and the text, in points." },
+    { key: "unfocused-split-opacity", type: "range", def: 0.7, min: 0.15, max: 1, step: 0.05, help: "How much an unfocused split is dimmed." },
+    { key: "cursor-style", type: "select", def: "block", values: ["block", "bar", "underline"], help: "Shell integration shows a bar at the prompt." },
+    { key: "cursor-style-blink", type: "bool", def: true, help: "Off stops blinking; programs may still ask for it." },
+    { key: "macos-titlebar-style", type: "select", def: "transparent", values: ["transparent", "native", "tabs", "hidden"], help: "How the title bar looks." },
+  ],
+  terminal: [
+    { key: "copy-on-select", type: "select", def: "none", values: ["none", "clipboard"], help: "Copy selected text without cmd+C." },
+    { key: "mouse-hide-while-typing", type: "bool", def: false, help: "Hide the pointer while typing." },
+    { key: "clipboard-paste-protection", type: "bool", def: true, help: "Ask before pasting text that may run commands." },
+    { key: "macos-option-as-alt", type: "select", def: "false", values: ["false", "true", "left", "right"], help: "Option sends Alt instead of special characters." },
+    { key: "link-url", type: "bool", def: true, help: "Cmd+click opens URLs." },
+    { key: "notify-on-command-finish", type: "select", def: "never", values: ["never", "unfocused", "always"], help: "Notify when a long command finishes." },
+  ],
+  windows: [
+    { key: "window-save-state", type: "select", def: "default", values: ["default", "never", "always"], help: "Restore windows, tabs and splits on launch; default follows macOS." },
+    { key: "confirm-close-surface", type: "select", def: "true", values: ["true", "false", "always"], help: "Ask before closing a terminal with a running program." },
+    { key: "window-inherit-working-directory", type: "bool", def: true, help: "A new tab or split starts in the focused tab's folder." },
+    { key: "undo-timeout", type: "select", def: "5s", values: ["0s", "5s", "10s", "30s"], help: "How long cmd+Z can bring back a closed pane or tab." },
+    { key: "drag-handle", type: "select", def: "auto", values: ["auto", "always", "never"], help: "The three dots that drag a pane: on hover, always or never." },
+  ],
+};
+const KEYS = [
+  ["Tabs and windows", [
+    ["⌘T", "New tab in the current workspace"], ["⌘N", "New window with Default"],
+    ["⌘W", "Close the pane; the last one closes the tab"], ["⌥⌘W", "Close the tab"], ["⇧⌘W", "Close the window"],
+    ["⌘Z", "Bring back what was closed (5 s)"], ["⌘1 … ⌘8", "Go to tab N down the sidebar"], ["⌘9", "Go to the last tab"],
+    ["⇧⌘[ ⇧⌘]", "Previous or next tab"], ["⌘↩", "Full screen"],
+  ]],
+  ["Splits", [
+    ["⌘D ⇧⌘D", "Split right or down"], ["⌘[ ⌘]", "Previous or next split"], ["⌥⌘ arrows", "Focus the split in that direction"],
+    ["⌃⌘ arrows", "Resize the split"], ["⌃⌘=", "Equalize splits"], ["⇧⌘↩", "Zoom the split"],
+  ]],
+  ["Terminal", [
+    ["⌘K", "Clear the screen"], ["⌘F", "Find; ⌘G and ⇧⌘G for next and previous"], ["⌘= ⌘- ⌘0", "Font size bigger, smaller, reset"],
+    ["⌘↑ ⌘↓", "Jump to the previous or next prompt"], ["⇧⌘P", "Command palette"], ["⇧⌘,", "Reload the Ghostty config"], ["⌘,", "Settings"],
+  ]],
+  ["Viewer", [
+    ["⌘B", "Open or hide the file viewer"], ["⌘E", "View or source"], ["⌘S", "Save the file"],
+    ["⌘D ⇧⌘D", "The file in a new viewer, right or below"], ["⌘W", "Close the file tab"],
+  ]],
+];
+const SEC_TITLE = { appearance: "Appearance", terminal: "Terminal", windows: "Windows", help: "Help" };
+let gset = {};
+try { gset = JSON.parse(localStorage.getItem("tarn-mockup-ghostty") || "{}"); } catch (err) { /* ignore */ }
+const gopt = key => Object.values(GHOSTTY).flat().find(o => o.key === key);
+const gval = key => key in gset ? gset[key] : gopt(key).def;
+function control(o) {
+  const v = gval(o.key), id = `g-${o.key}`;
+  if (o.type === "bool") return `<input type="checkbox" id="${id}" data-gkey="${o.key}"${v ? " checked" : ""}>`;
+  if (o.type === "select") return `<select id="${id}" data-gkey="${o.key}">${o.values.map(x => `<option value="${x}"${String(v) === x ? " selected" : ""}>${x || "(none)"}</option>`).join("")}</select>`;
+  if (o.type === "range") return `<input type="range" id="${id}" data-gkey="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${v}"><span class="val">${v}</span>`;
+  return `<input type="${o.type}" id="${id}" data-gkey="${o.key}" value="${esc(String(v))}"${o.type === "number" ? ` min="${o.min}" max="${o.max}"` : ""}>`;
+}
+const optRow = o => `<div class="opt" data-opt="${o.key}"><label for="g-${o.key}">${o.key}</label><span class="ctl">${o.key in gset ? `<span class="set" title="Set here; overrides the same line in the Ghostty config">set in tarn</span><button class="reset" data-greset="${o.key}">Reset</button>` : ""}${control(o)}</span><small>${esc(o.help)}</small></div>`;
+const tarnConf = () => Object.keys(gset).length ? Object.entries(gset).map(([k, v]) => `${k} = ${v === "" ? '""' : v}`).join("\n") : "# empty: every value comes from the Ghostty config";
+function renderSettings() {
+  const sec = k => `<section data-pane="${k}" hidden><h3>${SEC_TITLE[k]}</h3><div class="setgroup">${GHOSTTY[k].map(optRow).join("")}</div>${k === "windows" ? `<p class="setnote">Written to <code>~/.config/tarn/ghostty.conf</code>, loaded after your Ghostty config:</p><pre id="tarnConf">${esc(tarnConf())}</pre>` : `<p class="setnote">Ghostty options. Others, keys included, are in Ghostty Config.</p>`}</section>`;
+  const help = `<section data-pane="help" hidden><h3>Help</h3>${KEYS.map(([g, rows]) => `<h4>${g}</h4><div class="setgroup"><table class="keys">${rows.map(([k, d]) => `<tr><td>${k}</td><td>${d}</td><td class="src">${g === "Viewer" ? "tarn" : "Ghostty"}</td></tr>`).join("")}</table></div>`).join("")}<p class="setnote">Ghostty defaults. A <code>keybind</code> line in the Ghostty config changes them, and the app shows the keys in effect.</p></section>`;
+  $("setGen").innerHTML = ["appearance", "terminal", "windows"].map(sec).join("") + help;
+}
+// The mockup shows a few options on its own terminals.
+function applyGhostty() {
+  const root = document.documentElement.style;
+  root.setProperty("--g-font-size", `${gval("font-size")}px`);
+  root.setProperty("--g-unfocused", gval("unfocused-split-opacity"));
+  const ws = $("ws"), h = gval("drag-handle");
+  ws.classList.toggle("h-always", h === "always"); ws.classList.toggle("h-never", h === "never");
+}
+applyGhostty();
+let setSec = "tabs";
+function showSection(k) {
+  setSec = k;
+  document.querySelectorAll("#setNav [data-sec]").forEach(b => b.classList.toggle("on", b.dataset.sec === k));
+  document.querySelectorAll("#setMain [data-pane]").forEach(s => { s.hidden = s.dataset.pane !== k; });
+}
+function setGhostty(key, v) {
+  const o = gopt(key);
+  if (o.type === "number" || o.type === "range") v = +v;
+  if (v === o.def) delete gset[key]; else gset[key] = v;
+  try { localStorage.setItem("tarn-mockup-ghostty", JSON.stringify(gset)); } catch (err) { /* ignore */ }
+  applyGhostty();
+  const row = document.querySelector(`[data-opt="${key}"]`);
+  row.outerHTML = optRow(o);
+  if ($("tarnConf")) $("tarnConf").textContent = tarnConf();
+}
+function openSettings() {
+  document.querySelectorAll("input[name=tabstyle]").forEach(r => { r.checked = r.value === tabStyle; });
+  renderSettings(); showSection(setSec);
+  $("settings").hidden = false;
+  const first = document.querySelector(`#setMain [data-pane="${setSec}"] input, #setMain [data-pane="${setSec}"] select`);
+  (setSec === "tabs" ? document.querySelector(`input[name=tabstyle][value=${tabStyle}]`) : first || $("setNav")).focus();
+}
+const closeSettings = () => { $("settings").hidden = true; };
+document.addEventListener("click", e => {
+  const top = e.target.closest("[data-toptab]");
+  if (top && !e.target.closest("[data-tabclose]")) return selectTab(top.dataset.toptab);
+  if (e.target.closest("#topNew")) return newTab();
+  if (e.target.closest("#openSettings")) return openSettings();
+  if (e.target.closest("#settingsClose") || e.target.id === "settings") return closeSettings();
+  if (e.target.closest("#ghosttyConfig")) return toast("Opens the Ghostty config file");
+  const nav = e.target.closest("#setNav [data-sec]");
+  if (nav) return showSection(nav.dataset.sec);
+  const reset = e.target.closest("[data-greset]");
+  if (reset) return setGhostty(reset.dataset.greset, gopt(reset.dataset.greset).def);
+});
+document.addEventListener("input", e => {
+  const k = e.target.dataset && e.target.dataset.gkey;
+  if (!k || e.target.type !== "range") return;
+  e.target.nextElementSibling.textContent = e.target.value;
+  if (k === "unfocused-split-opacity") document.documentElement.style.setProperty("--g-unfocused", e.target.value);
+});
+// Applies to every open window at once, as TabStyle.applyToOpenWindows().
+document.addEventListener("change", e => {
+  const k = e.target.dataset && e.target.dataset.gkey;
+  if (k) return setGhostty(k, e.target.type === "checkbox" ? e.target.checked : e.target.value);
+  if (e.target.name !== "tabstyle") return;
+  tabStyle = e.target.value;
+  try { localStorage.setItem("tarn-mockup-tabstyle", tabStyle); } catch (err) { /* ignore */ }
+  hideCard(); renderSidebar();
+});
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === ",") { e.preventDefault(); openSettings(); }
+  else if (e.key === "Escape" && !$("settings").hidden) { e.stopImmediatePropagation(); closeSettings(); }
+}, true);
+$("sbGrip").addEventListener("pointerdown", e => {
+  const grip = e.currentTarget, x0 = e.clientX, w0 = sbRail ? 44 : sbWidth;
+  e.preventDefault(); grip.classList.add("drag"); grip.setPointerCapture(e.pointerId);
+  // Dragged below 80 the sidebar folds to the rail, like the Hide Sidebar button; dragged
+  // from the rail past the minimum it opens again.
+  const move = ev => {
+    const raw = w0 + ev.clientX - x0;
+    if (raw < 80) { if (!sbRail) { sbRail = true; renderSidebar(); } return; }
+    if (sbRail && raw < 120) return;
+    sbWidth = Math.round(Math.min(400, Math.max(120, raw)));
+    if (sbRail) { sbRail = false; renderSidebar(); } else $("sidebar").style.width = `${sbWidth}px`;
+  };
+  const up = () => {
+    grip.classList.remove("drag"); grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up);
+    try { localStorage.setItem("tarn-mockup-sbw", String(sbWidth)); localStorage.setItem("tarn-mockup-rail", sbRail ? "1" : "0"); } catch (err) { /* ignore */ }
+  };
+  grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up);
+});
+document.addEventListener("pointerdown", e => {
+  const sd = e.target.closest(".sdiv");
+  if (!sd) return;
+  e.preventDefault();
+  sd.classList.add("drag"); sd.setPointerCapture(e.pointerId);
+  const node = findSplit(L().root, sd.dataset.sdiv), box = sd.parentElement.getBoundingClientRect();
+  const move = ev => {
+    const f = node.dir === "row" ? (ev.clientX - box.left) / box.width : (ev.clientY - box.top) / box.height;
+    node.ratio = Math.min(0.85, Math.max(0.15, f));
+    const panes = sd.parentElement.children;
+    panes[0].style.flexGrow = node.ratio; panes[2].style.flexGrow = 1 - node.ratio;
+  };
+  const up = () => { sd.classList.remove("drag"); sd.removeEventListener("pointermove", move); sd.removeEventListener("pointerup", up); sd.removeEventListener("pointercancel", up); };
+  sd.addEventListener("pointermove", move); sd.addEventListener("pointerup", up); sd.addEventListener("pointercancel", up);
+});
+
+loadState();
+renderSidebar();
+renderWorkspace();
+</script>
+</html>

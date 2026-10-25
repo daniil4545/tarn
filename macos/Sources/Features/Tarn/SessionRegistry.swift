@@ -191,7 +191,10 @@ final class SessionRegistry {
 
     func start() {
         guard socket == nil else { return }
-        let socket = ControlSocket { [weak self] line, reply in self?.receive(line, reply: reply) }
+        let socket = ControlSocket { [weak self] line, reply in
+            if ViewerRouter.handleCommand(line, reply: reply) { return }
+            self?.receive(line, reply: reply)
+        }
         socket.start()
         self.socket = socket
 

@@ -94,9 +94,9 @@
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="VOq-y0-SEH"/>
-                            <menuItem title="Preferences…" keyEquivalent="," id="BOF-NM-1cW">
+                            <menuItem title="Settings…" keyEquivalent="," id="BOF-NM-1cW">
                                 <connections>
-                                    <action selector="openConfig:" target="bbz-4X-AYv" id="X65-fg-iWU"/>
+                                    <action selector="showTarnSettings:" target="bbz-4X-AYv" id="X65-fg-iWU"/>
                                 </connections>
                             </menuItem>
                             <menuItem isSeparatorItem="YES" id="GOd-qX-exa"/>
@@ -370,6 +370,11 @@
                                 <modifierMask key="keyEquivalentModifierMask"/>
                                 <connections>
                                     <action selector="toggleTerminalInspector:" target="-1" id="87m-3R-fQl"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Toggle File Viewer" keyEquivalent="b" id="Tf1-Vw-Fb1">
+                                <connections>
+                                    <action selector="toggleViewer:" target="-1" id="Tf2-Vw-Fb2"/>
                                 </connections>
                             </menuItem>
                         </items>
