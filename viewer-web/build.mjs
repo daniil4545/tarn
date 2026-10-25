@@ -21,6 +21,17 @@ const { metafile } = await build({
 });
 copyFileSync(join(here, "src", "viewer.html"), join(out, "tarn-viewer.html"));
 copyFileSync(join(here, "src", "viewer.css"), join(out, "tarn-viewer.css"));
-copyFileSync(join(here, "node_modules", "mermaid", "dist", "mermaid.min.js"), join(out, "tarn-mermaid.js"));
+// Mermaid is bundled from source, not copied from dist/mermaid.min.js, to leave out elkjs (EPL-2.0).
+const { metafile: mermaidMeta } = await build({
+  entryPoints: [join(here, "src", "mermaid-entry.js")],
+  bundle: true,
+  minify: true,
+  format: "iife",
+  target: "safari16",
+  outfile: join(out, "tarn-mermaid.js"),
+  legalComments: "none",
+  alias: { "elkjs/lib/elk.bundled.js": join(here, "src", "elk-stub.js") },
+  metafile: true,
+});
 
-writeFileSync(join(out, "tarn-viewer-licenses.txt"), licenseNotice(here, metafile, ["mermaid"]));
+writeFileSync(join(out, "tarn-viewer-licenses.txt"), licenseNotice(here, [metafile, mermaidMeta]));
