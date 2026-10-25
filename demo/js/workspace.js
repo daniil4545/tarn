@@ -21,6 +21,8 @@ let makeViewer;
 let write;
 
 export const paneOf = (id) => panes.get(id);
+// Ids of every pane of a tab, shown or hidden (a viewer hidden with Toggle Pane stays alive).
+export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node))];
 export const flatTabs = (s) => s.wss.flatMap((w) => w.tabs);
 export const currentTab = (s = read("workspaces")) => s.tabs[s.cur] ?? null;
 const wsOf = (s, tabId) => s.wss.find((w) => w.tabs.includes(tabId));
@@ -71,6 +73,7 @@ export function startWorkspaces({ createPane, createViewer }) {
   for (const tab of Object.values(initial.tabs)) {
     // A viewer's files are not stored, so after a reload its leaf would be empty: drop it.
     for (const v of tree.viewers(tab.layout)) tab.layout = tree.remove(tab.layout, v.viewer);
+    tab.hidden = [];
     if (!tree.pathOf(tab.layout, tab.focus)) tab.focus = null;
     tab.focus ??= tree.terminals(tab.layout)[0].pane;
     tab.zoom ??= null;
@@ -163,7 +166,7 @@ function select(s, id) {
 
 // Viewers with unsaved text ask first, as the app does: Save, Don't Save or Cancel. Then `go` runs.
 function settleViewers(tabs, go) {
-  const dirty = tabs.flatMap((t) => tree.viewers(t.layout)).map((v) => panes.get(v.viewer)).filter((p) => p?.dirtyFiles().length);
+  const dirty = tabs.flatMap((t) => leafIdsOf(t).filter((id) => id.startsWith("v"))).map((id) => panes.get(id)).filter((p) => p?.dirtyFiles().length);
   if (!dirty.length) return go();
   const names = dirty.flatMap((p) => p.dirtyFiles()).join(", ");
   return ask(`Save changes to ${names} before closing?`, ["Save", "Don't Save", "Cancel"]).then((choice) => {
@@ -175,7 +178,7 @@ function settleViewers(tabs, go) {
 
 function closeTab(s, id) {
   const tab = s.tabs[id], ws = wsOf(s, id), order = flatTabs(s), at = order.indexOf(id);
-  const kept = keepUndo({ kind: "tab", what: tab.title, tab, wsId: ws.id, wsAt: s.wss.indexOf(ws), wsName: ws.name, wsFolded: !!ws.collapsed, index: ws.tabs.indexOf(id), leafIds: tree.leaves(tab.layout).map(tree.leafId) });
+  const kept = keepUndo({ kind: "tab", what: tab.title, tab, wsId: ws.id, wsAt: s.wss.indexOf(ws), wsName: ws.name, wsFolded: !!ws.collapsed, index: ws.tabs.indexOf(id), leafIds: leafIdsOf(tab) });
   ws.tabs = ws.tabs.filter((x) => x !== id);
   delete s.tabs[id];
   if (!ws.tabs.length) s.wss = s.wss.filter((w) => w !== ws);
@@ -217,7 +220,7 @@ function restore(s, rec) {
 const leafCount = (tab) => tree.leaves(tab.layout).length;
 const ZONE = { right: "right", down: "bottom" };
 
-const NEEDS_TAB = /^(pane\.(?!undo)|tab\.(close|step))/;
+const NEEDS_TAB = /^(pane\.(?!undo)|tab\.(close|step)|viewer\.(hide|show))/;
 
 const COMMANDS = {
   "tab.new": ({ ws, pane, cwd, title, select = true }) => update((s) => {
@@ -284,6 +287,22 @@ const COMMANDS = {
     if (lastTerminal) settleViewers([tab], () => update((d) => closeLeaf(d, target)));
     else update((d) => closeLeaf(d, target));
   },
+
+  // Toggle Pane: a viewer leaves the layout but stays alive with its tabs and unsaved text.
+  "viewer.hide": ({ id }) => update((s) => {
+    const tab = tabOfLeaf(s, id);
+    if (!tab || !id.startsWith("v")) return;
+    (tab.hidden ??= []).push({ node: tree.at(tab.layout, tree.pathOf(tab.layout, id)), seat: tree.seatOf(tab.layout, id) });
+    tab.layout = tree.remove(tab.layout, id);
+    tab.zoom = null;
+    if (tab.focus === id) tab.focus = tree.terminals(tab.layout)[0].pane;
+  }),
+
+  "viewer.show": () => update((s) => {
+    const tab = currentTab(s);
+    for (const { node, seat } of tab.hidden ?? []) tab.layout = tree.reseat(tab.layout, node, seat);
+    tab.hidden = [];
+  }),
 
   "pane.focus": ({ id }) => {
     const tab = currentTab();
@@ -360,7 +379,7 @@ const COMMANDS = {
     const tabs = Object.values(read("workspaces").tabs);
     if (!tabs.every((t) => allowClose(tree.terminals(t.layout).map((x) => x.pane)))) return;
     settleViewers(tabs, () => {
-      for (const tab of tabs) tree.leaves(tab.layout).forEach((l) => expire({ leafIds: [tree.leafId(l)] }));
+      for (const tab of tabs) expire({ leafIds: leafIdsOf(tab) });
       update((s) => { s.tabs = {}; s.wss = []; s.cur = null; });
       toast("Window closed · ⌘N opens a new one");
     });

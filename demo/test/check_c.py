@@ -84,10 +84,10 @@ def viewer_checks(pg, base):
     v.locator(".ftab.on").dblclick()
     check("6 path after a pinned tab adds a tab", count(".ftab") == 2)
 
-    pg.keyboard.press("Meta+b")
+    v.locator("[data-act=tree]").click()
     v.locator(tree).wait_for()
     check(
-        "7 cmd+B shows the files tree on the right of the viewer",
+        "7 the Files button shows the files tree on the right of the viewer",
         x_of(tree) > x_of("#vcontent"),
     )
     v.locator(".tr[data-path$='/README.md']").click()
@@ -95,6 +95,7 @@ def viewer_checks(pg, base):
     check("8 tree click opens the file, tree stays", vis(tree))
     paths = v.locator(".tr").evaluate_all("els => els.map(e => e.dataset.path)")
     up = paths.index(f"{ROOT}/README.md") - paths.index(f"{ROOT}/docs/architecture.md")
+    v.locator("#vtree .tree").focus()  # opening a file moved the keyboard to the file
     for _ in range(up):
         pg.keyboard.press("ArrowUp")
     pg.keyboard.press("Enter")
@@ -103,6 +104,7 @@ def viewer_checks(pg, base):
         "9 arrows and Enter in the tree open a file",
         "architecture.md" in v.locator(".ftab.on").inner_text(),
     )
+    v.locator("#vtree .tree").focus()
     pg.keyboard.press("Escape")
     check("10 Esc hides the tree", count(tree) == 0)
     v.locator("[data-act=tree]").click()

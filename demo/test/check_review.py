@@ -510,67 +510,220 @@ def closed_window_keys_do_not_throw(base):
         )
 
 
-def vtree_states(base):
+def where(pg):
+    """Where the keyboard is: terminal pane id, 'tree' or 'file' (inside a viewer), or other."""
+    return pg.evaluate(
+        """() => {
+          const a = document.activeElement;
+          if (a?.tagName === 'IFRAME') {
+            const inner = a.contentDocument.activeElement;
+            return inner?.closest?.('#vtree') ? 'tree' : 'file';
+          }
+          return a?.closest?.('[data-pane]')?.dataset.pane ?? 'other';
+        }"""
+    )
+
+
+def settle(pg, seconds=0.6):
+    time.sleep(seconds)
+
+
+CMD_B = "Meta+b"
+
+
+def n_panes(pg):
+    return pg.locator('.tabview:not([hidden]) .leaf[data-kind="viewer"]').count()
+
+
+def n_hidden(pg, tab="t1"):
+    return len(ws(pg)["tabs"][tab].get("hidden", []))
+
+
+def open_file(pg):
+    cmd(pg, "viewer.open", {"path": "docs/spec.md"})
+    pg.wait_for_function(
+        "Object.values(__tarn.viewer().state().panes).some((p) => p.tabs.length)"
+    )
+    pg.wait_for_function(LOADED)
+    settle(pg)
+
+
+def file_tabs(pg):
+    return pg.evaluate(
+        "Object.values(__tarn.viewer().state().panes).flatMap((p) => p.tabs.map((t) => t.path))"
+    )
+
+
+def with_file(pg):
+    focus(pg, "p1")
+    open_file(pg)
+    focus(pg, "p1")
+
+
+def press(pg, key, wait=True):
+    pg.keyboard.press(key)
+    if wait:
+        settle(pg)
+
+
+def keys_table(base):
+    """Every cell of the Cmd+B / Cmd+W table, with where the keyboard ends up."""
     with app_page(base) as (pg, _e, _r):
-
-        def state():
-            return pg.evaluate("__tarn.viewer().state()")
-
-        def panes():
-            return pg.locator(
-                '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
-            ).count()
-
-        def to_terminal():
-            cmd(pg, "pane.focus", {"id": "p1"})
-
-        check("V0 no viewer at the start", panes() == 0)
-        pg.keyboard.press("Meta+b")
-        pg.wait_for_selector(VIEWER)
+        focus(pg, "p1")
+        press(pg, CMD_B, False)
         pg.wait_for_function(LOADED)
-        first = state()["panes"]
-        only = next(iter(first.values()))
+        settle(pg)
         check(
-            "V1 Cmd+B from the terminal with no viewer opens a pane with the tree only",
-            panes() == 1 and only["treeVisible"] and not only["tabs"],
-            str(only),
+            "B1 Cmd+B with no pane opens it, keyboard in the tree",
+            n_panes(pg) == 1 and where(pg) == "tree",
+            where(pg),
         )
-        to_terminal()
-        pg.keyboard.press("Meta+b")
-        pg.wait_for_function("document.querySelectorAll('.viewer-pane').length === 0")
-        check("V2 Cmd+B with an empty viewer closes it", panes() == 0)
-        pg.keyboard.press("Control+Alt+b")
-        pg.wait_for_selector(VIEWER)
-        check("V3 the Ctrl+Alt+B fallback opens it too", panes() == 1)
+        press(pg, CMD_B)
+        check(
+            "B2 Cmd+B on a shown pane with no file hides it (never closes), keyboard in the terminal",
+            n_panes(pg) == 0 and n_hidden(pg) == 1 and where(pg) == "p1",
+            f"{n_panes(pg)} {n_hidden(pg)} {where(pg)}",
+        )
+        press(pg, CMD_B, False)
         pg.wait_for_function(LOADED)
-        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
+        settle(pg)
+        check(
+            "B3 Cmd+B on a hidden pane shows it, keyboard in the pane",
+            n_panes(pg) == 1 and n_hidden(pg) == 0 and where(pg) in ("tree", "file"),
+            where(pg),
+        )
+        press(pg, "Meta+w")
+        check(
+            "W1 Cmd+W in a pane with no file closes the pane",
+            n_panes(pg) == 0 and n_hidden(pg) == 0,
+            f"{n_panes(pg)} {n_hidden(pg)}",
+        )
+    with app_page(base) as (pg, _e, _r):
+        focus(pg, "p1")
+        open_file(pg)
+        cmd(pg, "viewer.open", {"path": "docs/architecture.md", "background": True})
+        pg.wait_for_function(
+            "Object.values(__tarn.viewer().state().panes).some((p) => p.tabs.length === 2)"
+        )
+        settle(pg)
+        pg.frame_locator(f"{VIEWER} iframe").first.locator(".ftab.on").click()
+        press(pg, "Meta+w")
+        check(
+            "W2 Cmd+W with files closes the active tab only",
+            n_panes(pg) == 1 and len(file_tabs(pg)) == 1,
+            str(file_tabs(pg)),
+        )
+        press(pg, "Meta+w")
+        check(
+            "W3 Cmd+W on the last tab closes the pane",
+            n_panes(pg) == 0 and n_hidden(pg) == 0,
+            f"{n_panes(pg)} {n_hidden(pg)}",
+        )
+    with app_page(base) as (pg, _e, _r):
+        with_file(pg)
+        press(pg, CMD_B)
+        check(
+            "B4 Cmd+B on a pane with files hides the whole pane, keyboard in the terminal",
+            n_panes(pg) == 0 and n_hidden(pg) == 1 and where(pg) == "p1",
+            f"{n_panes(pg)} {n_hidden(pg)} {where(pg)}",
+        )
+        press(pg, CMD_B, False)
+        pg.wait_for_function(LOADED)
+        settle(pg)
+        check(
+            "B5 Cmd+B shows it back with its tabs",
+            n_panes(pg) == 1 and f"{REPO}/docs/spec.md" in file_tabs(pg),
+            str(file_tabs(pg)),
+        )
+    with app_page(base) as (pg, _e, _r):
+        focus(pg, "p1")
+        press(pg, CMD_B, False)
+        pg.wait_for_function(LOADED)
+        settle(pg)
+        frame = pg.frame_locator(f"{VIEWER} iframe").first
+        frame.locator("#vtree .tree").focus()
+        frame.locator("#vtree .tr", has_text="README.md").first.wait_for()
+        for _ in range(8):
+            if pg.evaluate(
+                "document.querySelector('iframe').contentDocument.activeElement.closest('.tr')?.textContent.includes('README')"
+            ):
+                break
+            pg.keyboard.press("ArrowDown")
+        pg.keyboard.press("Enter")
         pg.wait_for_function(
             "Object.values(__tarn.viewer().state().panes).some((p) => p.tabs.length)"
         )
-        time.sleep(0.5)
-        to_terminal()
-
-        def with_file():  # a closed pane stays for undo, so pick the one that holds the file
-            return next(p for p in state()["panes"].values() if p["tabs"])[
-                "treeVisible"
-            ]
-
-        before = with_file()
-        pg.keyboard.press("Meta+b")
-        time.sleep(0.5)
-        after = with_file()
-
+        settle(pg)
         check(
-            "V4 Cmd+B with a file toggles the tree and keeps the pane",
-            panes() == 1 and before != after,
-            f"{before} {after}",
+            "T1 Enter on a file in the tree opens it and moves the keyboard to the file",
+            where(pg) == "file" and len(file_tabs(pg)) == 1,
+            f"{where(pg)} {file_tabs(pg)}",
+        )
+
+
+def keys_fallback_help_hidden_edits(base):
+    with app_page(base) as (pg, _e, _r):
+        focus(pg, "p1")
+        press(pg, "Control+Alt+b", False)
+        pg.wait_for_function(LOADED)
+        settle(pg)
+        opened = n_panes(pg) == 1 and where(pg) == "tree"
+        press(pg, "Control+Alt+b")
+        check(
+            "F1 Ctrl+Alt+B does what Cmd+B does",
+            opened and n_panes(pg) == 0 and n_hidden(pg) == 1,
+            f"{opened} {n_panes(pg)}",
+        )
+        for gone in ("Alt+Cmd+B", "Shift+Cmd+E"):
+            rows = pg.evaluate(
+                "async (c) => { const m = await import('/js/keys/viewer.js'); return m.viewerKeys.filter((r) => r.chords.includes(c)).length }",
+                gone.replace("Alt+Cmd+B", "Cmd+Alt+B").replace(
+                    "Shift+Cmd+E", "Cmd+Shift+E"
+                ),
+            )
+            check(f"F2 no key row for {gone}", rows == 0)
+        cmd(pg, "settings.open", {})
+        pg.click('#setNav [data-sec="help"]')
+        text = pg.text_content("#settings")
+        check(
+            "F3 Help lists Toggle Pane with its fallback",
+            "Toggle Pane" in text
+            and "Ctrl+Alt+B" in text
+            and "Focus Files" not in text,
+        )
+    with app_page(base) as (pg, _e, _r):
+        dirty_viewer(pg)
+        press(pg, CMD_B)
+        hid = n_hidden(pg, "t3")
+        cmd(pg, "tab.close", {"id": "t3"})
+        buttons = pg.locator(".ask-dialog button").all_inner_texts()
+        if buttons:
+            pg.click(".ask-dialog button:has-text('Cancel')")
+        check(
+            "H1 a hidden pane with unsaved text still asks when its tab closes",
+            hid == 1
+            and buttons == ["Save", "Don't Save", "Cancel"]
+            and "t3" in ws(pg)["tabs"],
+            f"{hid} {buttons}",
+        )
+        press(pg, CMD_B, False)
+        pg.wait_for_function(LOADED)
+        settle(pg)
+        dirty = pg.evaluate(
+            "Object.values(__tarn.viewer().state().panes).flatMap((p) => p.tabs.map((t) => t.dirty))"
+        )
+        check(
+            "H2 the unsaved text is still there after hide and show",
+            True in dirty,
+            str(dirty),
         )
 
 
 SUITES = [
+    keys_table,
+    keys_fallback_help_hidden_edits,
     close_paths_ask,
     closed_window_keys_do_not_throw,
-    vtree_states,
     exit1_no_undo_after_exit,
     privacy1_no_personal_data,
     model1_workspace_rules,

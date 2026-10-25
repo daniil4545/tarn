@@ -242,7 +242,7 @@ export function createViewerModel({ fs, home, root, ui }) {
       case "toggleTree": toggleTree(); break;
       case "hideTree": treeVisible = false; pushChrome(); ui.focus(); break;
       case "treeToggle": if (treeOpen.delete(path) === false) treeOpen.add(path); pushChrome(); break;
-      case "treeOpen": open({ path, line: null }, { pin }); break;
+      case "treeOpen": open({ path, line: null }, { pin }); ui.focusContent(); break;
       case "edit": if (isCurrent(path, body)) edit(path, body.text); break;
       case "save": save(path); break;
       case "task": tickTask(path, body.line, body.checked === true, isCurrent(path, body)); break;
@@ -258,7 +258,8 @@ export function createViewerModel({ fs, home, root, ui }) {
     handle,
     open,
     toggleTree,
-    closeActiveTab: () => closeTab(active),
+    // A pane with no file has no tab to close: the key closes the pane itself.
+    closeActiveTab: () => (tabs.length ? closeTab(active) : ui.closePane()),
     closeAt: closeTab,
     dirtyPaths,
     saveAll,
