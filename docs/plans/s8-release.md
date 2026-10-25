@@ -98,30 +98,26 @@ Sparkle is a package dependency and stays (removing it touches the project graph
 
 ## 7. Packaging: `tarn.mk`
 
-New root file (the S0 row names it, it does not exist yet; `bench` is not part of this stage).
+Review M1, M2 applied. Configuration is `ReleaseLocal`, the one upstream picks for a local release (`src/build/GhosttyXcodebuild.zig:29-35`): Xcode signs ad-hoc with `disable-library-validation`, so the embedded Sparkle loads. No second `codesign`.
 
 | Target | Steps |
 |---|---|
-| `check` | `swiftlint lint --strict Sources/Features/Tarn Tests/Tarn` in `macos/`; `xcodebuild test` of the Tarn suites (Debug, 4 jobs, nice, skip UI tests); `python3 -I plugin/test/hook_test.py` |
-| `release` | `xcodebuild -configuration Release -jobs 4 SYMROOT=macos/build` under `nice -n 10` with the same clean `env -i` as `macos/build.nu`; `codesign --force --deep -s - --preserve-metadata=entitlements`; `codesign --verify`; `ditto -c -k --keepParent Tarn.app dist/tarn-<version>-macos.zip`; print `shasum -a 256` |
+| `check` | `swiftlint --strict` on our folders; `xcodebuild test` (Debug, 4 jobs, nice, UI tests skipped; `build.nu` has no `-jobs`, so xcodebuild is called directly); `plugin/test/hook_test.py` |
+| `release` | refuse on modified tracked files and on a linked xcframework; `zig build -Doptimize=ReleaseFast -Demit-macos-app=false -j4` under nice (core and `zig-out/share` are release builds, built in this worktree); clean `macos/build/ReleaseLocal`; `xcodebuild ... GHOSTTY_COMMIT=<sha>`; `ditto` zip; unzip a copy; `codesign --verify --deep --strict`; check `terminfo/78/xterm-ghostty` and the zsh integration file; run `<copy>/Contents/MacOS/ghostty +version`; print sha256 |
 
-- `<version>` is read from the built Info.plist, so the file name cannot differ from the app.
-- `dist/` goes into `.gitignore`.
-- Release config: upstream `Release` uses `Ghostty.entitlements` (privacy entitlements, no sandbox), signing identity `-` already set (`:996`). `--deep` re-signing drops entitlements unless preserved; hence `--preserve-metadata`.
-- The Zig core comes from `macos/GhosttyKit.xcframework`, built outside this stage. Its optimization mode decides runtime speed; the build is not rebuilt here. I record which mode the xcframework has in the report.
+The version is read from the built plist. The zip is universal (xcframework default). `GhosttyCommit` in the plist comes from `$(GHOSTTY_COMMIT)`. The worktree's `macos/GhosttyKit.xcframework` symlink to the main checkout was replaced by a real build output, so the main checkout is not touched.
 
 ## 8. Install guide and README
 
 `docs/install.md`: download and unzip; move to `/Applications`; `xattr -dr com.apple.quarantine /Applications/Tarn.app`; first launch (right-click Open fallback); coexistence with Ghostty (separate bundle id and settings, shared config, overlay `~/.config/tarn/ghostty.conf`, shared global key binds); Claude Code plugin (the real marketplace command is checked against `claude plugin --help`, local form `claude plugin marketplace add <repo>/plugin` then `claude plugin install tarn@tarn`); zsh setup for R7 (no guide exists; each line checked in a clean `zsh -f`); uninstall. README gets a short `Install` section and drops "still builds as `Ghostty.app`".
 
-## 9. Verification (run, with output)
+## 9. Verification and acceptance
 
-1. `make -f tarn.mk release` once, under the global lock.
-2. `defaults read .../Contents/Info.plist CFBundleIdentifier` is `com.daniil4545.tarn`; `CFBundleShortVersionString` is `1.0.0`; `CFBundleName`/display name `Tarn`.
-3. Icon file in `Contents/Resources`; `codesign -dv --verbose=4` shows ad-hoc; `codesign --verify --deep --strict`; entitlements present.
-4. Zip exists, `unzip -l` shows `Tarn.app/`, sha256 printed.
-5. `make -f tarn.mk check` once.
-6. Not done by me: install into `/Applications`, launch. The report says so.
+Automatic (me): `make -f tarn.mk release`; `CFBundleIdentifier`, `CFBundleShortVersionString`; icon file; `codesign -dv` of the unzipped copy; no `com.mitchellh` in the app and plugin Info.plist; `+version` exit 0; zip and sha256; `make -f tarn.mk check`.
+
+Manual (user, list in `docs/install.md`, "First check after installing"): both apps launch; two Dock icons and names; `TERM` and `GHOSTTY_RESOURCES_DIR` in a Tarn tab; no "Check for Updates"; notification asks permission as "Tarn"; Ghostty config untouched; config shared. I do not install or launch the app.
+
+Decisions after review: bundle id `com.daniil4545.tarn` supersedes `dev.tarn.app` of `docs/plans/s0-core.md:17` (it matches the private pasteboard types already in code and is the reverse DNS of an owned name). About shows the app icon, links the version to the tarn release tag, and states "Based on Ghostty <core version>, MIT". Upgrade section covers TCC loss with ad-hoc signing. `bench` before release (`docs/spec.md:187`) is handled by the main window.
 
 ## 10. Risks
 
@@ -131,4 +127,6 @@ New root file (the S0 row names it, it does not exist yet; `bench` is not part o
 | Release build needs the Sparkle package offline | Debug resolved it; if it fails, report |
 | Shared selection pasteboard and global key binds with Ghostty | documented |
 | S7 edits `project.pbxproj` and `AppDelegate.swift` | small commits, single-line settings; conflicts go to the main window |
+| Both dock-tile plugins share one class name `DockTilePlugin` (PLAUSIBLE collision when both apps are in the Dock) | not changed; check `log stream` for "implemented in both" when both run |
+| S7 `tarn` CLI in the bundle must be signed and reach PATH | whoever merges second extends `tarn.mk` and `install.md` |
 | Pre-rounded icon PNG shows a double edge on macOS 26 | check by eye, ask for a square source |
