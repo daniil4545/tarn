@@ -143,7 +143,9 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .sdiv:hover, .sdiv.drag { background: var(--accent); }
 .block { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .drop { transition: top .14s ease, right .14s ease, bottom .14s ease, left .14s ease; }
-.drop { position: absolute; z-index: 5; background: color-mix(in srgb, var(--accent) 20%, transparent); border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; }
+/* The frame only shows the place, like Rectangle's footprint: neutral, in the text color of what
+   it covers, so it reads on dark and light panes. Red is the only meaning: refused. */
+.drop { position: absolute; z-index: 5; background: color-mix(in srgb, currentColor 12%, transparent); border: 2px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 8px; pointer-events: none; }
 .drop.deny { background: color-mix(in srgb, var(--deny) 18%, transparent); border-color: var(--deny); }
 .drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: var(--chrome); padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
 
