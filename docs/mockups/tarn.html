@@ -132,7 +132,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .ctx button:hover { background: var(--line); }
 
 /* workspace layout */
-.ws { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.ws { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .split { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .split.col { flex-direction: column; }
 .pane { min-width: 0; min-height: 0; display: flex; flex-basis: 0; }
@@ -1122,8 +1122,65 @@ function edgeOf(el, x, y) {
   const edge = Math.min(fx, 1 - fx, fy, 1 - fy);
   return { edge, zone: edge === fx ? "left" : edge === 1 - fx ? "right" : edge === fy ? "top" : "bottom" };
 }
+// Rectangle-style zones of the whole tab area: a 24 px strip at an edge gives that half of the
+// area; a 48 px corner gives that quarter when the area is split in two on that axis (the new
+// pane halves the half), otherwise the nearest half. Panes only split in two, so a corner of an
+// unsplit area cannot be a quarter.
+const EDGE = 24, CORNER = 48;
+function areaTarget(e) {
+  const ws = $("ws"), r = ws.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  if (x < 0 || y < 0 || x > r.width || y > r.height) return null;
+  const v = y < CORNER ? "top" : y > r.height - CORNER ? "bottom" : null;
+  const h = x < CORNER ? "left" : x > r.width - CORNER ? "right" : null;
+  const near = Math.min(x, r.width - x) < Math.min(y, r.height - y) ? h || (x < r.width / 2 ? "left" : "right") : v || (y < r.height / 2 ? "top" : "bottom");
+  let edge = null;
+  if (!(v && h)) edge = x < EDGE ? "left" : x > r.width - EDGE ? "right" : y < EDGE ? "top" : y > r.height - EDGE ? "bottom" : null;
+  if (!(v && h) && !edge) return null;
+  // What moves and inside which tree: terminals stay in their Ghostty block.
+  let holder = L(), nodeId = drag.viewer || null, deny = null;
+  if (drag.term) {
+    const b = findBlock(L().root);
+    if (L().root === b) { holder = b; nodeId = drag.term; }
+    else if (terms().length === 1) nodeId = b.id;
+    else deny = "Split terminals stay together: drag them inside the block";
+  }
+  let root = holder.root;
+  if (nodeId && root.type === "split" && (root.a.id === nodeId || root.b.id === nodeId)) root = root.a.id === nodeId ? root.b : root.a;
+  else if (nodeId && root.id === nodeId) deny = "Nothing to drop beside";
+  const half = { left: { l: 0, t: 0, w: 0.5, h: 1 }, right: { l: 0.5, t: 0, w: 0.5, h: 1 }, top: { l: 0, t: 0, w: 1, h: 0.5 }, bottom: { l: 0, t: 0.5, w: 1, h: 0.5 } };
+  let plan = { edge: edge || near }, frame = half[plan.edge];
+  if (v && h && root.type === "split") {
+    const row = root.dir === "row", side = row ? (h === "left" ? "a" : "b") : (v === "top" ? "a" : "b");
+    const start = side === "a" ? 0 : root.ratio, size = side === "a" ? root.ratio : 1 - root.ratio;
+    plan = { side, sub: row ? v : h };
+    frame = row ? { l: start, w: size, t: v === "top" ? 0 : 0.5, h: 0.5 } : { t: start, h: size, l: h === "left" ? 0 : 0.5, w: 0.5 };
+  }
+  return { el: ws, area: true, holder, nodeId, plan, frame, deny };
+}
+function dropArea(d, tgt) {
+  const { holder, nodeId, plan } = tgt;
+  let node, src = null;
+  if (d.term) node = nodeId === d.term ? byId(d.term) : findBlock(L().root);
+  else if (d.viewer) node = byId(d.viewer);
+  else {
+    src = d.vid !== undefined ? byId(d.vid) : null;
+    const tab = src ? { ...src.tabs[d.idx], preview: false, jump: false } : { path: d.path, preview: false };
+    if (src) { src.tabs.splice(d.idx, 1); if (src.active >= src.tabs.length) src.active = src.tabs.length - 1; }
+    node = newViewer(false); node.tabs = [tab]; node.active = 0;
+  }
+  if (nodeId) removeFrom(holder, nodeId);
+  L().zoom = null;
+  if (plan.edge) holder.root = splitNode(holder.root, node, plan.edge);
+  else { const part = holder.root[plan.side]; replaceIn(holder, part.id, splitNode(part, node, plan.sub)); }
+  if (src && !src.tabs.length && !src.tree) closeViewer(src, false);
+  L().focus = d.term || node.id;
+  if (node.type === "viewer") L().lastViewer = node.id;
+  renderWorkspace();
+}
 function dropTarget(e) {
   if (drag && (drag.tabRow || drag.wsRow)) return null;
+  const area = drag && areaTarget(e);
+  if (area) return area;
   const vp = e.target.closest(".vpane"), tp = e.target.closest(".tpane");
   if (drag && drag.term) {
     // The block is one Ghostty split tree, so only a lone terminal can leave it: the block moves.
@@ -1151,6 +1208,10 @@ function showDrop(tgt, deny) {
   if (!d) { d = document.createElement("div"); d.className = "drop"; tgt.el.appendChild(d); }
   d.classList.toggle("deny", !!deny);
   d.innerHTML = deny ? `<span>${deny}</span>` : "";
+  if (tgt.frame) {
+    const f = tgt.frame, pc = n => `calc(${(n * 100).toFixed(2)}% + 4px)`;
+    return Object.assign(d.style, { top: pc(f.t), left: pc(f.l), right: pc(1 - f.l - f.w), bottom: pc(1 - f.t - f.h) });
+  }
   // Always the same four sides, so the frame slides between halves instead of jumping.
   const top = tgt.el.classList.contains("vpane") ? 31 : 4, mid = `calc(50% + ${top / 2 - 2}px)`;
   const [t, r, b, l] = { center: [`${top}px`, "4px", "4px", "4px"], left: [`${top}px`, "50%", "4px", "4px"], right: [`${top}px`, "4px", "4px", "50%"], top: [`${top}px`, "4px", mid, "4px"], bottom: [mid, "4px", "4px", "4px"] }[tgt.zone];
@@ -1204,6 +1265,7 @@ document.addEventListener("drop", e => {
   e.preventDefault();
   const d = drag; drag = null;
   if (tgt.deny) return;
+  if (tgt.area) return dropArea(d, tgt);
   if (d.term && tgt.block) {
     const b = findBlock(L().root);
     removeFrom(L(), b.id);

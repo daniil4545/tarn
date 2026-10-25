@@ -555,6 +555,59 @@ with sync_playwright() as p:
         str(frame),
     )
 
+    def area_over(src, x, y):
+        """Start a drag at src and hover a point of the tab area given in pixels from its corner."""
+        dt = pg.evaluate_handle("new DataTransfer()")
+        box = n("#ws").bounding_box()
+        pos = {"dataTransfer": dt, "clientX": box["x"] + x, "clientY": box["y"] + y}
+        pg.locator(src).first.dispatch_event("dragstart", {"dataTransfer": dt})
+        pg.locator("#ws").dispatch_event("dragover", pos)
+        pg.wait_for_timeout(200)
+        return box, dt, pos
+
+    def area_drop(dt, pos):
+        pg.locator("#ws").dispatch_event("drop", pos)
+        pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+
+    pg.click("#sbNew")
+    pg.evaluate("openLink('docs/spec.md')")
+    box, dt, pos = area_over(".vpane .ftab", 10, 300)
+    frame = n("#ws > .drop").bounding_box()
+    check(
+        "A1 a file at the left edge of the tab area frames the left half of the area",
+        frame is not None and abs(frame["width"] - (box["width"] / 2 - 8)) <= 3,
+        str(frame),
+    )
+    area_drop(dt, pos)
+    check(
+        "A2 dropped there it opens left of everything",
+        pg.evaluate("L().root.dir === 'row' && L().root.a.type === 'viewer'"),
+    )
+    pg.evaluate("openLink('README.md')")
+    box, dt, pos = area_over(".vpane .ftab", 10, 10)
+    frame = n("#ws > .drop").bounding_box()
+    ratio = pg.evaluate("L().root.ratio")
+    check(
+        "A3 the top left corner of a split area frames its top left quarter",
+        frame is not None
+        and abs(frame["width"] - (box["width"] * ratio - 8)) <= 3
+        and abs(frame["height"] - (box["height"] / 2 - 8)) <= 3,
+        f"{frame} ratio={ratio}",
+    )
+    area_drop(dt, pos)
+    check(
+        "A4 dropped there it halves the left side, new viewer on top",
+        pg.evaluate(
+            "L().root.a.type === 'split' && L().root.a.dir === 'col'"
+            " && L().root.a.a.type === 'viewer'"
+        ),
+    )
+    pg.click(".tpane .term")
+    pg.keyboard.press("Meta+d")
+    area_over(".tpane >> nth=0 >> .grip", box["width"] - 10, 300)
+    check("A5 split terminals cannot go to the area edge", vis("#ws > .drop.deny"))
+    pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")
     check("43 phone width: no horizontal page scroll", sw <= 420, f"scrollWidth={sw}")

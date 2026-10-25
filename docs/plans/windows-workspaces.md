@@ -54,6 +54,20 @@ stateDiagram-v2
 
 The last workspace has no delete action (D4); closing its last tab closes the window (D12).
 
+## 3a. Drop zones (Rectangle-style, user decision 2026-10-25)
+
+While a file tab, a viewer or a terminal is dragged, a frame shows the space it will take; the frame slides between zones. Checked first to last:
+
+| Pointer | Frame and result |
+| --- | --- |
+| corner of the tab area, 48x48 px | the area is split in two across that corner: the quarter, made by halving that half; otherwise the nearest half of the area |
+| 24 px strip at an edge of the tab area | that half of the whole area: the pane goes beside everything |
+| a viewer's tab bar or the middle box (30% of its size) | the whole viewer: the file or viewer goes into it |
+| elsewhere in a pane | the half of that pane on the nearest edge |
+| over the dragged pane itself | red frame, refused |
+
+Panes only split in two, so a quarter needs an area already split on that axis. Rectangle uses a 5 px edge because the screen edge stops the pointer; inside a window it does not, hence 24 px. The top edge gives the top half, not a full window (zoom is Ghostty's cmd+shift+enter); no thirds. Terminals: inside the block they use the pane zones; a lone terminal moves the whole block in area zones; split terminals get a red frame in area zones when viewers are open.
+
 ## 4. User scenarios
 
 | # | Start and steps | Result |
