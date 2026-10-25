@@ -16,6 +16,21 @@ from playwright.sync_api import sync_playwright  # noqa: E402,F401
 TAB = ".sidebar .tab[data-tabid]"
 
 
+# A video has no pointer, so a dot follows the mouse events of the page.
+POINTER = """
+addEventListener('DOMContentLoaded', () => {
+  const d = document.createElement('div');
+  d.style.cssText = 'position:fixed;z-index:99999;width:18px;height:18px;margin:-9px 0 0 -9px;border-radius:50%;'
+    + 'background:rgba(255,255,255,.55);border:2px solid #fff;box-shadow:0 0 6px #000;pointer-events:none;left:-50px;top:-50px';
+  document.body.append(d);
+  addEventListener('mousemove', (e) => { d.style.left = e.clientX + 'px'; d.style.top = e.clientY + 'px'; }, true);
+  addEventListener('mousedown', () => { d.style.transform = 'scale(.7)'; }, true);
+  addEventListener('mouseup', () => { d.style.transform = ''; }, true);
+  addEventListener('dragover', (e) => { d.style.left = e.clientX + 'px'; d.style.top = e.clientY + 'px'; }, true);
+});
+"""
+
+
 def open_page(p, base, dpr=2, video_dir=None):
     browser = p.chromium.launch(channel="chrome")
     opts = {
@@ -27,6 +42,8 @@ def open_page(p, base, dpr=2, video_dir=None):
         opts["record_video_dir"] = str(video_dir)
         opts["record_video_size"] = {"width": 1440, "height": 900}
     ctx = browser.new_context(**opts)
+    if video_dir:
+        ctx.add_init_script(POINTER)
     page = ctx.new_page()
     page.on("dialog", lambda d: d.accept())
     page.goto(f"{base}/index.html")
