@@ -134,6 +134,17 @@ struct ControlSocketOwnershipTests {
         #expect(ControlSocket.hasListener(path))
     }
 
+    /// spec: docs/spec.md 2.2.1 - only the user may talk to the socket.
+    @Test func socketIsOwnerOnly() {
+        let path = path()
+        defer { unlink(path) }
+        let socket = ControlSocket { _, _ in }
+        socket.start(path: path)
+        var info = stat()
+        #expect(stat(path, &info) == 0)
+        #expect(info.st_mode & 0o777 == 0o600)
+    }
+
     @Test func staleFileIsReplaced() {
         let path = path()
         defer { unlink(path) }
