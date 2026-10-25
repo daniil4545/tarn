@@ -445,6 +445,20 @@ with sync_playwright() as p:
     pg.hover(".tab[data-tabid='t3']")
     pg.wait_for_timeout(700)
     check("C3 a tab without an agent opens no card", not vis("#tabcard"))
+    pg.mouse.move(700, 500)
+    pg.click("#soloDemo")
+    check(
+        "O1 with one workspace the sidebar is a plain tab list",
+        count(".wsh") == 0
+        and count("#sidebar .tab[data-tabid]") == pg.evaluate("flat().length"),
+    )
+    pg.evaluate("window.prompt = q => q === 'Workspace name' ? 'work' : ''")
+    pg.click("#wsNew")
+    check(
+        "O2 a second workspace shows headers, Default among them",
+        pg.evaluate("wss.map(w => w.name)") == ["work", "Default"]
+        and count(".wsh") == 2,
+    )
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")

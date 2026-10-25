@@ -65,6 +65,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .tab { cursor: pointer; }
 /* Tabs sit indented under their workspace header. */
 .sidebar .tab[data-tabid] { margin-left: 12px; width: calc(100% - 12px); }
+.sidebar.solo .tab[data-tabid] { margin-left: 0; width: 100%; }
 .tab .x { opacity: 0; background: none; border: 0; padding: 0 3px; color: var(--muted); font-size: 11px; }
 .tab:hover .x { opacity: 1; }
 .tab:hover .key { display: none; }
@@ -250,6 +251,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
   <span>Terminal header (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="true">always</button><button data-v="auto" aria-pressed="false">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
   <button class="act" id="agentTab" title="Mock of tarn new from an agent in ~/Dev/Galera">Agent opens a tab in ~/Dev/Galera</button>
   <button class="act" id="openSettings">Settings ⌘,</button>
+  <button class="act" id="soloDemo" title="All tabs go to Default, other workspaces are removed">One workspace</button>
   <button class="act" id="resetDemo">Reset demo</button>
   <button class="act" id="agentEdit">Agent edits the file</button>
   <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
@@ -658,6 +660,7 @@ function renderSidebar() {
   const sb = $("sidebar");
   sb.classList.toggle("rail", sbRail);
   sb.style.width = sbRail ? "" : `${sbWidth}px`;
+  $("wtitle").textContent = [wss.length > 1 ? W().name : "", cur ? tabs[cur].title : ""].filter(Boolean).join(" · ");
   const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${sbRail ? "Show Sidebar" : "Hide Sidebar"}" aria-label="${sbRail ? "Show Sidebar" : "Hide Sidebar"}">${SB_ICON}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
   // Collapsed rail, as in the app: icons only, a divider between workspaces.
   if (sbRail) {
@@ -665,11 +668,14 @@ function renderSidebar() {
       const t = tabs[id];
       return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.title)}">${t.agent ? AGENT : TERM_ICON}${dotOf(t.state)}</div>`;
     }).join("")).join('<div class="sep"></div>');
-    $("wtitle").textContent = W().name + (cur ? " · " + tabs[cur].title : "");
     return;
   }
+  // Default alone needs no header: the sidebar is a plain list until a second workspace exists.
+  const solo = wss.length === 1;
+  sb.classList.toggle("solo", solo);
   let h = top;
-  for (const w of wss) {
+  if (solo) h += ordered(wss[0]).map(row).join("");
+  else for (const w of wss) {
     const n = w.tabs.length;
     // A folded workspace still shows how many tabs it has and its most urgent state.
     h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? esc(short(w.folder)) : "no folder"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.folder ? short(w.folder) : "~")}">+</button></div>`;
@@ -677,7 +683,6 @@ function renderSidebar() {
   }
   h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
   sb.innerHTML = h;
-  $("wtitle").textContent = W().name + (cur ? " · " + tabs[cur].title : "");
 }
 function updateTitleButton() { const v = lastViewer(); $("toggleFiles").setAttribute("aria-pressed", String(!!(v && v.tree))); }
 function renderWorkspace() {
@@ -908,6 +913,7 @@ function newWorkspace() {
   if (!name || !name.trim()) return;
   const folder = (prompt("Folder (optional): tabs opened in it join this workspace", "") || "").trim().replace(/\/$/, "") || null;
   const w = { id: "w" + Date.now(), name: name.trim(), folder, tabs: [] };
+  if (wss.length === 1) wss[0].collapsed = false;
   wss.splice(wss.length - 1, 0, w);
   // Creating it with a folder pulls in open tabs from that folder once; later a cd never moves a tab.
   let pulled = 0;
@@ -1277,6 +1283,11 @@ document.addEventListener("click", e => {
   const top = e.target.closest("[data-toptab]");
   if (top) return selectTab(top.dataset.toptab);
   if (e.target.closest("#openSettings")) return openSettings();
+  if (e.target.closest("#soloDemo")) {
+    const def = wsById("w0");
+    def.tabs = flat(); def.collapsed = false; def.tabs.forEach(id => { tabs[id].manual = false; });
+    wss = [def]; saveState(); return renderSidebar();
+  }
   if (e.target.closest("#settingsClose") || e.target.id === "settings") return closeSettings();
   if (e.target.closest("#ghosttyConfig")) return toast("Opens the Ghostty config file");
 });
