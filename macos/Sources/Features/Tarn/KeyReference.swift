@@ -2,7 +2,7 @@ import SwiftUI
 
 /// The keys Help lists. Ghostty has no call that lists all bindings, so this is a fixed list of
 /// actions; Ghostty gives the trigger in effect for each one (`docs/plans/s4-settings.md` 1.3).
-/// Actions bound with `performable` (undo, clear_screen, start_search, navigate_search) get no
+/// Actions bound with `performable` (undo, redo, clear_screen, start_search, navigate_search) get no
 /// trigger from Ghostty, and the main menu has no key for them either (`MainMenu.xib`), so
 /// those rows carry the Ghostty default keys; a `keybind` change for them is not visible.
 enum KeyReference {
@@ -50,6 +50,7 @@ enum KeyReference {
             Row("Close the tab", action: "close_tab"),
             Row("Close the window", action: "close_window"),
             Row("Bring back what was closed", action: "undo", defaultKeys: "⌘Z"),
+            Row("Redo what was brought back", action: "redo", defaultKeys: "⇧⌘Z"),
             Row("Go to tab 1, down the sidebar (2 to 8 likewise)", action: "goto_tab:1"),
             Row("Go to the last tab", action: "last_tab"),
             Row("Previous tab", action: "previous_tab"),
@@ -73,6 +74,10 @@ enum KeyReference {
             Row("Zoom the split", action: "toggle_split_zoom"),
         ]),
         Group(title: "Terminal", rows: [
+            Row("Clear the screen", action: "clear_screen", defaultKeys: "⌘K"),
+            Row("Search", action: "start_search", defaultKeys: "⌘F"),
+            Row("Next search match", action: "navigate_search:next", defaultKeys: "⌘G"),
+            Row("Previous search match", action: "navigate_search:previous", defaultKeys: "⇧⌘G"),
             Row("Font size bigger", action: "increase_font_size:1"),
             Row("Font size smaller", action: "decrease_font_size:1"),
             Row("Font size reset", action: "reset_font_size"),

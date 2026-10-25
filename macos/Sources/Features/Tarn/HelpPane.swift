@@ -2,14 +2,15 @@ import SwiftUI
 
 /// The Help section of the settings window: the keys in effect, read from the live Ghostty config.
 struct HelpPane: View {
-    @State private var config = (NSApp.delegate as? AppDelegate)?.ghostty.config
+    /// The store already follows the app's config notification.
+    @ObservedObject private var store: GhosttyOptionStore = .shared
 
     var body: some View {
         Form {
             ForEach(KeyReference.groups) { group in
                 Section(group.title) {
                     ForEach(group.rows) { row in
-                        let keys = KeyReference.keys(for: row, in: config)
+                        let keys = KeyReference.keys(for: row, in: store.config)
                         LabeledContent {
                             HStack {
                                 Text(keys)
@@ -35,11 +36,5 @@ struct HelpPane: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Help")
-        .onReceive(NotificationCenter.default.publisher(for: .ghosttyConfigDidChange)) { note in
-            guard note.object == nil,
-                  let changed = note.userInfo?[Notification.Name.GhosttyConfigChangeKey] as? Ghostty.Config
-            else { return }
-            config = changed
-        }
     }
 }

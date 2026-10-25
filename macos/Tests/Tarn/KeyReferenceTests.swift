@@ -35,6 +35,16 @@ struct KeyReferenceTests {
         #expect(KeyReference.keys(for: row, in: nil) == KeyReference.notBound)
     }
 
+    @Test func performableActionsCarryTheirDefaultKeys() {
+        let keys = Dictionary(uniqueKeysWithValues: Self.ghosttyRows.compactMap { row in row.defaultKeys.map { (row.action ?? "", $0) } })
+        #expect(keys["undo"] == "⌘Z")
+        #expect(keys["redo"] == "⇧⌘Z")
+        #expect(keys["clear_screen"] == "⌘K")
+        #expect(keys["start_search"] == "⌘F")
+        #expect(keys["navigate_search:next"] == "⌘G")
+        #expect(keys["navigate_search:previous"] == "⇧⌘G")
+    }
+
     @Test @MainActor func viewerKeysAreFixedAndComeFromTheTable() {
         let viewer = KeyReference.groups.first { $0.title == "Viewer" }
         #expect(viewer?.rows.map(\.source) == Array(repeating: "tarn", count: 4))
