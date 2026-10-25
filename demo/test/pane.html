@@ -1,0 +1,51 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>pane harness</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../css/fonts.css">
+<link rel="stylesheet" href="../css/base.css">
+<link rel="stylesheet" href="../css/pane.css">
+<style>.slot{width:700px;height:300px;margin:4px;position:relative}</style>
+<div id="toast" hidden></div>
+<div id="slots"></div>
+<script type="module">
+// Panes of slice A without the window chrome: real vfs, config, registry, shell and engine.
+// Commands owned by other slices are recorded in window.calls.
+import { bus } from "../js/bus.js";
+import { register } from "../js/state.js";
+import { startConfig } from "../js/config.js";
+import { startRegistry } from "../js/registry.js";
+import { WORKSPACES } from "../js/seed.js";
+import { clock } from "../js/clock.js";
+import { startVfs } from "../js/vfs.js";
+import { createPane, startPanes } from "../js/term-pane.js";
+import { installKeys } from "../js/keymap.js";
+import { TERMINAL_KEYS } from "../js/keys/terminal.js";
+import { installTestContract } from "../js/test-contract.js";
+import { toast } from "../js/toast.js";
+
+window.calls = [];
+let focused = null;
+bus.on("pane:focused", ({ pane }) => { focused = pane; });
+bus.on("toast", ({ text }) => toast(text));
+for (const name of ["pane.close", "viewer.open", "tab.new"]) bus.handle(name, (p) => { window.calls.push([name, p]); });
+
+register("workspaces", WORKSPACES);
+startConfig();
+startRegistry({ now: clock.now, isFocused: (pane) => pane === focused });
+startPanes({ vfs: startVfs() });
+installKeys(TERMINAL_KEYS, { focus: () => "terminal" });
+installTestContract();
+
+window.mount = async (id, cwd) => {
+  const slot = document.createElement("div");
+  slot.className = "slot";
+  document.getElementById("slots").append(slot);
+  const pane = createPane(id, { cwd });
+  slot.append(pane.el);
+  await pane.started;
+  return pane;
+};
+window.bus = bus;
+window.ready = true;
+</script>

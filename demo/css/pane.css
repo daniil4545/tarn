@@ -1,0 +1,16 @@
+.pane {
+  position: relative; display: flex; width: 100%; height: 100%; min-width: 0; min-height: 0;
+  background: var(--term-bg, #282c34); color: var(--term-fg, #fff);
+}
+.pane[hidden] { display: none; }
+.pane-term { flex: 1; min-width: 0; min-height: 0; padding: 0 var(--pad-x, 2px); overflow: hidden; }
+.pane-term canvas { display: block; }
+.hide-mouse-typing .pane.typing, .hide-mouse-typing .pane.typing * { cursor: none !important; }
+
+.paste-dialog {
+  position: absolute; left: 50%; top: 20%; transform: translateX(-50%); z-index: 5;
+  padding: 12px 14px; border-radius: 8px; background: var(--bg); color: var(--fg);
+  border: 1px solid var(--dim); box-shadow: 0 8px 24px rgba(0, 0, 0, .4);
+}
+.paste-dialog p { margin: 0 0 10px; }
+.paste-dialog button { margin-right: 8px; padding: 3px 12px; font: inherit; }

@@ -119,8 +119,10 @@ class Term {
   clearSelection() { this.#t.clearSelection(); }
   select(col, row, length) { this.#t.select(col, row, length); }
 
-  setOption(key, value) {
+  // A font that is not loaded yet would be measured as the fallback, so wait for it first.
+  async setOption(key, value) {
     if (!THEME_KEYS.has(key)) throw new Error(`term option not supported: ${key}`);
+    if (key === "fontFamily") await loadFont(value, this.#t.options.fontSize);
     this.#t.options[key] = value;
     if (key === "fontSize" || key === "fontFamily") this.fit();
   }
