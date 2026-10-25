@@ -230,11 +230,11 @@ with sync_playwright() as p:
         vis(".vtree") and vis(".vpane .empty"),
     )
 
-    pg.click("[data-tab='1']")
+    pg.click(".tab[data-tabid='t2']")
     check("38 tab 2 has its own layout", count(".vpane") == 0 and count(".tpane") == 1)
     pg.click(".term .path[data-path='README.md']")
     check("39 path in tab 2 opens a viewer there", count(".vpane") == 1)
-    pg.click("[data-tab='0']")
+    pg.click(".tab[data-tabid='t1']")
     check("40 tab 1 keeps its layout", count(".vtree") == 1)
 
     pg.click(".tpane >> nth=0")
@@ -245,9 +245,92 @@ with sync_playwright() as p:
 
     t = time.time()
     for _ in range(10):
-        pg.click("[data-tab='1']")
-        pg.click("[data-tab='0']")
+        pg.click(".tab[data-tabid='t2']")
+        pg.click(".tab[data-tabid='t1']")
     check("42 20 tab switches", True, f"{(time.time() - t) * 50:.0f} ms per switch")
+
+    def side_tabs():
+        return pg.locator(".sidebar .tab[data-tabid]").all_inner_texts()
+
+    def ws_tabs(wid):
+        return pg.evaluate(f"wss.find(w => w.id === '{wid}').tabs")
+
+    check(
+        "W1 all workspaces are visible as groups, pinned tab first",
+        count(".wsh") == 3 and len(side_tabs()) == 6 and "spec" in side_tabs()[0],
+    )
+    pg.click(".wsh[data-wsh='w1']")
+    check(
+        "W2 a folded workspace hides its tabs, shows count and state",
+        len(side_tabs()) == 2
+        and "4" in pg.inner_text(".wsh[data-wsh='w1']")
+        and count(".wsh[data-wsh='w1'] .dot") == 1,
+    )
+    pg.click(".wsh[data-wsh='w1']")
+    check("W3 unfold shows them again", len(side_tabs()) == 6)
+    pg.click(".wsh[data-wsh='w2']")
+    pg.click("#agentTab")
+    check(
+        "W4 an agent tab from ~/Dev/Galera joins galera, folded header shows it waits",
+        len(ws_tabs("w2")) == 2 and "2" in pg.inner_text(".wsh[data-wsh='w2']"),
+    )
+    pg.click(".tab[data-tabid='t1']")
+    pg.keyboard.press("Meta+t")
+    check(
+        "W5 cmd+T opens a tab in the workspace of the current tab",
+        len(ws_tabs("w1")) == 5 and "~/D/s/tarn" in pg.inner_text(".tpane .term"),
+    )
+    pg.hover(".wsh[data-wsh='w2']")
+    pg.click(".wsh[data-wsh='w2'] [data-wsnewtab]")
+    check(
+        "W6 + on a header opens a tab in its folder and unfolds it",
+        len(ws_tabs("w2")) == 3 and "~/D/Galera" in pg.inner_text(".tpane .term"),
+    )
+    drag(pg, ".tab[data-tabid='t3']", ".wsh[data-wsh='w2']", 0.5, 0.5)
+    check(
+        "W7 drag a tab onto a workspace header moves it there by hand",
+        "t3" in ws_tabs("w2") and "hand" in pg.inner_text(".tab[data-tabid='t3']"),
+    )
+    pg.click(".tab[data-tabid='t3']", button="right")
+    pg.click("#ctx [data-mmove][data-to='w1']")
+    check(
+        "W8 back to its folder workspace drops the hand mark",
+        "t3" in ws_tabs("w1") and "hand" not in pg.inner_text(".tab[data-tabid='t3']"),
+    )
+    pg.click(".tab[data-tabid='t2']", button="right")
+    pg.click("#ctx [data-mpin]")
+    check("W9 pin from the menu puts the tab on top", "review" in side_tabs()[1])
+    drag(pg, ".tab[data-tabid='t4']", ".tab[data-tabid='t3']", 0.5, 0.3)
+    order = ws_tabs("w1")
+    check("W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order))
+    answers = iter(["home", "~"])
+    pg.on("dialog", lambda d: d.accept(next(answers, "")))
+    pg.click("#wsNew")
+    home = pg.evaluate("wss.find(w => w.name === 'home')")
+    check(
+        "W11 a new workspace with a folder pulls in its open tabs",
+        home is not None and home["tabs"] == ["t6"] and count(".wsh") == 4,
+    )
+    pg.click(f".wsh[data-wsh='{home['id']}']", button="right")
+    pg.click("#ctx [data-wsdel]")
+    check(
+        "W12 deleting it moves the tabs to Default",
+        ws_tabs("w0") == ["t6"] and count(".wsh") == 3,
+    )
+    pg.click(".tab[data-tabid='t6'] .x")
+    check("W13 an empty workspace stays with No tabs", vis(".wsempty"))
+    pg.click(".wsh[data-wsh='w2']")
+    pg.reload()
+    pg.wait_for_selector(".wsh")
+    check(
+        "W14 workspaces and folding survive a reload",
+        count(".wsh") == 3
+        and pg.get_attribute(".wsh[data-wsh='w2']", "aria-expanded") == "false",
+    )
+    check(
+        "W15 tab order and pins survive a reload",
+        "spec" in side_tabs()[0] and "review" in side_tabs()[1],
+    )
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")

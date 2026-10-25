@@ -53,6 +53,26 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .agent { width: 13px; height: 13px; flex: none; }
 .key { font-size: 11px; color: #6c6f85; }
 .sep { height: 1px; background: var(--line); margin: 8px 4px; }
+.sidebar { width: 210px; overflow: auto; }
+.wsh { display: flex; align-items: center; gap: 6px; padding: 5px 6px; margin-top: 6px; border-radius: 5px; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); cursor: pointer; user-select: none; }
+.wsh:hover { background: rgba(255,255,255,.05); color: var(--fg); }
+.wsh .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsh .ib { opacity: 0; background: none; border: 0; padding: 0 5px; color: var(--muted); font-size: 14px; line-height: 1; }
+.wsh:hover .ib { opacity: 1; }
+.wsh .cnt { font-size: 11px; color: #6c6f85; text-transform: none; }
+.chev { width: 10px; color: var(--muted); font-size: 10px; }
+.wsempty { font-size: 12px; color: #6c6f85; padding: 2px 8px 4px 24px; }
+.tab { cursor: pointer; }
+.tab .x { opacity: 0; background: none; border: 0; padding: 0 3px; color: var(--muted); font-size: 11px; }
+.tab:hover .x { opacity: 1; }
+.tab:hover .key { display: none; }
+.tab.add { color: #6c6f85; margin-top: 4px; }
+.man { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.pin { width: 11px; height: 11px; color: var(--muted); flex: none; }
+.dropmark { box-shadow: inset 0 2px 0 var(--accent); background: rgba(139,233,253,.08); }
+.ctx { position: fixed; z-index: 20; min-width: 200px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+.ctx button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 5px 10px; border-radius: 5px; font-size: 13px; }
+.ctx button:hover { background: var(--line); }
 
 /* workspace layout */
 .ws { flex: 1; min-width: 0; min-height: 0; display: flex; }
@@ -177,9 +197,11 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 </style>
 
 <div class="mock" role="group" aria-label="Mockup controls">
-  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> viewer panes, terminal pane header, viewers in the split keys and undo.</span>
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
   <span>Terminal header (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="true">always</button><button data-v="auto" aria-pressed="false">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
+  <button class="act" id="agentTab" title="Mock of tarn new from an agent in ~/Dev/Galera">Agent opens a tab in ~/Dev/Galera</button>
+  <button class="act" id="resetDemo">Reset demo</button>
   <button class="act" id="agentEdit">Agent edits the file</button>
   <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
 </div>
@@ -323,12 +345,15 @@ const TREE = ["README.md", "docs/architecture.md", "docs/plans/s2-files.md", "do
 const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
 const TERM_ICON = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
 const lnk = (path, line) => `<span class="path" data-path="${path}"${line ? ` data-line="${line}"` : ""}>${path}${line ? ":" + line : ""}</span>`;
-const PROMPT = `<span class="u">daniil</span>@<span class="h">MacBook</span> <span class="cwd">~/D/s/tarn</span>>`;
+const short = cwd => cwd.replace("~/Dev/self-projects/", "~/D/s/").replace("~/Dev/", "~/D/");
+const promptLine = cwd => `<span class="u">daniil</span>@<span class="h">MacBook</span> <span class="cwd">${short(cwd)}</span>>`;
+const PROMPT = promptLine("~/Dev/self-projects/tarn");
 // Each split runs its own login shell on its own tty, in the working directory of the split it came from.
-const shell = tty => `<span class="dim">Last login: Sun Oct 25 12:34:44 on ttys0${String(tty).padStart(2, "0")}</span>\n${PROMPT} <span class="cursor"></span>`;
-const TABS = [
-  { title: "tarn · spec", agent: true, dot: "var(--blue)", key: "⌘1", term:
-`<span class="dim">╭─ Claude Code ─────────────────────────╮</span>
+const shell = (tty, cwd) => `<span class="dim">Last login: Sun Oct 25 12:34:44 on ttys0${String(tty).padStart(2, "0")}</span>\n${promptLine(cwd || "~/Dev/self-projects/tarn")} <span class="cursor"></span>`;
+// Agent states, most urgent first; a workspace shows the most urgent state of its tabs.
+const STATE = { waiting: { color: "var(--orange)", label: "needs you", rank: 3 }, working: { color: "var(--blue)", label: "working", rank: 2 }, done: { color: "var(--green)", label: "done", rank: 1 } };
+const SEED_TERM = {
+  t1: `<span class="dim">╭─ Claude Code ─────────────────────────╮</span>
 <span class="p">></span> update the spec and the plan for the viewer
 
 <span class="tool">● Update</span>(${lnk("docs/spec.md")})
@@ -341,21 +366,44 @@ Done. Changes:
 - ${lnk("docs/architecture.md")}: viewer module
 - ${lnk("macos/Sources/Features/Tarn/Sidebar.swift", 9)}: insertion point
 
-<span class="dim">✻ Working… (esc to interrupt)</span>` },
-  { title: "tarn · review", agent: true, dot: "var(--green)", key: "⌘2", term:
-`<span class="p">></span> check the README
+Allow edits to docs/spec.md? <span class="dim">(waiting for you)</span>`,
+  t2: `<span class="p">></span> check the README
 
 <span class="tool">● Read</span>(${lnk("README.md")})
 
 The README is fine. The module map in ${lnk("docs/architecture.md")} matches the code.
 
-<span class="p">></span> <span class="cursor"></span>` },
-  { title: "~/Dev/self-projects/tarn", agent: false, key: "⌘3", term:
-`${PROMPT} git status -s
+<span class="dim">✻ Working… (esc to interrupt)</span>`,
+  t3: `${PROMPT} git status -s
  M ${lnk("docs/spec.md")}
  M ${lnk("macos/Sources/Features/Tarn/TarnSettings.swift")}
-${PROMPT} <span class="cursor"></span>` }
-];
+${PROMPT} <span class="cursor"></span>`,
+  t4: `${promptLine("~")} ssh prod
+<span class="dim">Welcome to Ubuntu 24.04 LTS</span>
+root@prod:~# <span class="cursor"></span>`,
+  t5: `<span class="p">></span> fix the reminder schedule in the bot
+
+<span class="tool">● Edit</span>(bot/schedule.py)
+
+<span class="dim">✻ Working… (esc to interrupt)</span>`,
+  t6: `${promptLine("~")} <span class="cursor"></span>`,
+};
+const SEED = {
+  tabs: {
+    t1: { title: "Claude · spec", agent: true, state: "waiting", cwd: "~/Dev/self-projects/tarn", pinned: true },
+    t2: { title: "Claude · review", agent: true, state: "working", cwd: "~/Dev/self-projects/tarn" },
+    t3: { title: "git · tarn", agent: false, cwd: "~/Dev/self-projects/tarn" },
+    t4: { title: "ssh prod", agent: false, cwd: "root@prod:~", manual: true },
+    t5: { title: "Claude · bot", agent: true, state: "working", cwd: "~/Dev/Galera" },
+    t6: { title: "~", agent: false, cwd: "~" },
+  },
+  wss: [
+    { id: "w1", name: "tarn", folder: "~/Dev/self-projects/tarn", tabs: ["t1", "t2", "t3", "t4"] },
+    { id: "w2", name: "galera", folder: "~/Dev/Galera", tabs: ["t5"] },
+    { id: "w0", name: "Default", folder: null, tabs: ["t6"] },
+  ],
+  cur: "t1",
+};
 
 // ---- state ----
 // Documents are shared, as files on disk are. Each sidebar tab has its own layout:
@@ -369,13 +417,34 @@ let seq = 0;
 const nid = p => p + (++seq);
 const newViewer = tree => ({ type: "viewer", id: nid("v"), tabs: [], active: -1, tree, sel: null, scroll: {}, modeOf: {} });
 const newTerm = n => ({ type: "term", id: nid("t"), n });
-const layouts = TABS.map(() => { const t = newTerm(0); return { root: { type: "block", id: nid("b"), root: t }, focus: t.id, lastViewer: null, terms: 1 }; });
-let cur = 0, drag = null;
+const newLayout = () => { const t = newTerm(0); return { root: { type: "block", id: nid("b"), root: t }, focus: t.id, lastViewer: null, terms: 1 }; };
+// Workspaces and tab membership persist across reloads, as tarn keeps them across restarts;
+// the layout inside a tab comes back through Ghostty's window restore in the app.
+const STORE = "tarn-mockup-workspaces-v1";
+let tabs = {}, wss = [], cur = null, drag = null, tabSeq = 10;
+function loadState() {
+  let st = null;
+  try { st = JSON.parse(localStorage.getItem(STORE)); } catch (e) { st = null; }
+  if (!st) st = JSON.parse(JSON.stringify(SEED));
+  tabs = {};
+  for (const [id, t] of Object.entries(st.tabs)) tabs[id] = { ...t, id, layout: newLayout() };
+  wss = st.wss;
+  tabSeq = Math.max(10, ...Object.keys(tabs).map(id => +id.slice(1) || 0));
+  cur = tabs[st.cur] ? st.cur : flat()[0] || null;
+}
+function saveState() {
+  const meta = {};
+  for (const [id, t] of Object.entries(tabs)) { const { layout, ...rest } = t; meta[id] = rest; }
+  try { localStorage.setItem(STORE, JSON.stringify({ tabs: meta, wss, cur })); } catch (e) { /* the mockup still works without storage */ }
+}
 
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const isMd = p => p.endsWith(".md");
-const L = () => layouts[cur];
+const L = () => tabs[cur].layout;
+// The workspace of the tab on screen; new tabs from cmd+T go there.
+const W = () => wss.find(w => w.tabs.includes(cur)) || wss[0];
+const wsById = id => wss.find(w => w.id === id);
 const name = p => p.split("/").pop();
 function toast(text) { const el = document.createElement("div"); el.className = "toast"; el.textContent = text; document.body.appendChild(el); setTimeout(() => el.remove(), 1700); }
 
@@ -417,7 +486,7 @@ let undo = null;
 const keepUndo = what => { undo = { tab: cur, state: JSON.stringify(L()), at: Date.now(), what }; };
 function restoreClosed() {
   if (!undo || undo.tab !== cur || Date.now() - undo.at > 5000) { toast("Nothing to undo"); return; }
-  layouts[cur] = JSON.parse(undo.state); toast(`Restored: ${undo.what}`); undo = null; renderWorkspace();
+  tabs[cur].layout = JSON.parse(undo.state); toast(`Restored: ${undo.what}`); undo = null; renderWorkspace();
 }
 const activePath = v => v && v.tabs[v.active] ? v.tabs[v.active].path : null;
 const modeFor = (v, path) => isMd(path) ? (v.modeOf[path] || "rendered") : "code";
@@ -485,13 +554,43 @@ function treeHtml(v) {
 }
 
 // ---- render ----
+const PIN = '<svg class="pin" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>';
+const dotOf = s => s ? `<span class="dot" style="background:${STATE[s].color}" title="${STATE[s].label}"></span>` : "";
+function rollup(w) {
+  let best = null;
+  for (const id of w.tabs) { const s = tabs[id].state; if (s && (!best || STATE[s].rank > STATE[best].rank)) best = s; }
+  return best;
+}
+// Pinned tabs first, then the user's order. cmd+1..9 count tabs down the whole sidebar,
+// collapsed workspaces included, so a number never changes when a group folds.
+const ordered = w => [...w.tabs.filter(id => tabs[id].pinned), ...w.tabs.filter(id => !tabs[id].pinned)];
+const flat = () => wss.flatMap(ordered);
 function renderSidebar() {
-  const row = i => { const t = TABS[i]; return `<button class="tab" role="tab" aria-selected="${i === cur}" data-tab="${i}">${t.agent ? AGENT : TERM_ICON}<span class="t">${t.title}</span>${t.dot ? `<span class="dot" style="background:${t.dot}"></span>` : ""}<span class="key">${t.key}</span></button>`; };
-  $("sidebar").innerHTML = `<div class="group">tarn</div>${row(0)}${row(1)}<div class="sep"></div>${row(2)}`;
-  $("wtitle").textContent = TABS[cur].title;
+  const all = flat();
+  const row = id => {
+    const t = tabs[id], i = all.indexOf(id);
+    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${t.manual ? '<span class="man" title="Added by hand: stays in this workspace whatever its folder">hand</span>' : ""}${t.pinned ? PIN : ""}${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
+  };
+  let h = "";
+  for (const w of wss) {
+    const n = w.tabs.length;
+    // A folded workspace still shows how many tabs it has and its most urgent state.
+    h += `<div class="wsh" data-wsh="${w.id}" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? esc(short(w.folder)) : "no folder"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.folder ? short(w.folder) : "~")}">+</button></div>`;
+    if (!w.collapsed) h += ordered(w).map(row).join("") + (n ? "" : `<div class="wsempty">No tabs</div>`);
+  }
+  h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
+  $("sidebar").innerHTML = h;
+  $("wtitle").textContent = W().name + (cur ? " · " + tabs[cur].title : "");
 }
 function updateTitleButton() { const v = lastViewer(); $("toggleFiles").setAttribute("aria-pressed", String(!!(v && v.tree))); }
 function renderWorkspace() {
+  if (!cur) {
+    const w = W();
+    $("ws").className = "ws";
+    $("ws").innerHTML = `<div class="empty">No tabs in ${esc(w.name)}<br><button class="act" id="emptyNew">New tab in ${esc(w.folder ? short(w.folder) : "~")}</button></div>`;
+    $("toggleFiles").setAttribute("aria-pressed", "false");
+    return;
+  }
   const z = L().zoom && byId(L().zoom);
   $("ws").className = "ws h-" + opt.header;
   $("ws").innerHTML = z ? nodeHtml(z) : nodeHtml(L().root);
@@ -514,9 +613,9 @@ function nodeHtml(n) {
   if (n.type === "split") return `<div class="split ${n.dir}"><div class="pane" style="flex-grow:${n.ratio}">${nodeHtml(n.a)}</div><div class="sdiv ${n.dir}" data-sdiv="${n.id}" role="separator"></div><div class="pane" style="flex-grow:${1 - n.ratio}">${nodeHtml(n.b)}</div></div>`;
   if (n.type === "block") return `<div class="block" data-bid="${n.id}">${nodeHtml(n.root)}</div>`;
   if (n.type === "term") {
-    const t = TABS[cur], main = n.n === 0, agent = main && t.agent;
-    const head = `<div class="tph" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${agent ? AGENT : TERM_ICON}<span class="t" title="Double click to rename">${esc(n.title || (main ? t.title : "zsh · ~/Dev/self-projects/tarn"))}</span>${agent && t.dot ? `<span class="dot" style="background:${t.dot}"></span>` : ""}<button class="ib" data-tclose="${n.id}" title="Close terminal (⌘W)">✕</button></div>`;
-    return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? t.term : shell(n.n + 1)}</div></section>`;
+    const t = tabs[cur], main = n.n === 0, agent = main && t.agent;
+    const head = `<div class="tph" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${agent ? AGENT : TERM_ICON}<span class="t" title="Double click to rename">${esc(n.title || (main ? t.title : "zsh · ~/Dev/self-projects/tarn"))}</span>${agent ? dotOf(t.state) : ""}<button class="ib" data-tclose="${n.id}" title="Close terminal (⌘W)">✕</button></div>`;
+    return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? (SEED_TERM[t.id] || shell(1, t.cwd)) : shell(n.n + 1, t.cwd)}</div></section>`;
   }
   return viewerHtml(n);
 }
@@ -660,7 +759,103 @@ function agentEdit() {
   viewers().filter(x => activePath(x) === path).forEach(x => { rerenderViewer(x); setTimeout(() => { const el = document.querySelector(`#vc-${x.id} .doc, #vc-${x.id} .codeview, #vc-${x.id} textarea`); if (el) el.classList.add("flash"); }, 80); });
   toast("The agent changed the file: open tabs updated, scroll kept");
 }
-function switchTab(i) { if (i === cur) return; cur = i; renderSidebar(); renderWorkspace(); }
+function selectTab(id) {
+  const w = wss.find(x => x.tabs.includes(id));
+  if (w.collapsed) w.collapsed = false;
+  cur = id; saveState(); renderSidebar(); renderWorkspace();
+}
+// The workspace whose folder holds the path; nested folders go to the most specific one.
+function wsForPath(cwd) {
+  let best = null;
+  for (const w of wss) if (w.folder && (cwd === w.folder || cwd.startsWith(w.folder + "/")) && (!best || w.folder.length > best.folder.length)) best = w;
+  return best;
+}
+function addTab(w, t) {
+  const id = "t" + (++tabSeq);
+  tabs[id] = { id, layout: newLayout(), agent: false, ...t };
+  w.tabs.push(id);
+  return id;
+}
+function newTab(w = W()) {
+  const cwd = w.folder || "~";
+  w.collapsed = false;
+  cur = addTab(w, { title: "zsh · " + short(cwd), cwd });
+  saveState(); renderSidebar(); renderWorkspace();
+}
+function removeFromWs(id) {
+  const w = wss.find(x => x.tabs.includes(id)); if (w) w.tabs = w.tabs.filter(x => x !== id);
+}
+// Move a tab to a workspace, before another tab or at the end.
+function moveTab(id, to, before = null) {
+  const w = wsById(to), from = wss.find(x => x.tabs.includes(id));
+  if (!w) return;
+  removeFromWs(id);
+  const at = before ? w.tabs.indexOf(before) : -1;
+  if (at >= 0) w.tabs.splice(at, 0, id); else w.tabs.push(id);
+  if (from !== w) {
+    // Dropped into the workspace of its own folder: it follows the folder again.
+    tabs[id].manual = wsForPath(tabs[id].cwd) !== w;
+    w.collapsed = false;
+    toast(`Moved to ${w.name}`);
+  }
+  saveState(); renderSidebar(); renderWorkspace();
+}
+function closeSidebarTab(id) {
+  const next = flat()[flat().indexOf(id) + 1] || flat()[flat().indexOf(id) - 1] || null;
+  removeFromWs(id); delete tabs[id];
+  if (cur === id) cur = next;
+  saveState(); renderSidebar(); renderWorkspace();
+}
+function newWorkspace() {
+  const name = prompt("Workspace name");
+  if (!name || !name.trim()) return;
+  const folder = (prompt("Folder (optional): tabs opened in it join this workspace", "") || "").trim().replace(/\/$/, "") || null;
+  const w = { id: "w" + Date.now(), name: name.trim(), folder, tabs: [] };
+  wss.splice(wss.length - 1, 0, w);
+  // Creating it with a folder pulls in open tabs from that folder once; later a cd never moves a tab.
+  let pulled = 0;
+  if (folder) for (const x of wss) if (x !== w) for (const id of [...x.tabs]) if (!tabs[id].manual && wsForPath(tabs[id].cwd) === w) { removeFromWs(id); w.tabs.push(id); pulled++; }
+  if (pulled) toast(`${pulled} open tab${pulled === 1 ? "" : "s"} from ${short(folder)} joined ${w.name}`);
+  saveState(); renderSidebar(); renderWorkspace();
+}
+function renameWorkspace(id) {
+  const w = wsById(id), name = prompt("Workspace name", w.name);
+  if (name && name.trim()) { w.name = name.trim(); saveState(); renderSidebar(); }
+}
+function deleteWorkspace(id) {
+  const w = wsById(id), def = wsById("w0");
+  if (!w || w === def || !confirm(`Delete workspace ${w.name}? Its ${w.tabs.length} tab(s) move to Default.`)) return;
+  for (const t of w.tabs) { def.tabs.push(t); tabs[t].manual = false; }
+  def.collapsed = false;
+  wss = wss.filter(x => x !== w);
+  saveState(); renderSidebar(); renderWorkspace();
+}
+// Mock of `tarn new` from an agent: the tab joins the workspace of its folder.
+function agentOpensTab() {
+  const cwd = "~/Dev/Galera", w = wsForPath(cwd) || W();
+  addTab(w, { title: "Claude · tests", agent: true, state: "waiting", cwd });
+  toast(`New agent tab went to workspace ${w.name}`);
+  saveState(); renderSidebar();
+}
+function showMenu(items, x, y) {
+  closeMenu();
+  const m = document.createElement("div");
+  m.className = "ctx"; m.id = "ctx"; m.innerHTML = items.join("");
+  m.style.left = Math.min(x, innerWidth - 230) + "px"; m.style.top = Math.min(y, innerHeight - 34 * items.length) + "px";
+  document.body.appendChild(m);
+}
+function tabMenu(id, x, y) {
+  const t = tabs[id], here = wss.find(w => w.tabs.includes(id)), home = wsForPath(t.cwd);
+  showMenu([`<button data-mpin="${id}">${t.pinned ? "Unpin" : "Pin to top"}</button>`]
+    .concat(wss.filter(w => w !== here).map(w => `<button data-mmove="${id}" data-to="${w.id}">Move to ${esc(w.name)}</button>`))
+    .concat(t.manual && home && home !== here ? [`<button data-mmove="${id}" data-to="${home.id}">Back to ${esc(home.name)} (its folder)</button>`] : [])
+    .concat([`<button data-tabclose="${id}">Close tab</button>`]), x, y);
+}
+function wsMenu(id, x, y) {
+  showMenu([`<button data-wsnewtab="${id}">New tab</button>`, `<button data-wsren="${id}">Rename…</button>`]
+    .concat(id === "w0" ? [] : [`<button data-wsdel="${id}">Delete workspace</button>`]), x, y);
+}
+const closeMenu = () => { const m = $("ctx"); if (m) m.remove(); };
 function treeMove(v, delta) {
   const rows = treeRows(), i = Math.max(0, rows.findIndex(r => r.path === v.sel));
   v.sel = rows[Math.min(rows.length - 1, Math.max(0, i + delta))].path;
@@ -676,12 +871,29 @@ function treeEnter(v, path, kind, pin) {
 
 // ---- events ----
 document.addEventListener("click", async e => {
+  if (!e.target.closest("#ctx")) closeMenu();
+  const sb = e.target.closest("[data-tabclose], [data-mpin], [data-mmove], [data-wsdel], [data-wsren], [data-wsnewtab], .wsh[data-wsh], #wsNew, #emptyNew, #agentTab, #resetDemo, .tab[data-tabid]");
+  if (sb) {
+    closeMenu();
+    if (sb.dataset.tabclose) return closeSidebarTab(sb.dataset.tabclose);
+    if (sb.dataset.mpin) { tabs[sb.dataset.mpin].pinned = !tabs[sb.dataset.mpin].pinned; saveState(); return renderSidebar(); }
+    if (sb.dataset.mmove) return moveTab(sb.dataset.mmove, sb.dataset.to);
+    if (sb.dataset.wsdel) return deleteWorkspace(sb.dataset.wsdel);
+    if (sb.dataset.wsren) return renameWorkspace(sb.dataset.wsren);
+    if (sb.dataset.wsnewtab) return newTab(wsById(sb.dataset.wsnewtab));
+    if (sb.dataset.wsh) { const w = wsById(sb.dataset.wsh); w.collapsed = !w.collapsed; saveState(); return renderSidebar(); }
+    if (sb.id === "wsNew") return newWorkspace();
+    if (sb.id === "emptyNew") return newTab();
+    if (sb.id === "agentTab") return agentOpensTab();
+    if (sb.id === "resetDemo") { try { localStorage.removeItem(STORE); } catch (err) { /* ignore */ } return location.reload(); }
+    return selectTab(sb.dataset.tabid);
+  }
+  if (!cur) return;
   const pane = e.target.closest("[data-pid]");
   if (pane && L().focus !== pane.dataset.pid) focusPane(pane.dataset.pid);
   const t = e.target.closest("button, .path, .tr, .ftab, input[type=checkbox]");
   if (!t) return;
   if (t.classList.contains("path")) return openLink(t.dataset.path, +t.dataset.line || null);
-  if (t.dataset.tab) return switchTab(+t.dataset.tab);
   if (t.dataset.close) { e.stopPropagation(); return closeTab(byId(t.dataset.vid), +t.dataset.close); }
   // A click re-renders the element, so a double click is read from e.detail, not from dblclick.
   if (t.classList.contains("ftab")) { const v = byId(t.dataset.vid); v.active = +t.dataset.idx; if (e.detail > 1) v.tabs[v.active].preview = false; return rerenderViewer(v); }
@@ -721,7 +933,16 @@ document.addEventListener("input", e => {
   refreshMarks();
 });
 document.addEventListener("scroll", e => { if (e.target.matches && e.target.matches("textarea[data-src]")) e.target.previousElementSibling.scrollTop = e.target.scrollTop; }, true);
+document.addEventListener("contextmenu", e => {
+  const row = e.target.closest(".tab[data-tabid]"), head = e.target.closest(".wsh[data-wsh]");
+  if (row) { e.preventDefault(); tabMenu(row.dataset.tabid, e.clientX, e.clientY); }
+  else if (head) { e.preventDefault(); wsMenu(head.dataset.wsh, e.clientX, e.clientY); }
+});
 document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeMenu();
+  if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) { e.preventDefault(); const id = flat()[+e.key - 1]; if (id) selectTab(id); return; }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") { e.preventDefault(); return newTab(); }
+  if (!cur) return;
   const p = focused(), inText = e.target.matches && e.target.matches("textarea");
   const isV = p && p.type === "viewer";
   if (e.metaKey || e.ctrlKey) {
@@ -733,7 +954,6 @@ document.addEventListener("keydown", e => {
     if (k === "enter" && e.shiftKey) return run(() => { L().zoom = L().zoom ? null : L().focus; renderWorkspace(); });
     if (k === "z" && !e.shiftKey && !(isV && inText)) return run(restoreClosed);
     if (k === "b") return run(toggleFiles);
-    if (k >= "1" && k <= "3") return run(() => switchTab(+k - 1));
     if (k === "d") return run(() => {
       if (!isV) return splitTerm(p, e.shiftKey ? "bottom" : "right");
       const tab = p.tabs[p.active]; if (!tab) return;
@@ -767,6 +987,7 @@ function edgeOf(el, x, y) {
   return { edge, zone: edge === fx ? "left" : edge === 1 - fx ? "right" : edge === fy ? "top" : "bottom" };
 }
 function dropTarget(e) {
+  if (drag && drag.tabRow) return null;
   const vp = e.target.closest(".vpane"), tp = e.target.closest(".tpane");
   if (drag && drag.term) {
     if (vp) return { el: vp, id: vp.dataset.pid, zone: "center", deny: "Terminals stay in the terminal block" };
@@ -846,6 +1067,27 @@ document.addEventListener("dragend", e => {
   if (drag && out && (drag.term || drag.vid)) toast(drag.term ? "Terminal moves to a new window" : "File opens in a new window");
   drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
 
+document.addEventListener("dragstart", e => {
+  const row = e.target.closest(".tab[data-tabid]"); if (!row) return;
+  drag = { tabRow: row.dataset.tabid };
+  e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn-tab");
+}, true);
+document.addEventListener("dragover", e => {
+  if (!drag || !drag.tabRow) return;
+  document.querySelectorAll(".dropmark").forEach(x => x.classList.remove("dropmark"));
+  const target = e.target.closest(".wsh[data-wsh], .tab[data-tabid]");
+  if (target) { e.preventDefault(); target.classList.add("dropmark"); }
+});
+// Drop on a workspace header: the tab goes to the end of it; on a tab: before that tab.
+document.addEventListener("drop", e => {
+  if (!drag || !drag.tabRow) return;
+  e.preventDefault();
+  const id = drag.tabRow, head = e.target.closest(".wsh[data-wsh]"), row = e.target.closest(".tab[data-tabid]");
+  drag = null;
+  if (head) return moveTab(id, head.dataset.wsh);
+  if (row && row.dataset.tabid !== id) moveTab(id, wss.find(w => w.tabs.includes(row.dataset.tabid)).id, row.dataset.tabid);
+});
+
 // Resize splits on both levels.
 document.addEventListener("pointerdown", e => {
   const sd = e.target.closest(".sdiv");
@@ -863,6 +1105,7 @@ document.addEventListener("pointerdown", e => {
   sd.addEventListener("pointermove", move); sd.addEventListener("pointerup", up); sd.addEventListener("pointercancel", up);
 });
 
+loadState();
 renderSidebar();
 renderWorkspace();
 </script>
