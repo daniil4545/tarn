@@ -2,9 +2,7 @@
 
 ## Purpose
 
-The settings window (Cmd+,) holds tarn's own setting (tab style), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
-
-State of this document: branch `s4-settings` (PR #4). Plan and decisions: `docs/plans/s4-settings.md`.
+The settings window (Cmd+,) holds tarn's own settings (tab style, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
 
 ## Place in the system
 
@@ -37,7 +35,7 @@ Reading: the store writes the file, asks Ghostty to reload, and reads the new ef
 
 ## How it works
 
-State: the window `TarnSettingsController` (single, 640 by 400, Escape closes) with sections Tabs, Appearance, Terminal, Windows, Help. `GhosttyOptionStore.shared` holds the file as last read, errors per option key and the last app config. The catalog `GhosttyOption.all` lists 22 options, each with key, control (toggle, choice, theme, number, slider, text), default in file syntax, section, how Ghostty reads it, and when a change applies (live, new windows, restart).
+State: the window `TarnSettingsController` (single, 640 by 400, Escape closes) with sections Tabs, File Viewer, Appearance, Terminal, Windows, Help. `GhosttyOptionStore.shared` holds the file as last read, errors per option key and the last app config. The catalog `GhosttyOption.all` lists 22 options, each with key, control (toggle, choice, theme, number, slider, text), default in file syntax, section, how Ghostty reads it, and when a change applies (live, new windows, restart).
 
 Load order (`Ghostty.Config.loadConfig`):
 1. `load_file` if a path is given, else `load_default_files`.
@@ -82,13 +80,13 @@ Help: `KeyReference.groups` is a fixed list of actions (Ghostty has no call that
 | `reloadConfig` | `Ghostty/Ghostty.App.swift:144` | apply after a write |
 | `ghosttyConfigDidChange` with `GhosttyConfigChangeKey` | `Ghostty/GhosttyPackage.swift:291`, `Ghostty.App.swift:2450` | read new config |
 | `ghostty_config_get` accessors | `Ghostty.Config.swift` (pattern) | effective values |
-| `keyboardShortcut(for:)`, `keyList` | `Ghostty.Config.swift:114`, `Helpers/Extensions/KeyboardShortcut+Extension.swift:4` | Help keys |
+| `keyboardShortcut(for:)`, `keyList` | `Ghostty.Config.swift`, `Helpers/Extensions/KeyboardShortcut+Extension.swift` | Help keys |
 | `ghostty_config_load_file` | core C API | load our file |
 | Config errors window | Ghostty's own | a rejected line shows there |
 
 ## Insertion points in upstream files
 
-Row 14 of [architecture.md](../architecture.md): `Ghostty.Config.swift`, parameter `tarnFile: URL? = nil` on `loadConfig`, one `TarnConfigFile.load(into:from:)` call after `ghostty_config_load_recursive_files`, and `TarnConfigFile.activeURL()` passed from `init(at:finalize:)`. Row 9 (menu item "Settings...") comes from PR #3.
+Row 14 of [architecture.md](../architecture.md): `Ghostty.Config.swift`, parameter `tarnFile: URL? = nil` on `loadConfig`, one `TarnConfigFile.load(into:from:)` call after `ghostty_config_load_recursive_files`, and `TarnConfigFile.activeURL()` passed from `init(at:finalize:)`. Row 9 is the menu item "Settings...".
 
 ## Invariants and failure rules
 
@@ -103,6 +101,8 @@ Row 14 of [architecture.md](../architecture.md): `Ghostty.Config.swift`, paramet
 | A symlinked file stays a symlink | save resolves the link |
 
 Failures: a rejected line after reload opens Ghostty's configuration errors window and the mark "set in tarn" stays. Limits: CLI flags lose to the tarn file; the three unreadable options show no effective value; `background-blur` with a radius or glass reads as "true".
+
+Catalog choices: `macos-titlebar-style` offers only transparent, native and hidden (`tabs` is removed on purpose). `cursor-style-blink` and `macos-option-as-alt` default to null in Ghostty (the row shows "default (auto)" when unset). `background-opacity` needs a restart, `macos-titlebar-style` applies to new windows, `font-size` does not change a terminal after Cmd+=. Prior art: chlee1001/chostty PR 24 and alxhill/ghostty `ah/config-ui` (both MIT) for the option rows and "set in tarn" with Reset; a side file loaded after the user's config has no analog.
 
 ## Tests
 

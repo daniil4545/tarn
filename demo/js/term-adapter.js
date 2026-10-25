@@ -5,7 +5,7 @@ import { init, Terminal, FitAddon } from "../vendor/ghostty-web/ghostty-web.js";
 const ESC = "\x1b";
 let engine;
 
-// Engine bugs worked around here, found by the slice 0 spike (docs/plans/s5-demo-contracts.md section 2):
+// Engine bugs worked around here, (ghostty-web issues #203, #192, #205, #198, #207, #208):
 //  - Alt+key sends no ESC prefix and Cmd+key leaks its letter to the shell: own keydown handler.
 //  - Shift+Tab sends a plain Tab: own encoding.
 //  - cell metrics are whole CSS pixels, so at fractional DPR cell edges blur into seams:

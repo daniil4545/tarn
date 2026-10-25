@@ -11,13 +11,13 @@ No backend, no build step, no network: ES modules and vendored files only.
 
 | Part | State |
 | --- | --- |
-| Sidebar and agent states | built (PR #3-#5) |
-| Viewer (markdown, mermaid, code, save) | built (PR #3-#5) |
-| Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built (PR #3): Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
-| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built (PR #3): off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
-| Workspaces, splits, layout | built (PR #3-#5) |
-| Settings | built (PR #3-#5) |
-| `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`) | planned: the app only has the socket command that opens a file, and a click on a path does the same. The demo keeps the commands to try the idea and prints "planned: not in the app yet" on `tarn --help` and on the first run of each subcommand |
+| Sidebar and agent states | built |
+| Viewer (markdown, mermaid, code, save) | built |
+| Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built: Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
+| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
+| Workspaces, splits, layout | built |
+| Settings | built |
+| `tarn` CLI | built in the app: `tarn open`, `tarn ls`, `tarn notify`. The demo has `open` and `ls`; `tarn new` (R15, second wave) is planned and prints "planned: not in the app yet" on its first run |
 
 ## Run
 
@@ -47,19 +47,4 @@ Every check runs on the real `index.html` with Chrome (`channel="chrome"`). On a
 
 The viewer bundle is copied from the app by `tools/sync-viewer.sh`; run it after the viewer changes.
 
-## Modules (`demo/js/`)
-
-| Area | Files | App counterpart |
-| --- | --- | --- |
-| Core | `main.js` (boot order), `bus.js`, `state.js`, `storage.js`, `clock.js`, `config.js`, `test-contract.js` | `ControlSocket.swift`, `TarnSettings.swift` |
-| Agent state | `registry.js`, `agent-script.js`, `session-rows.js` | `SessionRegistry.swift` |
-| Terminal | `term-adapter.js` (the only engine importer), `term-pane.js`, `pane-options.js`, `pane-links.js`, `paste-guard.js`, `themes.js`, `seed-screens.js` | Ghostty surface |
-| Shell | `shell/` (line editor, parser, completion), `commands/`, `vfs.js`, `vfs-seed.js` | the shell and the disk |
-| Layout | `layout.js` (pure tree functions), `workspace.js` (only writer), `view.js`, `dnd.js`, `frame.js` | Ghostty `SplitTree`, `SidebarModel` |
-| Chrome | `chrome.js`, `sidebar.js`, `sidebar-drag.js`, `tabs.js`, `tabcard.js`, `tab-status.js`, `find.js`, `palette.js`, `toast.js` | `Sidebar.swift`, `TabCardPopover.swift` |
-| Viewer | `viewer.js`, `viewer-model.js`, `viewer-paths.js`, `viewer-shim.js`; bundle in `viewer/` | `ViewerModel.swift`, `ViewerHost.swift` |
-| Settings | `settings.js`, `settings-data.js`, `settings-effects.js`, `settings-help.js`, `demo-reset.js` | `TarnSettings.swift` |
-| Keys | `keymap.js` (dispatcher), `keys/` (rows as data) | menu key bindings |
-
-Rules: each state part has one writer; other modules send commands on the bus. A pane is created once
-and moved in the DOM, never rebuilt. Details: `js/CONTRACT.md`, `docs/plans/s5-demo.md`.
+The structure of `demo/js/` and its app counterparts: `docs/modules/demo.md`; contracts: `js/CONTRACT.md`.

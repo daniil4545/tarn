@@ -4,7 +4,7 @@
 
 The control socket is the one unix socket through which local processes talk to the running app: agent hooks send state events, and a client can ask the viewer to open a file. It reads one JSON line per connection and can keep the connection open to send an answer back.
 
-State of this document: branch `s2-files`. The `tarn` CLI binary (`hook`, `open`, `ls`, `notify`) does not exist on this branch or on `main`; the socket already accepts `{"cmd":"open"}` for it. Spec: `docs/spec.md` sections 2.2 to 2.5.
+Clients: the hook scripts and the `tarn` CLI (`open`, `ls`, `notify`, [attention.md](attention.md)). Spec: `docs/spec.md` sections 2.2 to 2.5.
 
 ## Place in the system
 
@@ -29,7 +29,8 @@ Reading: the socket knows no protocol. It hands each line and its `Reply` to the
 | In | hook event `{"version":1,"surface":<uuid>,"event":{...}}`, with `"reply":true` for the permission hook | `SessionRegistry.receive` |
 | In | command `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` | `ViewerRouter.handleCommand` |
 | Out | for a permission hook: the decision line, or an empty close | `Reply.send` |
-| Out | for `open`: `{"ok":true}` or `{"ok":false,"error":...}` | `ViewerRouter.handleCommand` |
+| In | commands `ls` and `notify`, see [attention.md](attention.md) | `AttentionCommands.handle` |
+| Out | every command: `{"ok":true,...,"version":1}` or `{"error":"<text>","ok":false,"version":1}`, keys sorted, text without the `tarn: ` prefix (the CLI adds it); error texts: `unsupported version`, `unknown surface`, `empty text`, `unknown command: <name>` | `AttentionCommands.reply`, `failure` |
 
 ## How it works
 
@@ -40,8 +41,10 @@ State: the listening descriptor, a read dispatch source and the serial queue `ta
 3. On a connection, `accept` sets a 1 s receive timeout and reads until a newline, end of data or more than 4 MB.
 4. An empty or oversized read closes the connection; an oversized one is logged.
 5. Otherwise a `Reply` wraps the descriptor and the line goes to the main actor.
-6. The callback first offers the line to `ViewerRouter.handleCommand`; a line without `"cmd":"open"` goes to `SessionRegistry.receive`.
-7. `Reply.send` writes the answer on the socket queue and closes; with an empty line it only closes. A dropped `Reply` closes the connection on deinit. Writes ignore SIGPIPE.
+6. The callback in `SessionRegistry.start` parses the line once. A line that is not a JSON object (junk, invalid UTF-8) gets `{"error":"malformed request",...}`, except a permission hook's line (`"reply":true`), which gets silence (`AttentionCommands.refuse`, `isMalformed`).
+7. The parsed message goes to `ViewerRouter.handleCommand` (`open`), then to `AttentionCommands.handle` (`ls`, `notify`, and an error reply for any other `cmd`); a message without `cmd` goes to `SessionRegistry.receive`.
+8. Before binding, `start` connects to an existing socket file. A live listener (another tarn, or a Debug build next to the installed app) keeps its file: the new app logs it and runs without a socket. A stale file is replaced.
+9. `Reply.send` writes the answer on the socket queue and closes; with an empty line it only closes. A dropped `Reply` closes the connection on deinit. Writes ignore SIGPIPE.
 
 ## Files
 
@@ -75,7 +78,7 @@ Path longer than the `sun_path` limit: bind is skipped and logged.
 
 ## Tests
 
-No Swift test covers the socket itself. Indirect pins: `python3 -I plugin/test/hook_test.py` (clients against a missing app, an app that never reads, garbage, a 200 KB event); `ViewerModelTests.swift` for the open rules. Not verified by a test: the 4 MB cap, the read timeout, mode 0600.
+Swift test: `ControlSocketOwnershipTests` (a live socket is never taken over; in `AttentionCommandsTests.swift`). Indirect pins: `python3 -I plugin/test/hook_test.py` (clients against a missing app, an app that never reads, garbage, a 200 KB event); `ViewerModelTests.swift` for the open rules. Not verified by a test: the 4 MB cap, the read timeout, mode 0600.
 
 ## Extending it
 
@@ -84,4 +87,4 @@ No Swift test covers the socket itself. Indirect pins: `python3 -I plugin/test/h
 | New command | a handler like `ViewerRouter.handleCommand`, called in the `SessionRegistry.start` callback before `receive`; bump or keep `version` |
 | New hook field | `AgentSession.handle` in `SessionRegistry.swift` |
 | Socket path | `ControlSocket.path` and the `sock` line of both hook scripts |
-| `tarn` CLI | new client of this protocol; no change here |
+| `tarn` CLI | `cli/tarn`, see [attention.md](attention.md) |

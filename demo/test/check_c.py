@@ -32,6 +32,8 @@ graph LR
 
 See [the plan](plans/s2-files.md) and [missing](nope.md).
 
+Raw <b>html</b> <img src="raw.png"> stays text.
+
 {FILLER}
 """
 
@@ -54,7 +56,7 @@ def focus_viewer(pg):
     pg.frame_locator(f"{VIEWER} iframe").first.locator(".ftab.on").click()
 
 
-def viewer_checks(pg, base):
+def viewer_checks(pg):
     v = pg.frame_locator(f"{VIEWER} iframe").first
     vis = lambda sel: v.locator(sel).first.is_visible()
     count = lambda sel: v.locator(sel).count()
@@ -71,6 +73,13 @@ def viewer_checks(pg, base):
     check(
         "C1 a path makes a viewer pane, the tree is hidden",
         viewers(pg) == 1 and count(tree) == 0,
+    )
+    # spec: docs/specs/viewer-pane.md 4 - raw HTML inside markdown is escaped.
+    check(
+        "C1a raw HTML in markdown is shown as text",
+        count("#vcontent b") == 0
+        and count("#vcontent img") == 0
+        and "<b>html</b>" in v.locator("#vcontent").inner_text(),
     )
     focus_viewer(pg)
     check("3 the file opens as a preview tab", count(".ftab.preview") == 1)
@@ -157,7 +166,7 @@ def viewer_checks(pg, base):
     cmd(pg, "config.reset", {"key": "window-theme"})
 
     task_checks(pg, v, open_file)
-    key_checks(pg, v, open_file)
+    key_checks(pg, v)
     close_checks(pg, v)
 
 
@@ -207,7 +216,7 @@ def task_checks(pg, v, open_file):
     )
 
 
-def key_checks(pg, v, open_file):
+def key_checks(pg, v):
     pg.evaluate("window.calls.length = 0")
     pg.keyboard.press("Meta+d")
     pg.wait_for_function(
@@ -280,8 +289,7 @@ def settings_checks(pg):
 
     def conf():
         pg.click("#setNav [data-sec='windows']")
-        text = s("#tarnConf").inner_text()
-        return text
+        return s("#tarnConf").inner_text()
 
     def option(key, value):
         pg.fill(f"#g-{key}", str(value))
@@ -525,7 +533,7 @@ def main():
         with app_page(base) as (pg, errors, requests):
             cmd(pg, "vfs.write", {"path": SPEC, "text": SPEC_TEXT, "by": "test"})
             path_checks(pg)
-            viewer_checks(pg, base)
+            viewer_checks(pg)
             settings_checks(pg)
             external = [r for r in requests if not r.startswith(base)]
             check(

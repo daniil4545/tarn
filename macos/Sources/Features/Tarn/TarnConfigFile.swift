@@ -3,7 +3,7 @@ import GhosttyKit
 
 /// The file `~/.config/tarn/ghostty.conf`: Ghostty options changed in the tarn settings window.
 /// It loads after the user's Ghostty config and its `config-file` includes, so its lines win; the
-/// user's own files are never edited (`docs/plans/s4-settings.md` section 2).
+/// user's own files are never edited (`docs/modules/settings.md`).
 ///
 /// The text is kept as lines. `key = value` lines are entries; comments, blank lines and anything
 /// else stay verbatim, so a hand edit survives a save.

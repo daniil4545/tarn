@@ -3,7 +3,7 @@ import Testing
 @testable import Ghostty
 import GhosttyKit
 
-/// The tarn options file: writer, load order and atomic save (`docs/plans/s4-settings.md` section 4).
+/// The tarn options file: writer, load order and atomic save (`docs/modules/settings.md`).
 /// Every test passes its own temp folder as `tarnFile`; the real `~/.config/tarn` is never read.
 @Suite
 struct TarnConfigFileTests {
@@ -154,7 +154,7 @@ struct TarnConfigFileTests {
         var file = TarnConfigFile()
         try file.set("font-family", to: ["", "B"])
         try file.save(to: box.tarn)
-        // font-family is not readable through ghostty_config_get; the C slice checks the effective list.
+        // font-family is not readable through ghostty_config_get; `GhosttyOptionStoreTests` checks the effective list.
         #expect(box.config().errors.isEmpty)
         #expect(TarnConfigFile(parsing: file.text).entries.map(\.value) == ["", "B"])
     }

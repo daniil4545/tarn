@@ -1,4 +1,4 @@
-// window.__tarn: the only way tests read state (docs/plans/s5-demo-contracts.md section 4).
+// window.__tarn: the only way tests read state (demo/js/CONTRACT.md).
 // Read only. Modules that own a view fill `hooks` with their reader.
 import { errors } from "./bus.js";
 import { snapshot } from "./state.js";

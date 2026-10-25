@@ -8,7 +8,7 @@ import WebKit
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
 /// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`. The
 /// split and focus items of the menu reach it first in the responder chain, before the terminal
-/// controller, so Ghostty's split keys work while a viewer holds the keyboard (D8, S14).
+/// controller, so Ghostty's split keys work while a viewer holds the keyboard.
 final class ViewerWebView: WKWebView {
     /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
     /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.

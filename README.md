@@ -6,7 +6,7 @@
 </p>
 
 <p align="center"><b>An agent-first terminal for macOS, built on <a href="https://ghostty.org">Ghostty</a>.</b><br>
-Every tab in a sidebar, grouped by project, with the state of each Claude Code session at a glance.</p>
+Every tab in a sidebar, grouped in workspaces, with the state of each Claude Code session at a glance.</p>
 
 tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty project; see
 [NOTICE.md](NOTICE.md).
@@ -15,8 +15,8 @@ tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty pro
 
 Ghostty keeps rendering, input, splits and config. tarn adds:
 
-- **Sidebar.** A vertical tab list in place of the tab bar, with tabs grouped in workspaces. A tab
-  running `claude`, `codex` or `opencode` joins the group of its project.
+- **Sidebar.** A vertical tab list in place of the tab bar. Tabs sit in workspaces you name, folded
+  or open; a tab running `claude`, `codex` or `opencode` shows the agent's icon.
 - **File viewer.** A click on a path in the terminal opens the file in a pane beside it: markdown
   rendered, mermaid diagrams, highlighted code, an editor with save, live reload when an agent
   rewrites the file.
@@ -42,8 +42,8 @@ Taken from the [browser demo](#try-the-demo) of the tarn window (dark theme).
 
 `demo/` is a static page that shows the tarn window in a browser: a real terminal emulator per pane,
 a simulated shell and a scripted `claude` session. It is a preview of the interface, not the app;
-it also holds the planned `tarn` commands, marked as planned. Nothing is published or hosted. Run it
-locally:
+it also has `tarn new`, a command of the second wave, marked as planned. Nothing is published or
+hosted. Run it locally:
 
 ```sh
 python3 -m http.server 8000 --directory demo
@@ -54,18 +54,39 @@ planned parts: [demo/README.md](demo/README.md).
 
 ## Stage
 
-Preview [`tarn-v0.0.1`](https://github.com/daniil4545/tarn/releases/tag/tarn-v0.0.1), built from
-source, has the sidebar, agent groups, state dots and the card. The viewer, workspaces and the
-settings window (PRs #3-#5) and the demo (PR #6) are not in that release. Not in yet: `tarn` CLI,
-notifications, own app name and icon. The app still builds as `Ghostty.app`.
+`tarn-v1.0.0`: the first wave. What works:
 
-## Quick start
+- a vertical sidebar with workspaces; a tab running `claude`, `codex` or `opencode` shows the
+  agent's icon, and Claude Code state shows as a colored dot with a card that answers a permission
+  request or a question with one click;
+- a file viewer next to the terminal: markdown with mermaid, source view, editing, a files tree;
+- a settings window with Ghostty options and a Help page of keys;
+- one notification per need of an agent, and cmd+U to jump to the session that waits for you;
+- the `tarn` command for agents: `tarn open`, `tarn ls`, `tarn notify`;
+- its own app, `Tarn.app`, next to Ghostty.
+
+Next: the second wave of `docs/spec.md` (hand-over between sessions, `tarn run`, subagents).
+
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/daniil4545/tarn/main/install.sh | sh
+```
+
+The script downloads the latest release, checks its checksum and puts `Tarn.app` into
+`/Applications`. The build is ad-hoc signed, not notarized; installing by hand needs one `xattr`
+command, see the guide. Tarn installs next to Ghostty and reads the same config. Full steps, the Claude Code plugin, zsh
+setup and upgrades: [docs/install.md](docs/install.md).
+
+## Build from source
 
 Requirements: macOS, Xcode and Zig as listed in [HACKING.md](HACKING.md), [Nushell](https://www.nushell.sh)
 for the build script, Claude Code for agent state.
 
+`zig build run` is not used on macOS (it looks for `Ghostty.app`).
+
 1. Build the app: `macos/build.nu --configuration Debug --action build`
-2. Open `macos/build/Debug/Ghostty.app`.
+2. Open `macos/build/Debug/Tarn.app`.
 3. Add the plugin: `claude plugin marketplace add <path to this repo>/plugin`, then
    `claude plugin install tarn@tarn`.
 4. Start `claude` in a tab of the app: its dot turns blue while it works.
@@ -76,10 +97,16 @@ Tests: `macos/build.nu --action test`; hook contract: `python3 -I plugin/test/ho
 
 | Question | Where |
 |---|---|
+| how to install, upgrade, add the plugin and set up zsh | [docs/install.md](docs/install.md) |
 | what tarn is for and why it is built this way | [docs/spec.md](docs/spec.md) |
+| how windows, workspaces and layout behave | [docs/specs/windows-workspaces.md](docs/specs/windows-workspaces.md) |
+| how the viewer pane behaves | [docs/specs/viewer-pane.md](docs/specs/viewer-pane.md) |
 | how it is built and where things live | [docs/architecture.md](docs/architecture.md) |
+| how one part works | [docs/modules/](docs/modules/), one file per module |
+| what the browser demo shows, how to run and test it | [demo/README.md](demo/README.md) |
 | what changed in each release | [CHANGELOG.md](CHANGELOG.md) |
 | ported code and its licenses | [THIRD_PARTY.md](THIRD_PARTY.md) |
+| the Ghostty trademark notice | [NOTICE.md](NOTICE.md) |
 | building and hacking on the Ghostty base | [HACKING.md](HACKING.md) |
 
 ## License

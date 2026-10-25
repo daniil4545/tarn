@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 extension NSPasteboard.PasteboardType {
-    /// Private drag payloads of the sidebar (C10). They need no `Info.plist` entry: both ends
+    /// Private drag payloads of the sidebar. They need no `Info.plist` entry: both ends
     /// are AppKit views of this process, like Ghostty's `SurfaceDragSourceView`.
     static let tarnTab = NSPasteboard.PasteboardType("com.daniil4545.tarn.tab")
     static let tarnWorkspace = NSPasteboard.PasteboardType("com.daniil4545.tarn.workspace")
@@ -26,7 +26,7 @@ enum SidebarDragKind: Equatable {
     }
 }
 
-/// The gap a drop would land in (S7 to S9).
+/// The gap a drop would land in.
 enum SidebarDropSlot: Equatable {
     /// Before a tab row, in that row's workspace.
     case beforeTab(TabKey)

@@ -4,7 +4,7 @@ import Testing
 import WebKit
 @testable import Ghostty
 
-/// Tab rules, path resolution and document conflicts of the viewer pane (`docs/plans/s2-files.md`).
+/// Tab rules, path resolution and document conflicts of the viewer pane (`docs/modules/viewer.md`).
 @Suite
 struct ViewerTabsTests {
     @Test func nextOpenReplacesThePreviewTab() {
@@ -680,9 +680,8 @@ struct ViewerClickAndKeyTests {
     }
 }
 
-/// The one pane key, Cmd+B, over the states of the pane (user decision 2026-10-25, PR #3 comment
-/// 6396372910): no pane, hidden, shown with no file, shown with files. Cmd+B opens and hides and
-/// never closes; Cmd+W closes. Test-change: replaces the tests of the earlier three-key scheme.
+/// The one pane key, Cmd+B, over the states of the pane: no pane, hidden, shown with no file,
+/// shown with files. Cmd+B opens and hides and never closes; Cmd+W closes.
 @Suite
 @MainActor
 struct ViewerPaneKeyTests {

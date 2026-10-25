@@ -3,8 +3,7 @@
 tarn is an unofficial fork of [Ghostty](https://github.com/ghostty-org/ghostty). It is not
 affiliated with or endorsed by the Ghostty project. "Ghostty" and the Ghostty icon are trademarks
 of the Ghostty project; tarn mentions Ghostty only to credit it and to describe where its code
-comes from. Until the app gets its own name and icon, a build from this repository is still
-named `Ghostty.app`; such builds are previews and are not distributed as Ghostty.
+comes from. The app is named `Tarn.app` and has its own icon and bundle id; it is not distributed as Ghostty.
 
 ## License
 

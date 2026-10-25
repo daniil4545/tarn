@@ -76,7 +76,7 @@ struct AreaDropTarget: Equatable {
     let refusal: String?
 }
 
-/// The drop zones of `docs/plans/windows-workspaces.md` section 3a, checked first to last: corner, strip,
+/// The drop zones of `docs/specs/windows-workspaces.md` section 3a, checked first to last: corner, strip,
 /// the middle of a viewer, elsewhere in a pane, the pane itself. Pure math; the overlay draws it.
 enum AreaDrop {
     static let corner: CGFloat = 48

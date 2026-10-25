@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The workspace model: delete (D13), last tab (D12), snapshot (C9).
+/// The workspace model: delete, last tab, snapshot.
 @Suite
 struct WorkspaceSetTests {
     private let a = Workspace(name: "A")

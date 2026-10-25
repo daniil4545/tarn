@@ -2,7 +2,8 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The sidebar's workspace groups: the state a header shows, and where a drop lands (S7 to S9, S23).
+/// The sidebar's workspace groups: the state a header shows, and where a drop lands
+/// (scenarios S7 to S9 and S23 of `docs/specs/windows-workspaces.md`).
 @Suite
 struct SidebarGroupingTests {
     private func tab(_ index: Int, agent: AgentSession? = nil) -> SidebarModel.Tab {
@@ -110,7 +111,7 @@ struct SidebarGroupingTests {
         #expect(slot == (beforeB ? .beforeWorkspace(groups[1].id) : .beforeWorkspace(groups[2].id)))
     }
 
-    // spec: S9. The empty sidebar below the last row takes drops after everything.
+    // spec: docs/specs/windows-workspaces.md S9. The empty sidebar below the last row takes drops after everything.
     @Test func belowTheLastRowAWorkspaceGoesToTheEndAndATabToTheLastWorkspace() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: groups) == .end)

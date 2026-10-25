@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// S7: where a dragged tab lands among the other tabs of its window.
+/// Where a dragged tab lands among the other tabs of its window.
 @Suite
 struct MoveTabTests {
     private let t = (0..<5).map { _ in TabKey() }

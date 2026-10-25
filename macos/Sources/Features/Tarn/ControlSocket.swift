@@ -22,12 +22,20 @@ final class ControlSocket {
         self.onLine = onLine
     }
 
-    /// Binds the socket, replacing a stale file. Failure is logged; the app runs without it.
-    func start() {
-        let path = Self.path
+    /// True when `start` bound the socket.
+    var isBound: Bool { source != nil }
+
+    /// Binds the socket, replacing a stale file. A file with a live listener (another tarn
+    /// or a Debug build next to the installed app) is left alone and the app runs without
+    /// a socket. Failure is logged too.
+    func start(path: String = ControlSocket.path) {
         try? FileManager.default.createDirectory(
             atPath: (path as NSString).deletingLastPathComponent,
             withIntermediateDirectories: true)
+        if Self.hasListener(path) {
+            Self.logger.error("another app listens on the control socket; this one runs without it")
+            return
+        }
         unlink(path)
 
         fd = socket(AF_UNIX, SOCK_STREAM, 0)
@@ -54,6 +62,23 @@ final class ControlSocket {
         source.setEventHandler { [weak self] in self?.accept() }
         source.resume()
         self.source = source
+    }
+
+    /// True when a process accepts connections on the socket file `path`.
+    static func hasListener(_ path: String) -> Bool {
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        guard path.utf8.count < MemoryLayout.size(ofValue: addr.sun_path) else { return false }
+        let probe = socket(AF_UNIX, SOCK_STREAM, 0)
+        guard probe >= 0 else { return false }
+        defer { close(probe) }
+        withUnsafeMutableBytes(of: &addr.sun_path) { $0.copyBytes(from: path.utf8) }
+        let result = withUnsafePointer(to: &addr) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                connect(probe, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        return result == 0
     }
 
     private func accept() {

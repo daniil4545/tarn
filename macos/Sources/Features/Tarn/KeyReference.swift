@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The keys Help lists. Ghostty has no call that lists all bindings, so this is a fixed list of
-/// actions; Ghostty gives the trigger in effect for each one (`docs/plans/s4-settings.md` 1.3).
+/// actions; Ghostty gives the trigger in effect for each one (`docs/modules/settings.md`).
 /// Actions bound with `performable` (undo, redo, clear_screen, start_search, navigate_search) get no
 /// trigger from Ghostty, and the main menu has no key for them either (`MainMenu.xib`), so
 /// those rows carry the Ghostty default keys; a `keybind` change for them is not visible.

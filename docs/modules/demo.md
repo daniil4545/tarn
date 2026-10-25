@@ -4,7 +4,7 @@
 
 The demo is a static site that shows the tarn window in a browser: a real terminal emulator per pane, a simulated shell, a scripted `claude` session with the permission card, workspaces, splits, drag-and-drop zones, the viewer and the settings window. It is the storefront before download and the place where a UI step is drawn and approved before it is built in the app ("Demo first", `.claude/CLAUDE.md`). It has no backend, no build step and no network: ES modules and vendored files only.
 
-State of this document: branch `s5-demo`. Plan: `docs/plans/s5-demo.md`; module contracts: `demo/js/CONTRACT.md`.
+Module contracts: `demo/js/CONTRACT.md`. Run, tests and the built-versus-planned list: `demo/README.md`.
 
 ## Place in the system
 
@@ -43,7 +43,7 @@ Reading: modules talk through the bus (commands and events); each state part has
 
 Boot (`main.js`): register state parts, load storage, build the registry, workspaces and layout, create panes, install keys.
 
-State: `state.js` gives `register(part, initial)` once per part and returns the only setter; `read` and `snapshot` return frozen data. Parts: `workspaces` (`workspace.js`), `registry` (`registry.js`), `config` (`config.js`). Other modules send commands on the bus (`bus.cmd`) and listen to events (`bus.on`); a failing command is caught, logged and toasted.
+State: `state.js` gives `register(part, initial)` once per part and returns the only setter; `read` and `snapshot` return frozen data. Parts: `workspaces` (`workspace.js`), `registry` (`registry.js`), `config` (`config.js`), `vfs` (`vfs.js`). Other modules send commands on the bus (`bus.cmd`) and listen to events (`bus.on`); a failing command is caught, logged and toasted.
 
 Layout: `layout.js` holds pure tree functions (split, close, move, zones); `workspace.js` is the only writer of the tab and layout state; `view.js` draws it. A pane is created once and moved in the DOM, never rebuilt, so a terminal keeps its screen across splits, undo and tab switches. A tab that is not current is hidden; a hidden tab that holds a viewer keeps its layout (`visibility`) because mermaid measures its diagram while it draws and returns NaN positions in a frame without a box.
 
@@ -58,18 +58,6 @@ Sync: `tools/sync-viewer.sh` copies the app bundle into `demo/viewer/`, rewrites
 Time: all timers go through `clock.js`, so a test can freeze and advance time.
 
 Keys: rows are data in `keys/*.js`; `keymap.js` runs in the capture phase and matches by `e.code` with `e.key` as fallback (Cyrillic layouts). Browser-reserved chords get a `Ctrl+Alt+<key>` fallback; Help lists both.
-
-## Built vs planned
-
-| Part | State |
-| --- | --- |
-| Sidebar and agent states | built (PR #3-#5) |
-| Viewer (markdown, mermaid, code, save) | built (PR #3-#5) |
-| Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built (PR #3): Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
-| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built (PR #3): off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
-| Workspaces, splits, layout | built (PR #3-#5) |
-| Settings | built (PR #3-#5) |
-| `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`) | planned: the app only has the socket command that opens a file, and a click on a path does the same. The demo keeps the commands to try the idea and prints "planned: not in the app yet" on `tarn --help` and on the first run of each subcommand |
 
 ## How the demo mirrors the app
 
@@ -108,6 +96,8 @@ The viewer page is the same code in both; the rest is a second implementation of
 | Ghostty split and sidebar behavior (`SplitTree`, undo window, tab restore) | followed in `layout.js`, `workspace.js` | same results for split, close, undo; not the same code |
 
 The engine has no OSC 133 marks, so the shell stores `cursorRow` at each prompt and jumps with `scrollToRow`.
+
+Engine choice: ghostty-web 0.4.0 (MIT) runs the same VT parser as the app; fallback xterm.js 6.0.0 if it fails. The shell is our own (about 600 lines): `just-bash` was rejected (16 dependencies, 21 MB, no line editor). Pipes and redirects print `not supported in the demo`. A tab holds at most 8 panes (the 9th split shows a toast); below 800 px width the page shows a notice.
 
 ## Invariants and failure rules
 

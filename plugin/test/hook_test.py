@@ -122,10 +122,8 @@ def check_stop(socket_path: Path, home: Path) -> str | None:
             hook.terminate()
             code = hook.wait(timeout=3)
             # A sender left behind would print this answer into the dead hook's output.
-            try:
+            with contextlib.suppress(BrokenPipeError):
                 client.sendall(ANSWER)
-            except BrokenPipeError:
-                pass
         late = hook.stdout.read()
         hook.stdout.close()
     socket_path.unlink()

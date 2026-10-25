@@ -193,6 +193,10 @@ function closeLeaf(s, id) {
   if (tree.terminals(tab.layout).length === 1 && tree.isTerm(tree.at(tab.layout, tree.pathOf(tab.layout, id)))) return closeTab(s, tab.id);
   const node = tree.at(tab.layout, tree.pathOf(tab.layout, id));
   keepUndo({ kind: "layout", what: id.startsWith("v") ? "viewer" : "pane", tabId: tab.id, node, seat: tree.seatOf(tab.layout, id), leafIds: [id] });
+  dropLeaf(tab, id);
+}
+
+function dropLeaf(tab, id) {
   tab.layout = tree.remove(tab.layout, id);
   tab.zoom = null;
   // Focus goes back to the terminal block, so cmd+Z (a terminal key) can bring the pane back.
@@ -293,9 +297,7 @@ const COMMANDS = {
     const tab = tabOfLeaf(s, id);
     if (!tab || !id.startsWith("v")) return;
     (tab.hidden ??= []).push({ node: tree.at(tab.layout, tree.pathOf(tab.layout, id)), seat: tree.seatOf(tab.layout, id) });
-    tab.layout = tree.remove(tab.layout, id);
-    tab.zoom = null;
-    if (tab.focus === id) tab.focus = tree.terminals(tab.layout)[0].pane;
+    dropLeaf(tab, id);
   }),
 
   "viewer.show": () => update((s) => {

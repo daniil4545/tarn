@@ -95,3 +95,5 @@ check-file = false
 
 [type.swift.extend-words]
 inout = "inout"
+# mach_timebase_info_data_t field
+numer = "numer"

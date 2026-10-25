@@ -2,10 +2,10 @@ import AppKit
 import SwiftUI
 
 /// The drop surface over a tab with viewers: it shows the frame of the zone under the pointer
-/// and carries out the drop (`docs/plans/windows-workspaces.md` section 3a). It answers `hitTest`
+/// and carries out the drop (`docs/specs/windows-workspaces.md` section 3a). It answers `hitTest`
 /// only where the zones are ours (`AreaDrop.target` is not nil) and only during a drag, so clicks
 /// and Ghostty's own drops in the terminal block (`TerminalSplitTreeView.swift`, `onDrop`) pass
-/// through (C10).
+/// through.
 struct AreaDropOverlay: NSViewRepresentable {
     let host: ViewerHost
 

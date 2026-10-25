@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a closed tab leaves behind so an undo can put it back where it was (S15 to S18): its
+/// What a closed tab leaves behind so an undo can put it back where it was: its
 /// workspace and place, the surfaces it held and its viewers.
 struct WorkspaceTombstone {
     let closed: WorkspaceBook.ClosedTab

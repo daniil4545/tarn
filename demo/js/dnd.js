@@ -1,4 +1,4 @@
-// Drop zones for panes, viewers and files (docs/plans/windows-workspaces.md section 3a).
+// Drop zones for panes, viewers and files (docs/specs/windows-workspaces.md section 3a).
 // A frame shows the space the dragged thing will take. Zones, first match wins: a corner of the
 // tab area, a strip at its edge, the tab bar or middle of a viewer, the half of a pane.
 // File drags carry JSON in the data-drag attribute: {kind: "file", path, from?: viewerId, idx?}.

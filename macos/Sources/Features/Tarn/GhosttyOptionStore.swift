@@ -4,7 +4,7 @@ import Foundation
 import OSLog
 
 /// The model behind the Ghostty option panes: reads and writes tarn's options file and keeps the
-/// last effective config (`docs/plans/s4-settings.md` section 2).
+/// last effective config (`docs/modules/settings.md`).
 ///
 /// A control change always writes its line, even when the value equals the Ghostty default; only
 /// `reset` removes it. Each write re-reads the file first and changes one key, so a hand edit

@@ -2,7 +2,7 @@ import AppKit
 import OSLog
 
 /// Saves and reads a window's workspace table beside Ghostty's `TerminalRestorableState`,
-/// under its own coder key, so Ghostty's state version stays as it is (C9).
+/// under its own coder key, so Ghostty's state version stays as it is.
 enum WorkspaceRestore {
     static let key = "tarn.workspaces"
 

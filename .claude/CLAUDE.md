@@ -2,7 +2,7 @@
 
 ## Project
 
-tarn is an agent-first terminal for macOS, a fork of Ghostty. It keeps the Ghostty core and app and adds a narrow set of features for working with CLI coding agents, Claude Code first. The user decides; the canon for behavior is `docs/spec.md`, for structure `docs/architecture.md` (created in stage S0). The project is public: code, docs, commits and this file are in English.
+tarn is an agent-first terminal for macOS, a fork of Ghostty. It keeps the Ghostty core and app and adds a narrow set of features for working with CLI coding agents, Claude Code first. The user decides; the canon for behavior is `docs/spec.md`, for structure `docs/architecture.md`. The project is public: code, docs, commits and this file are in English.
 
 `AGENTS.md`, `macos/AGENTS.md` and `Makefile` belong to upstream Ghostty and stay untouched to keep upstream merges clean. `README.md` and `NOTICE.md` are ours, as in other hard forks of Ghostty (Tellurion); on an upstream merge `README.md` keeps our version. Follow their build commands; never open issues or PRs against `ghostty-org/ghostty`.
 
@@ -23,10 +23,16 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | --- | --- |
 | `src/` | Ghostty core (Zig), upstream, not modified |
 | `macos/` | Ghostty macOS app (Swift), upstream |
-| `macos/Sources/Features/Tarn/` | our code: control socket, session registry, sidebar, markdown panel |
+| `macos/Sources/Features/Tarn/` | our code: control socket, session registry, sidebar, workspaces, layout, viewer pane, settings, attention |
 | `macos/Tests/Tarn/` | our tests |
-| `tarn.mk` | our make targets `check` and `bench` |
-| `docs/` | our docs: spec, architecture |
+| `cli/` | the `tarn` command (POSIX sh) and its tests |
+| `plugin/` | Claude Code plugin: hook scripts and the hook test |
+| `demo/` | static browser demo of the window and its checks |
+| `viewer-web/` | sources of the viewer page bundle |
+| `tools/` | GIF capture, viewer bundle sync, benchmark |
+| `install.sh` | the installer `curl ... \| sh` runs |
+| `tarn.mk` | our make targets `check`, `release` and `bench` |
+| `docs/` | our docs: spec, architecture, install guide, module documents |
 
 ## Commands
 
@@ -36,13 +42,16 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | build app | `macos/build.nu --configuration Debug --action build` |
 | app tests | `macos/build.nu --action test` |
 | Swift lint | `swiftlint lint --strict` (in `macos/`) on `Sources/Features/Tarn` and `Tests/Tarn` |
-| shell lint | `shellcheck plugin/hooks/*.sh` |
+| shell lint | `shellcheck plugin/hooks/*.sh install.sh cli/tarn cli/test/install_test.sh` |
 | Python lint | `uvx ruff check` and `uvx ruff format --check` on `plugin/test/` |
 | spelling | `typos` on our files (`git diff --name-only origin/main...HEAD`) |
 | hook invariant | `python3 -I plugin/test/hook_test.py` |
-| acceptance | `make -f tarn.mk check` (stage S0) |
-| benchmark | `make -f tarn.mk bench` (stage S0) |
-| demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e}.py` and `node --test demo/test/unit` (installed Chrome; how to run: `demo/README.md`) |
+| CLI and installer tests | `python3 -I cli/test/cli_test.py`, `sh cli/test/install_test.sh` |
+| viewer bundle | `node --test viewer-web/licenses.test.mjs`, `uv run --with playwright python -I viewer-web/test-mermaid.py` |
+| acceptance | `make -f tarn.mk check` |
+| release build | `make -f tarn.mk release` (ad-hoc signed `dist/tarn-<version>-macos.zip` with `.sha256`) |
+| benchmark | `make -f tarn.mk bench` (report `docs/bench.md`) |
+| demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e,review}.py` and `node --test demo/test/unit` (installed Chrome; how to run: `demo/README.md`) |
 
 ## Workflow
 
@@ -71,7 +80,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 - `src/` is not modified; Swift changes outside `macos/Sources/Features/Tarn/` only at insertion points listed in `docs/architecture.md`.
 - No network calls, telemetry or accounts in our code.
 - Ported code keeps its license header and an entry in `THIRD_PARTY.md`; no GPL, AGPL, BSL or unlicensed code.
-- `tarn hook` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing. The one exception is the `PermissionRequest` hook, which waits for the card while the app holds its connection (`docs/spec.md` 2.3).
+- `hook.sh` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing. The one exception is `permission.sh` (the `PermissionRequest` hook), which waits for the card while the app holds its connection (`docs/spec.md` 2.3).
 - Nothing edits `~/.claude/settings.json`; hooks ship as a Claude Code plugin.
 - No agent command moves focus or presses Enter for the user.
 - The session registry is the only writer of session state.

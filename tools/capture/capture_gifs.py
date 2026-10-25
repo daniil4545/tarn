@@ -13,7 +13,16 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from capture_lib import TAB, focus, open_page, run, server, show_pane, sync_playwright, until  # noqa: E402
+from capture_lib import (
+    TAB,
+    focus,
+    open_page,
+    run,
+    server,
+    show_pane,
+    sync_playwright,
+    until,
+)
 
 OUT = pathlib.Path(__file__).resolve().parents[2] / "docs" / "assets" / "gifs"
 FPS, WIDTH = 12, 960
@@ -46,7 +55,9 @@ def story_permission(pg):
     glide(pg, *center(pg, "#tabcard [data-allow='true']"), steps=12)
     time.sleep(0.4)
     pg.click("#tabcard [data-answer][data-allow='true']")
-    pg.wait_for_function("__tarn.snapshot().registry.p6?.state === 'waiting'", timeout=15000)
+    pg.wait_for_function(
+        "__tarn.snapshot().registry.p6?.state === 'waiting'", timeout=15000
+    )
     time.sleep(1.0)
 
 
@@ -116,7 +127,12 @@ def story_split(pg):
     pg.mouse.down()
     first = terms.nth(0).bounding_box()
     glide(pg, gx - 150, gy + 120, steps=15)
-    glide(pg, first["x"] + first["width"] / 2, first["y"] + first["height"] * 0.85, steps=25)
+    glide(
+        pg,
+        first["x"] + first["width"] / 2,
+        first["y"] + first["height"] * 0.85,
+        steps=25,
+    )
     pg.wait_for_selector("#ws > .drop")
     time.sleep(1.0)
     pg.mouse.up()
@@ -135,12 +151,55 @@ def to_gif(webm, start, name):
     mp4 = OUT / f"{name}.mp4"
     gif = OUT / f"{name}.gif"
     vf = f"fps={FPS},scale={WIDTH}:-1:flags=lanczos"
-    base = ["nice", "-n", "10", "ffmpeg", "-y", "-loglevel", "error", "-ss", f"{start:.2f}", "-t", "12", "-i", str(webm)]
-    subprocess.run(base + ["-vf", f"scale={WIDTH}:-2", "-an", "-pix_fmt", "yuv420p", "-crf", "30", str(mp4)], check=True)
+    base = [
+        "nice",
+        "-n",
+        "10",
+        "ffmpeg",
+        "-y",
+        "-loglevel",
+        "error",
+        "-ss",
+        f"{start:.2f}",
+        "-t",
+        "12",
+        "-i",
+        str(webm),
+    ]
+    subprocess.run(
+        base
+        + [
+            "-vf",
+            f"scale={WIDTH}:-2",
+            "-an",
+            "-pix_fmt",
+            "yuv420p",
+            "-crf",
+            "30",
+            str(mp4),
+        ],
+        check=True,
+    )
     pal = webm.with_suffix(".png")
-    subprocess.run(base + ["-vf", f"{vf},palettegen=max_colors=96", str(pal)], check=True)
-    subprocess.run(base + ["-i", str(pal), "-lavfi", f"{vf} [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=4", str(gif)], check=True)
-    print(name, f"{gif.stat().st_size / 1024:.0f} KB gif", f"{mp4.stat().st_size / 1024:.0f} KB mp4")
+    subprocess.run(
+        base + ["-vf", f"{vf},palettegen=max_colors=96", str(pal)], check=True
+    )
+    subprocess.run(
+        base
+        + [
+            "-i",
+            str(pal),
+            "-lavfi",
+            f"{vf} [x]; [x][1:v] paletteuse=dither=bayer:bayer_scale=4",
+            str(gif),
+        ],
+        check=True,
+    )
+    print(
+        name,
+        f"{gif.stat().st_size / 1024:.0f} KB gif",
+        f"{mp4.stat().st_size / 1024:.0f} KB mp4",
+    )
 
 
 if __name__ == "__main__":

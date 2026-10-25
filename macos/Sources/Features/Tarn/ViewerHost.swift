@@ -194,7 +194,7 @@ final class ViewerHost: ObservableObject {
         return ViewerSnapshot(layout: layout, viewers: viewers)
     }
 
-    /// Brings the viewers of a closed tab back into a tab that has none (undo of S16).
+    /// Brings the viewers of a closed tab back into a tab that has none (undo of a tab close).
     func restore(_ snapshot: ViewerSnapshot) {
         guard panes.isEmpty, let decoded = try? JSONDecoder().decode(AreaTree.self, from: snapshot.layout),
               let block = decoded.block
@@ -255,7 +255,7 @@ final class ViewerHost: ObservableObject {
         guard let pane = panes[id] else { return }
         switch command {
         case let .split(edge):
-            // S14: the file of the viewer opens in a new viewer beside it.
+            // The file of the viewer opens in a new viewer beside it.
             guard let path = pane.model.tabs.activePath else { return }
             let new = makeViewer(root: pane.model.tree.root, beside: pane.leaf, edge: edge, share: 0.5)
             guard new.model.open(OpenTarget(path: path), pin: true) else {
@@ -379,7 +379,7 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
-    /// S14a: a viewer dropped outside every window opens in a new window.
+    /// A viewer dropped outside every window opens in a new window.
     private func detach(_ id: UUID, at point: NSPoint) {
         guard let pane = panes[id], let controller else { return }
         let created = TerminalController.newWindow(controller.ghostty)
@@ -395,15 +395,8 @@ final class ViewerHost: ObservableObject {
 enum ViewerRouter {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
 
-    /// The `open_url` action as it reaches us, for diagnosing a click that does nothing. Debug level;
-    /// the URL is logged only for kind `unknown` (a path), never for links from terminal output.
-    /// Watch: `log stream --level debug --predicate 'subsystem == "tarn" AND category == "viewer"'`.
-    static func trace(kind: String, url: String, surfaceTarget: Bool) {
-        logger.debug("open_url kind=\(kind, privacy: .public) url=\(kind == "unknown" ? url : "-", privacy: .public) surfaceTarget=\(surfaceTarget)")
-    }
-
     /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
-    /// must be explainable from `log stream --predicate 'subsystem == "com.mitchellh.ghostty"'`.
+    /// must be explainable from `log stream --predicate 'subsystem == "tarn"'`.
     enum Decision: Equatable {
         case open(OpenTarget)
         /// A pane that is already open reports the missing file; otherwise the default opener runs.
@@ -461,8 +454,8 @@ enum ViewerRouter {
     }
 
     /// Ghostty's split keys when the terminal block has no target in that direction: the keyboard
-    /// goes to the viewer that lies there (D8). Called from `Ghostty.App.gotoSplit` (insertion
-    /// point 14); true if focus moved, so a performable keybind consumes the key.
+    /// goes to the viewer that lies there. Called from `Ghostty.App.gotoSplit` (insertion
+    /// point 17); true if focus moved, so a performable keybind consumes the key.
     @MainActor
     static func focusNeighbor(from surface: Ghostty.SurfaceView, direction: Ghostty.SplitFocusDirection) -> Bool {
         guard let controller = surface.window?.windowController as? TerminalController else { return false }
@@ -470,41 +463,38 @@ enum ViewerRouter {
     }
 
     /// `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` from the control
-    /// socket. Replies `{"ok":true}` or `{"ok":false,"error":...}`. It opens text files only and
+    /// socket. Replies `{"ok":true,...}` or `{"ok":false,"error":...}` (`AttentionCommands.reply`). It opens text files only and
     /// never moves focus (`docs/spec.md` 2.2 and 2.5). Returns false for lines that are not commands.
     @MainActor
-    static func handleCommand(_ line: Data, reply: ControlSocket.Reply) -> Bool {
-        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-              message["cmd"] as? String == "open"
-        else { return false }
+    static func handleCommand(_ message: [String: Any], reply: ControlSocket.Reply) -> Bool {
+        guard message["cmd"] as? String == "open" else { return false }
         let error = openFromSocket(message)
         if let error {
             logger.info("open refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
         }
-        let answer: [String: Any] = error.map { ["ok": false, "error": $0] } ?? ["ok": true]
-        reply.send((try? JSONSerialization.data(withJSONObject: answer)).map { $0 + Data("\n".utf8) } ?? Data())
+        reply.send(error.map(AttentionCommands.failure) ?? AttentionCommands.reply())
         return true
     }
 
     @MainActor
     private static func openFromSocket(_ message: [String: Any]) -> String? {
-        guard message["version"] as? Int == 1 else { return "tarn: unsupported version" }
-        guard FileViewerSetting.isOn else { return "tarn: the file viewer is off in Settings" }
+        guard message["version"] as? Int == 1 else { return "unsupported version" }
+        guard FileViewerSetting.isOn else { return "the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
-            return "tarn: the path must be absolute"
+            return "the path must be absolute"
         }
         guard let id = (message["surface"] as? String).flatMap(UUID.init(uuidString:)),
               let surface = SessionRegistry.surfaceView(id),
               let controller = surface.window?.windowController as? TerminalController
-        else { return "tarn: unknown surface" }
+        else { return "unknown surface" }
         switch ViewerPaths.classify(path) {
-        case .missing: return "tarn: no such file: \(path)"
-        case .directory, .special: return "tarn: not a file: \(path)"
-        case .system: return "tarn: not a text file: \(path)"
-        case .text where ViewerPaths.isBinary(path): return "tarn: not a text file: \(path)"
+        case .missing: return "no such file: \(path)"
+        case .directory, .special: return "not a file: \(path)"
+        case .system: return "not a text file: \(path)"
+        case .text where ViewerPaths.isBinary(path): return "not a text file: \(path)"
         case .text:
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
-            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
+            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "cannot open: \(path)"
         }
     }
 }

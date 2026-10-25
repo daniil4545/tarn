@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The drop zones of `docs/plans/windows-workspaces.md` section 3a, one case per row, and what a
+/// The drop zones of `docs/specs/windows-workspaces.md` section 3a, one case per row, and what a
 /// drop does to the layout.
 @MainActor
 @Suite

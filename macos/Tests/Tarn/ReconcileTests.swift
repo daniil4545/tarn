@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// C3: following a tab order Ghostty changed. After each case the sidebar rows, top to
+/// Following a tab order Ghostty changed. After each case the sidebar rows, top to
 /// bottom, are the native tabs in order, so cmd+N lands on row N.
 @Suite
 struct ReconcileTests {

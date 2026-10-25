@@ -8,8 +8,8 @@ struct WorkspaceRun {
 }
 
 /// Which workspace every tab window belongs to. The single writer of membership, names and
-/// fold; Ghostty stays the single writer of tab order (`docs/plans/s3-windows-contracts.md`
-/// section 1). The rules live in `WorkspaceBook`; this class maps them onto windows, makes
+/// fold; Ghostty stays the single writer of tab order (`docs/modules/workspaces.md`).
+/// The rules live in `WorkspaceBook`; this class maps them onto windows, makes
 /// the native moves they ask for, and tells restoration and the sidebar about changes.
 @MainActor
 final class WorkspaceRegistry {
@@ -31,7 +31,7 @@ final class WorkspaceRegistry {
     /// Windows raised by `moveNatively`; their key notifications arrive after `isBusy` is over.
     private var hops = KeyHops()
 
-    /// Closed tabs whose undo is still on Ghostty's stack (S15 to S18).
+    /// Closed tabs whose undo is still on Ghostty's stack.
     private let shelf = TombstoneShelf()
     /// Surface ids of every tab window as last seen. A close of a whole window empties the
     /// surface trees before the windows close (`TerminalController.swift:872`), so the ids are
@@ -70,7 +70,7 @@ final class WorkspaceRegistry {
         entries[ObjectIdentifier(window)]?.window === window ? entries[ObjectIdentifier(window)]?.key : nil
     }
 
-    /// The workspace of a tab window (S12 asks for it).
+    /// The workspace of a tab window.
     func workspace(of window: NSWindow) -> Workspace? {
         entries[ObjectIdentifier(window)].flatMap { book.workspace(of: $0.key) }
     }
@@ -149,7 +149,7 @@ final class WorkspaceRegistry {
     // MARK: Tombstones
 
     /// Registers the tombstone in the undo manager of the window, in the same group as
-    /// Ghostty's own close undo (Q11). The closure holds the tombstone, so it expires with
+    /// Ghostty's own close undo. The closure holds the tombstone, so it expires with
     /// Ghostty's undo and we run no timer. Undo runs the last registered action first: ours
     /// only arms the tombstone, Ghostty's action then creates the window, and `claimTombstones`
     /// matches the two.
@@ -182,7 +182,7 @@ final class WorkspaceRegistry {
     }
 
     /// Gives a window that Ghostty's undo created its place back: workspace, run position and
-    /// viewers (S15 to S18).
+    /// viewers.
     private func claimTombstones() {
         guard shelf.armedCount > 0 else { return }
         for window in NSApp.windows where isTab(window) {
@@ -235,7 +235,7 @@ final class WorkspaceRegistry {
 
     // MARK: Sidebar commands
 
-    /// A new tab in `workspace` (S3), after its last tab (D2).
+    /// A new tab in `workspace`, after its last tab.
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
         let tab = key(for: window)
         book.setPendingTarget(workspace, for: tab)
@@ -243,7 +243,7 @@ final class WorkspaceRegistry {
         expirePendingTarget(of: tab)
     }
 
-    /// A new workspace with one new tab (S4). False for a blank name.
+    /// A new workspace with one new tab. False for a blank name.
     @discardableResult
     func createWorkspace(named name: String, from window: NSWindow) -> Bool {
         let tab = key(for: window)
@@ -276,7 +276,7 @@ final class WorkspaceRegistry {
         edit(window) { $0.setCollapsed(workspace, collapsed) }
     }
 
-    /// Deletes the workspace; its tabs move up, or down for the first one (D13).
+    /// Deletes the workspace; its tabs move up, or down for the first one.
     @discardableResult
     func delete(_ workspace: Workspace.ID, in window: NSWindow) -> Bool {
         let order = group(of: window).map(key(for:))
@@ -285,8 +285,8 @@ final class WorkspaceRegistry {
         return deleted
     }
 
-    /// Puts `window` in `workspace`, before `neighbour` or at the end of the workspace
-    /// (S7, S8): membership first, then one native move.
+    /// Puts `window` in `workspace`, before `neighbour` or at the end of the workspace:
+    /// membership first, then one native move.
     func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil) {
         let tab = key(for: window)
         let order = group(of: window).map(key(for:))
@@ -320,7 +320,7 @@ final class WorkspaceRegistry {
         return order.firstIndex(of: tab) ?? others.count
     }
 
-    /// Moves a whole workspace before `other`, or to the end (S9): one native move per tab.
+    /// Moves a whole workspace before `other`, or to the end: one native move per tab.
     func moveWorkspace(_ workspace: Workspace.ID, before other: Workspace.ID?, in window: NSWindow) {
         var order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The layout places any number of viewer panes around the terminal block of one tab, lets the user split, resize, focus and drag them, and replaces the temporary one-pane host of PR #3. The terminal block stays Ghostty's own split tree; the layout treats it as one leaf.
+The layout places any number of viewer panes around the terminal block of one tab, lets the user split, resize, focus and drag them. The terminal block stays Ghostty's own split tree; the layout treats it as one leaf.
 
-State of this document: branch `s3-windows` (PR #5). Behavior: `docs/plans/windows-workspaces.md` section 3a; rules: `docs/plans/s3-windows-contracts.md` section 10. The viewer itself is in [viewer.md](viewer.md).
+Behavior and drop zones: `docs/specs/windows-workspaces.md` section 3a. The viewer itself is in [viewer.md](viewer.md).
 
 ## Place in the system
 
@@ -29,7 +29,7 @@ Reading: `ViewerHost` owns one `AreaTree` per window tab and one pane (model and
 | In | path click or socket open | `ViewerRouter`, `ViewerHost.open` |
 | In | menu split and focus actions while a viewer holds the keyboard (right, left, down, up; previous, next, spatial) | `ViewerWebView` to `ViewerModel.onLayout` |
 | In | Ghostty split keys with no terminal target | `ViewerRouter.focusNeighbor` to `ViewerHost.focusFromBlock` |
-| In | drags: a viewer by its grip, a file tab or tree row from the page, a terminal by Ghostty's grab handle | `ViewerGripView`, `PageFileDrag`, `DraggingSurfaceKey` |
+| In | drags: a viewer by its grip, a file tab or tree row from the page, a terminal by Ghostty's grab handle; private pasteboard types `com.daniil4545.tarn.tab`, `.workspace`, `.viewer` (no `Ghostty-Info.plist` entry); terminal drags keep `.ghosttySurfaceId` | `ViewerGripView`, `PageFileDrag`, `DraggingSurfaceKey` |
 | In | divider moves and equalize | `ViewerHost.resize`, `equalize` |
 | Out | the layout view | `ViewerLayout` |
 | Out | `ViewerSnapshot` (layout JSON, open files of each viewer) for a tombstone; `restore` brings it back | `ViewerHost.snapshot`, `restore` |
@@ -79,7 +79,7 @@ Grip: each viewer pane has a three-dot handle on top (`ViewerGripView`) that dra
 | `TerminalSplitDropZone` | `Features/Splits/TerminalSplitTreeView.swift:194` | nearest-edge zone inside a pane |
 | `DraggingSurfaceKey` | `Ghostty/Surface View/SurfaceDragSource.swift:7` | know a terminal is dragged |
 | `SurfaceDragSourceView` drag pattern | `SurfaceDragSource.swift` | grip drag session |
-| Grab handle, `drag-handle` setting | `Ghostty/Surface View/SurfaceGrabHandle.swift`, `Ghostty/Ghostty.Config.swift:274` | grip look and visibility |
+| Grab handle, `drag-handle` setting | `Ghostty/Surface View/SurfaceGrabHandle.swift`, `Ghostty/Ghostty.Config.swift` | grip look and visibility |
 | Undo manager and `undoExpiration` | `Features/Terminal/BaseTerminalController.swift:113` | close viewer undo |
 | `Ghostty.moveFocus` | `Ghostty/Surface View/SurfaceView.swift:1075` | focus back to a terminal |
 | `TerminalController.newWindow` | `Features/Terminal/TerminalController.swift:254` | viewer dropped outside |
@@ -87,7 +87,7 @@ Grip: each viewer pane has a three-dot handle on top (`ViewerGripView`) that dra
 
 ## Insertion points in upstream files
 
-Row 10 and 12 (carried over from PR #3, see [architecture.md](../architecture.md)); row 17: `Ghostty.App.gotoSplit` joins `isSplit` and `focusTarget` in one guard and, when it fails, returns `ViewerRouter.focusNeighbor`; row 18: `SurfaceGrabHandle` dot opacity 0.6 and 1.0.
+Rows 10 and 12 (see [architecture.md](../architecture.md)); row 17: `Ghostty.App.gotoSplit` joins `isSplit` and `focusTarget` in one guard and, when it fails, returns `ViewerRouter.focusNeighbor`; row 18: `SurfaceGrabHandle` dot opacity 0.6 and 1.0.
 
 ## Invariants and failure rules
 
@@ -101,6 +101,8 @@ Row 10 and 12 (carried over from PR #3, see [architecture.md](../architecture.md
 | Drag state from a page ends with the session | `cancelFileDrag`, `dragEnd` |
 
 Not restored after a relaunch: viewers. Restored by undo of a tab or window: layout and files, not unsaved edits (a close settles them first).
+
+Rejected: an own tree type and viewers inside the terminal tree (its leaves must be `SurfaceView`). Moving the terminal block changes SwiftUI identity and may recreate `TerminalView`; a drop that loses focus is refused. Prior art: no project groups native tabs into named workspaces; cmux `SessionPersistence.swift` (GPL, structure only) shaped the versioned snapshot with safe decode failure.
 
 ## Tests
 

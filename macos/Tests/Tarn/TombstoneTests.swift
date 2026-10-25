@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// C6, C7: a closed tab comes back to its workspace through Ghostty's undo (S15 to S18).
+/// A closed tab comes back to its workspace through Ghostty's undo.
 @MainActor
 @Suite
 struct TombstoneTests {
@@ -47,7 +47,7 @@ struct TombstoneTests {
         #expect(shelf.settle() == 0)
     }
 
-    /// Q11: the tombstone is an action in the same undo group as Ghostty's own, and it runs first
+    /// The tombstone is an action in the same undo group as Ghostty's own, and it runs first
     /// (last registered, first run), so it is armed before Ghostty's action creates the window.
     @Test func theTombstoneActionRunsInGhosttysUndoGroupBeforeGhosttysAction() {
         let manager = ExpiringUndoManager()
@@ -93,7 +93,7 @@ struct TombstoneTests {
         #expect(!manager.canUndo)
     }
 
-    /// S18: closing a window closes its tabs one by one; the undo makes new tabs. The set, the
+    /// Closing a window closes its tabs one by one; the undo makes new tabs. The set, the
     /// names and the places come back, and no empty `Default` appears.
     @Test func aWindowUndoRestoresEveryWorkspaceWithoutAnEmptyDefault() {
         var book = WorkspaceBook()
@@ -120,7 +120,7 @@ struct TombstoneTests {
         #expect(book.set(of: t[4])?.workspaces.count == 2)
     }
 
-    /// S17: the last tab of a workspace closed the workspace; the undo recreates it in its place.
+    /// The last tab of a workspace closed the workspace; the undo recreates it in its place.
     @Test func aTabUndoRecreatesItsClosedWorkspaceAtItsPlace() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])

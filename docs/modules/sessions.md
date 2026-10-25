@@ -17,7 +17,9 @@ flowchart LR
   reg -->|"decision line"| plug
 ```
 
-Reading: the registry is the only writer of session state; `AgentProcess` only names the agent for grouping. Source: `SessionRegistry.swift`, `AgentProcess.swift`, `plugin/hooks/`.
+Reading: the registry is the only writer of session state; `AgentProcess` only names the agent for its icon. Source: `SessionRegistry.swift`, `AgentProcess.swift`, `plugin/hooks/`.
+
+Attention (notifications, jump, `tarn ls` and `notify`) is in [attention.md](attention.md); it adds `agentSessionID`, `note` and `need` to `AgentSession`.
 
 ## Inputs and outputs
 
@@ -108,7 +110,7 @@ Failures: no app or socket means the event is lost and the agent is unaffected. 
 | Suite | Pins |
 |---|---|
 | `AgentSessionTests` (`macos/Tests/Tarn/AgentSessionTests.swift`) | transitions, permission ownership by subagent, background tasks, card allow, deny and question answers, waiting hook lifetime, late prompt, API error, `/clear`, quick answers rule |
-| `AgentProcessTests` (`AgentProcessTests.swift`) | name matching, interpreter scripts, versions, argv reading of a live process, unreadable pid, every agent has name and icon; the same file also holds sidebar title and grouping tests |
+| `AgentProcessTests` (`AgentProcessTests.swift`) | name matching, interpreter scripts, versions, argv reading of a live process, unreadable pid, every agent has name and icon; the same file also holds sidebar title tests |
 | `plugin/test/hook_test.py` | hook never blocks: no surface, no app, silent app, garbage, 200 KB event |
 
 ## Extending it
