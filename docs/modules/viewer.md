@@ -55,7 +55,7 @@ Socket open: same path, but `focus` is false. The host saves the first responder
 
 Disk change: the watcher throttles 0.3 s and re-arms. The model compares size and mtime first; then `ViewerDocument.diskChanged` decides. Clean document: reload and flash. Dirty document: a conflict banner with Take disk or Keep mine, raised once per disk text. Deleted file: the tab keeps its text and Save writes it again. Over 5 MB or non-UTF-8: a notice instead of text.
 
-Save: markdown only. Re-reads the disk first and refuses to overwrite a changed file. The write is atomic, follows a symlink and keeps the file mode. Ticking a task box writes the marker on its source line; it needs a clean, current document.
+Save: any text file (markdown and code; Cmd+E opens the editor for both). Re-reads the disk first and refuses to overwrite a changed file. The write is atomic, follows a symlink and keeps the file mode. Ticking a task box writes the marker on its source line; it needs a clean, current document.
 
 Page process: the web content process may die; the controller reloads the page and `ready` makes the model push everything again. Messages built on an older revision than the model's are dropped.
 
