@@ -125,7 +125,7 @@ function expire(rec) {
 function allowClose(leafIds) {
   const mode = cfg("confirm-close-surface");
   if (mode === "false") return true;
-  const busy = mode === "always" || leafIds.some((id) => panes.get(id)?.busy?.());
+  const busy = mode === "always" || leafIds.some((id) => panes.get(id)?.busy);
   return !busy || confirm("Close and stop the running program?");
 }
 

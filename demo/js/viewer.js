@@ -9,6 +9,7 @@ import { bus } from "./bus.js";
 import { hooks } from "./test-contract.js";
 import { createViewerModel } from "./viewer-model.js";
 import { resolve } from "./viewer-paths.js";
+import { watchDragSource } from "./dnd.js";
 
 const panes = new Map(); // id -> { el, frame, model }
 let fs = null;
@@ -48,6 +49,22 @@ function split({ dir, pane }) {
   if (path) bus.cmd("pane.split", { id: [...panes].find(([, p]) => p === entry)[0], dir, kind: "viewer", path });
 }
 
+// A file tab dropped on a viewer: it leaves the viewer it came from and opens (pinned) in `to`.
+// `drag` is the payload of the tab's data-drag: {kind: "file", path, from, idx}.
+function take({ to, drag }) {
+  const source = panes.get(drag.from);
+  if (drag.from === to || !panes.has(to) || (source && !source.model.closeAt(drag.idx))) return;
+  panes.get(to).model.open({ path: drag.path }, { pin: true });
+}
+
+// A whole viewer dropped on another: its files move there, then it closes.
+function merge({ from, to }) {
+  const source = panes.get(from);
+  if (from === to || !source || !panes.has(to) || !source.model.mayClose()) return;
+  for (const { path } of source.model.state().tabs) panes.get(to).model.open({ path }, { pin: true });
+  bus.cmd("pane.close", { id: from });
+}
+
 // fs: the vfs of vfs.js; root: the folder the tree starts at; home: what `~` means in a path.
 export function startViewer({ fs: files, home: homePath, root: projectRoot }) {
   fs = files;
@@ -56,6 +73,8 @@ export function startViewer({ fs: files, home: homePath, root: projectRoot }) {
   bus.handle("viewer.open", open);
   bus.handle("viewer.cmd", command);
   bus.handle("viewer.split", split);
+  bus.handle("viewer.take", take);
+  bus.handle("viewer.merge", merge);
   bus.on("vfs:changed", ({ path, by }) => {
     for (const [id, { model }] of panes) if (by !== `viewer:${id}`) model.diskChanged(path);
   });
@@ -74,6 +93,19 @@ function forwardKeys(frame) {
     document.dispatchEvent(copy);
     if (copy.defaultPrevented) { e.preventDefault(); e.stopPropagation(); }
   }, true);
+}
+
+// File tabs are drawn by the page. Mark one as draggable when the pointer goes down on it, so the
+// drop zones (dnd.js) see the same data-drag payload as for any other file drag.
+function makeTabsDraggable(frame, id, model) {
+  frame.contentDocument.addEventListener("pointerdown", (e) => {
+    const tab = e.target.closest(".ftab");
+    if (!tab) return;
+    const idx = [...tab.parentElement.querySelectorAll(":scope > .ftab")].indexOf(tab);
+    tab.draggable = true;
+    tab.dataset.drag = JSON.stringify({ kind: "file", path: model.state().tabs[idx].path, from: id, idx });
+  }, true);
+  watchDragSource(frame.contentDocument);
 }
 
 // Same shape as createPane of the terminal: { id, el, focus(), dispose() }.
@@ -104,6 +136,7 @@ export function createViewerPane(id) {
   frame.__host = model.handle;
   frame.addEventListener("load", () => {
     forwardKeys(frame);
+    makeTabsDraggable(frame, id, model);
     frame.contentWindow.addEventListener("focus", () => { focused = id; bus.emit("pane:focused", { pane: id }); });
   });
   frame.src = new URL("../viewer/tarn-viewer.html", import.meta.url).href;

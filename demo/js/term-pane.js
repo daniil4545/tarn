@@ -25,7 +25,7 @@ let vfs;
 let focusedId = null;
 const history = [];
 
-export const getPane = (id) => panes.get(id);
+export const panesReady = () => Promise.all([...panes.values()].map((p) => p.ready));
 
 function startDirectory(cwd) {
   const path = vfs.resolve(HOME, cwd.startsWith("~") ? HOME + cwd.slice(1) : cwd);

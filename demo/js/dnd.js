@@ -12,16 +12,34 @@ const NO_SPLIT = "Split terminals stay together: drag them inside the block";
 
 let drag = null; // {term: id} | {viewer: id} | {file: payload}
 
+function onDragStart(e) {
+  const grip = e.target.closest?.("[data-grip]"), file = e.target.closest?.("[data-drag]");
+  if (grip) drag = grip.dataset.grip.startsWith("v") ? { viewer: grip.dataset.grip } : { term: grip.dataset.grip };
+  else if (file) drag = { file: JSON.parse(file.dataset.drag) };
+  else return;
+  document.body.classList.add("dragging");
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", "tarn");
+}
+
+// A split dropped outside every window opens a new window, as in Ghostty.
+function onDragEnd(e) {
+  const out = e.screenX < window.screenX || e.screenY < window.screenY
+    || e.screenX > window.screenX + outerWidth || e.screenY > window.screenY + outerHeight;
+  if (drag && out) bus.emit("toast", { text: drag.term ? "Terminal moves to a new window" : drag.viewer ? "Viewer moves to a new window" : "File opens in a new window" });
+  drag = null;
+  document.body.classList.remove("dragging");
+  clearFrame();
+}
+
+// Drags that start in another document (the viewer iframe) feed the same zones.
+export function watchDragSource(doc) {
+  doc.addEventListener("dragstart", onDragStart);
+  doc.addEventListener("dragend", onDragEnd);
+}
+
 export function startDnd() {
-  document.addEventListener("dragstart", (e) => {
-    const grip = e.target.closest?.("[data-grip]"), file = e.target.closest?.("[data-drag]");
-    if (grip) drag = grip.dataset.grip.startsWith("v") ? { viewer: grip.dataset.grip } : { term: grip.dataset.grip };
-    else if (file) drag = { file: JSON.parse(file.dataset.drag) };
-    else return;
-    document.body.classList.add("dragging");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", "tarn");
-  });
+  watchDragSource(document);
   document.addEventListener("dragover", (e) => {
     if (!drag) return;
     const target = resolve(e);
@@ -36,14 +54,6 @@ export function startDnd() {
     if (!target || target.deny) return;
     e.preventDefault();
     target.run();
-  });
-  // A split dropped outside every window opens a new window, as in Ghostty.
-  document.addEventListener("dragend", (e) => {
-    const out = e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
-    if (drag && out) bus.emit("toast", { text: drag.term ? "Terminal moves to a new window" : drag.viewer ? "Viewer moves to a new window" : "File opens in a new window" });
-    drag = null;
-    document.body.classList.remove("dragging");
-    clearFrame();
   });
 }
 

@@ -128,13 +128,16 @@ export function createViewerModel({ fs, home, root, ui }) {
   }
 
   function closeTab(index) {
-    if (!tabs[index] || !confirmDiscard(tabs[index].path)) return;
+    if (!tabs[index] || !confirmDiscard(tabs[index].path)) return false;
     const [{ path }] = tabs.splice(index, 1);
     if (index < active) active -= 1;
     else if (index === active) active = Math.min(index, tabs.length - 1);
     docs.delete(path);
     if (tabs.length) pushChrome(); else ui.closePane();
+    return true;
   }
+
+  const mayClose = () => tabs.every((t) => confirmDiscard(t.path));
 
   function save(path) {
     const doc = docs.get(path);
@@ -231,7 +234,7 @@ export function createViewerModel({ fs, home, root, ui }) {
       case "error": console.warn("tarn-demo: viewer page error", body.message, body.at); break;
       case "tab": if (tabs[index]) { active = index; if (pin) tabs[index].preview = false; } pushChrome(); break;
       case "closeTab": closeTab(index); break;
-      case "closePane": if (tabs.every((t) => confirmDiscard(t.path))) ui.closePane(); break;
+      case "closePane": if (mayClose()) ui.closePane(); break;
       case "toggleTree": toggleTree(); break;
       case "hideTree": treeVisible = false; pushChrome(); ui.focus(); break;
       case "treeToggle": if (treeOpen.delete(path) === false) treeOpen.add(path); pushChrome(); break;
@@ -252,6 +255,8 @@ export function createViewerModel({ fs, home, root, ui }) {
     open,
     toggleTree,
     closeActiveTab: () => closeTab(active),
+    closeAt: closeTab,
+    mayClose,
     diskChanged,
     setDark(value) { if (dark !== value) { dark = value; pushChrome(); } },
     state: () => ({
