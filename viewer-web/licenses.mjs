@@ -2,28 +2,28 @@
 // the esbuild metafiles of both bundles (viewer and mermaid) name the packages inside them. A package
 // without a license file, or with a license outside the allowed list, fails the build, so the notice
 // cannot fall behind the bundles.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
-function packageDir(root, name, from) {
-  for (let dir = from; ; dir = dirname(dir)) {
-    const candidate = join(dir, "node_modules", name);
-    if (existsSync(join(candidate, "package.json"))) return candidate;
-    if (dir === root || dirname(dir) === dir) return null;
-  }
-}
-
-/** Package names with code in the output of an esbuild metafile (tree-shaken inputs do not count). */
-export function packagesOfMetafile(metafile) {
-  const names = new Set();
+/**
+ * Directories (relative to the metafile base) of the packages with code in the output of an esbuild
+ * metafile. A package is named by the last `node_modules` segment of the input path, so a nested copy
+ * (`d3-sankey/node_modules/d3-array`) is found as its own package; tree-shaken inputs do not count.
+ */
+export function packageDirsOfMetafile(metafile) {
+  const dirs = new Set();
   for (const output of Object.values(metafile.outputs)) {
     for (const [input, info] of Object.entries(output.inputs)) {
       if (info.bytesInOutput === 0) continue;
-      const match = input.match(/(?:^|\/)node_modules\/((?:@[^/]+\/)?[^/]+)\//);
-      if (match) names.add(match[1]);
+      const marker = "node_modules/";
+      const at = input.lastIndexOf(marker);
+      if (at < 0) continue;
+      const rest = input.slice(at + marker.length).split("/");
+      const name = rest[0].startsWith("@") ? rest.slice(0, 2) : rest.slice(0, 1);
+      dirs.add(input.slice(0, at + marker.length) + name.join("/"));
     }
   }
-  return names;
+  return dirs;
 }
 
 // Packages whose package.json has no license field; the license file was read and checked by hand.
@@ -37,14 +37,11 @@ export function isAllowed(expression) {
     part.split(/\s+AND\s+/).every(id => ALLOWED.includes(id.trim())));
 }
 
-export function licenseNotice(root, metafiles) {
-  const names = new Set(metafiles.flatMap(m => [...packagesOfMetafile(m)]));
-  const dirs = new Map();
-  for (const name of names) {
-    const dir = packageDir(root, name, root);
-    if (dir) dirs.set(dir, JSON.parse(readFileSync(join(dir, "package.json"), "utf8")));
-  }
-  const sections = [...dirs].map(([dir, pkg]) => {
+export function licenseNotice(base, metafiles) {
+  const dirs = new Set(metafiles.flatMap(m => [...packageDirsOfMetafile(m)]));
+  const sections = [...dirs].map(relative => {
+    const dir = join(base, relative);
+    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     const id = `${pkg.name}@${pkg.version}`;
     const license = typeof pkg.license === "string" ? pkg.license : DECLARED[pkg.name] ?? "";
     if (!isAllowed(license)) throw new Error(`${id}: license "${license}" is not on the allowed list ${ALLOWED.join(", ")}`);

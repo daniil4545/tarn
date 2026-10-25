@@ -14,6 +14,7 @@ const { metafile } = await build({
   bundle: true,
   minify: true,
   format: "iife",
+  absWorkingDir: here, // metafile paths are relative to the viewer-web folder
   target: "safari16",
   outfile: join(out, "tarn-viewer.js"),
   legalComments: "eof",
@@ -27,6 +28,7 @@ const { metafile: mermaidMeta } = await build({
   bundle: true,
   minify: true,
   format: "iife",
+  absWorkingDir: here, // metafile paths are relative to the viewer-web folder
   target: "safari16",
   outfile: join(out, "tarn-mermaid.js"),
   legalComments: "none",

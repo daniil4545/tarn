@@ -16,4 +16,4 @@ npm run build
 (`src/elk-stub.js`), because elkjs is EPL-2.0. The page therefore sets `layout: "dagre"`; mermaid 12 defaults to
 elk. The version is pinned in `package.json`. The bundle stays in git on purpose. To upgrade mermaid, change the version, run the commands
 above, commit the new bundle, and update the matching rows in `THIRD_PARTY.md`.
-`build.mjs` also regenerates `tarn-viewer-licenses.txt` from the bundle inputs and the mermaid dependency closure (`licenses.mjs`); it fails if a package has no license file or a license outside the allowed list. `uv run --with playwright python -I viewer-web/test-mermaid.py` renders flowchart, sequence, state, class and er diagrams with the built bundle.
+`build.mjs` also regenerates `tarn-viewer-licenses.txt` from the bundle inputs and the mermaid dependency closure (`licenses.mjs`); it fails if a package has no license file or a license outside the allowed list. `node --test viewer-web/licenses.test.mjs` tests the notice builder. `uv run --with playwright python -I viewer-web/test-mermaid.py` renders flowchart, sequence, state, class and er diagrams with the built bundle.
