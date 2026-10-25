@@ -1,8 +1,8 @@
 """Slice C checks: viewer panes, the settings window, Help. Mockup checks of this area keep their names.
 
 Run: nice -n 10 uv run --with playwright python -I demo/test/check_c.py
-Runs on test/c.html: the slice's modules on a stand-in layout and file set. Names of mockup checks
-that need the real layout or terminal (2, 36, 38-40, S2, S4-S6, S9a) are measured by the final run.
+Runs on the real index.html. The spec of the repository gets a fixture text (tasks, links, a
+diagram, length) written through vfs.write, as an agent's edit would.
 """
 
 import pathlib
@@ -10,21 +10,55 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import Checks, browser_page, server
+from lib import Checks, app_page, cmd, server
 
 check = Checks()
-ROOT = "/home/demo/tarn"
+ROOT = "/Users/daniil/Dev/self-projects/tarn"
 SPEC = f"{ROOT}/docs/spec.md"
+VIEWER = '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
+FILLER = "\n\n".join(f"Paragraph {i} of the spec text, long enough to scroll the page." for i in range(1, 61))
+SPEC_TEXT = f"""# Spec
+
+```mermaid
+graph LR
+  A --> B
+```
+
+- [ ] first task
+- [x] second task
+
+See [the plan](plans/s2-files.md) and [missing](nope.md).
+
+{FILLER}
+"""
+
+
+def vfs_text(pg, path):
+    return pg.evaluate("p => __tarn.snapshot().vfs.files[p].text", path)
+
+
+def viewers(pg):
+    return pg.locator(VIEWER).count()
+
+
+def focus_viewer(pg):
+    """Click the active file tab: keyboard focus goes into the viewer page."""
+    pg.wait_for_function(
+        "[...document.querySelectorAll('.viewer-pane iframe')].every("
+        "(f) => f.contentDocument?.readyState === 'complete' && f.contentWindow.tarn"
+        " && f.contentDocument.querySelector('.ftab.on'))"
+    )
+    pg.frame_locator(f"{VIEWER} iframe").first.locator(".ftab.on").click()
 
 
 def viewer_checks(pg, base):
-    v = pg.frame_locator("iframe")
+    v = pg.frame_locator(f"{VIEWER} iframe").first
     vis = lambda sel: v.locator(sel).first.is_visible()
     count = lambda sel: v.locator(sel).count()
     tree = "#vtree:not([hidden])"
 
     def open_file(path, line=None):
-        pg.evaluate("p => __c.bus.cmd('viewer.open', p)", {"path": path, "line": line})
+        cmd(pg, "viewer.open", {"path": path, "line": line})
 
     def x_of(sel):
         return v.locator(sel).first.bounding_box()["x"]
@@ -33,8 +67,9 @@ def viewer_checks(pg, base):
     v.locator(".mm svg").wait_for(timeout=20000)
     check(
         "C1 a path makes a viewer pane, the tree is hidden",
-        pg.evaluate("__c.paneCount()") == 1 and count(tree) == 0,
+        viewers(pg) == 1 and count(tree) == 0,
     )
+    focus_viewer(pg)
     check("3 the file opens as a preview tab", count(".ftab.preview") == 1)
     open_file("docs/plans/s2-files.md")
     v.locator(".ftab.on", has_text="s2-files.md").wait_for()
@@ -55,7 +90,9 @@ def viewer_checks(pg, base):
     v.locator(".tr[data-path$='/README.md']").click()
     v.locator(".ftab.on", has_text="README.md").wait_for()
     check("8 tree click opens the file, tree stays", vis(tree))
-    for _ in range(3):
+    paths = v.locator(".tr").evaluate_all("els => els.map(e => e.dataset.path)")
+    up = paths.index(f"{ROOT}/README.md") - paths.index(f"{ROOT}/docs/architecture.md")
+    for _ in range(up):
         pg.keyboard.press("ArrowUp")
     pg.keyboard.press("Enter")
     v.locator(".ftab.on", has_text="architecture.md").wait_for()
@@ -94,7 +131,7 @@ def viewer_checks(pg, base):
     v.locator(".cm-content").click()
     pg.keyboard.press("Meta+s")
     v.locator(".ftab.on .dirty").wait_for(state="detached")
-    saved = pg.evaluate("p => __c.files.get(p)", SPEC)
+    saved = vfs_text(pg, SPEC)
     check("32 cmd+S saves", count(".ftab.on .dirty") == 0 and "edited" in saved)
 
     pg.keyboard.press("Meta+e")
@@ -109,10 +146,10 @@ def viewer_checks(pg, base):
     v.locator(".codeview").wait_for()
     check("34 swift opens with the line highlighted", count(".codeview .row.hl") == 1)
 
-    pg.evaluate("__c.bus.cmd('config.set', {key: 'window-theme', value: 'light'})")
+    cmd(pg, "config.set", {"key": "window-theme", "value": "light"})
     v.locator("html[data-theme=light]").wait_for()
     check("35 light viewer theme", count("html[data-theme=light]") == 1)
-    pg.evaluate("__c.bus.cmd('config.reset', {key: 'window-theme'})")
+    cmd(pg, "config.reset", {"key": "window-theme"})
 
     task_checks(pg, v, open_file)
     key_checks(pg, v, open_file)
@@ -121,10 +158,7 @@ def viewer_checks(pg, base):
 
 def agent_write(pg, note):
     """The agent appends a note to the spec, as its hook-driven edit does."""
-    pg.evaluate(
-        "([p, n]) => __c.bus.cmd('vfs.write', {path: p, text: __c.files.get(p) + n, by: 'agent'})",
-        [SPEC, note],
-    )
+    cmd(pg, "vfs.write", {"path": SPEC, "text": vfs_text(pg, SPEC) + note, "by": "agent"})
 
 
 def task_checks(pg, v, open_file):
@@ -132,7 +166,9 @@ def task_checks(pg, v, open_file):
     v.locator(".ftab.on", has_text="spec.md").wait_for()
     v.locator(".doc input[data-line]").first.wait_for()
     v.locator(".doc input[data-line]").first.click()
-    pg.wait_for_function("p => __c.files.get(p).includes('- [x] first task')", arg=SPEC)
+    pg.wait_for_function(
+        "p => __tarn.snapshot().vfs.files[p].text.includes('- [x] first task')", arg=SPEC
+    )
     check("C2 ticking a task box writes the file", True)
 
     v.locator(".doc a", has_text="the plan").click()
@@ -145,26 +181,33 @@ def task_checks(pg, v, open_file):
 
 
 def key_checks(pg, v, open_file):
-    pg.evaluate("__c.splits.length = 0")
+    pg.evaluate("window.calls.length = 0")
     pg.keyboard.press("Meta+d")
+    pg.wait_for_function(
+        "[...document.querySelectorAll('.viewer-pane iframe')].every((f) => f.contentDocument?.readyState === 'complete' && f.contentWindow?.tarn)"
+    )
     pg.keyboard.press("Meta+Shift+d")
-    splits = pg.evaluate("__c.splits")
+    splits = pg.evaluate(
+        "window.calls.filter((c) => c[0] === 'pane.split').map((c) => c[1])"
+    )
     check(
         "C5 cmd+D and shift+cmd+D split the viewer with the open file",
-        [s["dir"] for s in splits] == ["right", "down"]
-        and all(s["kind"] == "viewer" and s["path"].endswith(".md") for s in splits),
+        [x["dir"] for x in splits] == ["right", "down"]
+        and all(x["kind"] == "viewer" and x["path"].endswith(".md") for x in splits)
+        and viewers(pg) == 3,
         str(splits),
     )
+    focus_viewer(pg)
     before = v.locator(".ftab").count()
     pg.keyboard.press("Meta+w")
     pg.wait_for_function(
-        "n => document.querySelector('iframe').contentDocument.querySelectorAll('.ftab').length < n",
+        "n => document.querySelector('.viewer-pane iframe').contentDocument.querySelectorAll('.ftab').length < n",
         arg=before,
     )
     check("C6 cmd+W closes the file tab", v.locator(".ftab").count() == before - 1)
     pg.keyboard.press("Control+Alt+w")
     pg.wait_for_function(
-        "n => document.querySelector('iframe').contentDocument.querySelectorAll('.ftab').length < n",
+        "n => document.querySelector('.viewer-pane iframe').contentDocument.querySelectorAll('.ftab').length < n",
         arg=before - 1,
     )
     check(
@@ -174,13 +217,15 @@ def key_checks(pg, v, open_file):
 
 
 def close_checks(pg, v):
-    while pg.evaluate("__c.paneCount()") == 1 and v.locator(".ftab").count():
+    start = viewers(pg)
+    while viewers(pg) == start and v.locator(".ftab").count():
         pg.keyboard.press("Meta+w")
         pg.wait_for_timeout(150)
-    check(
-        "C8 closing the last file tab closes the pane",
-        pg.evaluate("__c.paneCount()") == 0,
-    )
+    check("C8 closing the last file tab closes the pane", viewers(pg) == start - 1)
+    while viewers(pg):
+        focus_viewer(pg)
+        pg.keyboard.press("Meta+w")
+        pg.wait_for_timeout(150)
     pg.evaluate("document.activeElement.blur()")
     pg.keyboard.press("Meta+b")
     pg.frame_locator("iframe").locator("#vtree:not([hidden])").wait_for()
@@ -188,6 +233,17 @@ def close_checks(pg, v):
         "37 cmd+B with no viewer opens one with the tree",
         pg.frame_locator("iframe").locator("#vtree").is_visible()
         and pg.frame_locator("iframe").locator(".empty").first.is_visible(),
+    )
+
+
+def key_rows(pg):
+    """How many key rows the demo defines: Help lists each once."""
+    return pg.evaluate(
+        """async () => {
+          const names = ['tabs', 'splits', 'find', 'terminal', 'viewer', 'help'];
+          const mods = await Promise.all(names.map((n) => import(`/js/keys/${n}.js`)));
+          return mods.flatMap((m) => Object.values(m).flat()).length;
+        }"""
     )
 
 
@@ -270,7 +326,7 @@ def settings_checks(pg):
     )
     check(
         "S11b Help lists every key row once",
-        s("[data-pane='help'] tr:has(td.src)").count() == 10,
+        s("[data-pane='help'] tr:has(td.src)").count() == key_rows(pg),
     )
     pg.keyboard.press("Escape")
 
@@ -330,9 +386,7 @@ CHANGE = """key => {
 
 
 def effect_checks(pg):
-    cfg = lambda k, v: pg.evaluate(
-        "([k, v]) => __c.bus.cmd('config.set', {key: k, value: v})", [k, v]
-    )
+    cfg = lambda k, v: cmd(pg, "config.set", {"key": k, "value": v})
     theme = lambda: pg.evaluate("document.documentElement.dataset.theme")
     cfg("window-theme", "light")
     light = theme()
@@ -368,7 +422,7 @@ def effect_checks(pg):
     pg.keyboard.press("a")
     hidden = pg.evaluate("getComputedStyle(document.body).cursor")
     # A pointer over a viewer iframe never reaches the page: move it over the settings overlay.
-    pg.evaluate("__c.bus.cmd('settings.open')")
+    cmd(pg, "settings.open")
     pg.mouse.move(40, 40)
     pg.mouse.move(60, 60)
     shown = pg.evaluate("getComputedStyle(document.body).cursor")
@@ -429,8 +483,8 @@ def path_checks(pg):
 
 def main():
     with server() as base:  # noqa: SIM117 (the page needs the server address)
-        with browser_page(base, "test/c.html") as (pg, errors, requests):
-            pg.wait_for_function("document.documentElement.dataset.ready")
+        with app_page(base) as (pg, errors, requests):
+            cmd(pg, "vfs.write", {"path": SPEC, "text": SPEC_TEXT, "by": "test"})
             path_checks(pg)
             viewer_checks(pg, base)
             settings_checks(pg)

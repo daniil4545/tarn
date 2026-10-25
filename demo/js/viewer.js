@@ -122,14 +122,14 @@ export function createViewerPane(id) {
     home,
     root,
     ui: {
-      // A frame moved in the DOM reloads and has no `tarn` until its page says "ready"; the model
+      // A frame moved in the DOM reloads (a detached one has no window) and has no `tarn` until its page says "ready"; the model
       // then sends everything again, so a push in between is safely dropped.
-      setDoc: (doc) => frame.contentWindow.tarn?.setDoc(doc),
-      setChrome: (chrome) => frame.contentWindow.tarn?.setChrome(chrome),
-      toast: (text) => frame.contentWindow.tarn?.toast(text),
+      setDoc: (doc) => frame.contentWindow?.tarn?.setDoc(doc),
+      setChrome: (chrome) => frame.contentWindow?.tarn?.setChrome(chrome),
+      toast: (text) => frame.contentWindow?.tarn?.toast(text),
       write: (path, text) => bus.cmd("vfs.write", { path, text, by: `viewer:${id}` }),
       closePane: () => bus.cmd("pane.close", { id }),
-      focus: () => frame.contentWindow.focus(),
+      focus: () => frame.contentWindow?.focus(),
       confirm: (text) => window.confirm(text),
       open: (url) => window.open(url, "_blank", "noopener"),
     },
@@ -153,7 +153,7 @@ export function createViewerPane(id) {
     id,
     el,
     term: null,
-    focus: () => frame.contentWindow.focus(),
+    focus: () => frame.contentWindow?.focus(),
     screenText: () => frame.contentDocument.body.innerText,
     dispose() {
       el.remove();
