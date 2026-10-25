@@ -39,6 +39,22 @@ struct AgentSession: Equatable {
     var permissionAgent: String?
     /// A permission hook waits for the card's answer to `request`.
     var answerable = false
+    /// The Claude Code `session_id` of the live agent; empty until the first hook and after
+    /// `SessionEnd` (not after `/clear`: the agent keeps running in the surface).
+    var agentSessionID = ""
+    /// The text of the last `tarn notify`, cleared when the user focuses the surface.
+    var note = ""
+    /// When `note` was set; orders a session that has a note and no state of its own.
+    var noteSince = Date.distantPast
+
+    /// The user focused the surface: the session is seen and its note is read.
+    /// Returns false when there was nothing to change.
+    mutating func markFocused() -> Bool {
+        guard !seen || !note.isEmpty else { return false }
+        seen = true
+        note = ""
+        return true
+    }
 
     /// The turn ended and the user has not looked at it yet.
     var isUnseenDone: Bool { state == .waiting && !seen }
@@ -49,6 +65,7 @@ extension AgentSession {
     mutating func handle(_ name: String, _ event: [String: Any]) {
         let agentID = event["agent_id"] as? String
         let isSubagent = agentID != nil
+        if let id = event["session_id"] as? String, !id.isEmpty { agentSessionID = id }
 
         switch name {
         case "UserPromptSubmit" where !isSubagent:
@@ -98,8 +115,10 @@ extension AgentSession {
 
         case "SessionEnd" where !isSubagent:
             // After /clear the same agent waits for input in the same surface.
-            state = event["reason"] as? String == "clear" ? .waiting : .idle
+            let cleared = event["reason"] as? String == "clear"
+            state = cleared ? .waiting : .idle
             request = nil
+            if !cleared { agentSessionID = "" }
 
         default:
             break
@@ -193,6 +212,7 @@ final class SessionRegistry {
         guard socket == nil else { return }
         let socket = ControlSocket { [weak self] line, reply in
             if ViewerRouter.handleCommand(line, reply: reply) { return }
+            if AttentionCommands.handle(line, reply: reply) { return }
             self?.receive(line, reply: reply)
         }
         socket.start()
@@ -245,13 +265,14 @@ final class SessionRegistry {
         session.show(waiting: remaining.first?.request)
         guard session != old else { return }
 
-        if session.state != old.state {
+        if session.state != old.state || session.failed != old.failed {
             Self.logger.info("\(surfaceID, privacy: .public) \(String(describing: old.state), privacy: .public) -> \(String(describing: session.state), privacy: .public) on \(name, privacy: .public)")
             session.since = Date()
             session.seen = Self.isFocused(view)
             idleSince[surfaceID] = nil
         }
         update(session, view: view)
+        Attention.consider(old: old, new: session, view: view)
     }
 
     // MARK: Liveness
@@ -339,6 +360,39 @@ final class SessionRegistry {
         return data
     }
 
+    // MARK: Attention
+
+    /// Records whose surface still exists, in screen order (window, tab, split). A record of
+    /// a closed surface is dropped here, so no list ever shows a dead session.
+    func liveSessions() -> [(session: AgentSession, view: Ghostty.SurfaceView)] {
+        var live: [(AgentSession, Ghostty.SurfaceView)] = []
+        for view in Self.orderedSurfaces() {
+            if let session = sessions[view.id] { live.append((session, view)) }
+        }
+        for id in sessions.keys where !live.contains(where: { $0.0.surfaceID == id }) && Self.surfaceView(id) == nil {
+            remove(id)
+        }
+        return live
+    }
+
+    /// `tarn notify`: marks the caller's own session and raises one notification
+    /// (`docs/spec.md` section 3). Returns the error text, or nil.
+    func notify(_ surfaceID: UUID, text: String) -> String? {
+        guard let view = Self.surfaceView(surfaceID) else { return "unknown surface" }
+        let note = Attention.trimmed(note: text)
+        guard !note.isEmpty else { return "empty text" }
+        let old = sessions[surfaceID] ?? AgentSession(surfaceID: surfaceID)
+        // The user is looking at the surface: nothing to flag.
+        guard !Self.isFocused(view) else { return nil }
+        guard note != old.note else { return nil }
+        var session = old
+        session.note = note
+        session.noteSince = Date()
+        update(session, view: view)
+        Attention.raise(view: view, body: note)
+        return nil
+    }
+
     // MARK: Pending answers
 
     private func closePending(_ id: UUID) {
@@ -371,8 +425,7 @@ final class SessionRegistry {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 MainActor.assumeIsolated {
-                    guard let self, var session = self.sessions[id], !session.seen else { return }
-                    session.seen = true
+                    guard let self, var session = self.sessions[id], session.markFocused() else { return }
                     self.sessions[id] = session
                     NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
                 }
@@ -389,7 +442,21 @@ final class SessionRegistry {
         return nil
     }
 
-    private static func isFocused(_ view: Ghostty.SurfaceView) -> Bool {
+    /// Surfaces in screen order: windows in tab groups, tabs left to right, splits in tree order.
+    static func orderedSurfaces() -> [Ghostty.SurfaceView] {
+        var seen = Set<ObjectIdentifier>()
+        var views: [Ghostty.SurfaceView] = []
+        for controller in TerminalController.all {
+            guard let window = controller.window else { continue }
+            for member in window.tabGroup?.windows ?? [window] where seen.insert(ObjectIdentifier(member)).inserted {
+                guard let tab = member.windowController as? BaseTerminalController else { continue }
+                views.append(contentsOf: tab.surfaceTree)
+            }
+        }
+        return views
+    }
+
+    static func isFocused(_ view: Ghostty.SurfaceView) -> Bool {
         NSApp.isActive && view.window?.isKeyWindow == true && view.focused
     }
 

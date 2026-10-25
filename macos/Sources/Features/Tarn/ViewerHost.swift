@@ -470,7 +470,7 @@ enum ViewerRouter {
     }
 
     /// `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` from the control
-    /// socket. Replies `{"ok":true}` or `{"ok":false,"error":...}`. It opens text files only and
+    /// socket. Replies `{"ok":true,...}` or `{"ok":false,"error":...}` (`AttentionCommands.reply`). It opens text files only and
     /// never moves focus (`docs/spec.md` 2.2 and 2.5). Returns false for lines that are not commands.
     @MainActor
     static func handleCommand(_ line: Data, reply: ControlSocket.Reply) -> Bool {
@@ -481,30 +481,29 @@ enum ViewerRouter {
         if let error {
             logger.info("open refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
         }
-        let answer: [String: Any] = error.map { ["ok": false, "error": $0] } ?? ["ok": true]
-        reply.send((try? JSONSerialization.data(withJSONObject: answer)).map { $0 + Data("\n".utf8) } ?? Data())
+        reply.send(error.map(AttentionCommands.failure) ?? AttentionCommands.reply())
         return true
     }
 
     @MainActor
     private static func openFromSocket(_ message: [String: Any]) -> String? {
-        guard message["version"] as? Int == 1 else { return "tarn: unsupported version" }
-        guard FileViewerSetting.isOn else { return "tarn: the file viewer is off in Settings" }
+        guard message["version"] as? Int == 1 else { return "unsupported version" }
+        guard FileViewerSetting.isOn else { return "the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
-            return "tarn: the path must be absolute"
+            return "the path must be absolute"
         }
         guard let id = (message["surface"] as? String).flatMap(UUID.init(uuidString:)),
               let surface = SessionRegistry.surfaceView(id),
               let controller = surface.window?.windowController as? TerminalController
-        else { return "tarn: unknown surface" }
+        else { return "unknown surface" }
         switch ViewerPaths.classify(path) {
-        case .missing: return "tarn: no such file: \(path)"
-        case .directory, .special: return "tarn: not a file: \(path)"
-        case .system: return "tarn: not a text file: \(path)"
-        case .text where ViewerPaths.isBinary(path): return "tarn: not a text file: \(path)"
+        case .missing: return "no such file: \(path)"
+        case .directory, .special: return "not a file: \(path)"
+        case .system: return "not a text file: \(path)"
+        case .text where ViewerPaths.isBinary(path): return "not a text file: \(path)"
         case .text:
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
-            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
+            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "cannot open: \(path)"
         }
     }
 }
