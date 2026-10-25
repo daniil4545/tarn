@@ -1,0 +1,126 @@
+# Module: settings
+
+## Purpose
+
+The settings window (Cmd+,) holds tarn's own setting (tab style), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
+
+State of this document: branch `s4-settings` (PR #4). Plan and decisions: `docs/plans/s4-settings.md`.
+
+## Place in the system
+
+```mermaid
+flowchart LR
+  win["Settings window"] --> store["GhosttyOptionStore"]
+  store -->|"writes"| file["tarn ghostty.conf"]
+  store -->|"reloadConfig"| app["Ghostty.App"]
+  app -->|"loadConfig"| load["TarnConfigFile.load"]
+  file --> load
+  app -->|"configDidChange"| store
+  store --> reader["GhosttyOptionReader"]
+  help["HelpPane"] --> keys["KeyReference"]
+```
+
+Reading: the store writes the file, asks Ghostty to reload, and reads the new effective values back from the config in the change notification. Source: `GhosttyOptionStore.swift`, `TarnConfigFile.swift`, `macos/Sources/Ghostty/Ghostty.Config.swift`.
+
+## Inputs and outputs
+
+| Direction | What | Where |
+|---|---|---|
+| In | control changes and Reset in the option rows | `GhosttyOptionsPane`, `GhosttyOptionStore.set`, `reset` |
+| In | `~/.config/tarn/ghostty.conf` (or under `$XDG_CONFIG_HOME` when absolute) | `TarnConfigFile.read` |
+| In | app config in the `ghosttyConfigDidChange` notification (only with `object == nil`) | `GhosttyOptionStore.configDidChange` |
+| In | effective values and key triggers of the live config | `GhosttyOptionReader`, `KeyReference.keys` |
+| Out | the options file, written atomically | `TarnConfigFile.save` |
+| Out | `ghostty.reloadConfig()` after a successful write | store `reload` closure |
+| Out | file lines into every config built by the app | `TarnConfigFile.load(into:from:)` |
+| Out | tab style in `UserDefaults` `TarnTabStyle` | `TabStyle`, `TarnSettingsView` |
+
+## How it works
+
+State: the window `TarnSettingsController` (single, 640 by 400, Escape closes) with sections Tabs, Appearance, Terminal, Windows, Help. `GhosttyOptionStore.shared` holds the file as last read, errors per option key and the last app config. The catalog `GhosttyOption.all` lists 22 options, each with key, control (toggle, choice, theme, number, slider, text), default in file syntax, section, how Ghostty reads it, and when a change applies (live, new windows, restart).
+
+Load order (`Ghostty.Config.loadConfig`):
+1. `load_file` if a path is given, else `load_default_files`.
+2. CLI args, unless the app runs in Xcode.
+3. `load_recursive_files` (the `config-file` includes).
+4. The tarn file, only when `tarnFile` is passed. Only `Config.init(at:finalize:)` passes `TarnConfigFile.activeURL()`; `TemporaryConfig` and tests pass nothing.
+5. `finalize`.
+Scalars: the last line wins, so tarn beats the user's file and includes. A launch with `-e` skips the tarn file, because our lines would land after the command the CLI sets. A missing file loads nothing (Ghostty logs an error for a missing file, so existence is checked first).
+
+Write flow:
+1. A control change calls `set` (or `reset`).
+2. A number outside its range or a fraction for a whole-number option is reported in the row and not written.
+3. The store re-reads the file, changes one key, puts catalog options in catalog order after the header and any hand-written lines, and saves.
+4. The save goes through `resolvingSymlinksInPath()`, creates the folder and writes atomically.
+5. `reloadConfig()` runs; Ghostty posts the change; the store takes the new config and the rows refresh.
+
+Rules: a control change always writes its line, even when the value equals the Ghostty default; only Reset removes it, so the user's own value never resurfaces. Optional options write an empty value for their default entry. A repeatable option (`font-family`) writes an empty clear line first. Values with line breaks are rejected. Edge spaces, empty values and values wrapped in quotes are quoted; Ghostty strips one pair of quotes and does no escaping.
+
+Display of a row: the value in the file if the control can show it; a raw read-only text with Reset if it cannot (for example `undo-timeout = 7s`); otherwise the effective value from `ghostty_config_get`; for the unreadable options (`theme`, `font-family`, `window-padding-x`) the text "from Ghostty config". Rows say when a change applies; a set option shows "set in tarn" and Reset. The Windows page shows the file text.
+
+Help: `KeyReference.groups` is a fixed list of actions (Ghostty has no call that lists bindings). For each, `keyboardShortcut(for:)` gives the key in effect, else "not bound". Actions bound as performable (undo, redo, clear screen, search) get no trigger from Ghostty, so those rows carry the Ghostty default keys. Viewer keys come from `ViewerWebView.keyTable`, source "tarn".
+
+## Files
+
+| Path | Role |
+|---|---|
+| `macos/Sources/Features/Tarn/TarnSettings.swift` | `TabStyle`, `TarnSettingsController`, `TarnSettingsView` sections |
+| `macos/Sources/Features/Tarn/TarnConfigFile.swift` | file model (entries and verbatim lines), parse, set, remove, text, path, save, `load` |
+| `macos/Sources/Features/Tarn/GhosttyOption.swift` | the option catalog |
+| `macos/Sources/Features/Tarn/GhosttyOptionReader.swift` | effective value through `ghostty_config_get` |
+| `macos/Sources/Features/Tarn/GhosttyOptionStore.swift` | write, reset, display, notification |
+| `macos/Sources/Features/Tarn/GhosttyOptionsPane.swift` | one section of rows and controls |
+| `macos/Sources/Features/Tarn/KeyReference.swift` | Help rows and key text |
+| `macos/Sources/Features/Tarn/HelpPane.swift` | Help view |
+| `macos/Sources/Features/Tarn/ViewerWebView.swift` | `keyTable` shared with Help |
+
+## Ghostty mechanisms used
+
+| Mechanism | Where | Use |
+|---|---|---|
+| Config load sequence | `macos/Sources/Ghostty/Ghostty.Config.swift:61` (`loadConfig`), `:72`, `:81` | place of the tarn file |
+| `reloadConfig` | `Ghostty/Ghostty.App.swift:144` | apply after a write |
+| `ghosttyConfigDidChange` with `GhosttyConfigChangeKey` | `Ghostty/GhosttyPackage.swift:291`, `Ghostty.App.swift:2450` | read new config |
+| `ghostty_config_get` accessors | `Ghostty.Config.swift` (pattern) | effective values |
+| `keyboardShortcut(for:)`, `keyList` | `Ghostty.Config.swift:114`, `Helpers/Extensions/KeyboardShortcut+Extension.swift:4` | Help keys |
+| `ghostty_config_load_file` | core C API | load our file |
+| Config errors window | Ghostty's own | a rejected line shows there |
+
+## Insertion points in upstream files
+
+Row 14 of [architecture.md](../architecture.md): `Ghostty.Config.swift`, parameter `tarnFile: URL? = nil` on `loadConfig`, one `TarnConfigFile.load(into:from:)` call after `ghostty_config_load_recursive_files`, and `TarnConfigFile.activeURL()` passed from `init(at:finalize:)`. Row 9 (menu item "Settings...") comes from PR #3.
+
+## Invariants and failure rules
+
+| Rule | Enforced by |
+|---|---|
+| The user's Ghostty files are never edited | the store writes only the tarn file |
+| The tarn file beats the user file, includes and themes | test `tarnBeatsTheUserFile`, `...AConfigFileInclude`, `...ATheme` |
+| A hand edit (comments, unknown lines) survives a save | verbatim lines; test `commentsAndUnknownLinesSurviveAnEdit` |
+| A failed write leaves the old file and no reload | atomic write; row error "Could not save"; test `aFailedWriteReportsInTheRowAndDoesNotReload` |
+| Tests and `TemporaryConfig` never read the real file | `tarnFile` defaults to nil |
+| A single terminal's config reload is not taken as the app config | `object == nil` check |
+| A symlinked file stays a symlink | save resolves the link |
+
+Failures: a rejected line after reload opens Ghostty's configuration errors window and the mark "set in tarn" stays. Limits: CLI flags lose to the tarn file; the three unreadable options show no effective value; `background-blur` with a radius or glass reads as "true".
+
+## Tests
+
+All in `macos/Tests/Tarn/`.
+
+| Suite | Pins |
+|---|---|
+| `TarnConfigFileTests` | round trip, comments kept, header, repeatable keys, line breaks, XDG path, Ghostty reads what we wrote, precedence over user file, include and theme, font-family clear line, reset, empty and missing file, failed write, symlink |
+| `GhosttyOptionStoreTests` | set writes and reloads, default value still written, reset removes one line, empty default entry, bad number, catalog order, hand edit kept between writes, failed write, raw display, unreadable options, notification source |
+| `GhosttyOptionTests` | unique keys, choice defaults, catalog defaults equal a loaded config, repeatable clear, apply labels, whole numbers |
+| `KeyReferenceTests` | unique ids, each Ghostty action resolves, unbound text, keybind change visible, performable defaults, viewer keys from the table |
+
+## Extending it
+
+| Change | Goes to |
+|---|---|
+| New Ghostty option in the window | row in `GhosttyOption.all` (key, control, default, applies, help); `GhosttyOptionTests` compares the default with Zig |
+| New settings section | `TarnSettingsView.Section` and a pane |
+| New key in Help | row in `KeyReference.groups` |
+| New viewer key | `ViewerWebView.keyTable` (Help follows) |
+| File format or load place | `TarnConfigFile`, `Ghostty.Config.loadConfig`; keep row 14 |
