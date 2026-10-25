@@ -112,8 +112,8 @@ struct TabCard: View {
                 Text(tab.title)
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(2)
-                if !tab.project.isEmpty {
-                    Text(tab.project)
+                if !tab.workspace.isEmpty {
+                    Text(tab.workspace)
                         .font(.system(size: 11))
                         .foregroundStyle(.secondary)
                 }

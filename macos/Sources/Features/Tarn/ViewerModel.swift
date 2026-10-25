@@ -2,6 +2,20 @@ import AppKit
 import Foundation
 import OSLog
 
+/// What the page's keys ask of the layout around the viewer.
+enum ViewerLayoutCommand {
+    /// Opens the active file in a new viewer on that side.
+    case split(AreaEdge)
+    case focus(AreaTree.FocusDirection)
+}
+
+/// A file the page starts to drag: a tab (it moves) or a tree row (it only opens).
+struct PageFileDrag: Equatable {
+    let path: String
+    let moves: Bool
+    let sole: Bool
+}
+
 /// What a viewer pane shows: tabs, documents, the files tree and the watchers. The web page draws
 /// it and reports user actions; this model owns the state. See `docs/plans/s2-files.md` section 4.
 @MainActor
@@ -24,6 +38,10 @@ final class ViewerModel {
     var script: ((String) -> Void)?
     /// Asks to close the pane, with the tabs it had, for undo.
     var onClosePane: (([ViewerTab], Int) -> Void)?
+    /// A key or menu command that changes the layout of the tab: a split or a focus move.
+    var onLayout: ((ViewerLayoutCommand) -> Void)?
+    /// The page started dragging a file, or ended the drag (nil).
+    var onFileDrag: ((PageFileDrag?) -> Void)?
     /// Asks to give the page keyboard focus.
     var onFocus: (() -> Void)?
     /// True while the page holds keyboard focus.
@@ -67,6 +85,66 @@ final class ViewerModel {
         pushDocument(target.path, reason: "open")
         pushChrome()
         return true
+    }
+
+    /// Takes over the files of another viewer, edits included: the viewer is dropped into this one.
+    func absorb(_ other: ViewerModel) {
+        let active = other.tabs.activePath
+        for tab in other.tabs.tabs {
+            adopt(tab.path, from: other)
+            tabs.open(tab.path, pin: true)
+        }
+        if let active { tabs.open(active, pin: true) }
+        if let active { tree.reveal(active) }
+        pushAll()
+    }
+
+    /// Whether `take(_:from:)` loses nothing. Both viewers may hold the file: a clean copy gives way
+    /// to a copy with edits, equal edits are one, but two different edited copies cannot share a
+    /// tab (tabs and documents are keyed by path), so that drop is refused and both stay as they are.
+    func canTake(_ path: String, from other: ViewerModel) -> Bool {
+        guard let mine = docs[path], let theirs = other.docs[path] else { return true }
+        return !(mine.isDirty && theirs.isDirty && mine.text != theirs.text)
+    }
+
+    /// `canTake` for every file of `other`.
+    func canAbsorb(_ other: ViewerModel) -> Bool {
+        other.tabs.tabs.allSatisfy { canTake($0.path, from: other) }
+    }
+
+    /// Takes one file from another viewer's tab, edits included, or opens it from disk when it
+    /// was not a tab. The caller then calls `release` on the other viewer.
+    @discardableResult
+    func take(_ path: String, from other: ViewerModel) -> Bool {
+        guard other.docs[path] != nil else {
+            return open(OpenTarget(path: path), pin: true)
+        }
+        adopt(path, from: other)
+        tabs.open(path, pin: true)
+        tree.reveal(path)
+        pushAll()
+        return true
+    }
+
+    /// The file went to another viewer: its tab goes, the document went with it. No question, no
+    /// undo; the caller closes the viewer when no tab is left.
+    func release(_ path: String) {
+        guard let index = tabs.tabs.firstIndex(where: { $0.path == path }) else { return }
+        tabs.close(at: index)
+        docs[path] = nil
+        watchers[path] = nil
+        pushChrome()
+    }
+
+    var isEmpty: Bool { tabs.tabs.isEmpty }
+
+    /// Brings the document over unless this viewer holds the same file with edits of its own
+    /// (or an equal copy). Callers check `canTake` first.
+    private func adopt(_ path: String, from other: ViewerModel) {
+        guard let doc = other.docs[path] else { return }
+        if let mine = docs[path], mine.isDirty || !doc.isDirty { return }
+        docs[path] = doc
+        watchers[path] = FileWatcher(path: path) { [weak self] in self?.diskChanged(path) }
     }
 
     func reopen(_ saved: [ViewerTab], active: Int) {
@@ -202,6 +280,9 @@ final class ViewerModel {
             pushChrome()
         case "closeTab": closeTab(at: index)
         case "closePane": closePane()
+        case "dragFile":
+            if let path { onFileDrag?(PageFileDrag(path: path, moves: body["tab"] as? Bool == true, sole: tabs.tabs.count == 1)) }
+        case "dragEnd": onFileDrag?(nil)
         case "toggleTree":
             // The Files button: the tree of a pane with files; a pane with no file has nothing else.
             if hidePaneIfEmpty() { return }

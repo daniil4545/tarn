@@ -76,7 +76,7 @@ enum ViewerClose {
     /// Cancel in Ghostty's own dialog afterwards loses nothing.
     @MainActor
     static func intercept(_ controllers: [TerminalController], window: NSWindow?, proceed: @escaping () -> Void) -> Bool {
-        let models = unsettled(controllers.compactMap(\.viewerHost.model))
+        let models = unsettled(controllers.flatMap(\.viewerHost.models))
         let paths = dirtyPaths(in: models)
         guard !paths.isEmpty else { return false }
         ask(paths, window: window) { choice in
@@ -90,7 +90,7 @@ enum ViewerClose {
     /// Returns false when nothing is dirty.
     @MainActor
     static func interceptQuit(proceed: @escaping (Bool) -> Void) -> Bool {
-        let models = TerminalController.all.compactMap(\.viewerHost.model).filter { !$0.dirtyPaths.isEmpty }
+        let models = TerminalController.all.flatMap(\.viewerHost.models).filter { !$0.dirtyPaths.isEmpty }
         let paths = dirtyPaths(in: models)
         guard !paths.isEmpty else { return false }
         let window = NSApp.keyWindow ?? TerminalController.all.first?.window

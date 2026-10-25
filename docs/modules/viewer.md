@@ -4,7 +4,7 @@
 
 The viewer is a pane beside the terminal that shows files the user or an agent points at: markdown rendered (with an editor), other text as highlighted code, with file tabs, a files tree and live reload when the agent rewrites a file. Swift holds all state; a WKWebView only draws it.
 
-State of this document: branch `s2-files` (PR #3). The pane placement (`ViewerHost.swift`) is temporary; PR #5 replaces it with the area layout, see [layout.md](layout.md).
+State of this document: branch `s3-windows` (PR #5). A window tab holds any number of viewers around the terminal block; placement, drops and grips are in [layout.md](layout.md). This document covers one viewer.
 
 ## Place in the system
 
@@ -28,8 +28,10 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 |---|---|---|
 | In | click on a path in terminal output (Ghostty action `open_url`, kind unknown) | `ViewerRouter.handle` |
 | In | socket line `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` | `ViewerRouter.handleCommand` |
-| In | page messages (`ready`, `tab`, `closeTab`, `closePane`, `toggleTree`, `hideTree`, `treeToggle`, `treeOpen`, `edit`, `save`, `task`, `take`, `keep`, `link`, `copy`, `error`) | `ViewerModel.handle` |
+| In | page messages (`ready`, `tab`, `closeTab`, `closePane`, `toggleTree`, `hideTree`, `treeToggle`, `treeOpen`, `edit`, `save`, `task`, `take`, `keep`, `link`, `copy`, `error`, `dragFile`, `dragEnd`) | `ViewerModel.handle` |
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
+| In | menu split and focus actions while the pane has focus | `ViewerWebView` to `ViewerModel.onLayout`, handled by [layout.md](layout.md) |
+| In | files taken from or dropped into another viewer | `ViewerModel.absorb`, `take`, `release`, `canTake` |
 | In | View menu item "Toggle File Viewer" Cmd+B (action `toggleViewer:`); in the pane `ViewerWebView.command` takes Cmd+B, Cmd+S, Cmd+E with exact modifiers | `TerminalController` extension, `ViewerHost.toggleFromKey` |
 | Out | keyboard: Cmd+B opens into the tree, shows into the pane, hides to the terminal; Enter in the tree moves it into the file; a layout change gives the terminal its first responder back and a focus request waits for the web view to join the window (as `Ghostty.moveFocus`) | `ViewerHost`, `ViewerWebController.focus` |
 | In | (note) a Ghostty keybind on Cmd+B takes the key first and wins over the menu item; the item keeps showing Cmd+B because Ghostty has no action to sync it with | `MainMenu.xib` |
@@ -48,7 +50,7 @@ Open flow:
 1. A click reaches `Ghostty.App.openURL`; for kind unknown on a surface it calls `ViewerRouter.handle`, which returns false for URLs, directories, system-type files and a missing file without a pane (upstream opens them).
 2. `ViewerPaths.resolve` expands `~/`, absolute and relative paths against the surface's `pwd`, and splits `:line[:column]`. A real file whose name holds a colon wins over the split.
 3. `ViewerPaths.classify` returns text, system (allowlist of media, document, archive extensions), directory, special or missing.
-4. `ViewerHost.open` creates the pane on first use (model, web controller, rule list), then `ViewerModel.open` builds the `ViewerDocument`, arms a `FileWatcher`, opens or activates the tab, unfolds the tree to the file and pushes document and chrome to the page.
+4. `ViewerHost.open` uses the viewer that has the keyboard, else the one used last, and creates a viewer beside the terminal block when the tab has none (model, web controller, rule list); then `ViewerModel.open` builds the `ViewerDocument`, arms a `FileWatcher`, opens or activates the tab, unfolds the tree to the file and pushes document and chrome to the page.
 5. A click opens a preview tab (replaced by the next open) and focuses the pane. A double click, an edit or a drag pins it.
 
 Socket open: same path, but `focus` is false. The host saves the first responder and restores it at 0 s and 0.15 s; if the user types in the pane, the open adds a pinned background tab and keeps the active one. Binary files (NUL byte or invalid UTF-8 in the first 8 KB) are refused.
@@ -61,7 +63,7 @@ Save: any text file (markdown and code; Cmd+E opens the editor for both). Re-rea
 
 Page process: the web content process may die; the controller reloads the page and `ready` makes the model push everything again. Messages built on an older revision than the model's are dropped.
 
-Close: `ViewerClose` is called from the close paths of Ghostty (see insertion points 12 and 13 in [architecture.md](../architecture.md)). It collects dirty paths of all panes of the tab group and shows one sheet (Save, Don't Save, Cancel). Don't Save keeps the edits and lets the repeated close pass once. Closing the last tab closes the pane and registers an undo that reopens the tabs.
+Close: `ViewerClose` is called from the close paths of Ghostty (see insertion points 12 and 13 in [architecture.md](../architecture.md)). It collects dirty paths of all panes of the tab group and shows one sheet (Save, Don't Save, Cancel). Don't Save keeps the edits and lets the repeated close pass once. Closing the last tab closes the viewer and registers an undo that reopens the tabs. `ViewerClose` collects dirty files of every viewer of the group (`viewerHost.models`).
 
 Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off), code with highlight.js (limit 512 KB), the editor with CodeMirror 6, diagrams with mermaid (layout dagre) loaded on demand. Output is bundled by esbuild into `Viewer/` and committed; the app build needs no node.
 
@@ -70,7 +72,7 @@ Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off),
 | Path | Role |
 |---|---|
 | `macos/Sources/Features/Tarn/ViewerModel.swift` | state owner, page message handler, save, follow link, push to page |
-| `macos/Sources/Features/Tarn/ViewerHost.swift` | temporary pane placement (SplitView), pane create and close with undo, `ViewerRouter` |
+| `macos/Sources/Features/Tarn/ViewerHost.swift` | viewers of a window tab: panes, open, close with undo, drops, `ViewerRouter` (see [layout.md](layout.md)) |
 | `macos/Sources/Features/Tarn/ViewerTabs.swift` | tab list, preview and pin rules, jump token |
 | `macos/Sources/Features/Tarn/ViewerDocument.swift` | text, disk text, conflict, 5 MB cap, `FileStamp`, `FileRead`, `TaskList` |
 | `macos/Sources/Features/Tarn/ViewerPaths.swift` | path resolution, file classification, binary test, language hint |
@@ -96,7 +98,7 @@ Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off),
 
 ## Insertion points in upstream files
 
-From the table in [architecture.md](../architecture.md): rows 10 (`TerminalController`: `viewerHost`, `ViewerLayout`), 11 (`Ghostty.App.openURL`), 12 (one `ViewerClose.intercept` line in the close functions, `ScriptWindow`, `ScriptTab`) and 13 (`AppDelegate.applicationShouldTerminate`).
+From the table in [architecture.md](../architecture.md): rows 10 (`TerminalController`: `viewerHost`, `ViewerLayout`), 11 (`Ghostty.App.openURL`), 12 (one `ViewerClose.intercept` line in the close functions, `ScriptWindow`, `ScriptTab`), 13 (`AppDelegate.applicationShouldTerminate`) and 17 (`Ghostty.App.gotoSplit`, split keys reach a viewer).
 
 ## Invariants and failure rules
 
@@ -122,6 +124,7 @@ Failures: a file that cannot be read gives the toast "Cannot open <name>"; a ref
 | `ViewerDocumentTests` | reload, conflict once, take and keep, own write is not a change, deleted file, notices, task toggle |
 | `ViewerRulesTests` | rule list content, compile in WebKit, asset mapping and refusals |
 | `FileTreeTests` | folders first, hidden names, unfold on demand |
+| `ViewerHostTests` | a page file drag ends with a click or the drag end |
 | `ViewerCloseTests` | dirty collection, Save, Don't Save once, all close call sites, tab group reach, sheet text |
 | `ViewerWebLifetimeTests` | controller is freed |
 
@@ -134,6 +137,6 @@ Other checks: `node --test viewer-web/licenses.test.mjs` (notice builder); `uv r
 | New file type to open elsewhere or as text | `ViewerPaths.systemExtensions`, `classify` |
 | New page message | `ViewerModel.handle` and `main.js` `post` |
 | New data for the page | `pushDocument` or `pushChrome`, and `window.tarn` in `main.js`; rebuild `viewer-web` |
-| Pane placement | `ViewerHost.swift` only (replaced in PR #5) |
+| Pane placement and layout | [layout.md](layout.md) |
 | New close path | call `ViewerClose.intercept`, then update the count in `directClosesAreAllReviewed` |
 | Bundled library | `viewer-web/package.json`, rebuild, `THIRD_PARTY.md` |
