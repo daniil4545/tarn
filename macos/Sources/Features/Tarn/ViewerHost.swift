@@ -74,21 +74,41 @@ final class ViewerHost: ObservableObject {
         let typingInPane = !focus && (existing?.model.hasFocus() ?? false)
         let pane = existing ?? makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6)
         guard pane.model.open(target, background: typingInPane) else {
-            if pane.model.snapshot.isEmpty { discard(pane.leaf.id) }
+            // A viewer this call created for a file that cannot open does not stay; a tree-only one does.
+            if existing == nil, pane.model.snapshot.isEmpty { discard(pane.leaf.id) }
             return false
         }
         lastViewer = pane.leaf.id
         if focus {
             DispatchQueue.main.async { pane.model.onFocus?() }
-        } else if let responder {
-            for delay in [0.0, 0.15] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let window = self?.window, window.firstResponder !== responder else { return }
-                    window.makeFirstResponder(responder)
-                }
-            }
+        } else {
+            keepFocus(responder)
         }
         return true
+    }
+
+    /// A layout change takes the first responder from the terminal; give it back.
+    private func keepFocus(_ responder: NSResponder?) {
+        guard let responder else { return }
+        for delay in [0.0, 0.15] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let window = self?.window, window.firstResponder !== responder else { return }
+                window.makeFirstResponder(responder)
+            }
+        }
+    }
+
+    /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
+    /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
+    /// only; otherwise the model decides (an empty pane closes, one with files toggles the tree).
+    func toggleFromKey(root: String?) {
+        guard let model = activeModel else {
+            let responder = window?.firstResponder
+            makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.showTreeOnly()
+            keepFocus(responder)
+            return
+        }
+        model.toggleTreeKey()
     }
 
     /// A new, empty viewer on `edge` of `anchor`; `share` is the part of the room that `anchor` keeps.
@@ -428,5 +448,12 @@ enum ViewerRouter {
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
             return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
         }
+    }
+}
+
+extension TerminalController {
+    /// The View menu item "Toggle Files" (Cmd+B), found through the responder chain from the terminal.
+    @IBAction func toggleViewerTree(_ sender: Any?) {
+        viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
     }
 }

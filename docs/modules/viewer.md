@@ -32,6 +32,8 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
 | In | menu split and focus actions while the pane has focus | `ViewerWebView` to `ViewerModel.onLayout`, handled by [layout.md](layout.md) |
 | In | files taken from or dropped into another viewer | `ViewerModel.absorb`, `take`, `release`, `canTake` |
+| In | Cmd+B in the terminal: View menu item "Toggle Files" (action `toggleViewerTree:`) | `TerminalController.toggleViewerTree`, `ViewerHost.toggleFromKey` |
+| In | (note) a Ghostty keybind on Cmd+B takes the key first and wins over the menu item; the item keeps showing Cmd+B because Ghostty has no action to sync it with | `MainMenu.xib` |
 | In | file events (write, delete, rename, extend) on the file and its folder | `FileWatcher` |
 | In | close of a tab, window or the app | `ViewerClose` |
 | Out | script calls `tarn.setDoc`, `tarn.setChrome`, `tarn.toast`, `tarn.cmd` | `ViewerModel.runScript` |
