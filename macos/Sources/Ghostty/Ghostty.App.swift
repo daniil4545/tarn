@@ -744,7 +744,7 @@ extension Ghostty {
                 checkForUpdates(app)
 
             case GHOSTTY_ACTION_OPEN_URL:
-                return openURL(action.action.open_url)
+                return openURL(action.action.open_url, target: target)
 
             case GHOSTTY_ACTION_UNDO:
                 return undo(app, target: target)
@@ -806,9 +806,18 @@ extension Ghostty {
         }
 
         private static func openURL(
-            _ v: ghostty_action_open_url_s
+            _ v: ghostty_action_open_url_s,
+            target: ghostty_target_s? = nil
         ) -> Bool {
             let action = Ghostty.Action.OpenURL(c: v)
+
+            // tarn: a clicked path opens in the viewer pane of the clicked surface's window.
+            if action.kind == .unknown,
+               target?.tag == GHOSTTY_TARGET_SURFACE,
+               let surface = target?.target.surface,
+               MainActor.assumeIsolated({ ViewerRouter.handle(action.url, from: surfaceView(from: surface)) }) {
+                return true
+            }
 
             // OSC 8 targets are producer-controlled terminal output. Keep them
             // out of the unrestricted generic opener so unsafe local files and

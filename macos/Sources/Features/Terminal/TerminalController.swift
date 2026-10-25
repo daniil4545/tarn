@@ -63,6 +63,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
     /// tarn: the tabs listed by this window's sidebar.
     private let sidebarModel = SidebarModel()
+    /// tarn: the viewer pane of this window tab.
+    let viewerHost = ViewerHost()
 
     init(_ ghostty: Ghostty.App,
          withBaseConfig base: Ghostty.SurfaceConfiguration? = nil,
@@ -1120,10 +1122,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Initialize our content view to the SwiftUI root, with the tarn
         // sidebar beside the terminal.
         sidebarModel.window = window
+        viewerHost.window = window
         NativeTabMark.install(in: window, model: sidebarModel)
         let container = TerminalViewContainer {
             SidebarLayout(model: sidebarModel, ghostty: ghostty) {
-                TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
+                ViewerLayout(host: viewerHost, ghostty: ghostty) {
+                    TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
+                }
             }
         }
 
