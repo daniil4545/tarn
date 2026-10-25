@@ -63,12 +63,32 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .chev { width: 10px; color: var(--muted); font-size: 10px; }
 .wsempty { font-size: 12px; color: #6c6f85; padding: 2px 8px 4px 24px; }
 .tab { cursor: pointer; }
+/* Tabs sit indented under their workspace header. */
+.sidebar .tab[data-tabid] { margin-left: 12px; width: calc(100% - 12px); }
 .tab .x { opacity: 0; background: none; border: 0; padding: 0 3px; color: var(--muted); font-size: 11px; }
 .tab:hover .x { opacity: 1; }
 .tab:hover .key { display: none; }
 .tab.add { color: #6c6f85; margin-top: 4px; }
 .man { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .pin { width: 11px; height: 11px; color: var(--muted); flex: none; }
+.sidebar { position: relative; }
+.card { position: fixed; z-index: 15; width: 280px; padding: 12px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
+.card b { font-size: 13px; font-weight: 600; }
+.card .dim { color: var(--muted); font-size: 11px; }
+.card .mono { font-family: var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; direction: rtl; text-align: left; }
+.card .st { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+.card .req { margin-top: 6px; display: flex; flex-direction: column; gap: 6px; }
+.card .req code { font: 11.5px var(--mono); background: var(--term); padding: 4px 6px; border-radius: 5px; }
+.card .btns { display: flex; gap: 6px; }
+.card .btns button { background: var(--line); border: 0; border-radius: 5px; padding: 2px 12px; }
+.sbtop { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 4px; }
+.sbtop .ib { display: grid; place-items: center; width: 26px; height: 24px; padding: 0; font-size: 16px; color: var(--muted); }
+.sidebar.rail { width: 44px; padding: 8px 4px; align-items: center; }
+.sidebar.rail .sbtop { flex-direction: column; gap: 4px; padding: 0 0 6px; }
+.sidebar.rail .tab[data-tabid] { margin: 0; width: 34px; height: 30px; justify-content: center; position: relative; padding: 0; }
+.sidebar.rail .tab .dot { position: absolute; top: 5px; right: 5px; }
+.sidebar.rail .sep { width: 24px; margin: 6px auto; }
+.wsline { position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
 .dropmark { box-shadow: inset 0 2px 0 var(--accent); background: rgba(139,233,253,.08); }
 .ctx { position: fixed; z-index: 20; min-width: 200px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
 .ctx button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 5px 10px; border-radius: 5px; font-size: 13px; }
@@ -197,7 +217,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 </style>
 
 <div class="mock" role="group" aria-label="Mockup controls">
-  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
   <span>Terminal header (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="true">always</button><button data-v="auto" aria-pressed="false">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
   <button class="act" id="agentTab" title="Mock of tarn new from an agent in ~/Dev/Galera">Agent opens a tab in ~/Dev/Galera</button>
@@ -565,13 +585,28 @@ function rollup(w) {
 // collapsed workspaces included, so a number never changes when a group folds.
 const ordered = w => [...w.tabs.filter(id => tabs[id].pinned), ...w.tabs.filter(id => !tabs[id].pinned)];
 const flat = () => wss.flatMap(ordered);
+const SB_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
+let sbRail = false;
+try { sbRail = localStorage.getItem("tarn-mockup-rail") === "1"; } catch (err) { /* ignore */ }
 function renderSidebar() {
   const all = flat();
   const row = id => {
     const t = tabs[id], i = all.indexOf(id);
     return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${t.manual ? '<span class="man" title="Added by hand: stays in this workspace whatever its folder">hand</span>' : ""}${t.pinned ? PIN : ""}${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
   };
-  let h = "";
+  const sb = $("sidebar");
+  sb.classList.toggle("rail", sbRail);
+  const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${sbRail ? "Show Sidebar" : "Hide Sidebar"}" aria-label="${sbRail ? "Show Sidebar" : "Hide Sidebar"}">${SB_ICON}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
+  // Collapsed rail, as in the app: icons only, a divider between workspaces.
+  if (sbRail) {
+    sb.innerHTML = top + wss.filter(w => w.tabs.length).map(w => ordered(w).map(id => {
+      const t = tabs[id];
+      return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.title)}">${t.agent ? AGENT : TERM_ICON}${dotOf(t.state)}</div>`;
+    }).join("")).join('<div class="sep"></div>');
+    $("wtitle").textContent = W().name + (cur ? " · " + tabs[cur].title : "");
+    return;
+  }
+  let h = top;
   for (const w of wss) {
     const n = w.tabs.length;
     // A folded workspace still shows how many tabs it has and its most urgent state.
@@ -579,7 +614,7 @@ function renderSidebar() {
     if (!w.collapsed) h += ordered(w).map(row).join("") + (n ? "" : `<div class="wsempty">No tabs</div>`);
   }
   h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
-  $("sidebar").innerHTML = h;
+  sb.innerHTML = h;
   $("wtitle").textContent = W().name + (cur ? " · " + tabs[cur].title : "");
 }
 function updateTitleButton() { const v = lastViewer(); $("toggleFiles").setAttribute("aria-pressed", String(!!(v && v.tree))); }
@@ -872,7 +907,7 @@ function treeEnter(v, path, kind, pin) {
 // ---- events ----
 document.addEventListener("click", async e => {
   if (!e.target.closest("#ctx")) closeMenu();
-  const sb = e.target.closest("[data-tabclose], [data-mpin], [data-mmove], [data-wsdel], [data-wsren], [data-wsnewtab], .wsh[data-wsh], #wsNew, #emptyNew, #agentTab, #resetDemo, .tab[data-tabid]");
+  const sb = e.target.closest("[data-tabclose], [data-mpin], [data-mmove], [data-wsdel], [data-wsren], [data-wsnewtab], .wsh[data-wsh], #wsNew, #sbToggle, #sbNew, #emptyNew, #agentTab, #resetDemo, .tab[data-tabid]");
   if (sb) {
     closeMenu();
     if (sb.dataset.tabclose) return closeSidebarTab(sb.dataset.tabclose);
@@ -883,7 +918,8 @@ document.addEventListener("click", async e => {
     if (sb.dataset.wsnewtab) return newTab(wsById(sb.dataset.wsnewtab));
     if (sb.dataset.wsh) { const w = wsById(sb.dataset.wsh); w.collapsed = !w.collapsed; saveState(); return renderSidebar(); }
     if (sb.id === "wsNew") return newWorkspace();
-    if (sb.id === "emptyNew") return newTab();
+    if (sb.id === "sbToggle") { sbRail = !sbRail; try { localStorage.setItem("tarn-mockup-rail", sbRail ? "1" : "0"); } catch (err) { /* ignore */ } return renderSidebar(); }
+    if (sb.id === "emptyNew" || sb.id === "sbNew") return newTab();
     if (sb.id === "agentTab") return agentOpensTab();
     if (sb.id === "resetDemo") { try { localStorage.removeItem(STORE); } catch (err) { /* ignore */ } return location.reload(); }
     return selectTab(sb.dataset.tabid);
@@ -1074,24 +1110,84 @@ document.addEventListener("dragstart", e => {
   else return;
   e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn-tab");
 }, true);
-// A workspace header dragged onto another header goes before it.
+// A dragged workspace goes into the gap between groups nearest the pointer; a line marks the gap.
+// Slot i is the gap before group i; a group spans from its header to the next header.
+function wsSlot(y) {
+  const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]")];
+  const tops = heads.map(h => h.getBoundingClientRect().top).concat(document.getElementById("wsNew").getBoundingClientRect().top);
+  const slot = heads.filter((_, i) => (tops[i] + tops[i + 1]) / 2 < y).length;
+  return { slot, y: tops[slot] - sb.getBoundingClientRect().top + sb.scrollTop };
+}
+const clearWsLine = () => document.querySelectorAll(".wsline").forEach(x => x.remove());
 document.addEventListener("dragover", e => {
   if (!drag || !drag.wsRow) return;
-  document.querySelectorAll(".dropmark").forEach(x => x.classList.remove("dropmark"));
-  const head = e.target.closest(".wsh[data-wsh]");
-  if (head) { e.preventDefault(); head.classList.add("dropmark"); }
+  const sb = document.getElementById("sidebar");
+  if (!sb.contains(e.target)) return clearWsLine();
+  e.preventDefault();
+  const { y } = wsSlot(e.clientY);
+  let line = sb.querySelector(".wsline");
+  if (!line) { line = document.createElement("div"); line.className = "wsline"; sb.appendChild(line); }
+  line.style.top = `${y - 4}px`;
 });
 document.addEventListener("drop", e => {
   if (!drag || !drag.wsRow) return;
-  e.preventDefault();
-  const id = drag.wsRow, head = e.target.closest(".wsh[data-wsh]");
-  drag = null;
-  if (!head || head.dataset.wsh === id) return;
-  const w = wsById(id);
-  wss = wss.filter(x => x !== w);
-  wss.splice(wss.indexOf(wsById(head.dataset.wsh)), 0, w);
+  e.preventDefault(); clearWsLine();
+  const id = drag.wsRow; drag = null;
+  if (!document.getElementById("sidebar").contains(e.target)) return;
+  const w = wsById(id), from = wss.indexOf(w);
+  let { slot } = wsSlot(e.clientY);
+  if (slot === from || slot === from + 1) return;
+  if (slot > from) slot--;
+  wss.splice(from, 1); wss.splice(slot, 0, w);
   saveState(); renderSidebar();
 });
+document.addEventListener("dragend", clearWsLine);
+
+// Tab card, as TabCard in the app: hover an agent row for 0.5 s, the card opens to its right;
+// while it is open it jumps at once to the next agent row and stays while the pointer is on it.
+const CARD_TEXT = { waiting: "Needs permission", working: "Working", done: "Done, not seen" };
+const loadedAt = Date.now(), SINCE = { t1: 190, t2: 75, t5: 720 };
+let cardTab = null, cardTimer = 0, closeTimer = 0;
+function elapsed(id) {
+  const s = Math.floor((Date.now() - loadedAt) / 1000) + (SINCE[id] || 0);
+  return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor(s % 3600 / 60)}m`;
+}
+function showCard(id) {
+  const row = document.querySelector(`#sidebar .tab[data-tabid="${id}"]`), t = tabs[id];
+  if (!row || !t) return;
+  let card = $("tabcard");
+  if (!card) { card = document.createElement("div"); card.id = "tabcard"; card.className = "card"; document.body.appendChild(card); }
+  const ask = t.state === "waiting" ? `<div class="req"><code>Edit: docs/spec.md</code><div class="btns"><button data-answer="${id}">Allow</button><button data-answer="${id}">Deny</button></div></div>` : "";
+  card.innerHTML = `<b>${esc(t.title)}</b><div class="dim">${esc(wss.find(w => w.tabs.includes(id)).name)}</div><div class="dim mono"><bdi>${esc(t.cwd)}</bdi></div><div class="st">${AGENT}${dotOf(t.state)}<span>${t.state ? CARD_TEXT[t.state] : "No agent"}</span><span class="dim">${elapsed(id)}</span></div>${ask}`;
+  const r = row.getBoundingClientRect();
+  card.style.left = `${r.right + 8}px`;
+  card.style.top = `${Math.max(8, Math.min(r.top - 6, innerHeight - card.offsetHeight - 8))}px`;
+  cardTab = id;
+}
+function hideCard() { clearTimeout(cardTimer); cardTab = null; const c = $("tabcard"); if (c) c.remove(); }
+document.addEventListener("mouseover", e => {
+  if (drag) return;
+  if (e.target.closest("#tabcard")) { clearTimeout(closeTimer); return; }
+  const row = e.target.closest("#sidebar .tab[data-tabid]");
+  if (!row || !tabs[row.dataset.tabid].agent) return;
+  const id = row.dataset.tabid;
+  clearTimeout(closeTimer); clearTimeout(cardTimer);
+  if (cardTab && cardTab !== id) return showCard(id);
+  if (!cardTab) cardTimer = setTimeout(() => showCard(id), 500);
+});
+document.addEventListener("mouseout", e => {
+  const from = e.target.closest("#sidebar .tab[data-tabid], #tabcard");
+  if (!from || (e.relatedTarget && from.contains(e.relatedTarget))) return;
+  clearTimeout(cardTimer);
+  closeTimer = setTimeout(hideCard, 200);
+});
+document.addEventListener("click", e => {
+  const b = e.target.closest("[data-answer]"); if (!b) return;
+  const t = tabs[b.dataset.answer];
+  t.state = "working"; SINCE[b.dataset.answer] = -Math.floor((Date.now() - loadedAt) / 1000);
+  toast(`${b.textContent}: answer sent to the agent`); hideCard(); saveState(); renderSidebar();
+});
+document.addEventListener("dragstart", hideCard, true);
 document.addEventListener("dragover", e => {
   if (!drag || !drag.tabRow) return;
   document.querySelectorAll(".dropmark").forEach(x => x.classList.remove("dropmark"));

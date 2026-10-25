@@ -324,6 +324,21 @@ with sync_playwright() as p:
         "W13a drag a workspace header before another reorders workspaces",
         pg.evaluate("wss.map(w => w.id)")[0] == "w0",
     )
+    dt = pg.evaluate_handle("new DataTransfer()")
+    box = pg.locator(".wsh[data-wsh='w2']").bounding_box()
+    pg.locator(".wsh[data-wsh='w0']").dispatch_event("dragstart", {"dataTransfer": dt})
+    pg.locator(".wsh[data-wsh='w2']").dispatch_event(
+        "dragover",
+        {"dataTransfer": dt, "clientX": box["x"] + 20, "clientY": box["y"] + 4},
+    )
+    line = pg.locator(".wsline").bounding_box()
+    check(
+        "W13b dragging a workspace draws a line in the gap above the target",
+        line is not None and abs(line["y"] + 2 - box["y"]) <= 6,
+        str(line),
+    )
+    pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+    check("W13c the line goes away when the drag ends", count(".wsline") == 0)
     pg.click(".wsh[data-wsh='w2']")
     pg.reload()
     pg.wait_for_selector(".wsh")
@@ -336,6 +351,34 @@ with sync_playwright() as p:
         "W15 tab order and pins survive a reload",
         "spec" in side_tabs()[0] and "review" in side_tabs()[1],
     )
+    pg.click("#sbToggle")
+    width = pg.locator("#sidebar").bounding_box()["width"]
+    check(
+        "W16 hide sidebar leaves a rail of tab icons",
+        width < 60
+        and count(".wsh") == 0
+        and count("#sidebar .tab[data-tabid]") == pg.evaluate("flat().length"),
+        f"width={width}",
+    )
+    pg.click("#sidebar .tab[data-tabid='t2']")
+    check("W17 a rail icon selects its tab", pg.evaluate("cur") == "t2")
+    pg.reload()
+    pg.wait_for_selector("#sbToggle")
+    check("W18 the rail survives a reload", count(".wsh") == 0)
+    pg.click("#sbToggle")
+    check("W19 show sidebar brings the workspaces back", count(".wsh") == 3)
+    pg.hover(".tab[data-tabid='t1']")
+    pg.wait_for_timeout(700)
+    card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
+    check("C1 hover an agent tab opens its card", "Needs permission" in card, card[:60])
+    pg.click("#tabcard [data-answer]")
+    check(
+        "C2 Allow in the card answers the agent and closes the card",
+        pg.evaluate("tabs.t1.state") == "working" and not vis("#tabcard"),
+    )
+    pg.hover(".tab[data-tabid='t3']")
+    pg.wait_for_timeout(700)
+    check("C3 a tab without an agent opens no card", not vis("#tabcard"))
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")
