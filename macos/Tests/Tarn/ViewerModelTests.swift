@@ -123,8 +123,29 @@ struct ViewerPathsTests {
         #expect(ViewerPaths.classify(dir + "/c.pdf") == .system)
         #expect(ViewerPaths.classify(dir + "/d.svg") == .text)
         #expect(ViewerPaths.classify(dir + "/Makefile") == .text)
+        try FileManager.default.createSymbolicLink(atPath: dir + "/link.md", withDestinationPath: dir + "/a.md")
+        #expect(ViewerPaths.classify(dir + "/link.md") == .text)
         #expect(ViewerPaths.classify(dir) == .directory)
         #expect(ViewerPaths.classify(dir + "/nope") == .missing)
+    }
+
+    @Test func binaryIsDecidedByContent() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        func write(_ name: String, _ data: Data) -> String {
+            let path = dir + "/" + name
+            FileManager.default.createFile(atPath: path, contents: data)
+            return path
+        }
+        #expect(ViewerPaths.isBinary(write("nul", Data([0x61, 0x00, 0x62]))))
+        #expect(ViewerPaths.isBinary(write("bad", Data([0xFF, 0xFE, 0x41]))))
+        #expect(!ViewerPaths.isBinary(write("text", Data("plain \u{e9} text\n".utf8))))
+        #expect(!ViewerPaths.isBinary(write("empty", Data())))
+        // A two-byte character cut by the 8 KB edge stays text.
+        let cut = Data(repeating: 0x61, count: 8191) + Data("\u{e9}".utf8) + Data(repeating: 0x61, count: 100)
+        #expect(!ViewerPaths.isBinary(write("cut", cut)))
+        #expect(ViewerPaths.isBinary("/bin/ls"))
+        #expect(!ViewerPaths.isBinary(dir + "/missing"))
     }
 
     @Test func sourceFilesAreTextAndSpecialFilesAreNeverRead() throws {
@@ -296,5 +317,152 @@ private enum Scratch {
         let dir = NSTemporaryDirectory() + "tarn-viewer-" + UUID().uuidString
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
         return dir
+    }
+}
+
+/// Unsaved edits when a window or the app closes (`ViewerClose`).
+@Suite
+@MainActor
+struct ViewerCloseTests {
+    private func model(editing names: [String: String]) throws -> (ViewerModel, String) {
+        let dir = try Scratch.make()
+        let model = ViewerModel(root: dir)
+        for (name, edit) in names.sorted(by: { $0.key < $1.key }) {
+            let path = dir + "/" + name
+            try "one".write(toFile: path, atomically: true, encoding: .utf8)
+            model.open(OpenTarget(path: path), pin: true)
+            if !edit.isEmpty { model.handle(["t": "edit", "path": path, "text": edit, "rev": 1]) }
+        }
+        return (model, dir)
+    }
+
+    @Test func collectsOnlyDirtyFilesInTabOrder() throws {
+        let (model, dir) = try model(editing: ["a.md": "x", "b.md": "", "c.md": "y"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(model.dirtyPaths == [dir + "/a.md", dir + "/c.md"])
+    }
+
+    @Test func dirtyPathsOfSeveralPanesHaveNoRepeats() throws {
+        let (first, dir) = try model(editing: ["a.md": "x"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let second = ViewerModel(root: dir)
+        second.open(OpenTarget(path: dir + "/a.md"), pin: true)
+        second.handle(["t": "edit", "path": dir + "/a.md", "text": "z", "rev": 1])
+        #expect(ViewerClose.dirtyPaths(in: [first, second]) == [dir + "/a.md"])
+    }
+
+    @Test func saveAllWritesTheFilesAndClearsTheFlags() throws {
+        let (model, dir) = try model(editing: ["a.md": "x", "b.md": "y"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(model.saveAll())
+        #expect(model.dirtyPaths.isEmpty)
+        #expect(try String(contentsOfFile: dir + "/a.md", encoding: .utf8) == "x")
+        #expect(try String(contentsOfFile: dir + "/b.md", encoding: .utf8) == "y")
+    }
+
+    @Test func dontSaveKeepsTheEditsAndSkipsTheQuestionOnce() throws {
+        let (model, dir) = try model(editing: ["a.md": "x"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(ViewerClose.unsettled([model]).count == 1)
+        // Don't Save, then the repeated close passes once.
+        model.discardOnce = true
+        #expect(ViewerClose.unsettled([model]).isEmpty)
+        // Ghostty's own dialog was cancelled: the edits are intact and the next close asks again.
+        #expect(model.dirtyPaths == [dir + "/a.md"])
+        #expect(ViewerClose.unsettled([model]).count == 1)
+        #expect(try String(contentsOfFile: dir + "/a.md", encoding: .utf8) == "one")
+    }
+
+    /// Every direct close of a window or tab must be reachable only after `ViewerClose.intercept`.
+    /// A new call site fails this test until it is reviewed and listed here.
+    @Test func directClosesAreAllReviewed() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources")
+        let reviewed: [String: Int] = [
+            // callers behind ViewerClose.intercept, plus undo and redo (asked at the original close)
+            "TerminalController.swift": 19,
+            "ScriptWindow.swift": 2,
+            "ScriptTab.swift": 2,
+        ]
+        var found: [String: Int] = [:]
+        let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let count = text.components(separatedBy: "closeWindowImmediately(").count - 1
+                + text.components(separatedBy: "closeTabImmediately(").count - 1
+            if count > 0 { found[url.lastPathComponent] = count }
+        }
+        #expect(found == reviewed)
+    }
+
+    @Test func discardMarkIsOnlyInForceDuringTheRepeatedCloseAndNeverLeftBehind() throws {
+        let (model, dir) = try model(editing: ["a.md": "x"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var askedInside = true
+        ViewerClose.discardThen([model]) { askedInside = !ViewerClose.unsettled([model]).isEmpty }
+        #expect(!askedInside)
+        #expect(!model.discardOnce)
+        #expect(ViewerClose.unsettled([model]).count == 1)
+        // A repeated close that never asks again leaves nothing behind either.
+        ViewerClose.discardThen([model]) {}
+        #expect(!model.discardOnce)
+        #expect(model.dirtyPaths.count == 1)
+    }
+
+    @Test func aWindowCloseReachesTheWholeTabGroup() {
+        let first = NSWindow(contentRect: .init(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        let second = NSWindow(contentRect: .init(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        first.tabbingMode = .preferred
+        second.tabbingMode = .preferred
+        #expect(ViewerClose.members(of: first) == [first])
+        first.addTabbedWindow(second, ordered: .above)
+        #expect(Set(ViewerClose.members(of: second).map(ObjectIdentifier.init)) == Set([first, second].map(ObjectIdentifier.init)))
+        #expect(ViewerClose.members(of: nil).isEmpty)
+    }
+
+    @Test func buttonsMapToChoices() {
+        #expect(ViewerClose.choice(for: .alertFirstButtonReturn) == .save)
+        #expect(ViewerClose.choice(for: .alertSecondButtonReturn) == .discard)
+        #expect(ViewerClose.choice(for: .alertThirdButtonReturn) == .cancel)
+        #expect(ViewerClose.choice(for: .cancel) == .cancel)
+    }
+
+    @Test func closeGoesOnForDiscardAndForASuccessfulSaveOnly() {
+        #expect(ViewerClose.proceeds(.discard) { false })
+        #expect(ViewerClose.proceeds(.save) { true })
+        #expect(!ViewerClose.proceeds(.save) { false })
+        #expect(!ViewerClose.proceeds(.cancel) { true })
+    }
+
+    @Test func messageNamesOneFileOrCountsMany() {
+        #expect(ViewerClose.message(for: ["/p/a.md"]).title == "Save changes to a.md?")
+        let many = (1...10).map { "/p/f\($0).md" }
+        let text = ViewerClose.message(for: many)
+        #expect(text.title == "Save changes to 10 files?")
+        #expect(text.detail.contains("f8.md") && !text.detail.contains("f9.md"))
+        #expect(text.detail.contains("and 2 more"))
+    }
+}
+
+/// The web view must not outlive its controller: a window closed without `stop()` frees it.
+@Suite
+@MainActor
+struct ViewerWebLifetimeTests {
+    @Test func controllerIsFreedWhenNothingHoldsIt() async throws {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        var controller: ViewerWebController? = ViewerWebController(model: model)
+        weak var weakController = controller
+        let container = try #require(controller?.container)
+        controller?.start()
+        for _ in 0..<100 where container.subviews.isEmpty {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        #expect(!container.subviews.isEmpty)
+        controller = nil
+        for _ in 0..<20 where weakController != nil {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        #expect(weakController == nil)
     }
 }

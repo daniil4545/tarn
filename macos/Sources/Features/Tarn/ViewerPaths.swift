@@ -87,9 +87,24 @@ enum ViewerPaths {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return .missing }
         if isDirectory.boolValue { return .directory }
-        let values = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isRegularFileKey])
+        let values = try? URL(fileURLWithPath: path).resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey])
         guard values?.isRegularFile == true else { return .special }
         return systemExtensions.contains((path as NSString).pathExtension.lowercased()) ? .system : .text
+    }
+
+    /// Binary by content, as git decides: a NUL byte or invalid UTF-8 in the first 8 KB. A multibyte
+    /// character cut by the 8 KB edge is not invalid.
+    static func isBinary(_ path: String) -> Bool {
+        guard let handle = FileHandle(forReadingAtPath: path) else { return false }
+        defer { try? handle.close() }
+        let limit = 8192
+        guard let head = try? handle.read(upToCount: limit) else { return false }
+        if head.contains(0) { return true }
+        let cut = head.count == limit
+        for trim in 0...(cut ? 3 : 0) where String(data: head.dropLast(trim), encoding: .utf8) != nil {
+            return false
+        }
+        return true
     }
 
     static func isMarkdown(_ path: String) -> Bool {
