@@ -4,7 +4,7 @@ import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { load, save } from "./storage.js";
 import { flatTabs } from "./workspace.js";
-import { tabStatus, workspaceStatus } from "./tab-status.js";
+import { tabStatus, workspaceStatus, isAgentTab } from "./tab-status.js";
 
 export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
@@ -39,7 +39,7 @@ function render() {
   sb.style.width = ui.rail ? "" : `${ui.width}px`;
   const label = ui.rail ? "Show Sidebar" : "Hide Sidebar";
   const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${label}" aria-label="${label}">${TOGGLE}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
-  const icon = (t) => (t.agent ? AGENT : TERM);
+  const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
     sb.innerHTML = top + s.wss.map((w) => w.tabs.map((id) => {
       const t = s.tabs[id];

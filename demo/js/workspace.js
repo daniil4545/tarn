@@ -92,7 +92,7 @@ const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s
 
 function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
   const id = nextId("t"), pane = nextId("p");
-  s.tabs[id] = { id, title, agent: false, cwd, layout: { pane }, focus: pane, zoom: null };
+  s.tabs[id] = { id, title, cwd, layout: { pane }, focus: pane, zoom: null };
   ws.tabs.push(id);
   ensurePane(pane, cwd);
   return id;

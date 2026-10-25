@@ -26,6 +26,9 @@ export function tabStatus(tab, registry) {
   return kind && { ...found.find((f) => f.kind === kind), ...KINDS[kind] };
 }
 
+// A tab is an agent tab while a terminal of it has a session that is not idle.
+export const isAgentTab = (tab, registry) => terminals(tab.layout).some((t) => registry[t.pane] && registry[t.pane].state !== "idle");
+
 export function workspaceStatus(ws, tabs, registry) {
   const all = ws.tabs.map((id) => tabStatus(tabs[id], registry));
   const kind = best(all.map((s) => s?.kind));

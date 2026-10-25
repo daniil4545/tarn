@@ -33,7 +33,7 @@ export function startPalette(keyRows) {
 function draw() {
   const words = input.value.toLowerCase().split(/\s+/).filter(Boolean);
   shown = rows.filter((r) => words.every((w) => `${r.group} ${r.text}`.toLowerCase().includes(w)));
-  list.innerHTML = shown.map((r, i) => `<div class="item${i === pick ? " on" : ""}" role="option" data-row="${i}"><span>${esc(r.text)}</span><kbd>${esc(r.chords[0])}</kbd></div>`).join("") || '<div class="item">No command</div>';
+  list.innerHTML = shown.map((r, i) => `<div class="item${i === pick ? " on" : ""}" role="option" data-row="${i}"><span>${esc(r.text)}</span><kbd>${esc(r.chords[0] ?? "")}</kbd></div>`).join("") || '<div class="item">No command</div>';
 }
 
 function onKey(e) {

@@ -52,7 +52,7 @@ export function configLines() {
 
 function optionSection(name, title) {
   const tail = name === "windows"
-    ? `<p class="setnote">Written to <code>~/.config/tarn/ghostty.conf</code>, loaded after your Ghostty config:</p><pre id="tarnConf">${esc(configLines())}</pre>`
+    ? `<p class="setnote">Written to <code>~/.config/tarn/ghostty.conf</code>, loaded after your Ghostty config:</p><pre id="tarnConf">${esc(configLines())}</pre><p class="setnote"><button class="act" id="resetDemo">Reset demo</button> Forgets the layout, files, history and settings kept in this browser.</p>`
     : `<p class="setnote">Ghostty options. Others, keys included, are in Ghostty Config.</p>`;
   return `<section data-pane="${name}" hidden><h3>${title}</h3><div class="setgroup">${GHOSTTY[name].map(optionRow).join("")}</div>${tail}</section>`;
 }
@@ -124,6 +124,7 @@ function onChange(e) {
 
 function onClick(e) {
   if (e.target === root || e.target.closest("#settingsClose")) return close();
+  if (e.target.closest("#resetDemo")) return bus.cmd("demo.reset");
   if (e.target.closest("#ghosttyConfig")) return bus.emit("toast", { text: "Opens the Ghostty config file" });
   const nav = e.target.closest("#setNav [data-sec]");
   if (nav) return show(nav.dataset.sec);

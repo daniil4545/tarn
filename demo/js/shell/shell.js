@@ -68,6 +68,7 @@ export function createShell({ vfs, emit, write, clock, identity, history, cols, 
 
   const ctx = {
     paneId,
+    planned: new Set(), // tarn subcommands that already printed the planned notice
     vfs,
     identity,
     emit,

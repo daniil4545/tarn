@@ -8,7 +8,7 @@ What every slice may rely on. Source of intent: `docs/plans/s5-demo.md` and `doc
 
 | Part | Writer | Shape |
 |---|---|---|
-| `workspaces` | `main.js` now, `workspace.js` after slice B | `{tabs: {id: {id, title, agent, cwd, layout}}, wss: [{id, name, tabs}], cur}`, seed in `seed.js` |
+| `workspaces` | `main.js` now, `workspace.js` after slice B | `{tabs: {id: {id, title, cwd, layout}}, wss: [{id, name, tabs}], cur}`, seed in `seed.js` |
 | `registry` | `registry.js` | `{paneId: {state, since, seen, failed, request, sawPermissionRequest, permissionAgent, answerable}}` |
 | `config` | `config.js` | `{key: value}` for every key of `OPTIONS` |
 

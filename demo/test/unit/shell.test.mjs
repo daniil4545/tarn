@@ -200,6 +200,18 @@ test("tarn open emits viewer.open and reports a missing file", () => {
   assert.equal(events.filter(([n]) => n === "viewer.open").length, 1);
 });
 
+test("tarn says it is planned on --help and on the first run of each subcommand", () => {
+  const { screen, run } = setup();
+  run("tarn --help");
+  assert.match(screen.text(), /planned: not in the app yet\nusage: tarn/);
+  run("clear");
+  run("tarn ls");
+  assert.match(screen.text(), /planned: not in the app yet/);
+  run("clear");
+  run("tarn ls");
+  assert.doesNotMatch(screen.text(), /planned/);
+});
+
 test("sleep runs on the clock and ctrl-C stops it", () => {
   const { screen, run, clock, shell, type } = setup();
   run("sleep 3");

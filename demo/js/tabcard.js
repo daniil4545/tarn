@@ -4,7 +4,7 @@ import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { clock } from "./clock.js";
 import { AGENT, dot } from "./sidebar.js";
-import { tabStatus } from "./tab-status.js";
+import { tabStatus, isAgentTab } from "./tab-status.js";
 
 const OPEN_AFTER = 500, CLOSE_AFTER = 200;
 let shown = null;
@@ -49,7 +49,7 @@ export function startTabCard() {
     if (document.body.classList.contains("dragging")) return;
     if (e.target.closest("#tabcard")) return clearTimeout(closeTimer);
     const row = e.target.closest("#sidebar .tab[data-tabid]");
-    if (!row || !read("workspaces").tabs[row.dataset.tabid].agent) return;
+    if (!row || !isAgentTab(read("workspaces").tabs[row.dataset.tabid], read("registry"))) return;
     const id = row.dataset.tabid;
     clearTimeout(closeTimer);
     clearTimeout(openTimer);
