@@ -28,6 +28,14 @@ final class ViewerModel {
     var onFocus: (() -> Void)?
     /// True while the page holds keyboard focus.
     var hasFocus: () -> Bool = { false }
+    /// Cmd+Alt+B and Cmd+Shift+E typed in the pane; the host owns the pane's lifetime and focus.
+    var onPaneKey: (() -> Void)?
+    var onFocusTreeKey: (() -> Void)?
+    /// Reported by the page: the focus is inside the files tree.
+    private var treeFocused = false
+
+    /// The tree has the keyboard right now: the page says so and the web view is the first responder.
+    var treeInFocus: Bool { treeFocused && hasFocus() }
 
     init(root: String) {
         tree = FileTree(root: root)
@@ -104,8 +112,17 @@ final class ViewerModel {
         return true
     }
 
+    func focusTreeInPage() {
+        runScript("tarn.focusTree()")
+    }
+
+    func focusContentInPage() {
+        onFocus?()
+        runScript("tarn.focusContent()")
+    }
+
     /// Opens the pane with the tree only, no file (Cmd+B in a terminal with no pane).
-    func showTreeOnly() {
+    func revealTree() {
         treeVisible = true
         pushChrome()
     }
@@ -161,6 +178,8 @@ final class ViewerModel {
         switch name {
         case "save", "mode": runScript("tarn.cmd(\(literal(name)))")
         case "tree": toggleTreeKey()
+        case "pane": onPaneKey?()
+        case "focusTree": onFocusTreeKey?()
         case "closeTab": closeActiveTab()
         default: break
         }
@@ -185,6 +204,7 @@ final class ViewerModel {
         case "closeTab": closeTab(at: index)
         case "closePane": closePane()
         case "toggleTree": toggleTreeKey()
+        case "treeFocus": treeFocused = body["on"] as? Bool == true
         case "hideTree":
             if closeIfEmpty() { return }
             treeVisible = false

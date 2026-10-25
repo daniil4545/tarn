@@ -573,14 +573,14 @@ struct ViewerTreeKeyTests {
 
     @Test func treeOnlyPaneShowsTheTreeWithNoFile() {
         let model = ViewerModel(root: NSTemporaryDirectory())
-        model.showTreeOnly()
+        model.revealTree()
         #expect(model.treeVisible)
         #expect(model.snapshot.isEmpty)
     }
 
     @Test func theKeyInAnEmptyPaneClosesItAndKeepsNothingToReopen() {
         let model = ViewerModel(root: NSTemporaryDirectory())
-        model.showTreeOnly()
+        model.revealTree()
         var closed: [([ViewerTab], Int)] = []
         model.onClosePane = { closed.append(($0, $1)) }
         model.toggleTreeKey()
@@ -619,3 +619,119 @@ struct ViewerTreeKeyTests {
         #expect(saved.map(\.path) == [dir + "/a.md"])
     }
 }
+
+/// Cmd+Alt+B and Cmd+Shift+E over the states: A no pane, B tree only, C files with the tree,
+/// D files without the tree, and a hidden pane.
+@Suite
+@MainActor
+struct ViewerPaneKeysTests {
+    private func hostWithFile(tree: Bool) throws -> (ViewerHost, String) {
+        let dir = try Scratch.make()
+        try "one".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let host = ViewerHost()
+        host.open(OpenTarget(path: dir + "/a.md"), root: dir, focus: false)
+        if tree { host.model?.revealTree() }
+        return (host, dir)
+    }
+
+    @Test func stateAPaneKeyOpensTheTreeOnlyPane() {
+        let host = ViewerHost()
+        host.togglePane(root: NSTemporaryDirectory())
+        #expect(host.model?.treeVisible == true && host.model?.snapshot.isEmpty == true && !host.hidden)
+    }
+
+    @Test func stateBPaneKeyClosesThePane() {
+        let host = ViewerHost()
+        host.togglePane(root: NSTemporaryDirectory())
+        host.togglePane(root: nil)
+        #expect(host.model == nil && !host.hidden)
+    }
+
+    @Test(arguments: [true, false]) func statesCAndDPaneKeyHidesThePaneKeepingTabsAndEdits(tree: Bool) throws {
+        let (host, dir) = try hostWithFile(tree: tree)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = dir + "/a.md"
+        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        host.togglePane(root: nil)
+        #expect(host.hidden)
+        #expect(host.model?.snapshot.map(\.path) == [path])
+        // A hidden pane with unsaved edits still reaches the close dialog.
+        #expect(ViewerClose.dirtyPaths(in: host.model.map { [$0] } ?? []) == [path])
+        // The pane key shows it again as it was.
+        host.togglePane(root: nil)
+        #expect(!host.hidden && host.model?.treeVisible == tree)
+        #expect(host.model?.dirtyPaths == [path])
+    }
+
+    @Test func treeKeyOnAHiddenPaneShowsItWithItsTabs() throws {
+        let (host, dir) = try hostWithFile(tree: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        host.togglePane(root: nil)
+        host.toggleFromKey(root: nil)
+        #expect(!host.hidden && host.model?.snapshot.count == 1 && host.model?.treeVisible == true)
+    }
+
+    @Test func aPathClickShowsAHiddenPaneAndAnAgentOpenLeavesItHidden() throws {
+        let (host, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        host.togglePane(root: nil)
+        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: false)
+        #expect(host.hidden)
+        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: true)
+        #expect(!host.hidden)
+    }
+
+    @Test func closingAHiddenPaneEndsTheHiddenState() throws {
+        let (host, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        host.togglePane(root: nil)
+        host.closePane(saved: [], active: -1)
+        #expect(host.model == nil && !host.hidden)
+    }
+
+    @Test func focusTreeStepCoversEveryCell() {
+        func step(_ open: Bool, _ hidden: Bool, _ focused: Bool, _ files: Bool) -> ViewerHost.FocusTreeStep {
+            ViewerHost.focusTreeStep(paneOpen: open, hidden: hidden, treeFocused: focused, hasFiles: files)
+        }
+        #expect(step(false, false, false, false) == .createAndFocus)
+        #expect(step(true, true, false, true) == .showAndFocus)
+        #expect(step(true, false, false, false) == .focusTree)
+        #expect(step(true, false, false, true) == .focusTree)
+        #expect(step(true, false, true, false) == .leaveToTerminal)
+        #expect(step(true, false, true, true) == .leaveToFile)
+    }
+
+    @Test func focusKeyOpensOrRevealsTheTree() throws {
+        let host = ViewerHost()
+        host.focusTreeFromKey(root: NSTemporaryDirectory())
+        #expect(host.model?.treeVisible == true)
+        let (withFile, dir) = try hostWithFile(tree: false)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        withFile.togglePane(root: nil)
+        withFile.focusTreeFromKey(root: nil)
+        #expect(!withFile.hidden && withFile.model?.treeVisible == true)
+    }
+
+    private func key(_ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags) -> String? {
+        ViewerWebView.command(characters: characters, keyCode: UInt16(code), flags: flags)
+    }
+
+    @Test func modifiersSeparateTheThreeTreeKeys() {
+        #expect(key("b", kVK_ANSI_B, .command) == "tree")
+        #expect(key("b", kVK_ANSI_B, [.command, .option]) == "pane")
+        #expect(key("E", kVK_ANSI_E, [.command, .shift]) == "focusTree")
+        #expect(key("e", kVK_ANSI_E, .command) == "mode")
+        #expect(key("b", kVK_ANSI_B, [.command, .option, .shift]) == nil)
+        #expect(key("e", kVK_ANSI_E, [.command, .option]) == nil)
+        #expect(key("b", kVK_ANSI_B, [.command, .option, .capsLock]) == "pane")
+    }
+
+    @Test func russianLayoutFallsBackToThePhysicalKey() {
+        #expect(key("и", kVK_ANSI_B, [.command, .option]) == "pane")
+        #expect(key("У", kVK_ANSI_E, [.command, .shift]) == "focusTree")
+        // Dvorak: the B key types "x"; the typed letter wins and no pane command results.
+        #expect(key("x", kVK_ANSI_B, [.command, .option]) == nil)
+    }
+}
+

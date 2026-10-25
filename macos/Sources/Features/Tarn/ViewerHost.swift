@@ -10,6 +10,9 @@ import SwiftUI
 final class ViewerHost: ObservableObject {
     @Published private(set) var model: ViewerModel?
     @Published var split: CGFloat = 0.6
+    /// The pane is hidden with Cmd+Alt+B: the model, its tabs and unsaved edits live on, only the
+    /// view is out of the layout. Closing the pane (`closePane`) ends it.
+    @Published private(set) var hidden = false
     private var web: ViewerWebController?
     weak var window: NSWindow?
 
@@ -25,6 +28,8 @@ final class ViewerHost: ObservableObject {
         let responder = focus ? nil : window?.firstResponder
         let typingInPane = !focus && (model?.hasFocus() ?? false)
         let created = model == nil
+        // A click shows a hidden pane (the user acted); an agent's open leaves it hidden.
+        if focus { hidden = false }
         let model = model ?? makePane(root: root ?? NSHomeDirectory())
         guard model.open(target, background: typingInPane) else {
             // A pane this call created for a file that cannot open does not stay; a tree-only pane does.
@@ -52,21 +57,86 @@ final class ViewerHost: ObservableObject {
 
     /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
     /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
-    /// only; otherwise the model decides (an empty pane closes, one with files toggles the tree).
+    /// only; a hidden pane comes back with its tabs; otherwise the model decides (an empty pane
+    /// closes, one with files toggles the tree).
     func toggleFromKey(root: String?) {
-        guard let model else {
-            let responder = window?.firstResponder
-            makePane(root: root ?? NSHomeDirectory()).showTreeOnly()
-            keepFocus(responder)
-            return
-        }
+        guard let model else { return openTreeOnly(root: root) }
+        if hidden { return show() }
         model.toggleTreeKey()
+    }
+
+    /// Cmd+Alt+B (View menu "Toggle Pane"): hides the whole pane keeping tabs and unsaved edits, or
+    /// shows it again. A pane with no file has nothing to keep and closes.
+    func togglePane(root: String?) {
+        guard let model else { return openTreeOnly(root: root) }
+        if hidden { return show() }
+        if model.snapshot.isEmpty { return closePane(saved: [], active: -1) }
+        hidden = true
+        returnFocusToTerminal()
+    }
+
+    /// What Cmd+Shift+E does, by the state of the pane and of the focus.
+    enum FocusTreeStep: Equatable {
+        case createAndFocus, showAndFocus, focusTree, leaveToTerminal, leaveToFile
+    }
+
+    static func focusTreeStep(paneOpen: Bool, hidden: Bool, treeFocused: Bool, hasFiles: Bool) -> FocusTreeStep {
+        if !paneOpen { return .createAndFocus }
+        if hidden { return .showAndFocus }
+        if !treeFocused { return .focusTree }
+        return hasFiles ? .leaveToFile : .leaveToTerminal
+    }
+
+    /// Cmd+Shift+E (View menu "Focus Files"): the keyboard goes to the tree; the same key again
+    /// returns it to the file, or to the terminal when the pane has no file.
+    func focusTreeFromKey(root: String?) {
+        switch Self.focusTreeStep(
+            paneOpen: model != nil, hidden: hidden,
+            treeFocused: model?.treeInFocus ?? false, hasFiles: !(model?.snapshot.isEmpty ?? true)
+        ) {
+        case .createAndFocus:
+            openTreeOnly(root: root, focusTree: true)
+        case .showAndFocus:
+            hidden = false
+            model?.revealTree()
+            focusTreeSoon()
+        case .focusTree:
+            model?.revealTree()
+            focusTreeSoon()
+        case .leaveToTerminal:
+            returnFocusToTerminal()
+        case .leaveToFile:
+            model?.focusContentInPage()
+        }
+    }
+
+    private func focusTreeSoon() {
+        DispatchQueue.main.async { [weak self] in
+            self?.model?.onFocus?()
+            self?.model?.focusTreeInPage()
+        }
+    }
+
+    private func openTreeOnly(root: String?, focusTree: Bool = false) {
+        let responder = window?.firstResponder
+        makePane(root: root ?? NSHomeDirectory()).revealTree()
+        if focusTree { focusTreeSoon() } else { keepFocus(responder) }
+    }
+
+    private func show() {
+        hidden = false
+    }
+
+    private func returnFocusToTerminal() {
+        if let surface = controller?.focusedSurface { Ghostty.moveFocus(to: surface) }
     }
 
     private func makePane(root: String) -> ViewerModel {
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
         model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active) }
+        model.onPaneKey = { [weak self] in self?.togglePane(root: nil) }
+        model.onFocusTreeKey = { [weak self] in self?.focusTreeFromKey(root: nil) }
         self.model = model
         self.web = web
         web.start()
@@ -82,7 +152,8 @@ final class ViewerHost: ObservableObject {
         web?.stop()
         web = nil
         self.model = nil
-        if let surface = controller?.focusedSurface { Ghostty.moveFocus(to: surface) }
+        hidden = false
+        returnFocusToTerminal()
         guard !saved.isEmpty, let controller, let undoManager = controller.undoManager else { return }
         let root = model.tree.root
         undoManager.setActionName("Close Viewer")
@@ -99,6 +170,16 @@ extension TerminalController {
     @IBAction func toggleViewerTree(_ sender: Any?) {
         viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
     }
+
+    /// The View menu item "Toggle Pane" (Cmd+Alt+B).
+    @IBAction func toggleViewerPane(_ sender: Any?) {
+        viewerHost.togglePane(root: focusedSurface?.workingDirectory)
+    }
+
+    /// The View menu item "Focus Files" (Cmd+Shift+E).
+    @IBAction func focusViewerTree(_ sender: Any?) {
+        viewerHost.focusTreeFromKey(root: focusedSurface?.workingDirectory)
+    }
 }
 
 /// Puts the viewer pane to the right of a window's terminal area.
@@ -114,7 +195,7 @@ struct ViewerLayout<Content: View>: View {
     }
 
     var body: some View {
-        if let model = host.model, let container = host.container {
+        if let model = host.model, !host.hidden, let container = host.container {
             SplitView(.horizontal, $host.split, dividerColor: ghostty.config.splitDividerColor, left: {
                 content
             }, right: {
