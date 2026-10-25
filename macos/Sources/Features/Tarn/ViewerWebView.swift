@@ -10,7 +10,7 @@ import WebKit
 final class ViewerWebView: WKWebView {
     /// The Cmd keys the web view handles itself: key, command sent to the page, text for Help.
     static let keyTable: [(key: String, command: String, help: String)] = [
-        ("b", "tree", "Show or hide the file tree"),
+        ("b", "tree", "Show or hide the file tree (in the terminal: View, Toggle Files)"),
         ("e", "mode", "View or source"),
         ("s", "save", "Save the file"),
     ]

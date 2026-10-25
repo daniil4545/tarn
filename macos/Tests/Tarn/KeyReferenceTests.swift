@@ -49,5 +49,7 @@ struct KeyReferenceTests {
         let viewer = KeyReference.groups.first { $0.title == "Viewer" }
         #expect(viewer?.rows.map(\.source) == Array(repeating: "tarn", count: 4))
         #expect(viewer?.rows.compactMap(\.fixedKeys).contains("⌘S") == true)
+        // Cmd+B also works from the terminal (View > Toggle Files); the row says so.
+        #expect(viewer?.rows.first { $0.fixedKeys == "⌘B" }?.label.contains("Toggle Files") == true)
     }
 }
