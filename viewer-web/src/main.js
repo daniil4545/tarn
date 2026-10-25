@@ -499,7 +499,7 @@ $("vtree").addEventListener("keydown", e => {
   else if (e.key === "Enter") {
     e.preventDefault();
     if (row.kind === "dir") post({ t: "treeToggle", path: row.path });
-    else post({ t: "treeOpen", path: row.path, pin: e.shiftKey || e.metaKey });
+    else post({ t: "treeOpen", path: row.path, pin: e.shiftKey || e.metaKey, enter: true });
   } else if (e.key === "Escape") { e.preventDefault(); post({ t: "hideTree" }); }
 });
 
@@ -507,6 +507,4 @@ window.addEventListener("error", e => post({ t: "error", message: String(e.messa
 window.addEventListener("unhandledrejection", e => post({ t: "error", message: String(e.reason) }));
 window.addEventListener("focus", () => window.tarn.setFocus(true));
 window.addEventListener("blur", () => { flushEdit(); window.tarn.setFocus(false); });
-$("vtree").addEventListener("focusin", () => post({ t: "treeFocus", on: true }));
-$("vtree").addEventListener("focusout", () => post({ t: "treeFocus", on: false }));
 post({ t: "ready" });

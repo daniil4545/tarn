@@ -55,62 +55,17 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
-    /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
-    /// only and the keyboard in the tree; a hidden pane comes back with its tabs; otherwise the
-    /// model decides (an empty pane closes and the terminal gets the keyboard, one with files
-    /// toggles the tree and the keyboard follows).
+    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in the pane (the web
+    /// view takes the key first, so there is one path per focus). It opens and hides, it never closes:
+    /// no pane opens one with the tree and the keyboard in it; a hidden pane comes back as it was
+    /// with the keyboard in it; a shown pane (with files or not) hides whole, tabs, unsaved edits and
+    /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
-        guard let model else { return openTreeOnly(root: root, focusTree: true) }
-        if hidden { return show() }
-        model.toggleTreeKey()
-    }
-
-    /// Cmd+Alt+B (View menu "Toggle Pane"): hides the whole pane keeping tabs and unsaved edits, or
-    /// shows it again. A pane with no file has nothing to keep and closes.
-    func togglePane(root: String?) {
         guard let model else { return openTreeOnly(root: root) }
         if hidden { return show() }
-        if model.snapshot.isEmpty { return closePane(saved: [], active: -1, undoable: true) }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
         model.flushPendingEdit()
-        hidden = true
-        returnFocusToTerminal()
-    }
-
-    /// What Cmd+Shift+E does, by the state of the pane and of the focus.
-    enum FocusTreeStep: Equatable {
-        case createAndFocus, showAndFocus, focusTree, leaveToTerminal, leaveToFile
-    }
-
-    static func focusTreeStep(paneOpen: Bool, hidden: Bool, treeFocused: Bool, hasFiles: Bool) -> FocusTreeStep {
-        if !paneOpen { return .createAndFocus }
-        if hidden { return .showAndFocus }
-        if !treeFocused { return .focusTree }
-        return hasFiles ? .leaveToFile : .leaveToTerminal
-    }
-
-    /// Cmd+Shift+E (View menu "Focus Files"): the keyboard goes to the tree; the same key again
-    /// returns it to the file, or to the terminal when the pane has no file.
-    func focusTreeFromKey(root: String?) {
-        switch Self.focusTreeStep(
-            paneOpen: model != nil, hidden: hidden,
-            treeFocused: model?.treeInFocus ?? false, hasFiles: !(model?.snapshot.isEmpty ?? true)
-        ) {
-        case .createAndFocus:
-            openTreeOnly(root: root, focusTree: true)
-        case .showAndFocus:
-            hidden = false
-            model?.revealTree()
-            focusTreeSoon()
-        case .focusTree:
-            model?.revealTree()
-            focusTreeSoon()
-        case .leaveToTerminal:
-            returnFocusToTerminal()
-        case .leaveToFile:
-            model?.focusContentInPage()
-        }
+        hidePane()
     }
 
     private func focusTreeSoon() {
@@ -119,24 +74,22 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    private func openTreeOnly(root: String?, focusTree: Bool = false) {
-        let responder = window?.firstResponder
+    private func openTreeOnly(root: String?) {
         makePane(root: root ?? NSHomeDirectory()).revealTree()
-        if focusTree { focusTreeSoon() } else { keepFocus(responder) }
+        focusTreeSoon()
     }
 
-    /// Cmd+B in a pane with no file: hide the pane, keep its tree state, keyboard to the terminal.
-    func hideEmptyPane() {
+    /// Hides the pane keeping its model; the keyboard goes to the terminal.
+    func hidePane() {
         hidden = true
         returnFocusToTerminal()
     }
 
-    /// Brings a hidden pane back. The layout change takes the first responder from the terminal;
-    /// give it back, as Ghostty's `moveFocus` does after a split change (SurfaceView.swift:1075).
+    /// Brings a hidden pane back with the keyboard in it. The focus request waits for the web view to
+    /// join the window, as Ghostty's `moveFocus` does after a split change (SurfaceView.swift:1075).
     private func show() {
-        let responder = window?.firstResponder
         hidden = false
-        keepFocus(responder)
+        DispatchQueue.main.async { [weak self] in self?.model?.onFocus?() }
     }
 
     private func returnFocusToTerminal() {
@@ -147,9 +100,8 @@ final class ViewerHost: ObservableObject {
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
         model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active, undoable: true) }
-        model.onHidePane = { [weak self] in self?.hideEmptyPane() }
-        model.onPaneKey = { [weak self] in self?.togglePane(root: nil) }
-        model.onFocusTreeKey = { [weak self] in self?.focusTreeFromKey(root: nil) }
+        model.onHidePane = { [weak self] in self?.hidePane() }
+        model.onPaneKey = { [weak self] in self?.toggleFromKey(root: nil) }
         self.model = model
         self.web = web
         web.start()
@@ -186,19 +138,9 @@ final class ViewerHost: ObservableObject {
 }
 
 extension TerminalController {
-    /// The View menu item "Toggle Files" (Cmd+B), found through the responder chain from the terminal.
-    @IBAction func toggleViewerTree(_ sender: Any?) {
+    /// The View menu item "Toggle File Viewer" (Cmd+B), found through the responder chain from the terminal.
+    @IBAction func toggleViewer(_ sender: Any?) {
         viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
-    }
-
-    /// The View menu item "Toggle Pane" (Cmd+Alt+B).
-    @IBAction func toggleViewerPane(_ sender: Any?) {
-        viewerHost.togglePane(root: focusedSurface?.workingDirectory)
-    }
-
-    /// The View menu item "Focus Files" (Cmd+Shift+E).
-    @IBAction func focusViewerTree(_ sender: Any?) {
-        viewerHost.focusTreeFromKey(root: focusedSurface?.workingDirectory)
     }
 }
 

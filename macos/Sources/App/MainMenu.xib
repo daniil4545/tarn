@@ -372,21 +372,9 @@
                                     <action selector="toggleTerminalInspector:" target="-1" id="87m-3R-fQl"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Toggle Files" keyEquivalent="b" id="Tf1-Vw-Fb1">
+                            <menuItem title="Toggle File Viewer" keyEquivalent="b" id="Tf1-Vw-Fb1">
                                 <connections>
-                                    <action selector="toggleViewerTree:" target="-1" id="Tf2-Vw-Fb2"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Toggle Pane" keyEquivalent="b" id="Tf3-Vw-Fb3">
-                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
-                                <connections>
-                                    <action selector="toggleViewerPane:" target="-1" id="Tf4-Vw-Fb4"/>
-                                </connections>
-                            </menuItem>
-                            <menuItem title="Focus Files" keyEquivalent="e" id="Tf5-Vw-Fb5">
-                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
-                                <connections>
-                                    <action selector="focusViewerTree:" target="-1" id="Tf6-Vw-Fb6"/>
+                                    <action selector="toggleViewer:" target="-1" id="Tf2-Vw-Fb2"/>
                                 </connections>
                             </menuItem>
                         </items>

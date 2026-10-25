@@ -540,300 +540,54 @@ struct ViewerClickAndKeyTests {
     }
 }
 
-/// Cmd+B: opens a tree-only pane, closes a pane with no file, toggles the tree of a pane with files.
+/// The one pane key, Cmd+B, over the states of the pane (user decision 2026-10-25, PR #3 comment
+/// 6396372910): no pane, hidden, shown with no file, shown with files. Cmd+B opens and hides and
+/// never closes; Cmd+W closes. Test-change: replaces the tests of the earlier three-key scheme.
 @Suite
 @MainActor
-struct ViewerTreeKeyTests {
-    @Test func undoOfACloseWhoseFilesAreGoneShowsTheTree() {
-        let model = ViewerModel(root: NSTemporaryDirectory())
-        model.reopen([ViewerTab(path: "/nonexistent/a.md", preview: false, line: nil, jump: 0)], active: 0)
-        #expect(model.snapshot.isEmpty)
-        #expect(model.treeVisible)
-    }
-
-    @Test func hostCreatesATreeOnlyPaneThatSurvivesAFailedOpenAndHidesOnTheNextKey() throws {
-        let dir = try Scratch.make()
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        let host = ViewerHost()
-        let missing = OpenTarget(path: dir + "/nope.md", line: nil)
-        // An open that fails in a pane it created leaves no pane behind.
-        #expect(!host.open(missing, root: dir, focus: false))
-        #expect(host.model == nil)
-        // Cmd+B from the terminal opens the tree-only pane.
-        host.toggleFromKey(root: dir)
-        #expect(host.model?.treeVisible == true)
-        #expect(host.model?.snapshot.isEmpty == true)
-        // A failed open does not take that pane away.
-        #expect(!host.open(missing, root: dir, focus: false))
-        #expect(host.model != nil)
-        // The next Cmd+B hides the empty pane; it never closes it.
-        host.toggleFromKey(root: dir)
-        #expect(host.model != nil && host.hidden)
-    }
-
-    @Test func treeOnlyPaneShowsTheTreeWithNoFile() {
-        let model = ViewerModel(root: NSTemporaryDirectory())
-        model.revealTree()
-        #expect(model.treeVisible)
-        #expect(model.snapshot.isEmpty)
-    }
-
-    @Test func cmdBAndEscInAnEmptyPaneHideItAndOnlyCmdWClosesIt() {
-        let model = ViewerModel(root: NSTemporaryDirectory())
-        model.revealTree()
-        var closed = 0
-        var hidden = 0
-        model.onClosePane = { _, _ in closed += 1 }
-        model.onHidePane = { hidden += 1 }
-        model.toggleTreeKey()
-        model.handle(["t": "hideTree"])
-        model.handle(["t": "toggleTree"])
-        #expect(hidden == 3 && closed == 0)
-        // Cmd+W with the focus in the empty pane closes it.
-        model.command("closeTab")
-        #expect(closed == 1 && hidden == 3)
-    }
-
-    @Test func theKeyInAPaneWithFilesOnlyTogglesTheTree() throws {
-        let dir = try Scratch.make()
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
-        let model = ViewerModel(root: dir)
-        model.open(OpenTarget(path: dir + "/a.md"))
-        var closes = 0
-        model.onClosePane = { _, _ in closes += 1 }
-        let before = model.treeVisible
-        model.toggleTreeKey()
-        #expect(model.treeVisible != before)
-        model.toggleTreeKey()
-        #expect(model.treeVisible == before)
-        #expect(closes == 0 && model.snapshot.count == 1)
-    }
-
-    @Test func lastTabStillClosesThePane() throws {
-        let dir = try Scratch.make()
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
-        let model = ViewerModel(root: dir)
-        model.open(OpenTarget(path: dir + "/a.md"))
-        var saved: [ViewerTab] = []
-        model.onClosePane = { tabs, _ in saved = tabs }
-        model.closeActiveTab()
-        #expect(saved.map(\.path) == [dir + "/a.md"])
-    }
-}
-
-/// Cmd+Alt+B and Cmd+Shift+E over the states: A no pane, B tree only, C files with the tree,
-/// D files without the tree, and a hidden pane.
-@Suite
-@MainActor
-struct ViewerPaneKeysTests {
-    private func hostWithFile(tree: Bool) throws -> (ViewerHost, String) {
+struct ViewerPaneKeyTests {
+    private func hostWithFile() throws -> (ViewerHost, String) {
         let dir = try Scratch.make()
         try "one".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
         let host = ViewerHost()
         host.open(OpenTarget(path: dir + "/a.md"), root: dir, focus: false)
-        if tree { host.model?.revealTree() }
         return (host, dir)
-    }
-
-    @Test func stateAPaneKeyOpensTheTreeOnlyPane() {
-        let host = ViewerHost()
-        host.togglePane(root: NSTemporaryDirectory())
-        #expect(host.model?.treeVisible == true && host.model?.snapshot.isEmpty == true && !host.hidden)
-    }
-
-    @Test func stateBPaneKeyClosesThePane() {
-        let host = ViewerHost()
-        host.togglePane(root: NSTemporaryDirectory())
-        host.togglePane(root: nil)
-        #expect(host.model == nil && !host.hidden)
-    }
-
-    @Test(arguments: [true, false]) func statesCAndDPaneKeyHidesThePaneKeepingTabsAndEdits(tree: Bool) throws {
-        let (host, dir) = try hostWithFile(tree: tree)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        let path = dir + "/a.md"
-        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
-        host.togglePane(root: nil)
-        #expect(host.hidden)
-        #expect(host.model?.snapshot.map(\.path) == [path])
-        // A hidden pane with unsaved edits still reaches the close dialog.
-        #expect(ViewerClose.dirtyPaths(in: host.model.map { [$0] } ?? []) == [path])
-        // The pane key shows it again as it was.
-        host.togglePane(root: nil)
-        #expect(!host.hidden && host.model?.treeVisible == tree)
-        #expect(host.model?.dirtyPaths == [path])
-    }
-
-    @Test func treeKeyOnAHiddenPaneShowsItWithItsTabs() throws {
-        let (host, dir) = try hostWithFile(tree: true)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        host.togglePane(root: nil)
-        host.toggleFromKey(root: nil)
-        #expect(!host.hidden && host.model?.snapshot.count == 1 && host.model?.treeVisible == true)
-    }
-
-    @Test func aPathClickShowsAHiddenPaneAndAnAgentOpenLeavesItHidden() throws {
-        let (host, dir) = try hostWithFile(tree: false)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
-        host.togglePane(root: nil)
-        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: false)
-        #expect(host.hidden)
-        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: true)
-        #expect(!host.hidden)
-    }
-
-    @Test func closingAHiddenPaneEndsTheHiddenState() throws {
-        let (host, dir) = try hostWithFile(tree: false)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        host.togglePane(root: nil)
-        host.closePane(saved: [], active: -1)
-        #expect(host.model == nil && !host.hidden)
-    }
-
-    @Test func focusTreeStepCoversEveryCell() {
-        func step(_ open: Bool, _ hidden: Bool, _ focused: Bool, _ files: Bool) -> ViewerHost.FocusTreeStep {
-            ViewerHost.focusTreeStep(paneOpen: open, hidden: hidden, treeFocused: focused, hasFiles: files)
-        }
-        #expect(step(false, false, false, false) == .createAndFocus)
-        #expect(step(true, true, false, true) == .showAndFocus)
-        #expect(step(true, false, false, false) == .focusTree)
-        #expect(step(true, false, false, true) == .focusTree)
-        #expect(step(true, false, true, false) == .leaveToTerminal)
-        #expect(step(true, false, true, true) == .leaveToFile)
-    }
-
-    @Test func focusKeyOpensOrRevealsTheTree() throws {
-        let host = ViewerHost()
-        host.focusTreeFromKey(root: NSTemporaryDirectory())
-        #expect(host.model?.treeVisible == true)
-        let (withFile, dir) = try hostWithFile(tree: false)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        withFile.togglePane(root: nil)
-        withFile.focusTreeFromKey(root: nil)
-        #expect(!withFile.hidden && withFile.model?.treeVisible == true)
-    }
-
-    private func key(_ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags) -> String? {
-        ViewerWebView.command(characters: characters, keyCode: UInt16(code), flags: flags)
-    }
-
-    @Test func modifiersSeparateTheThreeTreeKeys() {
-        #expect(key("b", kVK_ANSI_B, .command) == "tree")
-        #expect(key("b", kVK_ANSI_B, [.command, .option]) == "pane")
-        #expect(key("E", kVK_ANSI_E, [.command, .shift]) == "focusTree")
-        #expect(key("e", kVK_ANSI_E, .command) == "mode")
-        #expect(key("b", kVK_ANSI_B, [.command, .option, .shift]) == nil)
-        #expect(key("e", kVK_ANSI_E, [.command, .option]) == nil)
-        #expect(key("b", kVK_ANSI_B, [.command, .option, .capsLock]) == "pane")
-    }
-
-    @Test func russianLayoutFallsBackToThePhysicalKey() {
-        #expect(key("и", kVK_ANSI_B, [.command, .option]) == "pane")
-        #expect(key("У", kVK_ANSI_E, [.command, .shift]) == "focusTree")
-        // Dvorak: the B key types "x"; the typed letter wins and no pane command results.
-        #expect(key("x", kVK_ANSI_B, [.command, .option]) == nil)
-    }
-
-    // MARK: Review round: focus, stale tree focus, undo, pending edit
-
-    private final class Responder: NSView {
-        override var acceptsFirstResponder: Bool { true }
     }
 
     private func spin(_ seconds: TimeInterval) async throws {
         try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
     }
 
-    @Test func showingAHiddenPaneGivesTheFirstResponderBackToTheTerminal() async throws {
-        let (host, dir) = try hostWithFile(tree: false)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
-        let terminal = Responder()
-        window.contentView = NSView()
-        window.contentView?.addSubview(terminal)
-        host.window = window
-        host.togglePane(root: nil)
-        window.makeFirstResponder(terminal)
-        host.togglePane(root: nil)
-        // SwiftUI swaps the layout and the terminal loses the first responder.
-        window.makeFirstResponder(nil)
-        try await spin(0.4)
-        #expect(window.firstResponder === terminal)
-    }
+    // MARK: Cmd+B, one test per cell of the table
 
-    @Test func focusWaitsForTheWebViewToJoinAWindow() async throws {
-        let model = ViewerModel(root: NSTemporaryDirectory())
-        let web = ViewerWebController(model: model)
-        web.start()
-        for _ in 0..<100 where web.container.subviews.isEmpty { try await spin(0.1) }
-        let view = try #require(web.container.subviews.first)
-        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
-        web.focus()
-        // The layout puts the container into the window after the request.
-        window.contentView = web.container
-        try await spin(0.4)
-        #expect(window.firstResponder === view)
-    }
-
-    @Test func aHiddenTreeCannotHoldTheFocusWhateverThePageSaid() {
-        let model = ViewerModel(root: NSTemporaryDirectory())
-        model.hasFocus = { true }
-        model.handle(["t": "treeFocus", "on": true])
-        #expect(!model.treeInFocus)
-        model.revealTree()
-        #expect(model.treeInFocus)
-    }
-
-    @Test func undoWhileAnotherPaneIsHiddenShowsItWithTheTabs() throws {
-        let (host, dir) = try hostWithFile(tree: false)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
-        host.togglePane(root: nil)
-        host.restore([ViewerTab(path: dir + "/b.md", preview: false, line: nil, jump: 0)], active: 0, root: dir)
-        #expect(!host.hidden)
-        #expect(host.model?.snapshot.map(\.path).contains(dir + "/b.md") == true)
-    }
-
-    @Test func hidingThePaneSendsThePendingEditFirst() throws {
-        let (host, dir) = try hostWithFile(tree: false)
-        defer { try? FileManager.default.removeItem(atPath: dir) }
-        var calls: [String] = []
-        host.model?.handle(["t": "ready"])
-        host.model?.script = { calls.append($0) }
-        host.togglePane(root: nil)
-        #expect(calls.contains("tarn.flush()"))
-    }
-
-    // MARK: Cmd+B moves the keyboard with the tree
-
-    @Test func treeKeyOpeningThePaneFocusesTheTree() async throws {
+    @Test func noPaneOpensItWithTheTreeAndTheKeyboardInTheTree() async throws {
         let host = ViewerHost()
         host.toggleFromKey(root: NSTemporaryDirectory())
         var calls: [String] = []
         host.model?.handle(["t": "ready"])
         host.model?.script = { calls.append($0) }
         try await spin(0.2)
+        #expect(host.model?.treeVisible == true && host.model?.snapshot.isEmpty == true && !host.hidden)
         #expect(calls.contains("tarn.focusTree()"))
     }
 
-    @Test func treeKeyInAPaneWithFilesFocusesTheTreeWhenShownAndTheFileWhenHidden() throws {
-        let (host, dir) = try hostWithFile(tree: false)
+    @Test func hiddenPaneComesBackAsItWasHiddenWithTheKeyboardInIt() async throws {
+        let (host, dir) = try hostWithFile()
         defer { try? FileManager.default.removeItem(atPath: dir) }
-        var calls: [String] = []
+        let path = dir + "/a.md"
+        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        host.model?.revealTree()
+        host.toggleFromKey(root: nil)
+        #expect(host.hidden)
         var grabs = 0
-        host.model?.handle(["t": "ready"])
-        host.model?.script = { calls.append($0) }
         host.model?.onFocus = { grabs += 1 }
         host.toggleFromKey(root: nil)
-        #expect(host.model?.treeVisible == true && calls.last == "tarn.focusTree()" && grabs == 1)
-        host.toggleFromKey(root: nil)
-        #expect(host.model?.treeVisible == false && calls.last == "tarn.focusContent()" && grabs == 2)
+        try await spin(0.1)
+        #expect(!host.hidden && host.model?.snapshot.map(\.path) == [path] && host.model?.treeVisible == true)
+        #expect(host.model?.dirtyPaths == [path] && grabs == 1)
     }
 
-    @Test func treeKeyHidesAnEmptyPaneKeepingItsTreeStateAndShowsItAsItWas() throws {
+    @Test func shownPaneWithNoFileHidesAndKeepsItsTreeState() throws {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         try FileManager.default.createDirectory(atPath: dir + "/sub", withIntermediateDirectories: true)
@@ -847,16 +601,210 @@ struct ViewerPaneKeysTests {
         #expect(!host.hidden && host.model?.tree.rows().count == rows && host.model?.treeVisible == true)
     }
 
-    @Test func closingAnEmptyPaneIsUndoableLikeOtherCloses() throws {
+    @Test(arguments: [true, false]) func shownPaneWithFilesHidesWholeKeepingTabsEditsAndTree(tree: Bool) throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = dir + "/a.md"
+        if tree { host.model?.revealTree() }
+        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        host.toggleFromKey(root: nil)
+        #expect(host.hidden)
+        #expect(host.model?.snapshot.map(\.path) == [path] && host.model?.treeVisible == tree)
+        // A hidden pane with unsaved edits still reaches the close dialog.
+        #expect(ViewerClose.dirtyPaths(in: host.model.map { [$0] } ?? []) == [path])
+    }
+
+    @Test func cmdBNeverClosesInAnyState() throws {
+        let (withFile, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let empty = ViewerHost()
+        for host in [empty, withFile] {
+            host.toggleFromKey(root: dir)
+            for _ in 0..<4 {
+                host.toggleFromKey(root: nil)
+                #expect(host.model != nil)
+            }
+        }
+    }
+
+    // MARK: Cmd+W, the Files button, Esc, Enter
+
+    @Test func cmdWInAPaneWithNoFileClosesIt() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        var closed = 0
+        var hidden = 0
+        model.onClosePane = { _, _ in closed += 1 }
+        model.onHidePane = { hidden += 1 }
+        model.command("closeTab")
+        #expect(closed == 1 && hidden == 0)
+    }
+
+    @Test func cmdWClosesTheActiveTabAndTheLastTabClosesThePane() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        for name in ["a.md", "b.md"] { try "x".write(toFile: dir + "/" + name, atomically: true, encoding: .utf8) }
+        let model = ViewerModel(root: dir)
+        model.open(OpenTarget(path: dir + "/a.md"), pin: true)
+        model.open(OpenTarget(path: dir + "/b.md"), pin: true)
+        var saved: [ViewerTab] = []
+        var closes = 0
+        model.onClosePane = { tabs, _ in saved = tabs; closes += 1 }
+        model.command("closeTab")
+        #expect(model.snapshot.count == 1 && closes == 0)
+        model.command("closeTab")
+        #expect(closes == 1 && saved.count == 1)
+    }
+
+    @Test func filesButtonAndEscToggleTheTreeOfAPaneWithFilesAndHideAnEmptyPane() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        model.open(OpenTarget(path: dir + "/a.md"))
+        let before = model.treeVisible
+        model.handle(["t": "toggleTree"])
+        #expect(model.treeVisible != before)
+        model.handle(["t": "hideTree"])
+        #expect(!model.treeVisible)
+        let empty = ViewerModel(root: dir)
+        var hidden = 0
+        empty.onHidePane = { hidden += 1 }
+        empty.handle(["t": "toggleTree"])
+        empty.handle(["t": "hideTree"])
+        #expect(hidden == 2)
+    }
+
+    @Test func enterOnAFileInTheTreeOpensItAndMovesTheKeyboardIntoIt() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        var calls: [String] = []
+        model.handle(["t": "ready"])
+        model.script = { calls.append($0) }
+        model.handle(["t": "treeOpen", "path": dir + "/a.md", "enter": true])
+        #expect(model.snapshot.map(\.path) == [dir + "/a.md"])
+        #expect(calls.last == "tarn.focusContent()")
+        // A click on a file does not steal the keyboard from the tree.
+        calls = []
+        model.handle(["t": "treeOpen", "path": dir + "/a.md"])
+        #expect(!calls.contains("tarn.focusContent()"))
+    }
+
+    // MARK: Keys
+
+    private func key(_ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags) -> String? {
+        ViewerWebView.command(characters: characters, keyCode: UInt16(code), flags: flags)
+    }
+
+    @Test func onlyCmdBIsAPaneKeyAndTheRetiredChordsAreNot() {
+        #expect(key("b", kVK_ANSI_B, .command) == "tree")
+        #expect(key("и", kVK_ANSI_B, .command) == "tree")
+        #expect(key("b", kVK_ANSI_B, [.command, .option]) == nil)
+        #expect(key("E", kVK_ANSI_E, [.command, .shift]) == nil)
+        #expect(key("e", kVK_ANSI_E, .command) == "mode")
+        #expect(key("b", kVK_ANSI_B, [.command, .capsLock]) == "tree")
+    }
+
+    // MARK: Lifetime and focus kept from the earlier rounds
+
+    @Test func hostCreatesATreeOnlyPaneThatSurvivesAFailedOpen() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let host = ViewerHost()
+        let missing = OpenTarget(path: dir + "/nope.md", line: nil)
+        #expect(!host.open(missing, root: dir, focus: false))
+        #expect(host.model == nil)
+        host.toggleFromKey(root: dir)
+        #expect(!host.open(missing, root: dir, focus: false))
+        #expect(host.model != nil)
+    }
+
+    @Test func undoOfACloseWhoseFilesAreGoneShowsTheTree() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.reopen([ViewerTab(path: "/nonexistent/a.md", preview: false, line: nil, jump: 0)], active: 0)
+        #expect(model.snapshot.isEmpty && model.treeVisible)
+    }
+
+    @Test func undoWhileAnotherPaneIsHiddenShowsItWithTheTabs() throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        host.toggleFromKey(root: nil)
+        host.restore([ViewerTab(path: dir + "/b.md", preview: false, line: nil, jump: 0)], active: 0, root: dir)
+        #expect(!host.hidden && host.model?.snapshot.map(\.path).contains(dir + "/b.md") == true)
+    }
+
+    @Test func undoOfAnEmptyPaneCloseBringsBackThePaneWithItsTree() throws {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let host = ViewerHost()
         host.toggleFromKey(root: dir)
         host.model?.command("closeTab")
         #expect(host.model == nil)
-        // The undo closure calls `restore` with what the close saved: an empty pane with its tree.
         host.restore([], active: -1, root: dir)
         #expect(host.model?.treeVisible == true && host.model?.snapshot.isEmpty == true)
     }
-}
 
+    @Test func aPathClickShowsAHiddenPaneAndAnAgentOpenLeavesItHidden() throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        host.toggleFromKey(root: nil)
+        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: false)
+        #expect(host.hidden)
+        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: true)
+        #expect(!host.hidden)
+    }
+
+    @Test func closingAHiddenPaneEndsTheHiddenState() throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        host.toggleFromKey(root: nil)
+        host.closePane(saved: [], active: -1)
+        #expect(host.model == nil && !host.hidden)
+    }
+
+    @Test func hidingThePaneSendsThePendingEditFirst() throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var calls: [String] = []
+        host.model?.handle(["t": "ready"])
+        host.model?.script = { calls.append($0) }
+        host.toggleFromKey(root: nil)
+        #expect(calls.contains("tarn.flush()"))
+    }
+
+    private final class Responder: NSView {
+        override var acceptsFirstResponder: Bool { true }
+    }
+
+    @Test func layoutChangeGivesTheTerminalItsFirstResponderBackOnAnAgentOpen() async throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
+        let terminal = Responder()
+        window.contentView = NSView()
+        window.contentView?.addSubview(terminal)
+        host.window = window
+        window.makeFirstResponder(terminal)
+        host.open(OpenTarget(path: dir + "/b.md"), root: dir, focus: false)
+        window.makeFirstResponder(nil)
+        try await spin(0.4)
+        #expect(window.firstResponder === terminal)
+    }
+
+    @Test func focusWaitsForTheWebViewToJoinAWindow() async throws {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        let web = ViewerWebController(model: model)
+        web.start()
+        for _ in 0..<100 where web.container.subviews.isEmpty { try await spin(0.1) }
+        let view = try #require(web.container.subviews.first)
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
+        web.focus()
+        window.contentView = web.container
+        try await spin(0.4)
+        #expect(window.firstResponder === view)
+    }
+}
