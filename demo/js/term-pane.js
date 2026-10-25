@@ -41,6 +41,7 @@ export function createPane(id, { cwd }) {
   el.append(host);
 
   let term = null;
+  let wantsFocus = false;
   let shell = null;
   let identity = LOCAL;
   let adjust = 0;
@@ -55,7 +56,9 @@ export function createPane(id, { cwd }) {
     get term() { return term; },
     get cwd() { return shell ? tilde(shell.cwd, identity.home) : cwd; },
     get busy() { return shell?.busy ?? null; },
-    focus: () => term?.focus(),
+    focus() {
+      if (term) term.focus(); else wantsFocus = true;
+    },
     screenText: () => term?.screenText() ?? "",
     applyConfig,
     adjustFont,
@@ -138,6 +141,7 @@ export function createPane(id, { cwd }) {
     term = await createTerm(host, engineOptions(config, adjust));
     term.optionAsAlt = optionAsAlt(config["macos-option-as-alt"]);
     term.copyOnSelect = copyOnSelect(config["copy-on-select"]);
+    if (wantsFocus) term.focus();
     addPaneLinks(term, {
       vfs,
       cwd: () => shell?.cwd ?? startDirectory(cwd),

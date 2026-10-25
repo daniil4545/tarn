@@ -61,7 +61,11 @@ class Term {
 
   constructor(t, parent) {
     this.#t = t;
+    // The engine focuses itself on open (and again on a timer); a pane opened by the boot must not
+    // take the focus, so its focus() is silent while it opens.
+    t.focus = () => {};
     t.open(parent);
+    delete t.focus;
     alignMetricsToDevicePixels(t.renderer);
     skipIdleFrames(t);
     t.loadAddon(this.#fit);

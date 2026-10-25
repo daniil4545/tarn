@@ -2,6 +2,7 @@
 
 Run: nice -n 10 uv run --with playwright python -I demo/test/check_0.py
 Spike item 10 (reserved browser keys) is manual: demo/test/keys.html.
+Everything runs on the real index.html; the engine items add bare adapter terminals over the window.
 """
 
 import pathlib
@@ -22,6 +23,30 @@ for (const m of ['fillRect', 'fillText', 'clearRect', 'drawImage', 'stroke', 'fi
 }
 """
 
+STAGE = """async () => {
+  const { createTerm } = await import('/js/term-adapter.js');
+  const host = Object.assign(document.createElement('div'), { id: 'spike-host' });
+  host.style.cssText = 'position:fixed;left:0;top:0;z-index:9999;background:#000';
+  document.body.append(host);
+  window.make = async (opts = {}) => {
+    const el = document.createElement('div');
+    el.style.cssText = 'width:640px;height:300px';
+    host.append(el);
+    return createTerm(el, { fontSize: 14, fontFamily: '"JetBrains Mono", monospace', ...opts });
+  };
+}"""
+
+
+def engine_page(base, **kwargs):
+    """The real page with the bare-adapter stage: `make()` mounts a terminal in an overlay."""
+    return browser_page(base, "index.html", **kwargs)
+
+
+def stage(pg):
+    pg.wait_for_selector("html[data-ready=true]")
+    pg.evaluate(STAGE)
+
+
 MAKE = "async () => { const t = await make(); window.t = t; window.got = []; t.onData(d => got.push(d)); return [t.cols, t.rows]; }"
 
 
@@ -32,12 +57,12 @@ def pressed(pg, key):
 
 
 def spike_basics(base):
-    with browser_page(base, "test/engine.html", init=DRAWS) as (pg, errors, _):
-        pg.wait_for_function("window.ready")
+    with engine_page(base, init=DRAWS) as (pg, errors, _):
+        stage(pg)
         cols, rows = pg.evaluate(MAKE)
         check(
             "spike 1 load from static server, terminal draws",
-            cols > 40 and pg.locator("canvas").count() == 1,
+            cols > 40 and pg.locator("#spike-host canvas").count() == 1,
         )
 
         pg.evaluate(
@@ -151,8 +176,11 @@ def spike_basics(base):
 
 
 def spike_idle(base):
-    with browser_page(base, "test/engine.html", init=DRAWS) as (pg, _, _):
-        pg.wait_for_function("window.ready")
+    with engine_page(base, init=DRAWS) as (pg, _, _):
+        stage(pg)
+        pg.evaluate(
+            "import('/js/bus.js').then(m => m.bus.cmd('config.set', {key: 'cursor-style-blink', value: 'false'}))"
+        )
         pg.evaluate(
             "async () => { window.ts = []; for (let i = 0; i < 6; i++) { const t = await make({fontSize: 12}); t.write('hi\\r\\n'); ts.push(t); } }"
         )
@@ -175,7 +203,7 @@ def spike_dpr(base):
       const t = await make(); window.t = t;
       t.write('\\x1b[44m' + ' '.repeat(t.cols) + '\\x1b[0m\\r\\n'); t.write('\\x1b[44m' + ' '.repeat(t.cols) + '\\x1b[0m');
       await new Promise(r => setTimeout(r, 400));
-      const c = document.querySelector('canvas'), ctx = c.getContext('2d');
+      const c = document.querySelector('#spike-host canvas'), ctx = c.getContext('2d');
       const w = Math.floor(c.width / t.cols * (t.cols - 1));
       const h = Math.floor(2 * c.height / t.rows);
       const px = ctx.getImageData(0, 0, w, h).data, colours = new Set();
@@ -183,8 +211,8 @@ def spike_dpr(base):
       return [...colours];
     }"""
     for dpr in (1, 1.25, 1.5, 2):
-        with browser_page(base, "test/engine.html", dpr=dpr) as (pg, _, _):
-            pg.wait_for_function("window.ready")
+        with engine_page(base, dpr=dpr) as (pg, _, _):
+            stage(pg)
             colours = pg.evaluate(probe)
             check(f"spike 9 no seams at DPR {dpr}", len(colours) == 1, str(colours))
 
@@ -249,8 +277,8 @@ CONTRACT = """async () => {
   window.pings = [];
   bus.bus.handle('ping', p => pings.push(p));
   keymap.installKeys([
-    {id: 'p1', chords: ['Cmd+K'], when: 'terminal', group: 'g', text: 't', cmd: 'ping', payload: 'term'},
-    {id: 'p2', chords: ['Cmd+K'], when: 'viewer', group: 'g', text: 't', cmd: 'ping', payload: 'view'},
+    {id: 'p1', chords: ['Cmd+Y'], when: 'terminal', group: 'g', text: 't', cmd: 'ping', payload: 'term'},
+    {id: 'p2', chords: ['Cmd+Y'], when: 'viewer', group: 'g', text: 't', cmd: 'ping', payload: 'view'},
     {id: 'p3', chords: ['Cmd+J'], alt: ['Ctrl+Alt+J'], when: 'any', group: 'g', text: 't', cmd: 'ping', payload: 'j'},
   ], {focus: () => 'terminal'});
   return out;
@@ -279,8 +307,8 @@ def contracts(base):
             ),
         )
         check(
-            "stub pane readable through __tarn.screen",
-            "pane p1" in pg.evaluate("__tarn.screen('p1')"),
+            "terminal pane readable through __tarn.screen",
+            "Claude Code" in pg.evaluate("__tarn.screen('p1')"),
         )
 
         r = pg.evaluate(CONTRACT)
@@ -343,12 +371,12 @@ def contracts(base):
             return pg.evaluate("pings.slice()")
 
         check(
-            "keymap: Cmd+K resolves by focus area",
-            press("k", "KeyK", metaKey=True) == ["term"],
+            "keymap: Cmd+Y resolves by focus area",
+            press("y", "KeyY", metaKey=True) == ["term"],
         )
         check(
             "keymap: Cyrillic layout still matches by code",
-            press("л", "KeyK", metaKey=True) == ["term"],
+            press("н", "KeyY", metaKey=True) == ["term"],
         )
         check(
             "keymap: fallback chord Ctrl+Alt+J with Option symbol",
