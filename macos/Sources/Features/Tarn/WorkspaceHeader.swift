@@ -47,6 +47,8 @@ struct WorkspaceHeader: View {
         .onHover { isHovering = $0 }
         .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.workspace.id)) }
         .overlay(alignment: .bottom) { dropLine(endsHere) }
+        .padding(.vertical, Sidebar.rowGap / 2)
+        .padding(.horizontal, Sidebar.listInset)
         .overlay(
             SidebarInteraction(
                 payload: { (.workspace, group.workspace.id.uuidString) },
@@ -60,7 +62,7 @@ struct WorkspaceHeader: View {
                     model.drop(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
                 },
                 dragEnded: { _, _ in model.dragExit() },
-                excludedTrailing: isHovering ? 24 : 0
+                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0
             )
         )
         .accessibilityAddTraits(.isButton)
