@@ -4,6 +4,14 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ## [Unreleased]
 
+### Added
+
+- App identity: `Tarn.app`, bundle id `com.daniil4545.tarn`, version 1.0.0, own icon. It installs next to Ghostty and shares its config files.
+- `tarn.mk` with `check` and `release`; the release is an ad-hoc signed zip, see `docs/install.md`.
+
+### Changed
+
+- No updater: the menu item is gone and no feed is set. Sidebar settings saved by a Debug build under the old Ghostty bundle id are not carried over.
 ### Fixed
 
 - Sidebar drag and drop: a workspace or tab can be dropped below the last row, the drop line no longer blinks over the gaps between rows, the only tab of a workspace dropped on it no longer moves the workspace to the end, and a drag from another window shows no line.

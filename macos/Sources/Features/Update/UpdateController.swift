@@ -21,6 +21,9 @@ class UpdateController {
         viewModel.state.shouldTerminateWithoutWarning
     }
 
+    /// Off in tarn: there is no appcast, and Ghostty builds must never be offered.
+    private static let isEnabled = false
+
     /// Initialize a new update controller.
     init() {
         let hostBundle = Bundle.main
@@ -60,6 +63,9 @@ class UpdateController {
     ///
     /// This is typically connected to a menu item action.
     func checkForUpdates() {
+        // tarn has no updater: the key action and the menu item end here.
+        guard Self.isEnabled else { return }
+
         // If we're already idle, then just check for updates immediately.
         if viewModel.state == .idle {
             updater.checkForUpdates()
