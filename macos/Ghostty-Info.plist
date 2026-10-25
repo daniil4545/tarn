@@ -49,7 +49,7 @@
 	<key>GhosttyBuild</key>
 	<string></string>
 	<key>GhosttyCommit</key>
-	<string></string>
+	<string>$(GHOSTTY_COMMIT)</string>
 	<key>LSEnvironment</key>
 	<dict>
 		<key>GHOSTTY_MAC_LAUNCH_SOURCE</key>
