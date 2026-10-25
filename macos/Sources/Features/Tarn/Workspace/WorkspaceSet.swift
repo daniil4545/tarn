@@ -140,6 +140,13 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
+    /// Adds a workspace that already has an identity, for an undone close.
+    mutating func add(_ workspace: Workspace) {
+        guard self.workspace(workspace.id) == nil else { return }
+        workspaces.append(workspace)
+        revision += 1
+    }
+
     /// Puts `tab` in `workspace`, leaving the one it was in.
     mutating func join(_ tab: TabKey, to workspace: Workspace.ID) {
         guard self.workspace(workspace) != nil, members[tab] != workspace else { return }
@@ -208,7 +215,7 @@ struct WorkspaceSet: Equatable {
     ///   Membership is already final; the caller makes the moves.
     mutating func reconcile(previous: [TabKey], current: [TabKey], target: Workspace.ID) -> [Reorder] {
         let before = self
-        let fresh = current.filter { members[$0] == nil }
+        let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         if !fresh.isEmpty {
             let heir = ensureWorkspace(target)
             for tab in fresh { members[tab] = heir }
