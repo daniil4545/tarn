@@ -1,6 +1,7 @@
 // The asset scheme handler follows MarkEdit EditorViewController.swift (MIT); see THIRD_PARTY.md.
 
 import AppKit
+import Carbon.HIToolbox
 import OSLog
 import WebKit
 
@@ -16,11 +17,29 @@ final class ViewerWebView: WKWebView {
 
     var onCommand: ((String) -> Void)?
 
+    /// The pane command of a Cmd+key press. The typed letter decides, as for the menu, so Dvorak and
+    /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
+    /// the S key types "ы") the physical key decides.
+    static func command(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
+        guard flags.intersection([.shift, .control, .option, .command]) == .command else { return nil }
+        let letter: String
+        if let characters, characters.count == 1, characters.unicodeScalars.allSatisfy(\.isASCII) {
+            letter = characters.lowercased()
+        } else {
+            switch Int(keyCode) {
+            case kVK_ANSI_S: letter = "s"
+            case kVK_ANSI_E: letter = "e"
+            case kVK_ANSI_B: letter = "b"
+            default: return nil
+            }
+        }
+        return keyTable.first { $0.key == letter }?.command
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
-              event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
-              let command = Self.keyTable.first(where: { $0.key == event.charactersIgnoringModifiers })?.command
+              let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags)
         else { return super.performKeyEquivalent(with: event) }
         onCommand?(command)
         return true
