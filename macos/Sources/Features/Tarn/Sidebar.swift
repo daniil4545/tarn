@@ -439,11 +439,23 @@ final class SidebarModel: ObservableObject {
 
     // MARK: Drag and drop
 
-    /// A drag is over a row or header. True when the drop would do something.
-    func dragOver(_ kind: SidebarDragKind, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
-        let slot = Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
+    /// A drag is over a row or header. True when the drop would do something: a payload from
+    /// another window shows no line, as its drop is refused.
+    func dragOver(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
+        let slot = isOwn(kind, value: value)
+            ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
+            : nil
         if dropSlot != slot { dropSlot = slot }
         return slot != nil
+    }
+
+    /// The dragged tab or workspace belongs to this window.
+    private func isOwn(_ kind: SidebarDragKind, value: String) -> Bool {
+        guard let id = UUID(uuidString: value) else { return false }
+        switch kind {
+        case .tab: return tab(withKey: id) != nil
+        case .workspace: return groups.contains { $0.id == id }
+        }
     }
 
     func dragExit() {
@@ -667,17 +679,23 @@ struct Sidebar: View {
                 .padding(.horizontal, 6)
                 .frame(height: 36)
 
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 2) {
-                        ForEach(model.groups) { group in
-                            WorkspaceHeader(model: model, group: group)
-                            ForEach(visibleTabs(of: group)) { tab in
-                                SidebarRow(model: model, tab: tab, isCompact: false)
+                GeometryReader { proxy in
+                    ScrollView {
+                        VStack(spacing: 0) {
+                            LazyVStack(alignment: .leading, spacing: 2) {
+                                ForEach(model.groups) { group in
+                                    WorkspaceHeader(model: model, group: group)
+                                    ForEach(visibleTabs(of: group)) { tab in
+                                        SidebarRow(model: model, tab: tab, isCompact: false)
+                                    }
+                                }
                             }
+                            .padding(.horizontal, 6)
+                            // The rest of the height takes drops after the last row.
+                            tail.frame(maxWidth: .infinity, minHeight: 24, maxHeight: .infinity)
                         }
+                        .frame(minHeight: proxy.size.height)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.bottom, 6)
                 }
             }
         }
@@ -687,6 +705,17 @@ struct Sidebar: View {
     /// A folded workspace shows no tabs (D6); selecting one of them unfolds it (Q9).
     private func visibleTabs(of group: SidebarModel.Group) -> [SidebarModel.Tab] {
         group.workspace.collapsed ? [] : group.tabs
+    }
+
+    private var tail: some View {
+        Color.clear.overlay(
+            SidebarInteraction(
+                onClick: {},
+                dragOver: { kind, value, _ in model.dragOver(kind, value: value, over: .tail, lowerHalf: true) },
+                dragExit: { model.dragExit() },
+                drop: { kind, value, _ in model.drop(kind, value: value, over: .tail, lowerHalf: true) }
+            )
+        )
     }
 
     private var collapseButton: some View {
@@ -768,12 +797,16 @@ private struct SidebarRow: View {
             .accessibilityAction { model.select(tab) }
     }
 
-    /// The drop line goes under the last tab of a workspace dropped at its end.
+    /// The drop line goes under the last tab of a workspace dropped at its end, and under the
+    /// last tab of the last workspace for a drop after every workspace.
     private var endsHere: Bool {
-        guard case .endOfWorkspace(let id) = model.dropSlot,
-              let group = model.groups.first(where: { $0.id == id })
-        else { return false }
-        return group.tabs.last?.key == tab.key
+        let group: SidebarModel.Group?
+        switch model.dropSlot {
+        case .endOfWorkspace(let id): group = model.groups.first { $0.id == id }
+        case .end: group = model.groups.last
+        default: group = nil
+        }
+        return group?.tabs.last?.key == tab.key
     }
 
     private var interaction: some View {
@@ -787,8 +820,8 @@ private struct SidebarRow: View {
                 }
             },
             menu: { model.contextMenu(for: tab) },
-            dragOver: { kind, lowerHalf in
-                model.dragOver(kind, over: .tab(tab.key), lowerHalf: lowerHalf)
+            dragOver: { kind, value, lowerHalf in
+                model.dragOver(kind, value: value, over: .tab(tab.key), lowerHalf: lowerHalf)
             },
             dragExit: { model.dragExit() },
             drop: { kind, value, lowerHalf in

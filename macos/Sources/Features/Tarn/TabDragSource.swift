@@ -42,6 +42,8 @@ enum SidebarDropSlot: Equatable {
 enum SidebarDropTarget: Equatable {
     case tab(TabKey)
     case header(Workspace.ID)
+    /// The empty sidebar below the last row.
+    case tail
 }
 
 extension SidebarModel {
@@ -76,6 +78,12 @@ extension SidebarModel {
             else { return nil }
             let before = (row + (lowerHalf ? 1 : 0)) * 2 <= groups[index].tabs.count
             return before ? .beforeWorkspace(groups[index].workspace.id) : slot(after: index, in: groups)
+
+        case (.tab, .tail):
+            return groups.last.map { .endOfWorkspace($0.workspace.id) }
+
+        case (.workspace, .tail):
+            return groups.isEmpty ? nil : .end
         }
     }
 
@@ -90,9 +98,9 @@ extension SidebarModel {
 struct SidebarInteraction: NSViewRepresentable {
     var payload: (() -> (kind: SidebarDragKind, value: String)?)?
     var onClick: () -> Void
-    var menu: () -> NSMenu
+    var menu: (() -> NSMenu)?
     /// The pointer is over this view with `kind` dragged; true accepts it.
-    var dragOver: (SidebarDragKind, _ lowerHalf: Bool) -> Bool
+    var dragOver: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
     var dragExit: () -> Void
     var drop: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
     /// The drag ended at a screen point; true when somebody took it.
@@ -127,7 +135,7 @@ struct SidebarInteraction: NSViewRepresentable {
         var payload: (() -> (kind: SidebarDragKind, value: String)?)?
         var onClick: () -> Void = {}
         var menuProvider: (() -> NSMenu)?
-        var dragOver: (SidebarDragKind, Bool) -> Bool = { _, _ in false }
+        var dragOver: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
         var dragExit: () -> Void = {}
         var drop: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
         var dragEnded: (NSPoint, Bool) -> Void = { _, _ in }
@@ -231,7 +239,10 @@ struct SidebarInteraction: NSViewRepresentable {
         }
 
         private func respond(_ info: NSDraggingInfo) -> NSDragOperation {
-            guard let kind = kind(of: info), dragOver(kind, lowerHalf(info)) else { return [] }
+            guard let kind = kind(of: info),
+                  let value = info.draggingPasteboard.string(forType: kind.pasteboardType),
+                  dragOver(kind, value, lowerHalf(info))
+            else { return [] }
             return .move
         }
 
