@@ -691,6 +691,37 @@ struct ViewerPaneKeyTests {
         #expect(!calls.contains("tarn.focusContent()"))
     }
 
+    @Test func enterOnAFileThatDoesNotOpenLeavesTheKeyboardInTheTree() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let model = ViewerModel(root: dir)
+        var calls: [String] = []
+        model.handle(["t": "ready"])
+        model.script = { calls.append($0) }
+        model.handle(["t": "treeOpen", "path": dir + "/gone.md", "enter": true])
+        #expect(model.snapshot.isEmpty)
+        #expect(!calls.contains("tarn.focusContent()"))
+    }
+
+    @Test func hidingThePaneGivesTheKeyboardToTheTerminal() throws {
+        let (host, dir) = try hostWithFile()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var returned = 0
+        host.focusTerminal = { returned += 1 }
+        host.toggleFromKey(root: nil)
+        #expect(host.hidden && returned == 1)
+        // Showing it gives the keyboard to the pane, not back to the terminal.
+        host.toggleFromKey(root: nil)
+        #expect(!host.hidden && returned == 1)
+        // An empty pane hides the same way.
+        let empty = ViewerHost()
+        var emptyReturned = 0
+        empty.focusTerminal = { emptyReturned += 1 }
+        empty.toggleFromKey(root: dir)
+        empty.toggleFromKey(root: nil)
+        #expect(empty.hidden && emptyReturned == 1)
+    }
+
     // MARK: Keys
 
     private func key(_ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags) -> String? {

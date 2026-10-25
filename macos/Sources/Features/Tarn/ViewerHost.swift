@@ -10,7 +10,7 @@ import SwiftUI
 final class ViewerHost: ObservableObject {
     @Published private(set) var model: ViewerModel?
     @Published var split: CGFloat = 0.6
-    /// The pane is hidden with Cmd+Alt+B: the model, its tabs and unsaved edits live on, only the
+    /// The pane is hidden with Cmd+B: the model, its tabs and unsaved edits live on, only the
     /// view is out of the layout. Closing the pane (`closePane`) ends it.
     @Published private(set) var hidden = false
     private var web: ViewerWebController?
@@ -92,7 +92,11 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { [weak self] in self?.model?.onFocus?() }
     }
 
+    /// Replaced in tests, which have no terminal window.
+    var focusTerminal: (() -> Void)?
+
     private func returnFocusToTerminal() {
+        if let focusTerminal { return focusTerminal() }
         if let surface = controller?.focusedSurface { Ghostty.moveFocus(to: surface) }
     }
 

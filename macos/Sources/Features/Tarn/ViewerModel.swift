@@ -216,9 +216,9 @@ final class ViewerModel {
             pushChrome()
         case "treeOpen":
             if let path {
-                open(OpenTarget(path: path), pin: body["pin"] as? Bool == true)
-                // Enter on a file moves the keyboard into it.
-                if body["enter"] as? Bool == true { focusContentInPage() }
+                let opened = open(OpenTarget(path: path), pin: body["pin"] as? Bool == true)
+                // Enter on a file moves the keyboard into it; a file that did not open leaves it in the tree.
+                if opened, body["enter"] as? Bool == true { focusContentInPage() }
             }
         case "edit":
             if let path, let text = body["text"] as? String, isCurrent(path, body) { edit(path, text) }
