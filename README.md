@@ -68,7 +68,7 @@ planned parts: [demo/README.md](demo/README.md).
 
 Preview [`tarn-v0.0.1`](https://github.com/daniil4545/tarn/releases/tag/tarn-v0.0.1), built from
 source, has the sidebar, agent groups, state dots and the card. The viewer, workspaces and the
-settings window are in the source on branches and are not in that release. Not in yet: `tarn` CLI,
+settings window (PRs #3-#5) and the demo (PR #6) are not in that release. Not in yet: `tarn` CLI,
 notifications, own app name and icon. The app still builds as `Ghostty.app`.
 
 ## Quick start

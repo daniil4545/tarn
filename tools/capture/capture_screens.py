@@ -12,7 +12,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from capture_lib import TAB, focus, open_page, run, server, show_pane, sync_playwright, until  # noqa: E402
 
 OUT = pathlib.Path(__file__).resolve().parents[2] / "docs" / "assets" / "screens"
-SPEC = "/Users/daniil/Dev/self-projects/tarn/docs/spec.md"
+SPEC = "/Users/you/code/tarn/docs/spec.md"
 
 
 def shot(pg, name):
