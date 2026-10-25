@@ -384,6 +384,7 @@ struct ViewerCloseTests {
             "TerminalController.swift": 19,
             "ScriptWindow.swift": 2,
             "ScriptTab.swift": 2,
+            "Sidebar.swift": 1, // Close Other / Below, behind ViewerClose.intercept (Sidebar.close(_:title:from:))
         ]
         var found: [String: Int] = [:]
         let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))

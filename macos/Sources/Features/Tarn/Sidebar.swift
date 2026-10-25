@@ -352,14 +352,19 @@ final class SidebarModel: ObservableObject {
             anchor.undoManager?.setActionName(title)
             anchor.undoManager?.endUndoGrouping()
         }
-        guard controllers.contains(where: { $0.surfaceTree.contains { $0.needsConfirmQuit } }) else {
+        // Unsaved viewer edits of any closing tab are settled first (never lost).
+        let settled = { [window] in
+            if ViewerClose.intercept(controllers, window: window, proceed: closeAll) { return }
             closeAll()
+        }
+        guard controllers.contains(where: { $0.surfaceTree.contains { $0.needsConfirmQuit } }) else {
+            settled()
             return
         }
         anchor.confirmClose(
             messageText: "\(title)?",
             informativeText: "At least one of these tabs still has a running process. If you close the tab the process will be killed.",
-            completion: closeAll
+            completion: settled
         )
     }
 
