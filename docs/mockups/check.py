@@ -128,13 +128,13 @@ with sync_playwright() as p:
     check("20 again restores the layout", count("[data-pid]") == 4)
     pg.keyboard.press("Meta+w")
     check("21 cmd+W closes a terminal", count(".tpane") == 2)
-    check("21a every terminal has a header", count(".tph") == count(".tpane"))
-    drag(pg, ".tpane >> nth=0 >> .tph", ".tpane >> nth=1", 0.5, 0.95)
+    check("21a every terminal has a grab handle", count(".grip") == count(".tpane"))
+    drag(pg, ".tpane >> nth=0 >> .grip", ".tpane >> nth=1", 0.5, 0.95)
     check(
-        "21b drag a terminal header to a terminal bottom edge stacks them",
+        "21b drag a terminal grab handle to a terminal bottom edge stacks them",
         count(".block > .split.col") == 1 and count(".tpane") == 2,
     )
-    drag(pg, ".tpane >> nth=0 >> .tph", ".vpane", 0.9, 0.5)
+    drag(pg, ".tpane >> nth=0 >> .grip", ".vpane", 0.9, 0.5)
     check(
         "21c a terminal dropped on a viewer is refused",
         count(".block .tpane") == 2 and count(".block > .split.col") == 1,
@@ -159,15 +159,20 @@ with sync_playwright() as p:
     pg.keyboard.press("Meta+z")
     check("25a cmd+Z brings back a closed viewer", count(".vpane") == 2)
 
-    pg.click("[data-seg='header'] [data-v='auto']")
-    hidden = pg.evaluate("getComputedStyle(document.querySelector('.tph')).opacity")
-    check("25b header on hover is hidden until hover", hidden == "0")
+    def dots():
+        return pg.evaluate(
+            "getComputedStyle(document.querySelector('.tpane .grip svg')).opacity"
+        )
+
+    pg.mouse.move(5, 5)
+    check("25b grab handle dots are hidden away from the pane top", dots() == "0")
+    box = n(".tpane").first.bounding_box()
+    pg.mouse.move(box["x"] + 30, box["y"] + 20)
+    pg.wait_for_timeout(200)
+    check("25c dots show in the top band of the pane", dots() == "0.3", dots())
     pg.click("[data-seg='header'] [data-v='never']")
-    check("25c header never", not vis(".tph"))
-    pg.click("[data-seg='header'] [data-v='always']")
-    pg.once("dialog", lambda d: d.accept("agent: spec"))
-    pg.dblclick(".tph .t >> nth=0")
-    check("25d double click renames a terminal", "agent: spec" in pg.inner_text(".tph"))
+    check("25d drag-handle never removes the handle", not vis(".grip"))
+    pg.click("[data-seg='header'] [data-v='auto']")
 
     sd = n(".sdiv.row").first.bounding_box()
     w0 = n("[data-pid]").first.bounding_box()["width"]

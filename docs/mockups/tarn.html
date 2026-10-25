@@ -139,15 +139,13 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: var(--chrome); padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
 
 .tpane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
-.tph { flex: none; height: 27px; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; background: var(--chrome); border-bottom: 1px solid #000; font-size: 12px; color: var(--muted); cursor: grab; user-select: none; }
-/* Header follows Ghostty's drag-handle option: always, auto (on hover), never. */
-.ws.h-auto .tph { position: absolute; top: 0; left: 0; right: 0; z-index: 3; opacity: 0; transition: opacity .12s; }
-.ws.h-auto .tpane:hover .tph { opacity: 1; }
-.ws.h-never .tph { display: none; }
-.tpane.focus .tph { color: var(--fg); box-shadow: inset 0 2px 0 var(--purple); }
-.tph .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tph .ib { color: var(--muted); }
-.tph .ib:hover { background: rgba(255,255,255,.08); color: var(--fg); }
+/* Ghostty's SurfaceGrabHandle: an 80x12 grab area at the top center with an ellipsis.
+   drag-handle auto shows it while the pointer is in the top 20% of the pane; always and never as named. */
+.grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 12px; z-index: 3; display: grid; place-items: center; cursor: grab; color: var(--fg); }
+.grip svg { opacity: 0; transition: opacity .12s; margin-top: -3px; }
+.tpane.near .grip svg, .ws.h-always .grip svg { opacity: .3; }
+.grip:hover svg { opacity: .8; }
+.ws.h-never .grip { display: none; }
 /* Ghostty dims an unfocused split (unfocused-split-opacity 0.7). */
 .tpane:not(.focus) .term { opacity: .7; }
 .term { flex: 1; min-width: 0; padding: 10px 12px; font: 13px/1.55 var(--mono); overflow: auto; white-space: pre-wrap; word-break: break-word; }
@@ -248,7 +246,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 <div class="mock" role="group" aria-label="Mockup controls">
   <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, settings window with the tab style, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
-  <span>Terminal header (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="true">always</button><button data-v="auto" aria-pressed="false">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
+  <span>Terminal grab handle (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="false">always</button><button data-v="auto" aria-pressed="true">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
   <button class="act" id="agentTab" title="Mock of tarn new from an agent in ~/Dev/Galera">Agent opens a tab in ~/Dev/Galera</button>
   <button class="act" id="openSettings">Settings ⌘,</button>
   <button class="act" id="soloDemo" title="All tabs go to Default, other workspaces are removed">One workspace</button>
@@ -488,7 +486,7 @@ const SEED = {
 // its own split tree of terminal panes (the Ghostty split tree in the app).
 const docs = {};
 for (const k in FILES) docs[k] = { text: FILES[k], saved: FILES[k], v: 0, banner: false, disk: null, edits: 0 };
-const opt = { theme: "dark", header: "always" };
+const opt = { theme: "dark", header: "auto" };
 const folded = new Set(["plugin"]);
 let seq = 0;
 const nid = p => p + (++seq);
@@ -716,7 +714,7 @@ function nodeHtml(n) {
   if (n.type === "block") return `<div class="block" data-bid="${n.id}">${nodeHtml(n.root)}</div>`;
   if (n.type === "term") {
     const t = tabs[cur], main = n.n === 0, agent = main && t.agent;
-    const head = `<div class="tph" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${agent ? AGENT : TERM_ICON}<span class="t" title="Double click to rename">${esc(n.title || (main ? t.title : "zsh · ~/Dev/self-projects/tarn"))}</span>${agent ? dotOf(t.state) : ""}<button class="ib" data-tclose="${n.id}" title="Close terminal (⌘W)">✕</button></div>`;
+    const head = `<div class="grip" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge"><svg width="16" height="4" viewBox="0 0 16 4" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="14" cy="2" r="1.6"/></svg></div>`;
     return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? (SEED_TERM[t.id] || shell(1, t.cwd)) : shell(n.n + 1, t.cwd)}</div></section>`;
   }
   return viewerHtml(n);
@@ -1024,10 +1022,11 @@ document.addEventListener("click", async e => {
   if (t.id === "toggleFiles") return toggleFiles();
   if (t.id === "agentEdit") return agentEdit();
 });
-document.addEventListener("dblclick", e => {
-  const tt = e.target.closest(".tph .t"); if (!tt) return;
-  const t = byId(tt.closest("[data-pid]").dataset.pid), name = prompt("Terminal title", tt.textContent);
-  if (name !== null) { t.title = name.trim() || null; renderWorkspace(); }
+document.addEventListener("mousemove", e => {
+  document.querySelectorAll(".tpane").forEach(p => {
+    const r = p.getBoundingClientRect(), band = Math.max(12, r.height * 0.2);
+    p.classList.toggle("near", e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.top + band);
+  });
 });
 document.addEventListener("input", e => {
   const ta = e.target.closest("textarea[data-src]"); if (!ta) return;
@@ -1110,7 +1109,7 @@ function showDrop(tgt, deny) {
   if (!d) { d = document.createElement("div"); d.className = "drop"; tgt.el.appendChild(d); }
   d.classList.toggle("deny", !!deny);
   d.innerHTML = deny ? `<span>${deny}</span>` : "";
-  const top = tgt.el.classList.contains("vpane") ? 31 : tgt.el.classList.contains("tpane") ? 27 : 4;
+  const top = tgt.el.classList.contains("vpane") ? 31 : 4;
   d.style.cssText = { center: `inset:${top}px 4px 4px 4px`, left: `inset:${top}px 50% 4px 4px`, right: `inset:${top}px 4px 4px 50%`, top: `top:${top}px;left:4px;right:4px;height:calc(50% - ${top / 2 + 4}px)`, bottom: "bottom:4px;left:4px;right:4px;height:calc(50% - 4px)" }[tgt.zone];
 }
 const clearDrop = () => document.querySelectorAll(".drop").forEach(d => d.remove());
