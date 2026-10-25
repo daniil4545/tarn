@@ -19,7 +19,10 @@ PLIST    := $(APP)/Contents/Info.plist
 CLI      := $(APP)/Contents/MacOS/tarn
 TMP      := $(CURDIR)/dist/verify
 BENCH    := $(CURDIR)/dist/bench
-LSREG    := /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
+# Xcode 27 sets ENABLE_CODE_COVERAGE for every build: the binary would count every Swift branch and
+# write default.profraw into the cwd on exit. -enableCodeCoverage applies to `test` only.
+NOCOV    := ENABLE_CODE_COVERAGE=NO CLANG_COVERAGE_MAPPING=NO
+LSREG    :=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
 .PHONY: check release bench
 
@@ -40,12 +43,13 @@ release:
 	nice -n 10 zig build -Doptimize=ReleaseFast -Demit-macos-app=false -j4
 	rm -r -f $(SYMROOT)/$(CONFIG)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration $(CONFIG) SYMROOT=$(SYMROOT) \
-		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) -jobs 4 build 2>&1 | tail -15
+		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) $(NOCOV) -jobs 4 build 2>&1 | tail -15
 	@test -d $(APP) || { echo "release: $(APP) was not built"; exit 1; }
 	@test -x $(CLI) || { echo "release: $(CLI) is missing"; exit 1; }
 	@codesign --verify --strict $(CLI) || { echo "release: $(CLI) is not signed"; exit 1; }
+	@test "$$(otool -l $(APP)/Contents/MacOS/ghostty | grep -c __llvm_prf)" = 0 || { echo "release: the app has coverage instrumentation"; exit 1; }
 	@test "$$(plutil -extract CFBundleIdentifier raw $(PLIST))" = com.daniil4545.tarn || { echo "release: wrong CFBundleIdentifier"; exit 1; }
-	@! plutil -p $(PLIST) | grep -q -e mitchellh -e SUFeedURL || { echo "release: Info.plist names Ghostty or sets a feed"; exit 1; }
+	@test "$$(plutil -p $(PLIST) | grep -c -e mitchellh -e SUFeedURL)" = 0 || { echo "release: Info.plist names Ghostty or sets a feed"; exit 1; }
 	@v=$$(plutil -extract CFBundleShortVersionString raw $(PLIST)) && \
 	  zip=dist/tarn-$$v-macos.zip && mkdir -p dist && rm -f $$zip && \
 	  ditto -c -k --keepParent $(APP) $$zip && \
@@ -69,7 +73,7 @@ bench:
 	    rm -r -f $$up && mkdir -p $$up && git archive $$base | tar -x -C $$up && \
 	    (cd $$up && nice -n 10 zig build -Doptimize=ReleaseFast -Demit-macos-app=false -j4) && \
 	    $(XCB) -project $$up/macos/Ghostty.xcodeproj -scheme Ghostty -configuration ReleaseLocal \
-	      SYMROOT=$$up/macos/build -jobs 4 build 2>&1 | tail -3; \
+	      SYMROOT=$$up/macos/build $(NOCOV) -jobs 4 build 2>&1 | tail -3; \
 	  fi && \
 	  swiftc -O tools/bench/bench.swift -o $(BENCH)/bench && \
 	  { echo "# Benchmark"; echo; \
