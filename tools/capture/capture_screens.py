@@ -59,43 +59,12 @@ def viewer(pg):
     shot(pg, "viewer")
 
 
-def drop_zone(pg):
-    area = pg.locator("#ws").bounding_box()
-    dt = pg.evaluate_handle("new DataTransfer()")
-    pos = {
-        "dataTransfer": dt,
-        "clientX": area["x"] + 10,
-        "clientY": area["y"] + area["height"] / 2,
-    }
-    pg.locator('.leaf[data-kind="viewer"] .grip').dispatch_event(
-        "dragstart", {"dataTransfer": dt}
-    )
-    pg.locator("#ws").dispatch_event("dragover", pos)
-    pg.wait_for_selector("#ws > .drop")
-    time.sleep(0.5)
-    shot(pg, "drop-zone")
-    pg.evaluate("document.dispatchEvent(new Event('dragend'))")
-
-
-def settings(pg):
-    pg.keyboard.press("Meta+Comma")
-    pg.click("#setNav [data-sec='appearance']")
-    time.sleep(0.5)
-    shot(pg, "settings")
-    pg.click("#setNav [data-sec='help']")
-    time.sleep(0.5)
-    shot(pg, "help")
-    pg.keyboard.press("Escape")
-
-
-# Order matters: the viewer opens on the seed tab and the drop zone needs it; the permission card
-# runs claude in the Default workspace last, so no other shot shows its state.
+# Order matters: the permission card runs claude in the Default workspace last, so no other shot
+# shows its state.
 STEPS = {
     "sidebar": sidebar,
     "viewer": viewer,
-    "drop-zone": drop_zone,
     "permission-card": permission_card,
-    "settings": settings,
 }
 
 if __name__ == "__main__":

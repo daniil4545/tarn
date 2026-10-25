@@ -40,15 +40,13 @@ Local only: no account, cloud, telemetry or built-in AI model.
 
 Taken from the [browser demo](#try-the-demo) of the tarn window (dark theme).
 
-| | |
-|---|---|
-| ![Sidebar with workspaces and agent states](docs/assets/screens/sidebar.png) **Sidebar** | ![Permission card](docs/assets/screens/permission-card.png) **Permission card** |
-| ![Viewer with markdown and a mermaid diagram beside the terminal](docs/assets/screens/viewer.png) **Viewer** | ![A viewer dragged to a zone at the window edge](docs/assets/screens/drop-zone.png) **Drop zone** |
-| ![Settings window](docs/assets/screens/settings.png) **Settings** | ![Help with the key reference](docs/assets/screens/help.png) **Help** |
-
-| Click a path, edit, save | Drag a viewer to a zone | Font and theme in Settings |
+| Sidebar | Permission card | Viewer |
 |---|---|---|
-| ![](docs/assets/gifs/viewer-edit.gif) | ![](docs/assets/gifs/viewer-drag.gif) | ![](docs/assets/gifs/settings.gif) |
+| ![Sidebar with workspaces and agent states](docs/assets/screens/sidebar.png) | ![Permission card](docs/assets/screens/permission-card.png) | ![Viewer with markdown and a mermaid diagram beside the terminal](docs/assets/screens/viewer.png) |
+
+| Click a path, edit, save | Drag a viewer to a zone | Drag a terminal under another |
+|---|---|---|
+| ![](docs/assets/gifs/viewer-edit.gif) | ![](docs/assets/gifs/viewer-drag.gif) | ![](docs/assets/gifs/terminal-split.gif) |
 
 ## Try the demo
 
