@@ -22,6 +22,14 @@ export function save(part, value) {
   }
 }
 
+export function drop(part) {
+  try {
+    localStorage.removeItem(PREFIX + part);
+  } catch (e) {
+    console.warn("tarn-demo: storage unavailable", e);
+  }
+}
+
 export function clearAll() {
   try {
     for (const key of Object.keys(localStorage)) if (key.startsWith(PREFIX)) localStorage.removeItem(key);
