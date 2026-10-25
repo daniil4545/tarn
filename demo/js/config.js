@@ -10,27 +10,27 @@ const num = (def, min, max, step = 1) => ({ def, type: "number", min, max, step 
 const pick = (def, values) => ({ def, type: "enum", values });
 
 export const OPTIONS = Object.freeze({
-  theme: pick("ghostty", ["ghostty", "dracula", "catppuccin-mocha", "nord"]),
+  theme: pick("", ["", "dracula", "catppuccin-mocha", "nord"]),
   "window-theme": pick("auto", ["auto", "system", "light", "dark", "ghostty"]),
-  "font-family": { def: "JetBrains Mono", type: "text" },
-  "font-size": num(13, 8, 32),
-  "background-opacity": num(1, 0.2, 1, 0.05),
-  "background-blur": num(0, 0, 40),
+  "font-family": { def: "", type: "text" },
+  "font-size": num(13, 6, 32),
+  "background-opacity": num(1, 0.3, 1, 0.05),
+  "background-blur": bool(false),
   "window-padding-x": num(2, 0, 40),
   "unfocused-split-opacity": num(0.7, 0.15, 1, 0.05),
   "cursor-style": pick("block", ["block", "bar", "underline"]),
-  "cursor-style-blink": bool(true),
-  "macos-titlebar-style": pick("transparent", ["native", "transparent", "tabs", "hidden"]),
-  "copy-on-select": bool(true),
+  "cursor-style-blink": pick("", ["", "true", "false"]),
+  "macos-titlebar-style": pick("transparent", ["transparent", "native", "hidden"]),
+  "copy-on-select": pick("none", ["none", "clipboard"]),
   "mouse-hide-while-typing": bool(false),
   "clipboard-paste-protection": bool(true),
-  "macos-option-as-alt": bool(false),
+  "macos-option-as-alt": pick("", ["", "false", "true", "left", "right"]),
   "link-url": bool(true),
   "notify-on-command-finish": pick("never", ["never", "unfocused", "always"]),
   "window-save-state": pick("default", ["default", "never", "always"]),
   "confirm-close-surface": pick("true", ["false", "true", "always"]),
   "window-inherit-working-directory": bool(true),
-  "undo-timeout": num(5, 0, 60),
+  "undo-timeout": pick("5s", ["0s", "5s", "10s", "30s"]),
   "drag-handle": pick("auto", ["always", "auto", "never"]),
   "tab-style": pick("sidebar", ["sidebar", "top"]),
 });
@@ -43,25 +43,42 @@ function valid(key, value) {
   if (o.type === "bool") return typeof value === "boolean";
   if (o.type === "number") return typeof value === "number" && value >= o.min && value <= o.max;
   if (o.type === "enum") return o.values.includes(value);
-  return typeof value === "string" && value.length > 0;
+  return typeof value === "string";
 }
+
+// Keys whose line is in tarn's own config file: a set writes the line, only a reset removes it.
+// An option with an empty default entry ("default (auto)") drops its line when that entry is chosen.
+let written = new Set();
+export const isWritten = (key) => written.has(key);
+export const writtenKeys = () => [...written];
+const hasAutoEntry = (key) => OPTIONS[key].type === "enum" && OPTIONS[key].values.includes("");
 
 export function startConfig() {
   const stored = load("config", {});
   const initial = { ...DEFAULTS };
   for (const [key, value] of Object.entries(stored)) if (valid(key, value)) initial[key] = value;
+  written = new Set(load("config-written", []).filter((key) => key in OPTIONS));
   const write = register("config", initial);
 
-  const set = (key, value) => {
+  const persistWritten = () => save("config-written", [...written]);
+
+  const set = (key, value, { reset = false } = {}) => {
     if (!valid(key, value)) throw new Error(`bad config value: ${key}=${JSON.stringify(value)}`);
     const next = { ...read("config"), [key]: value };
     write(next);
     save("config", next);
+    if (reset || (hasAutoEntry(key) && value === "")) written.delete(key);
+    else written.add(key);
+    persistWritten();
     bus.emit("config:changed", { key, value });
   };
 
   bus.handle("config.set", ({ key, value }) => set(key, value));
-  bus.handle("config.reset", () => {
-    for (const [key, value] of Object.entries(DEFAULTS)) if (read("config")[key] !== value) set(key, value);
+  // One key with `{key}`, every key without a payload.
+  bus.handle("config.reset", (payload) => {
+    for (const key of payload?.key ? [payload.key] : Object.keys(DEFAULTS)) {
+      if (read("config")[key] !== DEFAULTS[key]) set(key, DEFAULTS[key], { reset: true });
+      else if (written.delete(key)) persistWritten();
+    }
   });
 }
