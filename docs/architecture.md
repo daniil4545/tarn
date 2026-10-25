@@ -4,7 +4,7 @@ tarn is an agent-first macOS terminal, a fork of Ghostty. For people who run CLI
 
 How to read: the overall picture is section 1, the module documents are in `docs/modules/`, where to change is section 9. Why it is decided so: section 12 of `docs/spec.md`.
 
-State of this document: it describes branch `s2-files` (PR #3). Module documents marked "with PR #N" arrive with that PR. The `tarn` CLI and `tarn.mk` do not exist here (not verified on other branches). Sections 3 to 7 of the earlier version (processes, data and states, trust boundaries, failures, observability) now live in the module documents.
+State of this document: it describes branch `s4-settings` (PR #4, on top of PR #3). Module documents marked "with PR #N" arrive with that PR. The `tarn` CLI and `tarn.mk` do not exist here (not verified on other branches). Sections 3 to 7 of the earlier version (processes, data and states, trust boundaries, failures, observability) now live in the module documents.
 
 ## Contents
 
@@ -61,7 +61,7 @@ flowchart LR
 | Control socket | binds the unix socket, reads one JSON line per connection, keeps a connection open for an answer | [control-socket.md](modules/control-socket.md) | works |
 | Sessions | agent state machine, liveness, pending answers, agent naming, plugin hooks | [sessions.md](modules/sessions.md) | works |
 | Sidebar | groups tabs per window, rows, hover card, quick answers | [sidebar.md](modules/sidebar.md) | works |
-| Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | with PR #4 |
+| Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | works on `s4-settings` |
 | Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | with PR #5 |
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | with PR #5 |
 | Demo | demo mode | [demo.md](modules/demo.md) | works on `s5-demo` |
@@ -133,11 +133,12 @@ Branch diff against `origin/main`. Every Swift change outside `macos/Sources/Fea
 | 11 | `macos/Sources/Ghostty/Ghostty.App.swift` | `openURL` takes the action `target`; a debug log call (`ViewerRouter.trace`, temporary) and a block at its top offer a clicked path (kind `unknown`) to `ViewerRouter`, which returns false for what it does not take | path click opens in the viewer; OSC 8 and URLs keep the upstream path |
 | 12 | `macos/Sources/Features/Terminal/TerminalController.swift` | in `closeTab`, `closeOtherTabs`, `closeTabsOnTheRight`, `closeWindow`, static `closeAllWindows` and `closeSurface` (root, no confirmation: process exit); `ScriptWindow` and `ScriptTab` close handlers: one `if ViewerClose.intercept(...) { return }` line before the process check | unsaved viewer edits are asked (Save, Don't Save, Cancel) before a tab or window closes; the red X and Cmd+W reach these functions |
 | 13 | `macos/Sources/App/AppDelegate.swift` | in `applicationShouldTerminate`: a `ViewerClose.interceptQuit` block before the `needsConfirmQuit` check; replies `.terminateLater`, then continues with Ghostty's own quit flow | one sheet lists the dirty files of all windows on quit |
-| 19 | `macos/Sources/App/MainMenu.xib` | View menu: item "Toggle Files", key equivalent `b`, action `toggleViewerTree:` to the first responder | Cmd+B from the terminal opens, toggles or closes the viewer pane; the action is in `ViewerHost.swift` |
+| 19 | `macos/Sources/App/MainMenu.xib` | View menu: item "Toggle File Viewer", key equivalent `b`, action `toggleViewer:` to the first responder | Cmd+B from the terminal opens, shows or hides the viewer pane; the action is in `ViewerHost.swift` |
 | 7 | `macos/Sources/Ghostty/Surface View/SurfaceView.swift` | `environmentVariables["TARN_SURFACE"] = view.id.uuidString` before the variables are converted to arrays; replaces an inherited value | hooks learn their surface |
 | 8 | `macos/Assets.xcassets/TarnAgentClaude.imageset`, `TarnAgentCodex.imageset`, `TarnAgentOpenCode.imageset` | new image sets with SVG (`claude.svg`, `openai.svg`, `opencode.svg`) | agent badges |
+| 14 | `macos/Sources/Ghostty/Ghostty.Config.swift` | `loadConfig` takes `tarnFile: URL? = nil`; after `ghostty_config_load_recursive_files` it calls `TarnConfigFile.load(into:from:)`; `init(at:finalize:)` passes `TarnConfigFile.activeURL()` | tarn's options file loads after the user's config and its includes, before `finalize`; tests and `TemporaryConfig` pass nothing |
 
-Rows 1 to 4, 10 and 12 are in `TerminalController.swift`. Line numbers are not recorded: they shift with upstream; search by the names above.
+Rows 1 to 4, 10 and 12 are in `TerminalController.swift`. Row 14 was numbered after the s2-files rows 12 and 13. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
 

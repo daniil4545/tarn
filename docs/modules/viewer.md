@@ -30,7 +30,8 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | socket line `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` | `ViewerRouter.handleCommand` |
 | In | page messages (`ready`, `tab`, `closeTab`, `closePane`, `toggleTree`, `hideTree`, `treeToggle`, `treeOpen`, `edit`, `save`, `task`, `take`, `keep`, `link`, `copy`, `error`) | `ViewerModel.handle` |
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
-| In | Cmd+B in the terminal: View menu item "Toggle Files" (action `toggleViewerTree:`) | `TerminalController.toggleViewerTree`, `ViewerHost.toggleFromKey` |
+| In | View menu item "Toggle File Viewer" Cmd+B (action `toggleViewer:`); in the pane `ViewerWebView.command` takes Cmd+B, Cmd+S, Cmd+E with exact modifiers | `TerminalController` extension, `ViewerHost.toggleFromKey` |
+| Out | keyboard: Cmd+B opens into the tree, shows into the pane, hides to the terminal; Enter in the tree moves it into the file; a layout change gives the terminal its first responder back and a focus request waits for the web view to join the window (as `Ghostty.moveFocus`) | `ViewerHost`, `ViewerWebController.focus` |
 | In | (note) a Ghostty keybind on Cmd+B takes the key first and wins over the menu item; the item keeps showing Cmd+B because Ghostty has no action to sync it with | `MainMenu.xib` |
 | In | file events (write, delete, rename, extend) on the file and its folder | `FileWatcher` |
 | In | close of a tab, window or the app | `ViewerClose` |
@@ -54,7 +55,9 @@ Socket open: same path, but `focus` is false. The host saves the first responder
 
 Disk change: the watcher throttles 0.3 s and re-arms. The model compares size and mtime first; then `ViewerDocument.diskChanged` decides. Clean document: reload and flash. Dirty document: a conflict banner with Take disk or Keep mine, raised once per disk text. Deleted file: the tab keeps its text and Save writes it again. Over 5 MB or non-UTF-8: a notice instead of text.
 
-Save: markdown only. Re-reads the disk first and refuses to overwrite a changed file. The write is atomic, follows a symlink and keeps the file mode. Ticking a task box writes the marker on its source line; it needs a clean, current document.
+Setting: Settings > File Viewer, on by default (`FileViewerSetting`, key `TarnFileViewer`). Off: Cmd+B opens no pane, path clicks go to Ghostty's opener, socket `open` answers "the file viewer is off"; an open pane works until closed.
+
+Save: any text file (markdown and code; Cmd+E opens the editor for both). Re-reads the disk first and refuses to overwrite a changed file. The write is atomic, follows a symlink and keeps the file mode. Ticking a task box writes the marker on its source line; it needs a clean, current document.
 
 Page process: the web content process may die; the controller reloads the page and `ready` makes the model push everything again. Messages built on an older revision than the model's are dropped.
 

@@ -372,9 +372,9 @@
                                     <action selector="toggleTerminalInspector:" target="-1" id="87m-3R-fQl"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="Toggle Files" keyEquivalent="b" id="Tf1-Vw-Fb1">
+                            <menuItem title="Toggle File Viewer" keyEquivalent="b" id="Tf1-Vw-Fb1">
                                 <connections>
-                                    <action selector="toggleViewerTree:" target="-1" id="Tf2-Vw-Fb2"/>
+                                    <action selector="toggleViewer:" target="-1" id="Tf2-Vw-Fb2"/>
                                 </connections>
                             </menuItem>
                         </items>

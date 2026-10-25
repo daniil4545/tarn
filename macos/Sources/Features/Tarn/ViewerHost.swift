@@ -10,6 +10,9 @@ import SwiftUI
 final class ViewerHost: ObservableObject {
     @Published private(set) var model: ViewerModel?
     @Published var split: CGFloat = 0.6
+    /// The pane is hidden with Cmd+B: the model, its tabs and unsaved edits live on, only the
+    /// view is out of the layout. Closing the pane (`closePane`) ends it.
+    @Published private(set) var hidden = false
     private var web: ViewerWebController?
     weak var window: NSWindow?
 
@@ -25,6 +28,8 @@ final class ViewerHost: ObservableObject {
         let responder = focus ? nil : window?.firstResponder
         let typingInPane = !focus && (model?.hasFocus() ?? false)
         let created = model == nil
+        // A click shows a hidden pane (the user acted); an agent's open leaves it hidden.
+        if focus { hidden = false }
         let model = model ?? makePane(root: root ?? NSHomeDirectory())
         guard model.open(target, background: typingInPane) else {
             // A pane this call created for a file that cannot open does not stay; a tree-only pane does.
@@ -50,23 +55,60 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
-    /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
-    /// only; otherwise the model decides (an empty pane closes, one with files toggles the tree).
+    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in the pane (the web
+    /// view takes the key first, so there is one path per focus). It opens and hides, it never closes:
+    /// no pane opens one with the tree and the keyboard in it; a hidden pane comes back as it was
+    /// with the keyboard in it; a shown pane (with files or not) hides whole, tabs, unsaved edits and
+    /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
         guard let model else {
-            let responder = window?.firstResponder
-            makePane(root: root ?? NSHomeDirectory()).showTreeOnly()
-            keepFocus(responder)
+            if FileViewerSetting.isOn { openTreeOnly(root: root) }
             return
         }
-        model.toggleTreeKey()
+        if hidden { return show() }
+        // The page holds an edit back for 120 ms; send it before the page leaves the window.
+        model.flushPendingEdit()
+        hidePane()
+    }
+
+    private func focusTreeSoon() {
+        DispatchQueue.main.async { [weak self] in
+            self?.model?.focusTreeInPage()
+        }
+    }
+
+    private func openTreeOnly(root: String?) {
+        makePane(root: root ?? NSHomeDirectory()).revealTree()
+        focusTreeSoon()
+    }
+
+    /// Hides the pane keeping its model; the keyboard goes to the terminal.
+    func hidePane() {
+        hidden = true
+        returnFocusToTerminal()
+    }
+
+    /// Brings a hidden pane back with the keyboard in it. The focus request waits for the web view to
+    /// join the window, as Ghostty's `moveFocus` does after a split change (SurfaceView.swift:1075).
+    private func show() {
+        hidden = false
+        DispatchQueue.main.async { [weak self] in self?.model?.onFocus?() }
+    }
+
+    /// Replaced in tests, which have no terminal window.
+    var focusTerminal: (() -> Void)?
+
+    private func returnFocusToTerminal() {
+        if let focusTerminal { return focusTerminal() }
+        if let surface = controller?.focusedSurface { Ghostty.moveFocus(to: surface) }
     }
 
     private func makePane(root: String) -> ViewerModel {
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
-        model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active) }
+        model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active, undoable: true) }
+        model.onHidePane = { [weak self] in self?.hidePane() }
+        model.onPaneKey = { [weak self] in self?.toggleFromKey(root: nil) }
         self.model = model
         self.web = web
         web.start()
@@ -75,28 +117,36 @@ final class ViewerHost: ObservableObject {
 
     var container: NSView? { web?.container }
 
-    /// Closes the pane. A close with tabs registers an undo that reopens them, with Ghostty's timeout.
-    func closePane(saved: [ViewerTab], active: Int) {
+    /// Closes the pane. A close by the user (`undoable`) registers an undo that reopens its tabs, or the empty tree pane, with Ghostty's timeout.
+    func closePane(saved: [ViewerTab], active: Int, undoable: Bool = false) {
         guard let model else { return }
         model.shutdown()
         web?.stop()
         web = nil
         self.model = nil
-        if let surface = controller?.focusedSurface { Ghostty.moveFocus(to: surface) }
-        guard !saved.isEmpty, let controller, let undoManager = controller.undoManager else { return }
+        hidden = false
+        returnFocusToTerminal()
+        guard undoable, let controller, let undoManager = controller.undoManager else { return }
         let root = model.tree.root
         undoManager.setActionName("Close Viewer")
         undoManager.registerUndo(withTarget: self, expiresAfter: controller.undoExpiration) { host in
-            let reopened = host.model ?? host.makePane(root: root)
-            reopened.reopen(saved, active: active)
-            DispatchQueue.main.async { reopened.onFocus?() }
+            host.restore(saved, active: active, root: root)
         }
+    }
+
+    /// The undo of a close: the tabs come back, in a pane that is shown (a pane opened and hidden
+    /// since the close takes them too).
+    func restore(_ saved: [ViewerTab], active: Int, root: String) {
+        hidden = false
+        let reopened = model ?? makePane(root: root)
+        reopened.reopen(saved, active: active)
+        DispatchQueue.main.async { reopened.onFocus?() }
     }
 }
 
 extension TerminalController {
-    /// The View menu item "Toggle Files" (Cmd+B), found through the responder chain from the terminal.
-    @IBAction func toggleViewerTree(_ sender: Any?) {
+    /// The View menu item "Toggle File Viewer" (Cmd+B), found through the responder chain from the terminal.
+    @IBAction func toggleViewer(_ sender: Any?) {
         viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
     }
 }
@@ -114,7 +164,7 @@ struct ViewerLayout<Content: View>: View {
     }
 
     var body: some View {
-        if let model = host.model, let container = host.container {
+        if let model = host.model, !host.hidden, let container = host.container {
             SplitView(.horizontal, $host.split, dividerColor: ghostty.config.splitDividerColor, left: {
                 content
             }, right: {
@@ -182,6 +232,10 @@ enum ViewerRouter {
     /// terminal. Files of media, document and archive types open in their own app.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
+        guard FileViewerSetting.isOn else {
+            logger.debug("click on \(raw, privacy: .public) refused: the file viewer is off")
+            return false
+        }
         guard let surface else {
             logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
@@ -198,7 +252,8 @@ enum ViewerRouter {
             _ = controller.viewerHost.open(target, root: cwd, focus: true)
             return true
         case let .missing(raw):
-            guard let model = controller.viewerHost.model else { return false }
+            // Only a shown pane can tell the user; otherwise the default opener reports it.
+            guard let model = controller.viewerHost.model, !controller.viewerHost.hidden else { return false }
             model.toast("No such file: \(raw)")
             return true
         case .upstream:
@@ -226,6 +281,7 @@ enum ViewerRouter {
     @MainActor
     private static func openFromSocket(_ message: [String: Any]) -> String? {
         guard message["version"] as? Int == 1 else { return "tarn: unsupported version" }
+        guard FileViewerSetting.isOn else { return "tarn: the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
             return "tarn: the path must be absolute"
         }

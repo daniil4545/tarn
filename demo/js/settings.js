@@ -67,6 +67,11 @@ function tabsSection() {
   return `<section data-pane="tabs"><h3>Tabs</h3><div class="setgroup"><div class="setrow"><span>Tab style</span><div class="radios">${radios.join("")}</div></div></div><p class="setnote">Applies to every open window at once.</p></section>`;
 }
 
+function viewerSection() {
+  const on = read("config")["file-viewer"];
+  return `<section data-pane="viewer" hidden><h3>File Viewer</h3><div class="setgroup"><div class="setrow"><label for="g-file-viewer">File viewer<small>Cmd+B, path clicks and agents open files in a pane beside the terminal. When off, path clicks open files in their default app; an open pane stays until you close it.</small></label><input type="checkbox" id="g-file-viewer" data-gkey="file-viewer"${on ? " checked" : ""}></div></div></section>`;
+}
+
 function helpSection() {
   const tables = helpGroups(rows).map(({ name, lines }) => {
     const body = lines.map((l) => `<tr><td>${esc(l.chords.map(symbols).join(" "))}</td><td class="alt">${esc(l.alt.join(" "))}</td><td>${esc(l.text)}</td><td class="src">${l.src}</td></tr>`);
@@ -77,7 +82,7 @@ function helpSection() {
 
 function build() {
   const nav = SECTIONS.map(([name, title]) => `<button class="setitem" data-sec="${name}">${title}</button>`).join("");
-  const sections = tabsSection() + ["appearance", "terminal", "windows"].map((n) => optionSection(n, SECTIONS.find(([k]) => k === n)[1])).join("") + helpSection();
+  const sections = tabsSection() + viewerSection() + ["appearance", "terminal", "windows"].map((n) => optionSection(n, SECTIONS.find(([k]) => k === n)[1])).join("") + helpSection();
   root.innerHTML = `<div class="setwin" role="dialog" aria-modal="true" aria-label="Settings"><div class="setside"><div class="lights"><i id="settingsClose" title="Close"></i><i></i><i></i></div><nav id="setNav" aria-label="Settings sections">${nav}</nav><button class="setcfg" id="ghosttyConfig" title="All Ghostty options, keys included. Opens the Ghostty config file.">Ghostty Config…</button></div><div class="setmain" id="setMain">${sections}</div></div>`;
 }
 

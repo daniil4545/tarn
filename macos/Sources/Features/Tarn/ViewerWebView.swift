@@ -8,13 +8,36 @@ import WebKit
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
 /// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`.
 final class ViewerWebView: WKWebView {
+    /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
+    /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
+    static let keyTable: [Key] = [
+        Key("b", "tree", "Toggle File Viewer (also in the terminal: View menu)"),
+        Key("e", "mode", "View or source"),
+        Key("s", "save", "Save the file"),
+    ]
+
+    struct Key {
+        let key: String
+        let command: String
+        let help: String
+
+        init(_ key: String, _ command: String, _ help: String) {
+            self.key = key
+            self.command = command
+            self.help = help
+        }
+    }
+
+    /// The key text of a `keyTable` entry, as Help shows it.
+    static func keyText(_ entry: Key) -> String { "⌘" + entry.key.uppercased() }
+
     var onCommand: ((String) -> Void)?
 
-    /// The pane command of a Cmd+key press. The typed letter decides, as for the menu, so Dvorak and
+    /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
     /// the S key types "ы") the physical key decides.
     static func command(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
-        guard flags.intersection([.shift, .control, .option, .command]) == .command else { return nil }
+        let modifiers = flags.intersection([.shift, .control, .option, .command])
         let letter: String
         if let characters, characters.count == 1, characters.unicodeScalars.allSatisfy(\.isASCII) {
             letter = characters.lowercased()
@@ -26,7 +49,9 @@ final class ViewerWebView: WKWebView {
             default: return nil
             }
         }
-        return ["s": "save", "e": "mode", "b": "tree"][letter]
+        // The modifiers are exact: Cmd+Alt+B and Cmd+Shift+B are not Cmd+B.
+        guard modifiers == .command else { return nil }
+        return keyTable.first { $0.key == letter }?.command
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -110,11 +135,19 @@ final class ViewerWebController: NSObject {
         if wantsFocus { DispatchQueue.main.async { [weak self] in self?.focus() } }
     }
 
-    /// Gives the page the keyboard; before the web view exists the request waits for it.
-    func focus() {
+    /// Gives the page the keyboard; before the web view exists the request waits for it. While the
+    /// view is not in a window yet (a hidden pane that SwiftUI is putting back) it retries with a
+    /// doubling delay, as `Ghostty.moveFocus` does (SurfaceView.swift:1075), and gives up at 0.5 s.
+    func focus(after delay: TimeInterval? = nil) {
         guard let webView else { wantsFocus = true; return }
         wantsFocus = false
-        webView.window?.makeFirstResponder(webView)
+        guard let window = webView.window else {
+            let next = delay.map { $0 * 2 } ?? 0.05
+            guard next < 0.5 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + next) { [weak self] in self?.focus(after: next) }
+            return
+        }
+        window.makeFirstResponder(webView)
     }
 
     func stop() {

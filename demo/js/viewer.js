@@ -7,9 +7,12 @@
 // the layout creates a viewer pane and sends viewer.open again with `pane`.
 import { bus } from "./bus.js";
 import { hooks } from "./test-contract.js";
+import { read } from "./state.js";
+import { toast } from "./toast.js";
 import { createViewerModel } from "./viewer-model.js";
 import { resolve } from "./viewer-paths.js";
 import { watchDragSource } from "./dnd.js";
+import { viewerKey } from "./viewer-keys.js";
 
 const panes = new Map(); // id -> { el, frame, model }
 let fs = null;
@@ -26,8 +29,13 @@ function visibleTarget(id) {
   return [...panes.values()].find(on);
 }
 
+// The Settings switch stops new panes; a pane that already exists (even hidden) works until it is closed.
+const viewerOn = () => read("config")["file-viewer"];
+const hasPane = () => panes.size > 0;
+
 function open(payload) {
   const entry = visibleTarget(payload.pane);
+  if (!entry && !hasPane() && !viewerOn()) return toast("File viewer is off: the file opens in its default app");
   if (!entry) return bus.emit("viewer:needed", payload);
   const target = payload.path && resolve(payload.path, { cwd: payload.cwd ?? root, home, exists: fs.exists });
   if (target) entry.model.open({ path: target.path, line: payload.line ?? target.line }, { background: payload.background });
@@ -35,18 +43,16 @@ function open(payload) {
 }
 
 function command({ name, pane }) {
+  if (KEY_COMMANDS.has(name)) return viewerKey(name, { target: () => visibleTarget(pane), idOf });
   const entry = visibleTarget(pane);
-  if (!entry) return name === "tree" ? bus.emit("viewer:needed", { tree: true }) : undefined;
+  if (!entry) return undefined;
   if (name === "save" || name === "mode") entry.frame.contentWindow.tarn.cmd(name);
-  else if (name === "tree") toggleTree(entry);
   else if (name === "closeTab") entry.model.closeActiveTab();
+  return undefined;
 }
 
-// Cmd+B as the app does it: a pane with no file has nothing else to show and closes; otherwise the tree toggles.
-function toggleTree(entry) {
-  if (entry.model.state().tabs.length) return entry.model.toggleTree();
-  bus.cmd("pane.close", { id: [...panes].find(([, p]) => p === entry)[0] });
-}
+const KEY_COMMANDS = new Set(["tree"]);
+const idOf = (entry) => [...panes].find(([, p]) => p === entry)[0];
 
 function split({ dir, pane }) {
   const entry = visibleTarget(pane);
@@ -77,6 +83,7 @@ export function startViewer({ fs: files, home: homePath, root: projectRoot }) {
   home = homePath;
   root = projectRoot;
   bus.handle("viewer.open", open);
+  bus.handle("viewer.available", () => viewerOn() || hasPane());
   bus.handle("viewer.cmd", command);
   bus.handle("viewer.split", split);
   bus.handle("viewer.take", take);
@@ -136,6 +143,7 @@ export function createViewerPane(id) {
       write: (path, text) => bus.cmd("vfs.write", { path, text, by: `viewer:${id}` }),
       closePane: () => bus.cmd("pane.close", { id }),
       focus: () => frame.contentWindow?.focus(),
+      focusContent: () => frame.contentWindow?.tarn?.focusContent?.(),
       confirm: (text) => window.confirm(text),
       open: (url) => window.open(url, "_blank", "noopener"),
     },

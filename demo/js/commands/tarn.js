@@ -11,6 +11,7 @@ function open(ctx) {
   const typed = match && ctx.vfs.isFile(ctx.vfs.resolve(ctx.cwd, match[1])) ? match[1] : arg;
   const path = ctx.vfs.resolve(ctx.cwd, typed);
   if (!ctx.vfs.isFile(path)) return ctx.out(`tarn: no such file: ${arg}`);
+  if (!ctx.viewerOn()) return ctx.out("tarn: the file viewer is off");
   ctx.emit("viewer.open", { path, line: typed === arg ? undefined : Number(match[2]) });
   return undefined;
 }

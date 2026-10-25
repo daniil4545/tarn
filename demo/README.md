@@ -13,7 +13,8 @@ No backend, no build step, no network: ES modules and vendored files only.
 | --- | --- |
 | Sidebar and agent states | built (PR #3-#5) |
 | Viewer (markdown, mermaid, code, save) | built (PR #3-#5) |
-| Cmd+B from the terminal (Ctrl+Alt+B fallback) | built (PR #3): no viewer opens a pane with the tree only, an empty viewer closes, a viewer with files toggles its tree |
+| Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built (PR #3): Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
+| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built (PR #3): off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
 | Workspaces, splits, layout | built (PR #3-#5) |
 | Settings | built (PR #3-#5) |
 | `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`) | planned: the app only has the socket command that opens a file, and a click on a path does the same. The demo keeps the commands to try the idea and prints "planned: not in the app yet" on `tarn --help` and on the first run of each subcommand |

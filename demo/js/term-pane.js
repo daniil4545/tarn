@@ -176,6 +176,7 @@ export function createPane(id, { cwd }) {
       identity,
       write,
       emit: onShellEvent,
+      viewerOn: () => bus.cmd("viewer.available") === true,
       cols: () => term.cols,
       sessions: () => sessionRows({
         workspaces: read("workspaces"),

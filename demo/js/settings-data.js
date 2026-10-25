@@ -3,6 +3,7 @@
 // and of lines in the config file (GhosttyOption.swift in macos/Sources/Features/Tarn/).
 export const SECTIONS = [
   ["tabs", "Tabs"],
+  ["viewer", "File Viewer"],
   ["appearance", "Appearance"],
   ["terminal", "Terminal"],
   ["windows", "Windows"],

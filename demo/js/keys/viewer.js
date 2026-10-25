@@ -3,8 +3,8 @@ const row = (id, chords, text, cmd, payload, extra = {}) =>
   ({ id, chords, when: "viewer", group: "Viewer", src: "tarn", text, cmd, payload, ...extra });
 
 export const viewerKeys = [
-  // Cmd+B also reaches a terminal: with no viewer open it opens one with the tree.
-  row("viewer.tree", ["Cmd+B"], "Show or hide the file tree", "viewer.cmd", { name: "tree" }, { when: "any", alt: ["Ctrl+Alt+B"] }),
+  // Cmd+B also works from a terminal; what it does depends on the pane (viewer-keys.js).
+  row("viewer.tree", ["Cmd+B"], "Toggle Pane: open, hide or show the viewer", "viewer.cmd", { name: "tree" }, { when: "any", alt: ["Ctrl+Alt+B"] }),
   row("viewer.mode", ["Cmd+E"], "View or source", "viewer.cmd", { name: "mode" }),
   row("viewer.save", ["Cmd+S"], "Save the file", "viewer.cmd", { name: "save" }),
   row("viewer.split.right", ["Cmd+D"], "The file in a new viewer, right", "viewer.split", { dir: "right" }),

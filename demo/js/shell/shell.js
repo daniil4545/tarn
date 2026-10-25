@@ -14,7 +14,7 @@ const BRACKETED_PASTE_ON = "\x1b[?2004h";
 const BRACKETED_PASTE_OFF = "\x1b[?2004l";
 const CLEAR = "\x1b[H\x1b[2J";
 
-export function createShell({ vfs, emit, write, clock, identity, history, cols, sessions, paneId }) {
+export function createShell({ vfs, emit, write, clock, identity, history, cols, sessions, paneId, viewerOn = () => true }) {
   let cwd = identity.start;
   let previous = cwd;
   let job = null;
@@ -75,6 +75,7 @@ export function createShell({ vfs, emit, write, clock, identity, history, cols, 
     write,
     cols,
     sessions,
+    viewerOn,
     now: clock.now,
     env,
     out: (s) => write(crlf(`${s}\n`)),
