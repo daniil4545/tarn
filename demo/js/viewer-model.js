@@ -6,9 +6,9 @@ import { basename, dirname, isMarkdown, language, resolve, setTask } from "./vie
 const HIDDEN = new Set([".git", ".DS_Store", "node_modules"]);
 const MAX_ROWS = 5000;
 
-// fs: { home, exists(path), isDir(path), read(path) -> text | null, list(dir) -> [{name, dir}] }
+// fs is the vfs of vfs.js: isFile, isDir, exists, read(path) -> text, list(dir) -> [{name, dir}]
 // ui: { setDoc(obj), setChrome(obj), toast(text), write(path, text), closePane(), focus(), confirm(text), open(url) }
-export function createViewerModel({ fs, root, ui }) {
+export function createViewerModel({ fs, home, root, ui }) {
   let tabs = [];
   let active = -1;
   let jumps = 0;
@@ -21,8 +21,8 @@ export function createViewerModel({ fs, root, ui }) {
   const dirty = (path) => docs.get(path)?.text !== docs.get(path)?.savedText;
 
   function newDoc(path) {
+    if (!fs.isFile(path)) return null;
     const text = fs.read(path);
-    if (text === null) return null;
     return { path, text, savedText: text, diskText: null, rev: 1, conflict: false, missing: false };
   }
 
@@ -105,7 +105,7 @@ export function createViewerModel({ fs, root, ui }) {
   // ---- actions ----
   function open(target, options) {
     if (!docs.has(target.path)) {
-      const doc = fs.isDir(target.path) ? null : newDoc(target.path);
+      const doc = newDoc(target.path);
       if (!doc) { toast(`Cannot open ${basename(target.path)}`); return false; }
       docs.set(target.path, doc);
     }
@@ -141,7 +141,7 @@ export function createViewerModel({ fs, root, ui }) {
     if (!doc || !isMarkdown(path)) return;
     if (!dirty(path) && !doc.conflict && !doc.missing) return toast("No changes");
     // The disk may have changed before the event arrived: never write over the agent's version.
-    if (doc.conflict || (fs.read(path) !== null && fs.read(path) !== doc.savedText)) {
+    if (doc.conflict || (fs.isFile(path) && fs.read(path) !== doc.savedText)) {
       diskChanged(path);
       return toast("The file changed on disk: take the agent version or keep yours first");
     }
@@ -181,7 +181,7 @@ export function createViewerModel({ fs, root, ui }) {
   function follow(href, from) {
     if (/^https?:\/\//i.test(href) || href.startsWith("mailto:")) return ui.open(href);
     const bare = decodeURIComponent(href.split("#")[0]);
-    const target = resolve(bare, { cwd: from ? dirname(from) : root, home: fs.home, exists: fs.exists });
+    const target = resolve(bare, { cwd: from ? dirname(from) : root, home, exists: fs.exists });
     if (!target || !fs.exists(target.path) || fs.isDir(target.path)) return toast(`No such file: ${bare}`);
     open(target);
   }
@@ -190,13 +190,13 @@ export function createViewerModel({ fs, root, ui }) {
   function diskChanged(path) {
     const doc = docs.get(path);
     if (!doc) return;
-    const disk = fs.read(path);
-    if (disk === null) {
+    if (!fs.isFile(path)) {
       if (doc.missing) return;
       doc.missing = true;
       return toast(`${basename(path)} was deleted on disk. Save writes it again.`);
     }
     doc.missing = false;
+    const disk = fs.read(path);
     if (disk === doc.savedText) return;
     if (!dirty(path)) {
       Object.assign(doc, { text: disk, savedText: disk, rev: doc.rev + 1 });

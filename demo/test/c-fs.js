@@ -11,10 +11,10 @@ export const files = new Map([
 ]);
 
 export const fs = {
-  home: "/home/demo",
+  isFile: (path) => files.has(path),
   exists: (path) => files.has(path) || fs.isDir(path),
   isDir: (path) => [...files.keys()].some((f) => f.startsWith(`${path}/`)),
-  read: (path) => files.get(path) ?? null,
+  read: (path) => files.get(path),
   list(dir) {
     const names = new Map();
     for (const file of files.keys()) {

@@ -12,6 +12,7 @@ import { resolve } from "./viewer-paths.js";
 
 const panes = new Map(); // id -> { el, frame, model }
 let fs = null;
+let home = "";
 let root = "";
 let focused = null;
 const isDark = () => document.documentElement.dataset.theme !== "light";
@@ -27,7 +28,7 @@ function visibleTarget(id) {
 function open(payload) {
   const entry = visibleTarget(payload.pane);
   if (!entry) return bus.emit("viewer:needed", payload);
-  const target = payload.path && resolve(payload.path, { cwd: payload.cwd ?? root, home: fs.home, exists: fs.exists });
+  const target = payload.path && resolve(payload.path, { cwd: payload.cwd ?? root, home, exists: fs.exists });
   if (target) entry.model.open({ path: target.path, line: payload.line ?? target.line }, { background: payload.background });
   if (payload.tree && !entry.model.state().treeVisible) entry.model.toggleTree();
 }
@@ -47,9 +48,10 @@ function split({ dir, pane }) {
   if (path) bus.cmd("pane.split", { id: [...panes].find(([, p]) => p === entry)[0], dir, kind: "viewer", path });
 }
 
-// fs: { home, exists, isDir, read, list } over the demo files (see viewer-model.js).
-export function startViewer({ fs: files, root: projectRoot }) {
+// fs: the vfs of vfs.js; root: the folder the tree starts at; home: what `~` means in a path.
+export function startViewer({ fs: files, home: homePath, root: projectRoot }) {
   fs = files;
+  home = homePath;
   root = projectRoot;
   bus.handle("viewer.open", open);
   bus.handle("viewer.cmd", command);
@@ -85,6 +87,7 @@ export function createViewerPane(id) {
 
   const model = createViewerModel({
     fs,
+    home,
     root,
     ui: {
       setDoc: (doc) => frame.contentWindow.tarn.setDoc(doc),
