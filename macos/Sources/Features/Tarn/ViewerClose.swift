@@ -55,6 +55,21 @@ enum ViewerClose {
         }
     }
 
+    /// Runs the repeated close with Don't Save in force: its `intercept` call passes once. The mark is
+    /// cleared afterwards, so a path that never asks again cannot leave it behind.
+    @MainActor
+    static func discardThen(_ models: [ViewerModel], _ proceed: () -> Void) {
+        models.forEach { $0.discardOnce = true }
+        proceed()
+        models.forEach { $0.discardOnce = false }
+    }
+
+    /// The windows a close of `window` reaches: its whole tab group, or the window alone.
+    @MainActor
+    static func members(of window: NSWindow?) -> [NSWindow] {
+        window?.tabGroup?.windows ?? window.map { [$0] } ?? []
+    }
+
     /// Runs `proceed` after the user settles unsaved edits of `controllers`. Returns false at once
     /// when nothing is dirty (the caller carries on); true when it took over: `proceed` runs later,
     /// or never on Cancel. Don't Save keeps the edits and lets the repeated close pass once, so a
@@ -66,8 +81,7 @@ enum ViewerClose {
         guard !paths.isEmpty else { return false }
         ask(paths, window: window) { choice in
             guard proceeds(choice, saved: { saveAll(models, window: window) }) else { return }
-            if choice == .discard { models.forEach { $0.discardOnce = true } }
-            proceed()
+            if choice == .discard { discardThen(models, proceed) } else { proceed() }
         }
         return true
     }

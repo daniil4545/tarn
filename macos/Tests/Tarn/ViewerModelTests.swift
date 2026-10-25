@@ -396,6 +396,31 @@ struct ViewerCloseTests {
         #expect(found == reviewed)
     }
 
+    @Test func discardMarkIsOnlyInForceDuringTheRepeatedCloseAndNeverLeftBehind() throws {
+        let (model, dir) = try model(editing: ["a.md": "x"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        var askedInside = true
+        ViewerClose.discardThen([model]) { askedInside = !ViewerClose.unsettled([model]).isEmpty }
+        #expect(!askedInside)
+        #expect(!model.discardOnce)
+        #expect(ViewerClose.unsettled([model]).count == 1)
+        // A repeated close that never asks again leaves nothing behind either.
+        ViewerClose.discardThen([model]) {}
+        #expect(!model.discardOnce)
+        #expect(model.dirtyPaths.count == 1)
+    }
+
+    @Test func aWindowCloseReachesTheWholeTabGroup() {
+        let first = NSWindow(contentRect: .init(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        let second = NSWindow(contentRect: .init(x: 0, y: 0, width: 200, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        first.tabbingMode = .preferred
+        second.tabbingMode = .preferred
+        #expect(ViewerClose.members(of: first) == [first])
+        first.addTabbedWindow(second, ordered: .above)
+        #expect(Set(ViewerClose.members(of: second).map(ObjectIdentifier.init)) == Set([first, second].map(ObjectIdentifier.init)))
+        #expect(ViewerClose.members(of: nil).isEmpty)
+    }
+
     @Test func buttonsMapToChoices() {
         #expect(ViewerClose.choice(for: .alertFirstButtonReturn) == .save)
         #expect(ViewerClose.choice(for: .alertSecondButtonReturn) == .discard)
