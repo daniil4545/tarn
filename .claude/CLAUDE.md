@@ -55,7 +55,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 | Subagent brief | `~/.claude/templates/subagent-brief.md` |
 | Findings file | `docs/findings.jsonl` |
 
-- Feature pipeline (user decision 2026-10-23): approve the feature, survey how other projects built it (read their code and architecture), approve our architecture, then write code. Take proven parts from other projects, then optimize and cut the excess; do not invent what exists. Code from any project may be ported, cmux and Tellurion included (user decision 2026-10-25); Warp is closed source, so only its behavior is followed.
+- Feature pipeline (user decision 2026-10-23): approve the feature, survey how other projects built it (read their code and architecture), approve our architecture, then write code. Take proven parts from other projects, then optimize and cut the excess; do not invent what exists. tarn stays MIT so anyone may reuse it (user decision 2026-10-25): copied code must be MIT or Apache-2.0; from GPL and AGPL projects (cmux, Tellurion) we follow structure and behavior and write the code ourselves; Warp is closed source, so only its behavior is followed.
 - No own mechanism where an analog exists. Before the first line of code of a feature or a fix of a mechanism, the plan names the analog project, file and commit it follows (analog base: OpenViking `agent-terminal/docs/research/landscape*`, then GitHub). No analog found: the plan says "Prior art: searched where - found what" and the user decides. A second fix of our own mechanism stops the work: survey the analogs again before a third.
 - Branches: a stage goes in `s<N>-<name>`; merge into `main` on acceptance with the user's confirmation.
 - Upstream: `upstream/main` is merged into `main` on a schedule, one merge commit; conflicts at insertion points get their own commit.
@@ -66,7 +66,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 
 - `src/` is not modified; Swift changes outside `macos/Sources/Features/Tarn/` only at insertion points listed in `docs/architecture.md`.
 - No network calls, telemetry or accounts in our code.
-- Any source may be ported (user decision 2026-10-25); ported code keeps its license header and an entry in `THIRD_PARTY.md`. The first GPL or AGPL port switches tarn to AGPL-3.0 in the same PR: `LICENSE` becomes AGPL-3.0, the Ghostty MIT notice moves to `NOTICE.md`.
+- Ported code keeps its license header and an entry in `THIRD_PARTY.md`; no GPL, AGPL, BSL or unlicensed code.
 - `tarn hook` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing. The one exception is the `PermissionRequest` hook, which waits for the card while the app holds its connection (`docs/spec.md` 2.3).
 - Nothing edits `~/.claude/settings.json`; hooks ship as a Claude Code plugin.
 - No agent command moves focus or presses Enter for the user.
