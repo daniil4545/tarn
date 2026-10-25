@@ -7,13 +7,20 @@ import WebKit
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
 /// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`.
 final class ViewerWebView: WKWebView {
+    /// The Cmd keys the web view handles itself: key, command sent to the page, text for Help.
+    static let keyTable: [(key: String, command: String, help: String)] = [
+        ("b", "tree", "Show or hide the file tree"),
+        ("e", "mode", "View or source"),
+        ("s", "save", "Save the file"),
+    ]
+
     var onCommand: ((String) -> Void)?
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
               event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
-              let command = ["s": "save", "e": "mode", "b": "tree"][event.charactersIgnoringModifiers ?? ""]
+              let command = Self.keyTable.first(where: { $0.key == event.charactersIgnoringModifiers })?.command
         else { return super.performKeyEquivalent(with: event) }
         onCommand?(command)
         return true
