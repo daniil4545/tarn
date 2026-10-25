@@ -42,6 +42,7 @@ State: the listening descriptor, a read dispatch source and the serial queue `ta
 4. An empty or oversized read closes the connection; an oversized one is logged.
 5. Otherwise a `Reply` wraps the descriptor and the line goes to the main actor.
 6. The callback offers the line to `ViewerRouter.handleCommand` (`open`), then to `AttentionCommands.handle` (`ls`, `notify`, and an error reply for any other `cmd`); a line without `cmd` goes to `SessionRegistry.receive`.
+7a. A line that is not a JSON object (junk, invalid UTF-8) gets `{"error":"malformed request",...}`, except a permission hook's line, which gets silence (`AttentionCommands.isMalformed`).
 8. Before binding, `start` connects to an existing socket file. A live listener (another tarn, or a Debug build next to the installed app) keeps its file: the new app logs it and runs without a socket. A stale file is replaced.
 7. `Reply.send` writes the answer on the socket queue and closes; with an empty line it only closes. A dropped `Reply` closes the connection on deinit. Writes ignore SIGPIPE.
 

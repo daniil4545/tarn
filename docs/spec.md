@@ -138,7 +138,7 @@ Hooks and agent commands enter through one socket; the registry is the only owne
    2. A hook event is matched to its record by surface id; the event moves the record by the table of section 8.
    3. A transition into `permission` or `waiting` raises one notification when the surface is not focused, by Ghostty's own focus rule.
    4. Focusing a surface sets `seen` on its record.
-4. Rules: one writer (main actor); an event for an unknown surface is dropped and logged; a repeated event in the same state changes nothing and raises nothing.
+4. Rules: one writer (main actor); an event for an unknown surface is dropped and logged; a repeated event in the same state changes nothing and raises nothing. One banner per surface per need: while a surface's `tarn notify` note is unseen, a new text replaces the note and raises no banner or sound; after the user focuses the surface, the next note banners again.
 
 ### 2.5 Viewer pane
 
