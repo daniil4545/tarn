@@ -16,9 +16,6 @@ let closeTimer = 0;
 // Same text as the app card: "Tool: detail" for a tool request, the detail alone for a question.
 const requestText = (r) => (r.kind === "tool" ? `${r.tool}: ${r.detail}` : r.detail);
 
-// Same text as the app card: "Tool: detail" for a tool request, the detail alone for a question.
-const requestText = (r) => (r.kind === "tool" ? `${r.tool}: ${r.detail}` : r.detail);
-
 function elapsed(since) {
   const s = Math.max(0, Math.floor((clock.now() - since) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
