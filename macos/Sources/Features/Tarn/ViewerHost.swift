@@ -17,7 +17,7 @@ final class ViewerHost: ObservableObject {
     @Published private(set) var tree: AreaTree
     /// What the user is dragging over this tab, if it is a pane.
     @Published private(set) var drag: AreaPayload?
-    private let blockLeaf: AreaLeaf
+    private var blockLeaf: AreaLeaf
     private var panes: [UUID: Pane] = [:]
     private var lastViewer: UUID?
     private var focusObserver: NSKeyValueObservation?
@@ -93,7 +93,13 @@ final class ViewerHost: ObservableObject {
 
     /// A new, empty viewer on `edge` of `anchor`; `share` is the part of the room that `anchor` keeps.
     private func makeViewer(root: String, beside anchor: AreaLeaf, edge: AreaEdge, share: Double) -> Pane {
-        let leaf = AreaLeaf(kind: .viewer)
+        let pane = makePane(AreaLeaf(kind: .viewer), root: root)
+        tree = tree.opening(pane.leaf, beside: anchor, direction: edge.direction, share: share)
+        return pane
+    }
+
+    /// The model and page of a viewer leaf. The caller puts the leaf into the layout.
+    private func makePane(_ leaf: AreaLeaf, root: String) -> Pane {
         let id = leaf.id
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
@@ -106,10 +112,35 @@ final class ViewerHost: ObservableObject {
         grip.onEndedOutside = { [weak self] point in self?.detach(id, at: point) }
         let pane = Pane(leaf: leaf, model: model, web: web)
         panes[id] = pane
-        tree = tree.opening(leaf, beside: anchor, direction: edge.direction, share: share)
         lastViewer = id
         web.start()
         return pane
+    }
+
+    // MARK: Snapshot
+
+    /// The viewers for a tombstone, or nil when the tab has none.
+    func snapshot() -> ViewerSnapshot? {
+        let viewers = tree.viewers.compactMap { leaf in
+            panes[leaf.id].map { ViewerSnapshot.Viewer(id: leaf.id, root: $0.model.tree.root, tabs: $0.model.snapshot, active: $0.model.tabs.active) }
+        }
+        guard !viewers.isEmpty, let layout = try? JSONEncoder().encode(tree) else { return nil }
+        return ViewerSnapshot(layout: layout, viewers: viewers)
+    }
+
+    /// Brings the viewers of a closed tab back into a tab that has none (undo of S16).
+    func restore(_ snapshot: ViewerSnapshot) {
+        guard panes.isEmpty, let decoded = try? JSONDecoder().decode(AreaTree.self, from: snapshot.layout),
+              let block = decoded.block
+        else { return }
+        blockLeaf = block
+        tree = decoded
+        for viewer in snapshot.viewers {
+            guard let leaf = decoded.leaf(id: viewer.id) else { continue }
+            let pane = makePane(leaf, root: viewer.root)
+            pane.model.reopen(viewer.tabs, active: viewer.active)
+        }
+        lastViewer = nil
     }
 
     // MARK: Closing

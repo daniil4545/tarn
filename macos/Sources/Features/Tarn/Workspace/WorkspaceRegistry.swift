@@ -29,9 +29,12 @@ final class WorkspaceRegistry {
     /// Our own moves are under way: ignore the notifications they cause.
     private var isBusy = false
 
-    /// Called for a tab window just before it closes, with what is needed to put it back.
-    /// The tombstone of S15 to S18 hangs here.
-    var onWillClose: ((NSWindow, WorkspaceBook.ClosedTab) -> Void)?
+    /// Closed tabs whose undo is still on Ghostty's stack (S15 to S18).
+    private let shelf = TombstoneShelf()
+    /// Surface ids of every tab window as last seen. A close of a whole window empties the
+    /// surface trees before the windows close (`TerminalController.swift:872`), so the ids are
+    /// read from here then.
+    private var surfaceCache: [ObjectIdentifier: Set<UUID>] = [:]
 
     private init() {
         let center = NotificationCenter.default
@@ -77,6 +80,8 @@ final class WorkspaceRegistry {
         guard !isBusy else { return }
         isBusy = true
         entries = entries.filter { $0.value.window != nil }
+        claimTombstones()
+        cacheSurfaces()
 
         var outcome = book.reconcile(bookGroups())
         for note in outcome.notes { Self.logger.error("\(note, privacy: .public)") }
@@ -125,6 +130,7 @@ final class WorkspaceRegistry {
     }
 
     private func windowDidBecomeKey(_ window: NSWindow) {
+        claimTombstones()
         guard !isBusy, let entry = entries[ObjectIdentifier(window)], let id = book.selected(entry.key) else { return }
         publish([id])
     }
@@ -135,8 +141,68 @@ final class WorkspaceRegistry {
         closing.add(window)
         entries[ObjectIdentifier(window)] = nil
         guard let closed = book.closing(entry.key, order: order) else { return }
-        onWillClose?(window, closed)
+        shelve(window, closed: closed)
         publish([closed.set.id])
+    }
+
+    // MARK: Tombstones
+
+    /// Registers the tombstone in the undo manager of the window, in the same group as
+    /// Ghostty's own close undo (Q11). The closure holds the tombstone, so it expires with
+    /// Ghostty's undo and we run no timer. Undo runs the last registered action first: ours
+    /// only arms the tombstone, Ghostty's action then creates the window, and `claimTombstones`
+    /// matches the two.
+    private func shelve(_ window: NSWindow, closed: WorkspaceBook.ClosedTab) {
+        guard let controller = window.windowController as? TerminalController,
+              let undoManager = controller.undoManager
+        else { return }
+        let live = Set(controller.surfaceTree.map(\.id))
+        let surfaces = live.isEmpty ? (surfaceCache[ObjectIdentifier(window)] ?? []) : live
+        surfaceCache[ObjectIdentifier(window)] = nil
+        guard !surfaces.isEmpty else {
+            Self.logger.error("workspace: tombstone without surfaces window=\(closed.tab, privacy: .public) set=\(closed.set.id, privacy: .public)")
+            return
+        }
+        let token = shelf.add(.init(closed: closed, surfaces: surfaces, viewers: controller.viewerHost.snapshot()))
+        undoManager.registerUndo(withTarget: controller.ghostty, expiresAfter: controller.undoExpiration) { [weak self] _ in
+            self?.undoRan(token)
+        }
+    }
+
+    private func undoRan(_ token: TombstoneToken) {
+        shelf.arm(token)
+        // Ghostty's closure of the same undo creates the windows right after ours; once the
+        // undo has finished, whatever no window claimed is dropped (section 8).
+        DispatchQueue.main.async { [self] in
+            claimTombstones()
+            let lost = shelf.settle()
+            if lost > 0 { Self.logger.error("workspace: tombstone not matched count=\(lost, privacy: .public)") }
+        }
+    }
+
+    /// Gives a window that Ghostty's undo created its place back: workspace, run position and
+    /// viewers (S15 to S18).
+    private func claimTombstones() {
+        guard shelf.armedCount > 0 else { return }
+        for window in NSApp.windows where isTab(window) {
+            guard let controller = window.windowController as? TerminalController,
+                  let tombstone = shelf.claim(surfaces: Set(controller.surfaceTree.map(\.id)))
+            else { continue }
+            book.reinsert(key(for: window), from: tombstone.closed)
+            if let viewers = tombstone.viewers { controller.viewerHost.restore(viewers) }
+            publish([tombstone.closed.set.id])
+        }
+    }
+
+    private func cacheSurfaces() {
+        var cache: [ObjectIdentifier: Set<UUID>] = [:]
+        for window in NSApp.windows where isTab(window) {
+            guard let controller = window.windowController as? TerminalController else { continue }
+            let id = ObjectIdentifier(window)
+            let live = Set(controller.surfaceTree.map(\.id))
+            cache[id] = live.isEmpty ? surfaceCache[id] ?? [] : live
+        }
+        surfaceCache = cache
     }
 
     /// Windows of the changed sets save their state again, and observers redraw.
