@@ -4,7 +4,7 @@ tarn is an agent-first macOS terminal, a fork of Ghostty. For people who run CLI
 
 How to read: the overall picture is section 1, how work flows is sections 2 and 3, where to change is section 9. Why it is decided so: section 12 of `docs/spec.md`. Domain documents: none.
 
-State of this document: it describes branch `s1-sidebar`. The `tarn` CLI, `tarn.mk` and the markdown panel from the spec do not exist on this branch (not verified on other branches).
+State of this document: it describes branches `s1-sidebar` and `s2-files`. The `tarn` CLI and `tarn.mk` do not exist here (not verified on other branches).
 
 ## Contents
 
@@ -72,7 +72,8 @@ flowchart LR
 | TabCardPopover | popover with the card beside a row | `macos/Sources/Features/Tarn/TabCardPopover.swift` | works |
 | Tests | process detection and session state machine | `macos/Tests/Tarn/` (`AgentProcessTests.swift`, `AgentSessionTests.swift`) | works |
 | Icons | template images for claude, codex, opencode | `macos/Assets.xcassets/TarnAgent*.imageset` | works |
-| `tarn` CLI, markdown panel, notifications | spec sections 2.5, 2.4 | none | not on this branch |
+| Viewer pane | file tabs, files tree, markdown view and editor, code view, watcher; a WKWebView draws it, Swift holds the state (`docs/plans/s2-files.md`) | `Features/Tarn/Viewer*.swift`, `FileTree.swift`, `FileWatcher.swift`, page `Viewer/`, web sources `viewer-web/` | works on `s2-files` |
+| `tarn` CLI, notifications | spec sections 2.4, 2.2 | none (the socket accepts `{"cmd":"open"}`; no binary) | not on this branch |
 
 ### Invariants
 
@@ -83,14 +84,10 @@ flowchart LR
 | The registry is the only writer of session state | `SessionRegistry.sessions` is `private(set)`; sidebar only reads | review (not verified by a test) |
 | `hook.sh` never blocks or fails the agent: exit 0, no output; `permission.sh` waits only while the app holds the connection | `exit 0` on every path; the agent's pipes are released first; `nc` runs in the background, the hook waits for it about 40 ms and then stops it | `python3 -I plugin/test/hook_test.py`: no surface, no app, an app that accepts and never reads, garbage input, a 200 KB event |
 | Nothing edits `~/.claude/settings.json` | hooks ship as a plugin | review |
-| No agent command moves focus or presses Enter for the user | no key is sent; `answer` writes the hook decision after a user click | review |
-| No network calls in our code | none present | review |
-
-Invariants without a test are candidates for tracker tasks.
+| No agent command moves focus or presses Enter for the user | no key is sent; `answer` writes the hook decision after a user click; socket `open` restores the first responder | review; run: responder unchanged after `open` |
+| No network calls in our code | the viewer page loads only `tarn-md://` (rule list, CSP, navigation policy) | `ViewerRulesTests`; page run under the rule list |
 
 ## 2. Main flow
-
-Hook event to the sidebar row.
 
 ```mermaid
 sequenceDiagram
@@ -174,9 +171,7 @@ stateDiagram-v2
   working --> waiting: SessionEnd with reason clear
 ```
 
-Reading: the full transition table, with the corrections of the hook research of 2026-10-23, is `docs/spec.md` section 8; `AgentSession.handle` in `SessionRegistry.swift` implements it and `AgentSessionTests.swift` covers it.
-
-Not in the code but in spec section 8: the `note` field of `tarn notify`; child-exit as an input (the registry removes a session only when its surface is gone).
+Full table: `docs/spec.md` section 8; code `AgentSession.handle`, tests `AgentSessionTests.swift`.
 
 Liveness: Claude Code sends no event on Esc. For `working`: no progress report on the surface and title starts with `✳` for 2 s continuous gives `waiting`, `seen = true`. For `permission`: the last 12 visible lines contain "Interrupted" for 2 s gives `waiting`. A surface that no longer exists is removed.
 
@@ -212,7 +207,7 @@ No retries exist: hooks are fire-and-forget. Idempotency: a repeated event that 
 - Correlation id: the surface UUID (`TARN_SURFACE`), in every registry log line.
 - Logs: `os_log`, subsystem `tarn`, categories `registry` and `socket`. Transitions are logged with old state, new state and event name. Errors: socket setup failures. Event bodies (commands, questions) are not logged.
 - Metrics: none.
-- Where to look: Console.app or `log stream --predicate 'subsystem == "tarn"'` (command not run here, not verified).
+- Where to look: Console.app, subsystem `tarn` (categories `registry`, `socket`, `viewer`).
 
 ## 8. Environments and configuration
 
@@ -243,10 +238,12 @@ Branch diff against `origin/main`. Every Swift change outside `macos/Sources/Fea
 | 5 | `macos/Sources/Features/Terminal/Window Styles/TerminalWindow.swift` | post `.terminalTabsDidChange` in the `tabColor` and `title` observers | sidebar shows color and title |
 | 6 | same | when the native tab bar controller is added: controller and view hidden while the tab style is `sidebar` | the sidebar replaces the native tab bar |
 | 9 | `macos/Sources/App/MainMenu.xib` | menu item "Preferences…" renamed "Settings…", action `showTarnSettings:` | cmd+, opens the tarn settings window; its button opens the Ghostty config file |
+| 10 | `macos/Sources/Features/Terminal/TerminalController.swift` | `let viewerHost = ViewerHost()`; `viewerHost.window = window`; `TerminalView` wrapped in `ViewerLayout` inside the `SidebarLayout` content (extends row 2) | viewer pane right of the terminal area |
+| 11 | `macos/Sources/Ghostty/Ghostty.App.swift` | `openURL` takes the action `target`; a block at its top offers a clicked path (kind `unknown`) to `ViewerRouter`, which returns false for what it does not take | path click opens in the viewer; OSC 8 and URLs keep the upstream path |
 | 7 | `macos/Sources/Ghostty/Surface View/SurfaceView.swift` | `environmentVariables["TARN_SURFACE"] = view.id.uuidString` before the variables are converted to arrays; replaces an inherited value | hooks learn their surface |
 | 8 | `macos/Assets.xcassets/TarnAgentClaude.imageset`, `TarnAgentCodex.imageset`, `TarnAgentOpenCode.imageset` | new image sets with SVG (`claude.svg`, `openai.svg`, `opencode.svg`) | agent badges |
 
-Rows 1 to 4 are in `TerminalController.swift`. Line numbers are not recorded: they shift with upstream; find the places by the `tarn:` comments and the names above (rows 2 to 4 have no `tarn:` comment on the changed lines, search by the names).
+Rows 1 to 4 are in `TerminalController.swift`. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
 
@@ -267,8 +264,8 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 
 - Not supported: agents inside tmux or over ssh (the shell in tmux inherits `TARN_SURFACE` from the tmux server, so events would hit the wrong surface; spec section 12); wrapper scripts that hide the agent name (detection reads the foreground process name, with argv only for versions and interpreters); codex and opencode get an icon and a group but no state, because they send no hooks here.
 - Sessions in tabs without hooks stay `idle`: the state needs the plugin; detection alone only groups the tab.
-- `permission` after the user approves a prompt stays until `PostToolUse`.
 - Liveness depends on Claude Code title prefix `✳`, "Interrupted" and "1. Yes": a UI change breaks it silently.
 - The session record is keyed by surface; two agents in one surface are not distinguished (not verified).
 - Detection latency: up to 2 s on a visible window; hidden windows refresh on notifications only.
-- Not on this branch: notifications, `tarn` CLI (`hook`, `open`, `ls`, `notify`), markdown panel, `tarn.mk`, `docs/api/` cards, CI.
+- Viewer: one pane per window tab (temporary host `ViewerHost.swift`); Cmd+B, Cmd+E, Cmd+S act while the pane has focus; unsaved edits are confirmed when a tab or the pane closes, not when the window closes or the app quits.
+- Not on this branch: notifications, `tarn` CLI binary (`hook`, `open`, `ls`, `notify`), `tarn.mk`, `docs/api/` cards, CI.
