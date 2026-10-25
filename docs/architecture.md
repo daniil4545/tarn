@@ -140,9 +140,10 @@ Third flow, answering from the card: click on a quick action calls `SessionRegis
 | Entity | Source of truth | Who changes it | Key or constraint |
 |---|---|---|---|
 | `AgentSession` | `SessionRegistry.sessions`, memory only | the registry: hook events, liveness timer, focus observer | surface UUID; removed when its surface is gone (found by the liveness check, only for `working` and `permission`) |
-| Sidebar groups | `SidebarModel.groups`, derived | `refresh()` | section plus project root path |
-| Project root cache | `SidebarModel.projects` | `projectRoot(for:)` | `pwd`; never invalidated (not verified elsewhere) |
-| Sidebar layout | `UserDefaults` keys `TarnSidebarCollapsed`, `TarnSidebarWidth`, `TarnSidebarFoldedRoots` | `Sidebar` view | width 120 to 400, default 200 |
+| Sidebar groups | `SidebarModel.groups`, derived from the registry runs | `refresh()` | workspace id |
+| Workspaces | `WorkspaceRegistry` (sets, membership by `TabKey`), saved per window under `tarn.workspaces` | the sidebar commands; `sync()` follows Ghostty's tab order | set id, workspace id (`docs/plans/s3-windows-contracts.md`) |
+| Tombstones | `TombstoneShelf`, held by Ghostty's undo closures | `WorkspaceRegistry.shelve` on close | surface ids; expire with `undoExpiration` |
+| Sidebar layout | `UserDefaults` keys `TarnSidebarCollapsed`, `TarnSidebarWidth` | `Sidebar` view | width 120 to 400, default 200 |
 
 Nothing is persisted across restarts: sessions rebuild from new hook events.
 
@@ -242,10 +243,14 @@ Branch diff against `origin/main`. Every Swift change outside `macos/Sources/Fea
 | 11 | `macos/Sources/Ghostty/Ghostty.App.swift` | `openURL` takes the action `target`; a block at its top offers a clicked path (kind `unknown`) to `ViewerRouter`, which returns false for what it does not take | path click opens in the viewer; OSC 8 and URLs keep the upstream path |
 | 12 | `macos/Sources/Features/Terminal/TerminalController.swift` | in `closeTab`, `closeOtherTabs`, `closeTabsOnTheRight`, `closeWindow`, static `closeAllWindows` and `closeSurface` (root, no confirmation: process exit); `ScriptWindow` and `ScriptTab` close handlers: one `if ViewerClose.intercept(...) { return }` line before the process check | unsaved viewer edits are asked (Save, Don't Save, Cancel) before a tab or window closes; the red X and Cmd+W reach these functions |
 | 13 | `macos/Sources/App/AppDelegate.swift` | in `applicationShouldTerminate`: a `ViewerClose.interceptQuit` block before the `needsConfirmQuit` check; replies `.terminateLater`, then continues with Ghostty's own quit flow | one sheet lists the dirty files of all windows on quit |
+| 15 | `macos/Sources/Features/Terminal/TerminalController.swift` | in `willEncodeRestorableState`: `WorkspaceRestore.encode(window, into: state)` | the workspace table is saved beside Ghostty's state under the key `tarn.workspaces`, `TerminalRestorableState` stays at version 7 |
+| 16 | `macos/Sources/Features/Terminal/TerminalRestorable.swift` | in `restoreWindow`: `let workspaceCoder = state` before the `guard let state` that shadows it; `WorkspaceRestore.decode(workspaceCoder, for: window)` after the window exists | the restored tab gets its table and key back |
+| 17 | `macos/Sources/Ghostty/Ghostty.App.swift` | `gotoSplit`: `isSplit` and `focusTarget` joined in one `guard`; when it fails, `ViewerRouter.focusNeighbor(from:direction:)` is the result | Ghostty's split keys cross from the terminal block into a viewer (D8) |
+| 18 | `macos/Sources/Ghostty/Surface View/SurfaceGrabHandle.swift` | dot opacity 0.3 and 0.8 become 0.6 and 1.0, comment `tarn:` | the grab handle is easier to see (D16) |
 | 7 | `macos/Sources/Ghostty/Surface View/SurfaceView.swift` | `environmentVariables["TARN_SURFACE"] = view.id.uuidString` before the variables are converted to arrays; replaces an inherited value | hooks learn their surface |
 | 8 | `macos/Assets.xcassets/TarnAgentClaude.imageset`, `TarnAgentCodex.imageset`, `TarnAgentOpenCode.imageset` | new image sets with SVG (`claude.svg`, `openai.svg`, `opencode.svg`) | agent badges |
 
-Rows 1 to 4, 10 and 12 are in `TerminalController.swift`. Line numbers are not recorded: they shift with upstream; search by the names above.
+Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows 14 (settings) and 15 to 18 were numbered after the s2-files rows 12 and 13. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
 
@@ -256,7 +261,8 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 | Add or rename an agent | `AgentProcess.names`, `displayNames`, `icons`; new image set | `AgentProcessTests`; note: only `claude` has hooks |
 | Change a state transition | `AgentSession.handle` | `docs/spec.md` section 8, `AgentSessionTests` |
 | Add a hook event | `plugin/hooks/hooks.json`, `handle` | hook timeout, the invariant on `hook.sh` |
-| Change grouping or order | `SidebarModel.refresh`, `arrange`, `projectRoot` | group key is the full root path |
+| Change workspaces, their rules or order | `WorkspaceSet` (table), `WorkspaceBook` (rules, no AppKit), `WorkspaceRegistry` (windows, native moves), `SidebarModel.refresh` | `ReconcileTests`, `TargetTests`, `MergeTests`, `FailureTests`; Ghostty alone writes tab order |
+| Change what an undo brings back | `WorkspaceTombstone`, `WorkspaceRegistry.shelve`, `ViewerHost.snapshot` and `restore` | `TombstoneTests`; the tombstone lives in Ghostty's undo group, no timer of ours |
 | Change detection triggers | `SidebarModel.init` timer and observer | idle CPU (bench in spec; `tarn.mk` absent here) |
 | Change quick answers | `SessionRegistry.answer`, `decision`, `AgentViews.swift` | Claude Code `PermissionRequest` decision format |
 | Change the socket path or protocol | `ControlSocket`, `hook.sh`, `permission.sh`, registry `receive` | `version` field |
@@ -269,5 +275,5 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 - Liveness depends on Claude Code title prefix `✳`, "Interrupted" and "1. Yes": a UI change breaks it silently.
 - The session record is keyed by surface; two agents in one surface are not distinguished (not verified).
 - Detection latency: up to 2 s on a visible window; hidden windows refresh on notifications only.
-- Viewer: one pane per window tab (temporary host `ViewerHost.swift`); Cmd+B, Cmd+E, Cmd+S act while the pane has focus; unsaved edits are asked (Save, Don't Save, Cancel) on every close of a tab, window, all windows, an AppleScript close and on quit, but not on a system shutdown or an update install. `ViewerModelTests.directClosesAreAllReviewed` fails when a new direct close call appears.
+- Viewer: many viewers per window tab around the terminal block (`ViewerHost`, `AreaTree`); not restored after a relaunch, restored by an undo of the tab (tombstone); Cmd+B, Cmd+E, Cmd+S act while the pane has focus; unsaved edits are asked (Save, Don't Save, Cancel) on every close of a tab, window, all windows, an AppleScript close and on quit, but not on a system shutdown or an update install. `ViewerModelTests.directClosesAreAllReviewed` fails when a new direct close call appears.
 - Not on this branch: notifications, `tarn` CLI binary (`hook`, `open`, `ls`, `notify`), `tarn.mk`, `docs/api/` cards, CI.

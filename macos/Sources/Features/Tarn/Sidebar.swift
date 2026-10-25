@@ -177,6 +177,7 @@ final class SidebarModel: ObservableObject {
             if !groups.isEmpty { groups = [] }
             return
         }
+        WorkspaceTitle.apply(to: window)
 
         // The window only carries a key equivalent label while it is in a tab group, so a
         // lone tab would have none. Look the shortcuts up from the keybinds instead.

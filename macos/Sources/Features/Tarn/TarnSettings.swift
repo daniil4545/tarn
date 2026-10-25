@@ -25,8 +25,8 @@ enum TabStyle: String, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .sidebar: "Tabs grouped by project with agent state, on the left of the window."
-        case .top: "The native tab bar, as in Ghostty. Agent state is not shown."
+        case .sidebar: "Tabs grouped in workspaces with agent state, on the left of the window."
+        case .top: "The native tab bar, as in Ghostty. Workspaces and agent state are not shown."
         }
     }
 
@@ -36,6 +36,7 @@ enum TabStyle: String, CaseIterable, Identifiable {
         let hidden = current == .sidebar
         for window in NSApp.windows {
             guard let window = window as? TerminalWindow else { continue }
+            WorkspaceTitle.apply(to: window)
             for controller in window.titlebarAccessoryViewControllers
             where controller.identifier == TerminalWindow.tabBarIdentifier {
                 controller.isHidden = hidden

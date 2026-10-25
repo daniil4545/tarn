@@ -40,12 +40,12 @@ Risk to check first (before slice 2): that AppKit restores tabs into one group; 
 
 | # | File | Change |
 | --- | --- | --- |
-| 12 | `macos/Sources/Features/Terminal/TerminalController.swift:1325` | in `willEncodeRestorableState`: `WorkspaceRestore.encode(window, into: state)` |
-| 13 | `macos/Sources/Features/Terminal/TerminalRestorable.swift` after `:158` | `WorkspaceRestore.decode(state, for: c)` |
-| 14 | `macos/Sources/Ghostty/Ghostty.App.swift:1364` `gotoSplit` | when no terminal target: `ViewerRouter.focusNeighbor(from:direction:)`; true if it moved focus (D8) |
-| 15 | `macos/Sources/Ghostty/Surface View/SurfaceGrabHandle.swift:70` | dot opacity 0.3/0.8 to 0.6/1.0 (D16) |
+| 12 (now 15) | `macos/Sources/Features/Terminal/TerminalController.swift:1325` | in `willEncodeRestorableState`: `WorkspaceRestore.encode(window, into: state)` |
+| 13 (now 16) | `macos/Sources/Features/Terminal/TerminalRestorable.swift` after `:158` | `WorkspaceRestore.decode(state, for: c)` |
+| 14 (now 17) | `macos/Sources/Ghostty/Ghostty.App.swift:1364` `gotoSplit` | when no terminal target: `ViewerRouter.focusNeighbor(from:direction:)`; true if it moved focus (D8) |
+| 15 (now 18) | `macos/Sources/Ghostty/Surface View/SurfaceGrabHandle.swift:70` | dot opacity 0.3/0.8 to 0.6/1.0 (D16) |
 
-Rows 12 to 15 get own commits on upstream merges. No `Ghostty-Info.plist` change (C10).
+Numbers 12 to 15 collided with the s2-files rows 12 and 13 and the settings row 14, so `docs/architecture.md` records them as 15 to 18. They get own commits on upstream merges. No `Ghostty-Info.plist` change (C10).
 
 ## 4. Slices (3 workers, no shared file)
 
@@ -126,3 +126,7 @@ Decided by the orchestrator (2026-10-25):
 - Q9: cmd+1..9 on a tab inside a collapsed workspace unfolds it and selects the tab.
 - Q10: the window title stays Ghostty's; the workspace name goes to `NSWindow.subtitle` (slice 7). The mockup follows later.
 - Q11: Ghostty first: the tombstone is registered in Ghostty's `UndoManager`, grouped with Ghostty's own close undo, not a separate timer. A separate timer only if proven impossible, with the proof in this plan (slice 6 does this; the registry only stays ready for it).
+
+## 9. Outcome of slice 6 (undo, Q11)
+
+The tombstone is an action in Ghostty's own `UndoManager` (`WorkspaceRegistry.shelve`), registered on `willClose` in the same undo group as Ghostty's close undo (`TerminalController.swift:737`, `:889`). Undo runs the last registered action first, so ours only arms the tombstone; Ghostty's action then creates the window; the registry matches the two by surface ids (`undoState` reuses the `SurfaceView`s). The undo closure holds the tombstone, so it expires with Ghostty's undo (`undoExpiration`) and we run no timer; a timer is not needed, so no proof is owed. A window close empties the surface trees before the windows close (`:872`), so ids come from a cache the registry refreshes on every sync. Test: `TombstoneTests`.
