@@ -13,11 +13,11 @@ final class ViewerWebView: WKWebView {
     var onCommand: ((String) -> Void)?
     var onLayout: ((ViewerLayoutCommand) -> Void)?
 
-    /// The pane command of a Cmd+key press. The typed letter decides, as for the menu, so Dvorak and
+    /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
     /// the S key types "ы") the physical key decides.
     static func command(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
-        guard flags.intersection([.shift, .control, .option, .command]) == .command else { return nil }
+        let modifiers = flags.intersection([.shift, .control, .option, .command])
         let letter: String
         if let characters, characters.count == 1, characters.unicodeScalars.allSatisfy(\.isASCII) {
             letter = characters.lowercased()
@@ -29,7 +29,15 @@ final class ViewerWebView: WKWebView {
             default: return nil
             }
         }
-        return ["s": "save", "e": "mode", "b": "tree"][letter]
+        // The modifiers are exact: Cmd+B, Cmd+Alt+B and Cmd+Shift+E are three different keys.
+        switch (modifiers, letter) {
+        case (.command, "s"): return "save"
+        case (.command, "e"): return "mode"
+        case (.command, "b"): return "tree"
+        case ([.command, .option], "b"): return "pane"
+        case ([.command, .shift], "e"): return "focusTree"
+        default: return nil
+        }
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
@@ -124,11 +132,19 @@ final class ViewerWebController: NSObject {
         if wantsFocus { DispatchQueue.main.async { [weak self] in self?.focus() } }
     }
 
-    /// Gives the page the keyboard; before the web view exists the request waits for it.
-    func focus() {
+    /// Gives the page the keyboard; before the web view exists the request waits for it. While the
+    /// view is not in a window yet (a hidden pane that SwiftUI is putting back) it retries with a
+    /// doubling delay, as `Ghostty.moveFocus` does (SurfaceView.swift:1075), and gives up at 0.5 s.
+    func focus(after delay: TimeInterval? = nil) {
         guard let webView else { wantsFocus = true; return }
         wantsFocus = false
-        webView.window?.makeFirstResponder(webView)
+        guard let window = webView.window else {
+            let next = delay.map { $0 * 2 } ?? 0.05
+            guard next < 0.5 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + next) { [weak self] in self?.focus(after: next) }
+            return
+        }
+        window.makeFirstResponder(webView)
     }
 
     func stop() {

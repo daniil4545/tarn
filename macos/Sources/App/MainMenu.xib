@@ -377,6 +377,18 @@
                                     <action selector="toggleViewerTree:" target="-1" id="Tf2-Vw-Fb2"/>
                                 </connections>
                             </menuItem>
+                            <menuItem title="Toggle Pane" keyEquivalent="b" id="Tf3-Vw-Fb3">
+                                <modifierMask key="keyEquivalentModifierMask" option="YES" command="YES"/>
+                                <connections>
+                                    <action selector="toggleViewerPane:" target="-1" id="Tf4-Vw-Fb4"/>
+                                </connections>
+                            </menuItem>
+                            <menuItem title="Focus Files" keyEquivalent="e" id="Tf5-Vw-Fb5">
+                                <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                <connections>
+                                    <action selector="focusViewerTree:" target="-1" id="Tf6-Vw-Fb6"/>
+                                </connections>
+                            </menuItem>
                         </items>
                     </menu>
                 </menuItem>

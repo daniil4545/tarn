@@ -46,6 +46,16 @@ final class ViewerModel {
     var onFocus: (() -> Void)?
     /// True while the page holds keyboard focus.
     var hasFocus: () -> Bool = { false }
+    /// Cmd+Alt+B and Cmd+Shift+E typed in the pane; the host owns the pane's lifetime and focus.
+    var onPaneKey: (() -> Void)?
+    var onFocusTreeKey: (() -> Void)?
+    /// Reported by the page: the focus is inside the files tree.
+    private var treeFocused = false
+
+    /// The tree has the keyboard right now: the page says so and the web view is the first responder.
+    /// A hidden tree cannot hold the focus, whatever the page last said: WebKit does not always send
+    /// the focusout of an element that is hidden or replaced.
+    var treeInFocus: Bool { treeFocused && treeVisible && hasFocus() }
 
     init(root: String) {
         tree = FileTree(root: root)
@@ -182,17 +192,32 @@ final class ViewerModel {
         return true
     }
 
+    func flushPendingEdit() {
+        runScript("tarn.flush()")
+    }
+
+    func focusTreeInPage() {
+        onFocus?()
+        runScript("tarn.focusTree()")
+    }
+
+    func focusContentInPage() {
+        onFocus?()
+        runScript("tarn.focusContent()")
+    }
+
     /// Opens the pane with the tree only, no file (Cmd+B in a terminal with no pane).
-    func showTreeOnly() {
+    func revealTree() {
         treeVisible = true
         pushChrome()
     }
 
-    /// Cmd+B in the pane: with files it toggles the tree; with no file the pane has nothing else to
-    /// show, so it closes.
+    /// Cmd+B: with files it toggles the tree and moves the keyboard with it (shown: into the tree,
+    /// hidden: back to the file); with no file the pane has nothing else to show, so it closes.
     func toggleTreeKey() {
         if closeIfEmpty() { return }
         toggleTree()
+        if treeVisible { focusTreeInPage() } else { focusContentInPage() }
     }
 
     func closeTab(at index: Int) {
@@ -239,6 +264,8 @@ final class ViewerModel {
         switch name {
         case "save", "mode": runScript("tarn.cmd(\(literal(name)))")
         case "tree": toggleTreeKey()
+        case "pane": onPaneKey?()
+        case "focusTree": onFocusTreeKey?()
         case "closeTab": closeActiveTab()
         default: break
         }
@@ -266,6 +293,7 @@ final class ViewerModel {
             if let path { onFileDrag?(PageFileDrag(path: path, moves: body["tab"] as? Bool == true, sole: tabs.tabs.count == 1)) }
         case "dragEnd": onFileDrag?(nil)
         case "toggleTree": toggleTreeKey()
+        case "treeFocus": treeFocused = body["on"] as? Bool == true
         case "hideTree":
             if closeIfEmpty() { return }
             treeVisible = false
