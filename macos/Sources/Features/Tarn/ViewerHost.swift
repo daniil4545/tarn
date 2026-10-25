@@ -252,7 +252,8 @@ enum ViewerRouter {
             _ = controller.viewerHost.open(target, root: cwd, focus: true)
             return true
         case let .missing(raw):
-            guard let model = controller.viewerHost.model else { return false }
+            // Only a shown pane can tell the user; otherwise the default opener reports it.
+            guard let model = controller.viewerHost.model, !controller.viewerHost.hidden else { return false }
             model.toast("No such file: \(raw)")
             return true
         case .upstream:
