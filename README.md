@@ -1,23 +1,75 @@
-# tarn
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo-wordmark-dark.svg">
+    <img src="docs/assets/logo-wordmark-light.svg" alt="tarn" width="360">
+  </picture>
+</p>
 
-An agent-first terminal for macOS, built on [Ghostty](https://ghostty.org): every tab in a sidebar,
-tabs with a coding agent grouped by project, and the state of each Claude Code session at a glance.
+<p align="center"><b>An agent-first terminal for macOS, built on <a href="https://ghostty.org">Ghostty</a>.</b><br>
+Every tab in a sidebar, grouped by project, with the state of each Claude Code session at a glance.</p>
+
+<p align="center">
+  <img src="docs/assets/gifs/agent-permission.gif" alt="A Claude Code session goes to needs-permission; the sidebar card answers it with one click" width="800">
+</p>
+<p align="center"><sub>The browser demo (simulated session): the dot turns orange, the card answers the request.</sub></p>
 
 tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty project; see
 [NOTICE.md](NOTICE.md).
 
+## What it adds to Ghostty
+
+Ghostty keeps rendering, input, splits and config. tarn adds:
+
+- **Sidebar with agent states.** A vertical tab list in place of the tab bar. A tab running `claude`,
+  `codex` or `opencode` joins the group of its project. Claude Code state shows as a colored dot:
+  working, needs permission, asks a question, done, error.
+- **Permission card.** Hover a row: the card shows the request and answers it with one click (Allow,
+  Deny, or a numbered option).
+- **File viewer.** A click on a path in the terminal opens the file in a pane beside it: markdown
+  rendered, mermaid diagrams, highlighted code, an editor with save, live reload when an agent
+  rewrites the file.
+- **Workspaces and pane layout.** Tabs grouped in workspaces; drag a pane or a viewer to a zone
+  at the window edge.
+- **Settings window** (Cmd+,). Tab style and Ghostty options in one place.
+- **Planned:** the `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`). The app has only the socket
+  command that opens a file; a click on a path does the same.
+
+Local only: no account, cloud, telemetry or built-in AI model.
+
+## Screenshots
+
+Taken from the [browser demo](#try-the-demo) of the tarn window (dark theme).
+
+| | |
+|---|---|
+| ![Sidebar with workspaces and agent states](docs/assets/screens/sidebar.png) **Sidebar** | ![Permission card](docs/assets/screens/permission-card.png) **Permission card** |
+| ![Viewer with markdown and a mermaid diagram beside the terminal](docs/assets/screens/viewer.png) **Viewer** | ![A viewer dragged to a zone at the window edge](docs/assets/screens/drop-zone.png) **Drop zone** |
+| ![Settings window](docs/assets/screens/settings.png) **Settings** | ![Help with the key reference](docs/assets/screens/help.png) **Help** |
+
+| Click a path, edit, save | Drag a viewer to a zone | Font and theme in Settings |
+|---|---|---|
+| ![](docs/assets/gifs/viewer-edit.gif) | ![](docs/assets/gifs/viewer-drag.gif) | ![](docs/assets/gifs/settings.gif) |
+
+## Try the demo
+
+`demo/` is a static page that shows the tarn window in a browser: a real terminal emulator per pane,
+a simulated shell and a scripted `claude` session. It is a preview of the interface, not the app;
+it also holds the planned `tarn` commands, marked as planned. Nothing is published or hosted. Run it
+locally:
+
+```sh
+python3 -m http.server 8000 --directory demo
+```
+
+Open http://localhost:8000 in current Chrome or Edge. Details, tests and the list of built and
+planned parts: [demo/README.md](demo/README.md).
+
 ## Stage
 
 Preview [`tarn-v0.0.1`](https://github.com/daniil4545/tarn/releases/tag/tarn-v0.0.1), built from
-source. What works:
-
-- a vertical sidebar in place of the tab bar, resizable, collapsible to icons;
-- agent groups: a tab running `claude`, `codex` or `opencode` joins the group of its project;
-- Claude Code state as a colored dot: working, needs permission, asks a question, done, error;
-- a card on hover that answers a permission request or a question with one click.
-
-Not in yet: markdown panel, `tarn` CLI, notifications, own app name and icon. The app still builds
-as `Ghostty.app`.
+source, has the sidebar, agent groups, state dots and the card. The viewer, workspaces and the
+settings window (PRs #3-#5) and the demo (PR #6) are not in that release. Not in yet: `tarn` CLI,
+notifications, own app name and icon. The app still builds as `Ghostty.app`.
 
 ## Quick start
 
