@@ -1,0 +1,18 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>spike</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="../css/fonts.css">
+<style>body{margin:0;background:#000}.t{width:640px;height:300px}</style>
+<div id="host"></div>
+<script type="module">
+import { createTerm } from "../js/term-adapter.js";
+window.createTerm = createTerm;
+window.make = async (opts = {}) => {
+  const el = document.createElement("div");
+  el.className = "t";
+  document.getElementById("host").append(el);
+  return createTerm(el, { fontSize: 14, fontFamily: '"JetBrains Mono", monospace', ...opts });
+};
+window.ready = true;
+</script>

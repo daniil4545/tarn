@@ -1,0 +1,19 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>reserved keys</title>
+<link rel="icon" href="data:,">
+<style>body{font:13px monospace;margin:12px}button{margin-bottom:8px}#log{white-space:pre}</style>
+<button id="fs">Full screen + Keyboard Lock</button>
+<div>Press every chord of the Help list; a line appears per keydown the page could see. A chord with no line is browser-reserved and needs a fallback.</div>
+<div id="log"></div>
+<script>
+const log = document.getElementById("log");
+document.getElementById("fs").onclick = async () => {
+  await document.documentElement.requestFullscreen();
+  await navigator.keyboard?.lock?.();
+};
+addEventListener("keydown", (e) => {
+  e.preventDefault();
+  log.textContent += `${[e.ctrlKey && "Ctrl", e.altKey && "Alt", e.shiftKey && "Shift", e.metaKey && "Cmd"].filter(Boolean).join("+")}+${e.code} key=${e.key}\n`;
+}, true);
+</script>
