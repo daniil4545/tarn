@@ -34,7 +34,8 @@ func configHome(_ name: String, command: String) throws -> URL {
 func launch(_ app: URL, xdg: URL) -> NSRunningApplication {
     let config = NSWorkspace.OpenConfiguration()
     config.createsNewApplicationInstance = true
-    config.activates = false
+    // Ghostty makes its first window only when the app becomes active.
+    config.activates = true
     config.addsToRecentItems = false
     config.environment = ["XDG_CONFIG_HOME": xdg.path]
     var result: Result<NSRunningApplication, Error>?
