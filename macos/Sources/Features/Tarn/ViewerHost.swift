@@ -24,22 +24,43 @@ final class ViewerHost: ObservableObject {
         // A layout change takes the first responder from the terminal; an agent's open gives it back.
         let responder = focus ? nil : window?.firstResponder
         let typingInPane = !focus && (model?.hasFocus() ?? false)
+        let created = model == nil
         let model = model ?? makePane(root: root ?? NSHomeDirectory())
         guard model.open(target, background: typingInPane) else {
-            if model.snapshot.isEmpty { closePane(saved: [], active: -1) }
+            // A pane this call created for a file that cannot open does not stay; a tree-only pane does.
+            if created, model.snapshot.isEmpty { closePane(saved: [], active: -1) }
             return false
         }
         if focus {
             DispatchQueue.main.async { model.onFocus?() }
-        } else if let responder {
-            for delay in [0.0, 0.15] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let window = self?.window, window.firstResponder !== responder else { return }
-                    window.makeFirstResponder(responder)
-                }
-            }
+        } else {
+            keepFocus(responder)
         }
         return true
+    }
+
+    /// A layout change takes the first responder from the terminal; give it back.
+    private func keepFocus(_ responder: NSResponder?) {
+        guard let responder else { return }
+        for delay in [0.0, 0.15] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let window = self?.window, window.firstResponder !== responder else { return }
+                window.makeFirstResponder(responder)
+            }
+        }
+    }
+
+    /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
+    /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
+    /// only; otherwise the model decides (an empty pane closes, one with files toggles the tree).
+    func toggleFromKey(root: String?) {
+        guard let model else {
+            let responder = window?.firstResponder
+            makePane(root: root ?? NSHomeDirectory()).showTreeOnly()
+            keepFocus(responder)
+            return
+        }
+        model.toggleTreeKey()
     }
 
     private func makePane(root: String) -> ViewerModel {
@@ -70,6 +91,13 @@ final class ViewerHost: ObservableObject {
             reopened.reopen(saved, active: active)
             DispatchQueue.main.async { reopened.onFocus?() }
         }
+    }
+}
+
+extension TerminalController {
+    /// The View menu item "Toggle Files" (Cmd+B), found through the responder chain from the terminal.
+    @IBAction func toggleViewerTree(_ sender: Any?) {
+        viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
     }
 }
 
@@ -118,27 +146,64 @@ private struct ViewerPane: NSViewRepresentable {
 enum ViewerRouter {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
 
+    /// The `open_url` action as it reaches us, for diagnosing a click that does nothing. Debug level;
+    /// the URL is logged only for kind `unknown` (a path), never for links from terminal output.
+    /// Watch: `log stream --level debug --predicate 'subsystem == "tarn" AND category == "viewer"'`.
+    static func trace(kind: String, url: String, surfaceTarget: Bool) {
+        logger.debug("open_url kind=\(kind, privacy: .public) url=\(kind == "unknown" ? url : "-", privacy: .public) surfaceTarget=\(surfaceTarget)")
+    }
+
+    /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
+    /// must be explainable from `log stream --predicate 'subsystem == "com.mitchellh.ghostty"'`.
+    enum Decision: Equatable {
+        case open(OpenTarget)
+        /// A pane that is already open reports the missing file; otherwise the default opener runs.
+        case missing(raw: String)
+        case upstream(reason: String)
+    }
+
+    /// The pure part of a path click: which of the three outcomes `raw` leads to.
+    static func decide(_ raw: String, cwd: String?) -> Decision {
+        if ViewerPaths.isURL(raw) { return .upstream(reason: "a URL") }
+        guard let target = ViewerPaths.resolve(raw, cwd: cwd) else {
+            return .upstream(reason: cwd == nil ? "relative path and the terminal has no working directory" : "not a path")
+        }
+        switch ViewerPaths.classify(target.path) {
+        case .text: return .open(target)
+        case .system: return .upstream(reason: "a media, document or archive type")
+        case .directory: return .upstream(reason: "a directory")
+        case .special: return .upstream(reason: "not a regular file")
+        case .missing: return .missing(raw: raw)
+        }
+    }
+
     /// Opens a clicked path in the viewer of the clicked surface's window. Returns false to let the
     /// default opener run: URLs, directories, a missing file without a pane, clicks without a
     /// terminal. Files of media, document and archive types open in their own app.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
-        guard !ViewerPaths.isURL(raw), let surface,
-              let controller = surface.window?.windowController as? TerminalController,
-              let target = ViewerPaths.resolve(raw, cwd: surface.pwd)
-        else { return false }
-        switch ViewerPaths.classify(target.path) {
-        case .text:
-            _ = controller.viewerHost.open(target, root: surface.pwd, focus: true)
-        case .system, .directory, .special:
-            // Upstream opens these through its untrusted-target policy.
+        guard let surface else {
+            logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
-        case .missing:
-            // A pane that is already open says so; without one the default opener runs.
+        }
+        guard let controller = surface.window?.windowController as? TerminalController else {
+            logger.debug("click on \(raw, privacy: .public) refused: the surface has no terminal window")
+            return false
+        }
+        let cwd = surface.workingDirectory
+        let decision = decide(raw, cwd: cwd)
+        logger.debug("click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
+        switch decision {
+        case let .open(target):
+            _ = controller.viewerHost.open(target, root: cwd, focus: true)
+            return true
+        case let .missing(raw):
             guard let model = controller.viewerHost.model else { return false }
             model.toast("No such file: \(raw)")
+            return true
+        case .upstream:
+            return false
         }
-        return true
     }
 
     /// `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` from the control
@@ -175,7 +240,7 @@ enum ViewerRouter {
         case .text where ViewerPaths.isBinary(path): return "tarn: not a text file: \(path)"
         case .text:
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
-            return controller.viewerHost.open(target, root: surface.pwd, focus: false) ? nil : "tarn: cannot open: \(path)"
+            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
         }
     }
 }

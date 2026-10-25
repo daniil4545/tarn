@@ -197,7 +197,7 @@ final class SidebarModel: ObservableObject {
                 }
                 .first
             let agentSurface = running?.view
-            let pwd = (agentSurface ?? controller?.focusedSurface)?.pwd
+            let pwd = (agentSurface ?? controller?.focusedSurface)?.workingDirectory
             let root = projectRoot(for: pwd)
             let key = agentSurface == nil
                 ? GroupKey(section: .terminals, path: "")
