@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tarn mockup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Mock of a tarn window: sessions sidebar | terminal | file panel. The panel holds groups of
+   file tabs that split by drag and drop, as VS Code editor groups do. */
+:root {
+  color-scheme: dark;
+  --desk: #17181f; --chrome: #21222c; --term: #282a36; --line: #3a3c4e;
+  --fg: #e6e6ef; --muted: #9a9cb3; --accent: #8be9fd;
+  --blue: #4f8cff; --green: #50fa7b; --orange: #ffb86c; --purple: #bd93f9; --yellow: #f1fa8c;
+  --p-bg: #282a36; --p-bar: #21222c; --p-fg: #e6e6ef; --p-muted: #9a9cb3; --p-line: #3a3c4e; --p-code: #1f2029; --p-accent: #bd93f9;
+  --sans: "IBM Plex Sans", -apple-system, "Helvetica Neue", sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+.panel.light { --p-bg: #fbfbfd; --p-bar: #f0f1f6; --p-fg: #1d1f2b; --p-muted: #5f6378; --p-line: #dfe0ea; --p-code: #f1f2f7; --p-accent: #6b46c1; }
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--desk); color: var(--fg); font: 14px/1.5 var(--sans); padding: 14px max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px)); display: flex; flex-direction: column; gap: 10px; }
+button { font: inherit; color: inherit; cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.mock { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; font-size: 13px; color: var(--muted); }
+.mock b { color: var(--fg); font-weight: 600; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+.seg button { background: none; border: 0; padding: 3px 10px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--line); color: var(--fg); }
+.act { background: #2f3142; border: 1px solid var(--line); border-radius: 7px; padding: 3px 10px; }
+.act:hover { border-color: var(--muted); }
+kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; color: var(--fg); }
+.keys { font-size: 12px; }
+
+.win { flex: 1; min-height: 540px; display: flex; flex-direction: column; border: 1px solid #000; border-radius: 12px; overflow: hidden; background: var(--term); box-shadow: 0 20px 60px rgba(0,0,0,.45); }
+.titlebar { height: 34px; flex: none; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 12px; background: var(--chrome); border-bottom: 1px solid #000; font-size: 12px; color: var(--muted); }
+.lights { display: flex; gap: 7px; margin-right: 10px; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+.ttl-btn { margin-left: auto; background: none; border: 1px solid var(--line); border-radius: 6px; padding: 1px 9px; color: var(--muted); font-size: 12px; }
+.ttl-btn[aria-pressed="true"] { color: var(--fg); background: var(--line); }
+.body { flex: 1; display: flex; min-height: 0; }
+.sidebar { width: 190px; flex: none; background: var(--chrome); border-right: 1px solid #000; padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.group { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 8px 8px 4px; }
+.tab { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 5px; background: none; border: 0; text-align: left; color: var(--muted); width: 100%; }
+.tab:hover { background: rgba(255,255,255,.05); }
+.tab[aria-selected="true"] { background: rgba(255,255,255,.1); color: var(--fg); }
+.tab .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.agent { width: 13px; height: 13px; flex: none; }
+.key { font-size: 11px; color: #6c6f85; }
+.sep { height: 1px; background: var(--line); margin: 8px 4px; }
+
+.main { flex: 1; min-width: 0; display: flex; }
+.term { flex: 1; min-width: 0; padding: 10px 12px; font: 13px/1.55 var(--mono); overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.term .p { color: var(--green); } .term .dim { color: var(--muted); } .term .tool { color: var(--purple); }
+.path { color: var(--accent); text-decoration: underline; text-decoration-color: rgba(139,233,253,.35); text-underline-offset: 2px; cursor: pointer; }
+.path:hover { text-decoration-color: var(--accent); background: rgba(139,233,253,.08); }
+.cursor { display: inline-block; width: 8px; height: 15px; background: var(--fg); vertical-align: -2px; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+
+.resizer { width: 7px; flex: none; cursor: col-resize; position: relative; }
+.resizer::after { content: ""; position: absolute; inset: 0 3px; background: #000; }
+.resizer:hover::after, .resizer.drag::after { background: var(--accent); }
+
+/* panel */
+.panel { width: 56%; min-width: 340px; flex: none; display: flex; background: var(--p-bg); color: var(--p-fg); min-height: 0; }
+.tcol { width: 200px; flex: none; display: flex; flex-direction: column; background: var(--p-bar); border-right: 1px solid var(--p-line); min-height: 0; }
+.groups { flex: 1; min-width: 0; display: flex; min-height: 0; }
+.split { flex: 1; min-width: 0; min-height: 0; display: flex; }
+.split.col { flex-direction: column; }
+.pane { min-width: 0; min-height: 0; display: flex; flex-basis: 0; }
+.sdiv { flex: none; background: var(--p-line); position: relative; }
+.sdiv.row { width: 1px; cursor: col-resize; }
+.sdiv.col { height: 1px; cursor: row-resize; }
+.sdiv::after { content: ""; position: absolute; inset: -3px; }
+.sdiv:hover, .sdiv.drag { background: var(--p-accent); }
+.grp { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.gh { flex: none; display: flex; align-items: stretch; background: var(--p-bar); border-bottom: 1px solid var(--p-line); font-size: 12.5px; min-height: 31px; }
+.grp.focus .gh { box-shadow: inset 0 2px 0 var(--p-accent); }
+.gtabs { flex: 1; min-width: 0; display: flex; overflow-x: auto; scrollbar-width: none; }
+.ftab { display: flex; align-items: center; gap: 5px; padding: 0 4px 0 10px; border-right: 1px solid var(--p-line); color: var(--p-muted); white-space: nowrap; cursor: pointer; user-select: none; }
+.ftab.on { color: var(--p-fg); background: var(--p-bg); }
+.ftab.preview .nm { font-style: italic; }
+.ftab .x { opacity: 0; padding: 0 4px; border-radius: 3px; border: 0; background: none; color: inherit; font-size: 11px; }
+.ftab:hover .x, .ftab.on .x { opacity: .6; }
+.ftab .x:hover { opacity: 1; background: color-mix(in srgb, var(--p-fg) 12%, transparent); }
+.ftab.dragging { opacity: .4; }
+.dirty { width: 7px; height: 7px; border-radius: 50%; background: var(--p-fg); flex: none; }
+.gact { flex: none; display: flex; align-items: center; gap: 2px; padding: 0 6px; }
+.ib { background: none; border: 0; padding: 2px 6px; border-radius: 5px; color: var(--p-muted); font-size: 12px; }
+.ib:hover { background: color-mix(in srgb, var(--p-fg) 9%, transparent); color: var(--p-fg); }
+.ib[aria-pressed="true"] { color: var(--p-fg); background: color-mix(in srgb, var(--p-fg) 12%, transparent); }
+.ib:disabled { opacity: .35; cursor: default; }
+.gbody { flex: 1; min-height: 0; display: flex; position: relative; }
+.crumb { flex: none; padding: 4px 12px; font-size: 12px; color: var(--p-muted); border-bottom: 1px solid var(--p-line); display: flex; gap: 8px; }
+.crumb .grow { flex: 1; }
+.drop { position: absolute; z-index: 4; background: color-mix(in srgb, var(--p-accent) 22%, transparent); border: 2px solid var(--p-accent); border-radius: 6px; pointer-events: none; transition: all .08s; }
+.banner { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 6px 12px; font-size: 12.5px; background: color-mix(in srgb, var(--orange) 22%, var(--p-bg)); border-bottom: 1px solid var(--p-line); }
+.banner button { background: var(--p-bg); border: 1px solid var(--p-line); border-radius: 5px; padding: 1px 8px; color: var(--p-fg); }
+
+.tree { flex: 1; min-height: 0; overflow: auto; padding: 6px 4px; font-size: 12.5px; outline: none; }
+.th { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--p-muted); padding: 4px 8px 6px; display: flex; }
+.th span { margin-left: auto; text-transform: none; letter-spacing: 0; }
+.tr { display: flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; user-select: none; }
+.tr:hover { background: color-mix(in srgb, var(--p-fg) 7%, transparent); }
+.tr.cur { color: var(--p-accent); }
+.tr.sel { background: color-mix(in srgb, var(--p-accent) 24%, transparent); }
+.tr.off { color: var(--p-muted); cursor: default; }
+.chev { width: 10px; flex: none; color: var(--p-muted); font-size: 10px; }
+.mod { margin-left: auto; color: var(--orange); font: 11px var(--mono); }
+.tree.big { font-size: 13.5px; padding: 10px 14px; }
+.tree.big .tr { padding: 3px 8px; }
+
+.scroll { flex: 1; min-width: 0; overflow: auto; }
+.doc { max-width: 72ch; margin: 0 auto; padding: 18px 26px 60px; font-size: 14.5px; line-height: 1.65; }
+.doc h1, .doc h2 { line-height: 1.25; text-wrap: balance; }
+.doc h1 { font-size: 1.6em; margin: .2em 0 .6em; }
+.doc h2 { font-size: 1.25em; margin: 1.5em 0 .5em; padding-bottom: .25em; border-bottom: 1px solid var(--p-line); }
+.doc code { font: .88em var(--mono); background: var(--p-code); padding: .1em .35em; border-radius: 4px; }
+.doc pre { position: relative; background: var(--p-code); border-radius: 8px; padding: 12px 14px; overflow-x: auto; font: 12.5px/1.55 var(--mono); }
+.doc pre code { background: none; padding: 0; font: inherit; }
+.copy { position: absolute; top: 6px; right: 6px; font: 11px var(--sans); background: var(--p-bg); border: 1px solid var(--p-line); border-radius: 5px; padding: 1px 7px; color: var(--p-muted); opacity: 0; }
+.doc pre:hover .copy, .copy:focus-visible { opacity: 1; }
+.doc table { border-collapse: collapse; display: block; overflow-x: auto; font-size: .92em; }
+.doc th, .doc td { border: 1px solid var(--p-line); padding: 5px 10px; text-align: left; }
+.doc th { background: var(--p-code); }
+.doc blockquote { margin: 0; padding-left: 12px; border-left: 3px solid var(--p-line); color: var(--p-muted); }
+.doc li.task { list-style: none; margin-left: -1.3em; }
+.doc li.task input { margin-right: 8px; accent-color: var(--p-accent); }
+.mm { background: var(--p-code); border-radius: 8px; padding: 30px 12px 12px; overflow-x: auto; position: relative; text-align: center; min-height: 60px; }
+.mm .mtoggle { position: absolute; top: 6px; right: 6px; font: 11px var(--sans); background: var(--p-bg); border: 1px solid var(--p-line); border-radius: 5px; padding: 1px 7px; color: var(--p-muted); }
+.mm pre { text-align: left; margin: 0; padding: 0; }
+.flash { animation: flash 1.2s ease-out; }
+@keyframes flash { from { background: color-mix(in srgb, var(--yellow) 30%, transparent); } to { background: transparent; } }
+.raw { flex: 1; min-width: 0; display: flex; font: 13px/1.6 var(--mono); }
+.gut { flex: none; padding: 14px 8px 14px 12px; color: var(--p-muted); text-align: right; user-select: none; white-space: pre; overflow: hidden; opacity: .6; }
+.raw textarea { flex: 1; min-width: 0; resize: none; border: 0; outline: none; background: transparent; color: var(--p-fg); font: inherit; padding: 14px 14px 60px 4px; white-space: pre; overflow: auto; tab-size: 4; }
+.codeview { margin: 0; padding: 14px 0 60px; font: 13px/1.6 var(--mono); }
+.codeview .row { display: flex; padding-right: 14px; }
+.codeview .row.hl { background: color-mix(in srgb, var(--yellow) 16%, transparent); }
+.codeview .ln { flex: none; width: 5ch; text-align: right; padding-right: 1.5ch; color: var(--p-muted); opacity: .6; user-select: none; }
+.codeview code { white-space: pre; }
+.empty { margin: auto; color: var(--p-muted); font-size: 13px; text-align: center; padding: 20px; }
+.toast { position: fixed; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); left: 50%; transform: translateX(-50%); background: #44475a; color: #fff; padding: 6px 14px; border-radius: 8px; font-size: 13px; pointer-events: none; z-index: 10; }
+
+.hljs-keyword, .hljs-built_in, .hljs-type { color: #d63384; }
+.hljs-string, .hljs-attr { color: #2f855a; }
+.hljs-comment { color: var(--p-muted); font-style: italic; }
+.hljs-number, .hljs-literal { color: #b7791f; }
+.hljs-title { color: #3b6fd8; }
+.panel:not(.light) .hljs-keyword, .panel:not(.light) .hljs-type, .panel:not(.light) .hljs-built_in { color: #ff79c6; }
+.panel:not(.light) .hljs-string { color: var(--yellow); }
+.panel:not(.light) .hljs-number, .panel:not(.light) .hljs-literal { color: var(--purple); }
+.panel:not(.light) .hljs-title { color: var(--green); }
+
+@media (max-width: 760px) {
+  .sidebar, .resizer { display: none !important; }
+  .main { flex-direction: column; }
+  .panel { width: auto !important; min-width: 0; height: 60%; }
+  .tcol { width: 140px; }
+  .term { min-height: 160px; }
+}
+@media (prefers-reduced-motion: reduce) { .cursor, .flash { animation: none; } }
+</style>
+
+<div class="mock" role="group" aria-label="Mockup controls">
+  <span><b>tarn mockup.</b> Built: sessions sidebar, state dot, agent logo. Planned: file panel.</span>
+  <span>Panel: <span class="seg" data-seg="mode"><button data-v="single" aria-pressed="true">single window</button><button data-v="tree" aria-pressed="false">tree + file</button></span></span>
+  <span>Theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
+  <button class="act" id="agentEdit">Agent edits the file</button>
+  <span class="keys">Drag a tab to a group edge to split. <kbd>Esc</kbd> tree · <kbd>Enter</kbd> open · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> · <kbd>⌘W</kbd> · <kbd>⌘\</kbd> split · <kbd>⌘B</kbd> panel</span>
+</div>
+
+<div class="win">
+  <div class="titlebar"><span class="lights"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i></span><span id="wtitle"></span><button class="ttl-btn" id="togglePanel" aria-pressed="false">Files ⌘B</button></div>
+  <div class="body">
+    <nav class="sidebar" id="sidebar" aria-label="Tabs"></nav>
+    <div class="main" id="main">
+      <div class="term" id="term"></div>
+      <div class="resizer" id="resizer" role="separator" aria-orientation="vertical" hidden></div>
+      <section class="panel" id="panel" aria-label="File panel" hidden></section>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it/13.0.2/markdown-it.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10.9.1/dist/mermaid.min.js"></script>
+<script>
+"use strict";
+const FILES = {
+"docs/spec.md": `# Spec: tarn, an agent-first terminal
+
+tarn is a fork of Ghostty for macOS. It keeps the Ghostty core and adds a narrow set of features for CLI coding agents.
+
+## Goal and scope
+
+| ID | Requirement | Wave |
+| --- | --- | --- |
+| R5 | Markdown panel next to the terminal, mermaid rendered, no network | first |
+| R6 | File editing in the panel | first |
+| R9 | Click on a file path opens it in the panel | first |
+
+## State model
+
+\`\`\`mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> working: UserPromptSubmit
+  working --> permission: PermissionRequest
+  permission --> working: PostToolUse
+  working --> waiting: Stop
+  waiting --> working: UserPromptSubmit
+  waiting --> idle: SessionEnd
+\`\`\`
+
+## Panel checklist
+
+- [x] Rendered and raw views, switched with cmd+E
+- [x] Mermaid without network
+- [ ] Scroll kept when the agent edits the file
+- [ ] Tabs split by drag and drop
+
+> No network: a content rule list blocks every load except \`tarn-md://\`.
+`,
+"docs/architecture.md": `# Architecture of tarn
+
+One process: the Ghostty macOS app. State lives in memory.
+
+## Map
+
+\`\`\`mermaid
+flowchart LR
+  hook["hook.sh"] --> sock["ControlSocket"]
+  sock --> reg["SessionRegistry"]
+  proc["AgentProcess"] --> model["SidebarModel"]
+  reg --> model
+  model --> views["Sidebar views"]
+  click["path click"] --> panel["File panel"]
+\`\`\`
+
+## Hook flow
+
+\`\`\`mermaid
+sequenceDiagram
+  participant H as hook.sh
+  participant S as ControlSocket
+  participant R as SessionRegistry
+  H->>S: event JSON
+  S->>R: receive
+  R-->>S: answer
+\`\`\`
+`,
+"docs/plans/s2-files.md": `# Plan: s2-files
+
+## Steps
+
+1. File panel with groups of tabs
+2. Drag a tab to an edge to split
+3. Tree and single-window modes
+
+\`\`\`sh
+make -f tarn.mk check
+\`\`\`
+`,
+"README.md": `# tarn
+
+An agent-first terminal for macOS, built on Ghostty.
+
+- Sidebar with every Claude Code session and its state
+- One notification when a session needs you
+- Markdown and code open beside the terminal
+`,
+"macos/Sources/Features/Tarn/Sidebar.swift": `/// Places the sidebar beside a terminal window's content.
+struct SidebarLayout<Content: View>: View {
+    @ObservedObject var model: SidebarModel
+    @ObservedObject var ghostty: Ghostty.App
+    let content: Content
+
+    @AppStorage(Sidebar.collapsedKey) private var isCollapsed = false
+    @AppStorage(Sidebar.widthKey) private var width = Sidebar.defaultWidth
+    @AppStorage(TabStyle.key) private var tabStyle: TabStyle = .sidebar
+
+    var body: some View {
+        if tabStyle == .top {
+            content
+        } else {
+            sidebarAndContent
+        }
+    }
+
+    private var sidebarAndContent: some View {
+        HStack(spacing: 0) {
+            Sidebar(model: model, isCollapsed: $isCollapsed)
+                .frame(width: isCollapsed ? Sidebar.collapsedWidth : width)
+            content
+        }
+    }
+}
+`,
+"macos/Sources/Features/Tarn/TarnSettings.swift": `/// Where a terminal window lists its tabs.
+enum TabStyle: String, CaseIterable, Identifiable {
+    case sidebar
+    case top
+
+    static let key = "TarnTabStyle"
+    var id: String { rawValue }
+}
+`
+};
+const TREE = ["README.md", "docs/architecture.md", "docs/plans/s2-files.md", "docs/spec.md",
+  "macos/Sources/Features/Tarn/AgentProcess.swift", "macos/Sources/Features/Tarn/Sidebar.swift",
+  "macos/Sources/Features/Tarn/TarnSettings.swift", "plugin/hooks/hook.sh"];
+const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
+const TERM_ICON = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
+const lnk = (path, line) => `<span class="path" data-path="${path}"${line ? ` data-line="${line}"` : ""}>${path}${line ? ":" + line : ""}</span>`;
+const TABS = [
+  { title: "tarn · spec", agent: true, dot: "var(--blue)", key: "⌘1", term:
+`<span class="dim">╭─ Claude Code ─────────────────────────╮</span>
+<span class="p">></span> update the spec and the plan for the file panel
+
+<span class="tool">● Update</span>(${lnk("docs/spec.md")})
+<span class="tool">● Write</span>(${lnk("docs/plans/s2-files.md")})
+<span class="tool">● Read</span>(${lnk("macos/Sources/Features/Tarn/Sidebar.swift", 9)})
+
+Done. Changes:
+- ${lnk("docs/spec.md")}: R6 and the network rule
+- ${lnk("docs/plans/s2-files.md")}: stage steps
+- ${lnk("docs/architecture.md")}: panel module
+- ${lnk("macos/Sources/Features/Tarn/Sidebar.swift", 9)}: insertion point
+
+<span class="dim">✻ Working… (esc to interrupt)</span>` },
+  { title: "tarn · review", agent: true, dot: "var(--green)", key: "⌘2", term:
+`<span class="p">></span> check the README
+
+<span class="tool">● Read</span>(${lnk("README.md")})
+
+The README is fine. The module map in ${lnk("docs/architecture.md")} matches the code.
+
+<span class="p">></span> <span class="cursor"></span>` },
+  { title: "~/Dev/self-projects/tarn", agent: false, key: "⌘3", term:
+`<span class="p">daniil@MacBook tarn></span> git status -s
+ M ${lnk("docs/spec.md")}
+ M ${lnk("macos/Sources/Features/Tarn/TarnSettings.swift")}
+<span class="p">daniil@MacBook tarn></span> <span class="cursor"></span>` }
+];
+
+// ---- state ----
+// Documents are shared, as files on disk are. Each terminal tab has its own panel:
+// a layout tree of splits whose leaves are groups; a group is a strip of file tabs.
+const docs = {};
+for (const k in FILES) docs[k] = { text: FILES[k], saved: FILES[k], v: 0, banner: false, disk: null, edits: 0 };
+const opt = { mode: "single", theme: "dark" };
+const folded = new Set(["plugin"]);
+let seq = 0;
+const newGroup = () => ({ type: "group", id: "g" + (++seq), tabs: [], active: -1, view: "tree", sel: null, scroll: {}, modeOf: {} });
+const panels = TABS.map(() => { const g = newGroup(); return { open: false, width: null, root: g, focus: g.id, colSel: null }; });
+let cur = 0, drag = null;
+
+const $ = id => document.getElementById(id);
+const esc = s => s.replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const isMd = p => p.endsWith(".md");
+const P = () => panels[cur];
+const name = p => p.split("/").pop();
+const dirOf = p => p.includes("/") ? p.slice(0, p.lastIndexOf("/")) : "";
+function toast(text) { const el = document.createElement("div"); el.className = "toast"; el.textContent = text; document.body.appendChild(el); setTimeout(() => el.remove(), 1700); }
+
+function groups(n = P().root, out = []) { if (n.type === "group") out.push(n); else { groups(n.a, out); groups(n.b, out); } return out; }
+const groupById = id => groups().find(g => g.id === id);
+const focused = () => groupById(P().focus) || groups()[0];
+function parentOf(id, n = P().root, parent = null) {
+  if (n.id === id) return parent;
+  if (n.type === "split") return parentOf(id, n.a, n) || parentOf(id, n.b, n);
+  return null;
+}
+function replaceNode(oldId, node) {
+  const par = parentOf(oldId);
+  if (!par) { P().root = node; return; }
+  if (par.a.id === oldId) par.a = node; else par.b = node;
+}
+const activePath = g => g.tabs[g.active] ? g.tabs[g.active].path : null;
+const modeFor = (g, path) => isMd(path) ? (g.modeOf[path] || "rendered") : "code";
+
+// ---- markdown ----
+const md = window.markdownit ? window.markdownit({ html: false, linkify: true, highlight: (s, lang) => {
+  if (window.hljs && lang && hljs.getLanguage(lang)) { try { return hljs.highlight(s, { language: lang }).value; } catch (e) { /* plain */ } }
+  return esc(s);
+} }) : null;
+const hl = text => window.hljs ? hljs.highlight(text, { language: "swift" }).value.split("\n") : text.split("\n").map(esc);
+const cache = new Map();
+let mmCount = 0;
+function renderMarkdown(text) {
+  if (!md) return `<pre>${esc(text)}</pre>`;
+  let ti = 0;
+  return md.render(text)
+    .replace(/<li>\[( |x)\] /g, (_, x) => `<li class="task"><input type="checkbox" data-task="${ti++}" ${x === "x" ? "checked" : ""} aria-label="Task">`)
+    .replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, (_, src) => `<div class="mm" data-src="${src.replace(/"/g, "&quot;")}"></div>`)
+    .replace(/<pre><code/g, '<pre><button class="copy">Copy</button><code');
+}
+async function drawMermaid(box, raw) {
+  const t = document.createElement("textarea"); t.innerHTML = box.dataset.src; const src = t.value;
+  const tog = `<button class="mtoggle" data-mraw="${raw ? 0 : 1}">${raw ? "Diagram" : "Source"}</button>`;
+  if (raw || !window.mermaid) { box.innerHTML = tog + `<pre><code>${esc(src)}</code></pre>`; return; }
+  try {
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: opt.theme === "light" ? "default" : "dark" });
+    const { svg } = await mermaid.render("mm" + (mmCount++), src);
+    box.innerHTML = tog + svg;
+  } catch (e) { box.innerHTML = tog + `<pre><code>${esc(src)}</code></pre>`; }
+}
+
+// ---- tree ----
+function treeRows() {
+  const rows = [], seen = new Set();
+  const hiddenBy = p => [...folded].some(x => p !== x && p.startsWith(x + "/"));
+  for (const f of TREE) {
+    const parts = f.split("/");
+    for (let i = 1; i < parts.length; i++) {
+      const dir = parts.slice(0, i).join("/");
+      if (seen.has(dir)) continue;
+      seen.add(dir);
+      if (!hiddenBy(dir)) rows.push({ kind: "dir", path: dir, depth: i - 1, label: parts[i - 1] });
+    }
+    if (!hiddenBy(f)) rows.push({ kind: "file", path: f, depth: parts.length - 1, label: parts[parts.length - 1] });
+  }
+  return rows;
+}
+function treeHtml(sel, current, big, gid) {
+  const rows = treeRows().map(r => {
+    const d = docs[r.path], cls = ["tr", r.path === sel ? "sel" : "", r.path === current ? "cur" : "", r.kind === "file" && !d ? "off" : ""].join(" ");
+    const chev = r.kind === "dir" ? (folded.has(r.path) ? "▸" : "▾") : "";
+    return `<div class="${cls}" data-tpath="${r.path}" data-tkind="${r.kind}" ${r.kind === "file" && d ? 'draggable="true"' : ""} ${gid ? `data-tgid="${gid}"` : ""} style="padding-left:${6 + r.depth * 12}px" title="${r.kind === "file" && !d ? "No content in the mockup" : ""}"><span class="chev">${chev}</span>${r.label}${d && d.text !== d.saved ? '<span class="mod">M</span>' : ""}</div>`;
+  });
+  return `<div class="tree${big ? " big" : ""}" tabindex="0"><div class="th">tarn${big ? "<span>Enter open · Esc back</span>" : ""}</div>${rows.join("")}</div>`;
+}
+
+// ---- render ----
+function renderSidebar() {
+  const row = i => { const t = TABS[i]; return `<button class="tab" role="tab" aria-selected="${i === cur}" data-tab="${i}">${t.agent ? AGENT : TERM_ICON}<span class="t">${t.title}</span>${t.dot ? `<span class="dot" style="background:${t.dot}"></span>` : ""}<span class="key">${t.key}</span></button>`; };
+  $("sidebar").innerHTML = `<div class="group">tarn</div>${row(0)}${row(1)}<div class="sep"></div>${row(2)}`;
+  $("wtitle").textContent = TABS[cur].title;
+  $("term").innerHTML = TABS[cur].term;
+}
+function renderPanel() {
+  const p = P(), panel = $("panel");
+  panel.hidden = !p.open; $("resizer").hidden = !p.open;
+  $("togglePanel").setAttribute("aria-pressed", String(p.open));
+  panel.style.width = p.width ? p.width + "px" : "";
+  panel.classList.toggle("light", opt.theme === "light");
+  if (!p.open) return;
+  const col = opt.mode === "tree" ? `<div class="tcol">${treeHtml(p.colSel, activePath(focused()), false, "")}</div>` : "";
+  panel.innerHTML = `${col}<div class="groups">${nodeHtml(p.root)}</div>`;
+  groups().forEach(fillGroup);
+}
+function nodeHtml(n) {
+  if (n.type === "group") return groupHtml(n);
+  return `<div class="split ${n.dir}" data-sid="${n.id}"><div class="pane" style="flex-grow:${n.ratio}">${nodeHtml(n.a)}</div><div class="sdiv ${n.dir}" data-sdiv="${n.id}"></div><div class="pane" style="flex-grow:${1 - n.ratio}">${nodeHtml(n.b)}</div></div>`;
+}
+function groupHtml(g) {
+  const p = P(), path = activePath(g), d = path && docs[path], m = path ? modeFor(g, path) : null;
+  const tabs = g.tabs.map((t, i) => { const dd = docs[t.path]; return `<div class="ftab${i === g.active ? " on" : ""}${t.preview ? " preview" : ""}" draggable="true" data-gid="${g.id}" data-idx="${i}" title="${t.path}${t.preview ? " (preview: the next file replaces this tab)" : ""}"><span class="nm">${name(t.path)}</span>${dd.text !== dd.saved ? '<span class="dirty"></span>' : ""}<button class="x" data-close="${i}" data-gid="${g.id}" aria-label="Close tab">✕</button></div>`; }).join("");
+  const isRoot = p.root.id === g.id || parentOf(g.id) === null;
+  let h = `<section class="grp${p.focus === g.id ? " focus" : ""}" data-gid="${g.id}"><div class="gh"><div class="gtabs">${tabs}</div><span class="gact">`;
+  h += `<button class="ib" data-gmode="${g.id}" ${!path || !isMd(path) || g.view === "tree" ? "disabled" : ""} aria-pressed="${m === "raw"}" title="View or source (⌘E)">${m === "raw" ? "Source" : "View"}</button>`;
+  h += `<button class="ib" data-gsplit="${g.id}" ${path ? "" : "disabled"} title="Open to the right (⌘\\)">⫽</button>`;
+  h += `<button class="ib" id="closePanel" title="Close panel (⌘B)" ${isRoot || groups()[groups().length - 1].id === g.id ? "" : "hidden"}>✕</button></span></div>`;
+  if (d && d.banner && g.view === "file") h += `<div class="banner"><span>The agent changed this file and you have unsaved edits.</span><button data-take="${path}">Take the agent version</button><button data-keep="${path}">Keep mine</button></div>`;
+  h += `<div class="gbody" id="gb-${g.id}"></div></section>`;
+  return h;
+}
+async function fillGroup(g) {
+  const box = $("gb-" + g.id); if (!box) return;
+  const path = activePath(g);
+  if (g.view === "tree" || !path) {
+    if (opt.mode === "tree" && !path) { box.innerHTML = `<div class="empty">Pick a file in the tree<br>or click a path in the terminal</div>`; return; }
+    if (!g.sel) g.sel = path || "docs/spec.md";
+    box.innerHTML = treeHtml(g.sel, path, true, g.id);
+    const s = box.querySelector(".tr.sel"); if (s) s.scrollIntoView({ block: "nearest" });
+    return;
+  }
+  const d = docs[path], m = modeFor(g, path), key = path + m;
+  if (m === "code") {
+    const line = g.tabs[g.active].line;
+    box.innerHTML = `<div class="scroll"><pre class="codeview">${hl(d.text).map((l, i) => `<div class="row${line === i + 1 ? " hl" : ""}"><span class="ln">${i + 1}</span><code>${l || " "}</code></div>`).join("")}</pre></div>`;
+  } else if (m === "raw") {
+    box.innerHTML = `<div class="raw"><div class="gut">${Array.from({ length: d.text.split("\n").length }, (_, i) => i + 1).join("\n")}</div><textarea spellcheck="false" data-src="${path}" aria-label="Source of ${name(path)}">${esc(d.text)}</textarea></div>`;
+  } else {
+    const ck = `${path}|${d.v}|${opt.theme}`;
+    if (cache.has(ck)) box.innerHTML = `<div class="scroll"><article class="doc">${cache.get(ck)}</article></div>`;
+    else {
+      box.innerHTML = `<div class="scroll"><article class="doc">${renderMarkdown(d.text)}</article></div>`;
+      for (const mm of box.querySelectorAll(".mm")) { await drawMermaid(mm, false); if (!box.isConnected) return; }
+      cache.set(ck, box.querySelector(".doc").innerHTML);
+    }
+  }
+  const sc = box.querySelector(".scroll, textarea");
+  if (!sc) return;
+  const hlRow = box.querySelector(".row.hl");
+  if (hlRow && g.tabs[g.active].jump) { sc.scrollTop = hlRow.offsetTop - 120; g.tabs[g.active].jump = false; }
+  else sc.scrollTop = g.scroll[key] || 0;
+  sc.addEventListener("scroll", () => { g.scroll[key] = sc.scrollTop; }, { passive: true });
+}
+function rerenderGroup(g) {
+  const el = document.querySelector(`.grp[data-gid="${g.id}"]`);
+  if (!el) return renderPanel();
+  el.outerHTML = groupHtml(g); fillGroup(g);
+}
+function refreshMarks() {
+  // Dirty dots and tree marks without touching the content (keeps the editor caret).
+  groups().forEach(g => g.tabs.forEach((t, i) => {
+    const el = document.querySelector(`.ftab[data-gid="${g.id}"][data-idx="${i}"]`); if (!el) return;
+    const dirty = docs[t.path].text !== docs[t.path].saved, dot = el.querySelector(".dirty");
+    if (dirty && !dot) el.insertBefore(Object.assign(document.createElement("span"), { className: "dirty" }), el.querySelector(".x"));
+    if (!dirty && dot) dot.remove();
+  }));
+  document.querySelectorAll(".tr[data-tkind='file']").forEach(el => {
+    const d = docs[el.dataset.tpath]; if (!d) return;
+    const dirty = d.text !== d.saved, m = el.querySelector(".mod");
+    if (dirty && !m) el.insertAdjacentHTML("beforeend", '<span class="mod">M</span>');
+    if (!dirty && m) m.remove();
+  });
+}
+
+// ---- actions ----
+function openIn(g, path, { pin = false, line = null } = {}) {
+  if (!docs[path]) return;
+  let i = g.tabs.findIndex(t => t.path === path);
+  if (i < 0) {
+    const pv = g.tabs.findIndex(t => t.preview);
+    const tab = { path, preview: !pin, line, jump: !!line };
+    if (pv >= 0 && !pin) { g.tabs[pv] = tab; i = pv; } else { g.tabs.splice(g.active + 1, 0, tab); i = g.active + 1; }
+  } else {
+    if (pin) g.tabs[i].preview = false;
+    if (line) { g.tabs[i].line = line; g.tabs[i].jump = true; }
+  }
+  g.active = i; g.view = "file"; g.sel = path;
+}
+function openPath(path, opts) {
+  const p = P(); p.open = true;
+  openIn(focused(), path, opts);
+  p.colSel = path;
+  renderPanel();
+}
+function closeTab(g, i) {
+  g.tabs.splice(i, 1);
+  if (g.active >= g.tabs.length) g.active = g.tabs.length - 1;
+  if (!g.tabs.length) {
+    if (parentOf(g.id)) { removeGroup(g); return renderPanel(); }
+    g.view = "tree"; g.active = -1;
+  }
+  renderPanel();
+}
+function removeGroup(g) {
+  const par = parentOf(g.id); if (!par) return;
+  const sibling = par.a.id === g.id ? par.b : par.a;
+  replaceNode(par.id, sibling);
+  if (P().focus === g.id) P().focus = groups(sibling)[0].id;
+}
+function splitWith(target, zone, tab) {
+  const g = newGroup(); g.tabs = [tab]; g.active = 0; g.view = "file";
+  const dir = zone === "left" || zone === "right" ? "row" : "col";
+  const first = zone === "left" || zone === "top";
+  replaceNode(target.id, { type: "split", id: "s" + (++seq), dir, ratio: 0.5, a: first ? g : target, b: first ? target : g });
+  P().focus = g.id;
+}
+function moveTab(src, idx, target, zone) {
+  const tab = { ...src.tabs[idx], preview: false };
+  if (zone === "center" && src.id === target.id) return;
+  if (zone !== "center" && src.id === target.id && src.tabs.length === 1) return;
+  src.tabs.splice(idx, 1);
+  if (src.active >= src.tabs.length) src.active = src.tabs.length - 1;
+  if (zone === "center") {
+    const at = target.tabs.findIndex(t => t.path === tab.path);
+    if (at >= 0) target.active = at; else { target.tabs.push(tab); target.active = target.tabs.length - 1; }
+    target.view = "file"; P().focus = target.id;
+  } else splitWith(target, zone, tab);
+  if (!src.tabs.length) { if (parentOf(src.id)) removeGroup(src); else { src.view = "tree"; src.active = -1; } }
+  renderPanel();
+}
+function setMode(g, m) {
+  const path = activePath(g); if (!path || !isMd(path) || g.view !== "file") return;
+  g.modeOf[path] = m || (modeFor(g, path) === "raw" ? "rendered" : "raw");
+  rerenderGroup(g);
+  if (g.modeOf[path] === "raw") { const ta = document.querySelector(`#gb-${g.id} textarea`); if (ta) ta.focus(); }
+}
+function save() {
+  const path = activePath(focused()); if (!path) return;
+  const d = docs[path]; if (d.text === d.saved) { toast("No changes"); return; }
+  d.saved = d.text; d.banner = false; d.v++; refreshMarks(); toast("Saved");
+  groups().filter(g => activePath(g) === path && modeFor(g, path) !== "raw").forEach(rerenderGroup);
+}
+function agentEdit() {
+  const g = focused(), path = activePath(g);
+  if (!P().open || !path) { toast("Open a file in the panel first"); return; }
+  const d = docs[path], n = ++d.edits;
+  const disk = d.saved + (isMd(path) ? `\n- [ ] Agent note ${n}: measure panel memory\n` : `\n// agent edit ${n}\n`);
+  if (d.text !== d.saved) { d.disk = disk; d.banner = true; groups().filter(x => activePath(x) === path).forEach(rerenderGroup); return; }
+  d.text = disk; d.saved = disk; d.v++;
+  groups().filter(x => activePath(x) === path).forEach(x => { rerenderGroup(x); setTimeout(() => { const el = document.querySelector(`#gb-${x.id} .doc, #gb-${x.id} .codeview, #gb-${x.id} textarea`); if (el) el.classList.add("flash"); }, 80); });
+  toast("The agent changed the file: open tabs updated, scroll kept");
+}
+function switchTab(i) { if (i === cur) return; cur = i; renderSidebar(); renderPanel(); }
+function togglePanel() { const p = P(); p.open = !p.open; renderPanel(); }
+function treeMove(g, delta) {
+  const rows = treeRows(), i = Math.max(0, rows.findIndex(r => r.path === g.sel));
+  g.sel = rows[Math.min(rows.length - 1, Math.max(0, i + delta))].path;
+  fillGroup(g);
+}
+function treeEnter(g, path, kind, pin) {
+  if (kind === "dir") { folded.has(path) ? folded.delete(path) : folded.add(path); g ? fillGroup(g) : renderPanel(); return; }
+  if (!docs[path]) { toast("No content in the mockup"); return; }
+  if (g) { P().focus = g.id; openIn(g, path, { pin }); renderPanel(); }
+  else openPath(path, { pin });
+}
+
+// ---- events ----
+document.addEventListener("click", async e => {
+  const t = e.target.closest("button, .path, .tr, .ftab, input[type=checkbox], .grp");
+  if (!t) return;
+  const grpEl = e.target.closest(".grp");
+  if (grpEl && P().focus !== grpEl.dataset.gid) {
+    P().focus = grpEl.dataset.gid;
+    document.querySelectorAll(".grp").forEach(el => el.classList.toggle("focus", el === grpEl));
+  }
+  if (t.classList.contains("path")) return openPath(t.dataset.path, { line: +t.dataset.line || null });
+  if (t.dataset.tab) return switchTab(+t.dataset.tab);
+  if (t.dataset.close) { e.stopPropagation(); return closeTab(groupById(t.dataset.gid), +t.dataset.close); }
+  // A click re-renders the element, so a double click is read from e.detail, not from dblclick.
+  if (t.classList.contains("ftab")) { const g = groupById(t.dataset.gid); g.active = +t.dataset.idx; g.view = "file"; if (e.detail > 1) g.tabs[g.active].preview = false; return rerenderGroup(g); }
+  if (t.classList.contains("tr")) { if (t.classList.contains("off")) { toast("No content in the mockup"); return; } const g = t.dataset.tgid ? groupById(t.dataset.tgid) : null; if (g) g.sel = t.dataset.tpath; else P().colSel = t.dataset.tpath; return treeEnter(g, t.dataset.tpath, t.dataset.tkind, e.detail > 1); }
+  if (t.dataset.gmode) return setMode(groupById(t.dataset.gmode));
+  if (t.dataset.gsplit) { const g = groupById(t.dataset.gsplit), tab = g.tabs[g.active]; if (!tab) return; splitWith(g, "right", { ...tab, preview: false }); return renderPanel(); }
+  if (t.dataset.take) { const d = docs[t.dataset.take]; d.text = d.disk; d.saved = d.disk; d.banner = false; d.v++; return renderPanel(); }
+  if (t.dataset.keep) { docs[t.dataset.keep].banner = false; return renderPanel(); }
+  if (t.dataset.mraw !== undefined) return drawMermaid(t.closest(".mm"), t.dataset.mraw === "1");
+  if (t.dataset.task !== undefined) {
+    const path = activePath(groupById(t.closest(".grp").dataset.gid)), d = docs[path]; let n = -1;
+    d.text = d.text.replace(/^(\s*- )\[( |x)\]/gm, (m, a, x) => (++n === +t.dataset.task) ? `${a}[${x === "x" ? " " : "x"}]` : m);
+    d.saved = d.text; d.v++; toast("Checkbox written to the file"); return;
+  }
+  if (t.classList.contains("copy")) { const code = t.parentElement.querySelector("code").textContent; try { await navigator.clipboard.writeText(code); } catch (err) { /* ignore */ } t.textContent = "Copied"; setTimeout(() => { t.textContent = "Copy"; }, 1200); return; }
+  const seg = t.closest(".seg");
+  if (seg) {
+    seg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b === t)));
+    opt[seg.dataset.seg] = t.dataset.v;
+    if (seg.dataset.seg === "mode") panels.forEach(p => groups(p.root).forEach(g => { if (opt.mode === "tree" && g.tabs.length) g.view = "file"; }));
+    return renderPanel();
+  }
+  if (t.id === "closePanel" || t.id === "togglePanel") return togglePanel();
+  if (t.id === "agentEdit") return agentEdit();
+});
+document.addEventListener("input", e => {
+  const ta = e.target.closest("textarea[data-src]"); if (!ta) return;
+  const d = docs[ta.dataset.src]; d.text = ta.value; d.v++;
+  ta.previousElementSibling.textContent = Array.from({ length: d.text.split("\n").length }, (_, i) => i + 1).join("\n");
+  groups().forEach(g => g.tabs.forEach(t => { if (t.path === ta.dataset.src && t.preview) { t.preview = false; const el = document.querySelector(`.ftab[data-gid="${g.id}"][data-idx="${g.tabs.indexOf(t)}"]`); if (el) el.classList.remove("preview"); } }));
+  refreshMarks();
+});
+document.addEventListener("scroll", e => { if (e.target.matches && e.target.matches("textarea[data-src]")) e.target.previousElementSibling.scrollTop = e.target.scrollTop; }, true);
+document.addEventListener("keydown", e => {
+  const g = focused(), inText = e.target.matches && e.target.matches("textarea");
+  if (e.metaKey || e.ctrlKey) {
+    const k = e.key.toLowerCase();
+    const run = f => { e.preventDefault(); f(); };
+    if (k === "e") return run(() => setMode(g));
+    if (k === "s") return run(save);
+    if (k === "b") return run(togglePanel);
+    if (k === "w") return run(() => { if (g.active >= 0) closeTab(g, g.active); });
+    if (k === "\\") return run(() => { const tab = g.tabs[g.active]; if (tab) { splitWith(g, "right", { ...tab, preview: false }); renderPanel(); } });
+    if (k >= "1" && k <= "3") return run(() => switchTab(+k - 1));
+    return;
+  }
+  if (!P().open) return;
+  if (e.key === "Escape") {
+    e.preventDefault();
+    if (inText) { e.target.blur(); toast("Editing done. Esc again: tree"); return; }
+    if (opt.mode !== "single") return;
+    if (g.view === "file") { g.view = "tree"; g.sel = activePath(g); }
+    else if (g.active >= 0) g.view = "file";
+    return rerenderGroup(g);
+  }
+  if (inText || g.view !== "tree" || opt.mode !== "single") return;
+  if (e.key === "ArrowDown" || e.key === "j") { e.preventDefault(); treeMove(g, 1); }
+  else if (e.key === "ArrowUp" || e.key === "k") { e.preventDefault(); treeMove(g, -1); }
+  else if (e.key === "Enter") { e.preventDefault(); const r = treeRows().find(x => x.path === g.sel); if (r) treeEnter(g, r.path, r.kind, e.altKey); }
+});
+
+// Drag a tab or a tree file onto a group: the middle adds it to that group, an edge splits.
+function zoneOf(el, x, y) {
+  const r = el.getBoundingClientRect(), fx = (x - r.left) / r.width, fy = (y - r.top) / r.height;
+  if (y - r.top < 32) return "center";
+  const edge = Math.min(fx, 1 - fx, fy, 1 - fy);
+  if (edge > 0.22) return "center";
+  return edge === fx ? "left" : edge === 1 - fx ? "right" : edge === fy ? "top" : "bottom";
+}
+function showDrop(grp, zone) {
+  let d = grp.querySelector(".drop");
+  if (!d) { d = document.createElement("div"); d.className = "drop"; grp.appendChild(d); }
+  const box = { center: "inset:31px 4px 4px 4px", left: "inset:31px 50% 4px 4px", right: "inset:31px 4px 4px 50%", top: "top:31px;left:4px;right:4px;height:calc(50% - 16px)", bottom: "bottom:4px;left:4px;right:4px;height:calc(50% - 16px)" }[zone];
+  d.style.cssText = box;
+}
+const clearDrop = () => document.querySelectorAll(".drop").forEach(d => d.remove());
+document.addEventListener("dragstart", e => {
+  const ft = e.target.closest(".ftab"), tr = e.target.closest(".tr[draggable]");
+  if (ft) { drag = { gid: ft.dataset.gid, idx: +ft.dataset.idx }; ft.classList.add("dragging"); }
+  else if (tr) drag = { path: tr.dataset.tpath };
+  else return;
+  e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn");
+});
+document.addEventListener("dragover", e => {
+  if (!drag) return;
+  const grp = e.target.closest(".grp"); if (!grp) { clearDrop(); return; }
+  e.preventDefault();
+  document.querySelectorAll(".drop").forEach(d => { if (d.parentElement !== grp) d.remove(); });
+  showDrop(grp, zoneOf(grp, e.clientX, e.clientY));
+});
+document.addEventListener("drop", e => {
+  const grp = e.target.closest(".grp"); clearDrop();
+  if (!drag || !grp) return;
+  e.preventDefault();
+  const target = groupById(grp.dataset.gid), zone = zoneOf(grp, e.clientX, e.clientY), d = drag; drag = null;
+  if (d.path) {
+    if (zone === "center") { P().focus = target.id; openIn(target, d.path, { pin: true }); }
+    else splitWith(target, zone, { path: d.path, preview: false });
+    return renderPanel();
+  }
+  moveTab(groupById(d.gid), d.idx, target, zone);
+});
+document.addEventListener("dragend", () => { drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
+
+// Resize the panel and the splits inside it.
+document.addEventListener("pointerdown", e => {
+  const rz = e.target.closest("#resizer"), sd = e.target.closest(".sdiv");
+  if (!rz && !sd) return;
+  e.preventDefault();
+  const el = rz || sd; el.classList.add("drag"); el.setPointerCapture(e.pointerId);
+  const panelW = $("panel").getBoundingClientRect().width, x0 = e.clientX;
+  let node = null, box = null;
+  if (sd) { node = (function find(n) { if (n.type !== "split") return null; return n.id === sd.dataset.sdiv ? n : find(n.a) || find(n.b); })(P().root); box = sd.parentElement.getBoundingClientRect(); }
+  const move = ev => {
+    if (rz) { const w = Math.min(Math.max(panelW - (ev.clientX - x0), 340), $("main").getBoundingClientRect().width - 220); P().width = w; $("panel").style.width = w + "px"; return; }
+    const f = node.dir === "row" ? (ev.clientX - box.left) / box.width : (ev.clientY - box.top) / box.height;
+    node.ratio = Math.min(0.85, Math.max(0.15, f));
+    const panes = sd.parentElement.children;
+    panes[0].style.flexGrow = node.ratio; panes[2].style.flexGrow = 1 - node.ratio;
+  };
+  const up = () => { el.classList.remove("drag"); el.removeEventListener("pointermove", move); el.removeEventListener("pointerup", up); el.removeEventListener("pointercancel", up); };
+  el.addEventListener("pointermove", move); el.addEventListener("pointerup", up); el.addEventListener("pointercancel", up);
+});
+
+renderSidebar();
+openPath("docs/spec.md");
+</script>
+</html>
