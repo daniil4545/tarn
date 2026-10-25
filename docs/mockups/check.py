@@ -390,6 +390,27 @@ with sync_playwright() as p:
         "W21 the sidebar width survives a reload",
         pg.locator("#sidebar").bounding_box()["width"] == 400,
     )
+
+    def drag_grip(dx):
+        box = pg.locator("#sbGrip").bounding_box()
+        x, y = box["x"] + 5, box["y"] + 200
+        pg.mouse.move(x, y)
+        pg.mouse.down()
+        pg.mouse.move(x + dx, y, steps=8)
+        pg.mouse.up()
+
+    drag_grip(-500)
+    check(
+        "W22 drag the edge all the way left folds the sidebar to the rail",
+        count(".wsh") == 0,
+    )
+    drag_grip(150)
+    width = pg.locator("#sidebar").bounding_box()["width"]
+    check(
+        "W23 drag the rail edge right opens the sidebar again",
+        count(".wsh") == 3 and abs(width - 194) <= 2,
+        f"width={width}",
+    )
     pg.keyboard.press("Meta+Comma")
     check("S1 cmd+, opens the settings window", vis("#settings"))
     pg.check("input[name=tabstyle][value=top]")

@@ -97,10 +97,9 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .radios b { font-weight: 400; display: block; }
 .radios small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 @media (max-width: 760px) { .setside { width: 120px; } .setrow { flex-direction: column; gap: 8px; } }
-/* Invisible strip on the sidebar's right edge that resizes it, as in the app (120-400, default 200). */
+/* Invisible strip on the sidebar's right edge: resizes it (120-400, default 200), folds it to the rail and back. */
 .sbgrip { flex: none; width: 10px; margin-left: -10px; cursor: col-resize; position: relative; z-index: 4; }
 .sbgrip.drag, .sbgrip:hover { box-shadow: inset -2px 0 0 var(--accent); }
-.sidebar.rail + .sbgrip { display: none; }
 .card { position: fixed; z-index: 15; width: 280px; padding: 12px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
 .card b { font-size: 13px; font-weight: 600; }
 .card .dim { color: var(--muted); font-size: 11px; }
@@ -1293,12 +1292,20 @@ document.addEventListener("keydown", e => {
   else if (e.key === "Escape" && !$("settings").hidden) { e.stopImmediatePropagation(); closeSettings(); }
 }, true);
 $("sbGrip").addEventListener("pointerdown", e => {
-  const grip = e.currentTarget, x0 = e.clientX, w0 = sbWidth;
+  const grip = e.currentTarget, x0 = e.clientX, w0 = sbRail ? 44 : sbWidth;
   e.preventDefault(); grip.classList.add("drag"); grip.setPointerCapture(e.pointerId);
-  const move = ev => { sbWidth = Math.round(Math.min(400, Math.max(120, w0 + ev.clientX - x0))); $("sidebar").style.width = `${sbWidth}px`; };
+  // Dragged below 80 the sidebar folds to the rail, like the Hide Sidebar button; dragged
+  // from the rail past the minimum it opens again.
+  const move = ev => {
+    const raw = w0 + ev.clientX - x0;
+    if (raw < 80) { if (!sbRail) { sbRail = true; renderSidebar(); } return; }
+    if (sbRail && raw < 120) return;
+    sbWidth = Math.round(Math.min(400, Math.max(120, raw)));
+    if (sbRail) { sbRail = false; renderSidebar(); } else $("sidebar").style.width = `${sbWidth}px`;
+  };
   const up = () => {
     grip.classList.remove("drag"); grip.removeEventListener("pointermove", move); grip.removeEventListener("pointerup", up);
-    try { localStorage.setItem("tarn-mockup-sbw", String(sbWidth)); } catch (err) { /* ignore */ }
+    try { localStorage.setItem("tarn-mockup-sbw", String(sbWidth)); localStorage.setItem("tarn-mockup-rail", sbRail ? "1" : "0"); } catch (err) { /* ignore */ }
   };
   grip.addEventListener("pointermove", move); grip.addEventListener("pointerup", up);
 });
