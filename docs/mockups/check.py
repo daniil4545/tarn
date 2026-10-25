@@ -441,6 +441,20 @@ with sync_playwright() as p:
     check("S3 Escape closes the settings window", not vis("#settings"))
     pg.click("#topTabs [data-toptab='t3']")
     check("S4 a top tab selects its tab", pg.evaluate("cur") == "t3")
+    check(
+        "S4a a top tab shows its cmd+N key as Ghostty does",
+        pg.inner_text("#topTabs .ttab >> nth=0 >> .tk") == "⌘1",
+    )
+    before = count("#topTabs [data-toptab]")
+    pg.click("#topNew")
+    check(
+        "S4b + in the tab bar opens a tab",
+        count("#topTabs [data-toptab]") == before + 1,
+    )
+    new_id = pg.evaluate("cur")
+    pg.hover(f"#topTabs [data-toptab='{new_id}']")
+    pg.click(f"#topTabs [data-toptab='{new_id}'] .tx")
+    check("S4c x on a top tab closes it", count("#topTabs [data-toptab]") == before)
     pg.reload()
     pg.wait_for_selector("#topTabs [data-toptab]")
     check("S5 the tab style survives a reload", not vis("#sidebar"))
