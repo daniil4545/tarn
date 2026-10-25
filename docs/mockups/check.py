@@ -289,13 +289,13 @@ with sync_playwright() as p:
     drag(pg, ".tab[data-tabid='t3']", ".wsh[data-wsh='w2']", 0.5, 0.5)
     check(
         "W7 drag a tab onto a workspace header moves it there by hand",
-        "t3" in ws_tabs("w2") and "hand" in pg.inner_text(".tab[data-tabid='t3']"),
+        "t3" in ws_tabs("w2") and pg.evaluate("tabs.t3.manual"),
     )
     pg.click(".tab[data-tabid='t3']", button="right")
     pg.click("#ctx [data-mmove][data-to='w1']")
     check(
-        "W8 back to its folder workspace drops the hand mark",
-        "t3" in ws_tabs("w1") and "hand" not in pg.inner_text(".tab[data-tabid='t3']"),
+        "W8 back to its folder workspace clears the manual flag",
+        "t3" in ws_tabs("w1") and not pg.evaluate("tabs.t3.manual"),
     )
     pg.click(".tab[data-tabid='t2']", button="right")
     pg.click("#ctx [data-mpin]")

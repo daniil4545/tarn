@@ -69,7 +69,6 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .tab:hover .x { opacity: 1; }
 .tab:hover .key { display: none; }
 .tab.add { color: #6c6f85; margin-top: 4px; }
-.man { font-size: 10px; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
 .pin { width: 11px; height: 11px; color: var(--muted); flex: none; }
 .sidebar { position: relative; }
 .card { position: fixed; z-index: 15; width: 280px; padding: 12px; background: #2b2d3a; border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
@@ -592,7 +591,7 @@ function renderSidebar() {
   const all = flat();
   const row = id => {
     const t = tabs[id], i = all.indexOf(id);
-    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${t.manual ? '<span class="man" title="Added by hand: stays in this workspace whatever its folder">hand</span>' : ""}${t.pinned ? PIN : ""}${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
+    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${t.pinned ? PIN : ""}${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
   };
   const sb = $("sidebar");
   sb.classList.toggle("rail", sbRail);
