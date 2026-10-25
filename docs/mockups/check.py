@@ -169,7 +169,7 @@ with sync_playwright() as p:
     box = n(".tpane").first.bounding_box()
     pg.mouse.move(box["x"] + 30, box["y"] + 20)
     pg.wait_for_timeout(200)
-    check("25c dots show in the top band of the pane", dots() == "0.3", dots())
+    check("25c dots show in the top band of the pane", dots() == "0.6", dots())
     pg.click("[data-seg='header'] [data-v='never']")
     check("25d drag-handle never removes the handle", not vis(".grip"))
     pg.click("[data-seg='header'] [data-v='auto']")

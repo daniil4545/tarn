@@ -151,10 +151,12 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
    drag-handle auto shows it while the pointer is in the top 20% of the pane; always and never as named. */
 .grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 12px; z-index: 3; display: grid; place-items: center; cursor: grab; color: var(--fg); }
 .grip svg { opacity: 0; transition: opacity .12s; margin-top: -3px; }
-.tpane.near .grip svg, .vpane.near .grip svg, .ws.h-always .grip svg { opacity: .3; }
+/* Brighter than Ghostty's 0.3 / 0.8: at 0.3 the dots were hard to see. */
+.tpane.near .grip svg, .vpane.near .grip svg, .ws.h-always .grip svg { opacity: .6; }
 /* The same handle drags a whole viewer; it sits over the top edge of the file tab bar. */
-.vpane .grip { color: var(--p-fg); height: 9px; }
-.grip:hover svg { opacity: .8; }
+.vpane .grip { color: var(--p-fg); height: 12px; }
+.vpane .grip svg { margin-top: 0; }
+.grip:hover svg { opacity: 1; }
 .ws.h-never .grip { display: none; }
 /* Ghostty dims an unfocused split (unfocused-split-opacity 0.7). */
 .tpane:not(.focus) .term { opacity: .7; }
@@ -738,7 +740,7 @@ function nodeHtml(n) {
   }
   return viewerHtml(n);
 }
-const GRIP_DOTS = '<svg width="16" height="4" viewBox="0 0 16 4" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="14" cy="2" r="1.6"/></svg>';
+const GRIP_DOTS = '<svg width="22" height="6" viewBox="0 0 22 6" fill="currentColor" aria-hidden="true"><circle cx="3" cy="3" r="2.2"/><circle cx="11" cy="3" r="2.2"/><circle cx="19" cy="3" r="2.2"/></svg>';
 function viewerHtml(v) {
   const path = activePath(v), d = path && docs[path], m = path ? modeFor(v, path) : null;
   const tabs = v.tabs.map((t, i) => { const dd = docs[t.path]; return `<div class="ftab${i === v.active ? " on" : ""}${t.preview ? " preview" : ""}" draggable="true" data-vid="${v.id}" data-idx="${i}" title="${t.path}${t.preview ? " (preview: the next file replaces this tab)" : ""}"><span class="nm">${name(t.path)}</span>${dd.text !== dd.saved ? '<span class="dirty"></span>' : ""}<button class="x" data-close="${i}" data-vid="${v.id}" aria-label="Close tab">✕</button></div>`; }).join("");
