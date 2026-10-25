@@ -466,10 +466,8 @@ enum ViewerRouter {
     /// socket. Replies `{"ok":true,...}` or `{"ok":false,"error":...}` (`AttentionCommands.reply`). It opens text files only and
     /// never moves focus (`docs/spec.md` 2.2 and 2.5). Returns false for lines that are not commands.
     @MainActor
-    static func handleCommand(_ line: Data, reply: ControlSocket.Reply) -> Bool {
-        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-              message["cmd"] as? String == "open"
-        else { return false }
+    static func handleCommand(_ message: [String: Any], reply: ControlSocket.Reply) -> Bool {
+        guard message["cmd"] as? String == "open" else { return false }
         let error = openFromSocket(message)
         if let error {
             logger.info("open refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")

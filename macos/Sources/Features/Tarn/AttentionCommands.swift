@@ -99,18 +99,21 @@ enum AttentionCommands {
         return line.range(of: Data("\"reply\":true".utf8)) == nil
     }
 
-    /// Answers `ls`, `notify` and any other `cmd` the earlier handlers did not take. A line that
-    /// is not a JSON object gets an error reply (`docs/spec.md` 2.2), except a permission hook's
-    /// line (`"reply":true`): that hook prints whatever the app answers, so it gets silence.
+    /// A line that is not a JSON object gets an error reply (`docs/spec.md` 2.2), except a permission
+    /// hook's line (`"reply":true`): that hook prints whatever the app answers, so it gets silence.
+    static func refuse(_ line: Data, reply sink: ControlSocket.Reply) {
+        guard isMalformed(line) else {
+            logger.info("dropped a malformed hook line")
+            return
+        }
+        logger.info("malformed request refused")
+        sink.send(failure("malformed request"))
+    }
+
+    /// Answers `ls`, `notify` and any other `cmd` the earlier handlers did not take.
     /// Returns false for JSON without `cmd`, which are hook events.
     @MainActor
-    static func handle(_ line: Data, reply sink: ControlSocket.Reply) -> Bool {
-        if isMalformed(line) {
-            logger.info("malformed request refused")
-            sink.send(failure("malformed request"))
-            return true
-        }
-        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return false }
+    static func handle(_ message: [String: Any], reply sink: ControlSocket.Reply) -> Bool {
         guard let command = message["cmd"] as? String else { return false }
         sink.send(answer(command: command, message: message))
         return true
@@ -145,7 +148,7 @@ enum AttentionCommands {
 
     @MainActor
     private static func listing(_ message: [String: Any]) -> Data {
-        let rows = SessionRegistry.shared.liveSessions().map { SessionRow($0.session, cwd: $0.view.pwd) }
+        let rows = SessionRegistry.shared.liveSessions().map { SessionRow($0.session, cwd: $0.view.workingDirectory) }
         return message["json"] as? Bool == true
             ? reply(["sessions": json(rows)])
             : reply(["text": text(rows, now: Date())])

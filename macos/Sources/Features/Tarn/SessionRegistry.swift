@@ -222,10 +222,15 @@ final class SessionRegistry {
 
     func start() {
         guard socket == nil else { return }
+        // A line is parsed once here: hook events with tool output reach 4 MB.
         let socket = ControlSocket { [weak self] line, reply in
-            if ViewerRouter.handleCommand(line, reply: reply) { return }
-            if AttentionCommands.handle(line, reply: reply) { return }
-            self?.receive(line, reply: reply)
+            guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else {
+                AttentionCommands.refuse(line, reply: reply)
+                return
+            }
+            if ViewerRouter.handleCommand(message, reply: reply) { return }
+            if AttentionCommands.handle(message, reply: reply) { return }
+            self?.receive(message, reply: reply)
         }
         socket.start()
         self.socket = socket
@@ -238,9 +243,8 @@ final class SessionRegistry {
 
     // MARK: Events
 
-    private func receive(_ line: Data, reply: ControlSocket.Reply) {
-        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-              message["version"] as? Int == 1,
+    private func receive(_ message: [String: Any], reply: ControlSocket.Reply) {
+        guard message["version"] as? Int == 1,
               let surfaceText = message["surface"] as? String,
               let surfaceID = UUID(uuidString: surfaceText),
               let event = message["event"] as? [String: Any],
@@ -426,11 +430,11 @@ final class SessionRegistry {
 
     private func raise(_ surface: SurfaceContext, body: String) {
         Self.logger.info("raised for \(surface.id, privacy: .public)")
-        deliver(surface.id, Attention.title(cwd: surface.pwd), body)
+        deliver(surface.id, ProjectInfo.resolve(cwd: surface.pwd).name, body)
     }
 
     private func context(for view: Ghostty.SurfaceView) -> SurfaceContext {
-        SurfaceContext(id: view.id, focused: Self.isFocused(view), pwd: view.pwd) { [weak self, weak view] in
+        SurfaceContext(id: view.id, focused: Self.isFocused(view), pwd: view.workingDirectory) { [weak self, weak view] in
             if let view { self?.observeFocus(view) }
         }
     }

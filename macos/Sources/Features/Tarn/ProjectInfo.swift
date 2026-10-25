@@ -1,7 +1,6 @@
 import Foundation
 
-/// The project name and git branch of a working directory, for notification titles and
-/// `tarn ls`. The sidebar keeps its own cached copy of the root walk in `Sidebar.swift`.
+/// The project name and git branch of a working directory, for notification titles and `tarn ls`.
 struct ProjectInfo: Equatable {
     /// The git root folder name, else the working folder name, else `tarn`.
     let name: String

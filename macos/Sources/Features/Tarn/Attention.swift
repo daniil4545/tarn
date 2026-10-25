@@ -81,9 +81,6 @@ enum Attention {
         return NoteChange(session: session, raise: first)
     }
 
-    /// The banner title: the project name of the surface's working directory.
-    static func title(cwd: String?) -> String { ProjectInfo.resolve(cwd: cwd).name }
-
     // MARK: Delivery
 
     /// Shows the notification through Ghostty's route (insertion point 21).
