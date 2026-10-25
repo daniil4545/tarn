@@ -13,6 +13,9 @@ let closeTimer = 0;
 
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
+// Same text as the app card: "Tool: detail" for a tool request, the detail alone for a question.
+const requestText = (r) => (r.kind === "tool" ? `${r.tool}: ${r.detail}` : r.detail);
+
 function elapsed(since) {
   const s = Math.max(0, Math.floor((clock.now() - since) / 1000));
   return s < 60 ? `${s}s` : s < 3600 ? `${Math.floor(s / 60)}m` : `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
@@ -23,7 +26,7 @@ function show(id) {
   if (!tab || !row) return hide();
   const status = tabStatus(tab, read("registry")), session = status?.session;
   const ask = status?.kind === "permission" && session.answerable && session.request
-    ? `<div class="req"><code>${esc(session.request)}</code><div class="btns"><button data-answer="${status.pane}" data-allow="true">Allow</button><button data-answer="${status.pane}" data-allow="false">Deny</button></div></div>`
+    ? `<div class="req"><code>${esc(requestText(session.request))}</code><div class="btns"><button data-answer="${status.pane}" data-allow="true">Allow</button><button data-answer="${status.pane}" data-allow="false">Deny</button></div></div>`
     : "";
   let card = document.getElementById("tabcard");
   if (!card) {
