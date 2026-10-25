@@ -87,7 +87,7 @@ enum ViewerPaths {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return .missing }
         if isDirectory.boolValue { return .directory }
-        let values = try? URL(fileURLWithPath: path).resourceValues(forKeys: [.isRegularFileKey])
+        let values = try? URL(fileURLWithPath: path).resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey])
         guard values?.isRegularFile == true else { return .special }
         return systemExtensions.contains((path as NSString).pathExtension.lowercased()) ? .system : .text
     }

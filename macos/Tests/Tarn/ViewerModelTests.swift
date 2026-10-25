@@ -123,6 +123,8 @@ struct ViewerPathsTests {
         #expect(ViewerPaths.classify(dir + "/c.pdf") == .system)
         #expect(ViewerPaths.classify(dir + "/d.svg") == .text)
         #expect(ViewerPaths.classify(dir + "/Makefile") == .text)
+        try FileManager.default.createSymbolicLink(atPath: dir + "/link.md", withDestinationPath: dir + "/a.md")
+        #expect(ViewerPaths.classify(dir + "/link.md") == .text)
         #expect(ViewerPaths.classify(dir) == .directory)
         #expect(ViewerPaths.classify(dir + "/nope") == .missing)
     }
