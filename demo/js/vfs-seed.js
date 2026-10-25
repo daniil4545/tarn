@@ -128,6 +128,24 @@ enum AgentProcess {
     static let known = ["claude", "codex", "opencode"]
 }
 `,
+  "tools/export.go": `package main
+
+import "fmt"
+
+// export prints the session table as JSON.
+func export(rows []string) {
+	for i, row := range rows {
+		fmt.Printf("%d: %s\\n", i, row)
+	}
+}
+`,
+  "plugin/hooks/hooks.json": `{
+  "hooks": {
+    "Stop": [{ "command": "hook.sh stop" }],
+    "PermissionRequest": [{ "command": "hook.sh permission" }]
+  }
+}
+`,
   "plugin/hooks/hook.sh": `#!/bin/sh
 # Forwards a Claude Code hook event to the tarn app and never fails the agent.
 tarn hook "$@" 2>/dev/null || true

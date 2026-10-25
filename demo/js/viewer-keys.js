@@ -5,6 +5,7 @@
 //   pane shown   hides the whole pane (tabs, unsaved text, tree state kept), the keyboard in the terminal
 // `host` is viewer.js: { target(), idOf(entry) }.
 import { bus } from "./bus.js";
+import { toast } from "./toast.js";
 import * as tree from "./layout.js";
 import { currentTab, paneOf } from "./workspace.js";
 
@@ -46,6 +47,7 @@ export function viewerKey(name, host) {
     return whenShown(host, (shown) => whenReady(shown, () => intoPane(host, shown)));
   }
   if (!entry) {
+    if (!bus.cmd("viewer.available")) return toast("File viewer is off (Settings)");
     bus.emit("viewer:needed", { tree: true });
     const opened = host.target();
     if (opened) whenReady(opened, (page) => { intoPane(host, opened); page.focusTree(); });

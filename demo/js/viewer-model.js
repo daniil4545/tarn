@@ -145,7 +145,7 @@ export function createViewerModel({ fs, home, root, ui }) {
 
   function save(path) {
     const doc = docs.get(path);
-    if (!doc || !isMarkdown(path)) return;
+    if (!doc) return;
     if (!dirty(path) && !doc.conflict && !doc.missing) return toast("No changes");
     // The disk may have changed before the event arrived: never write over the agent's version.
     if (doc.conflict || (fs.isFile(path) && fs.read(path) !== doc.savedText)) {
@@ -161,7 +161,7 @@ export function createViewerModel({ fs, home, root, ui }) {
 
   function edit(path, text) {
     const doc = docs.get(path);
-    if (!doc || doc.text === text || !isMarkdown(path)) return;
+    if (!doc || doc.text === text) return;
     doc.text = text;
     pinPath(path);
     pushChrome();
