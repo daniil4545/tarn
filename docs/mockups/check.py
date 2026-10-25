@@ -286,7 +286,7 @@ with sync_playwright() as p:
     pg.click(".wsh[data-wsh='w2']")
     pg.click("#agentTab")
     check(
-        "W4 an agent tab from ~/Dev/Galera joins galera, folded header shows it waits",
+        "W4 an agent's new tab joins the agent's workspace, folded header shows it",
         len(ws_tabs("w2")) == 2 and "2" in pg.inner_text(".wsh[data-wsh='w2']"),
     )
     pg.click(".tab[data-tabid='t1']")
@@ -298,44 +298,42 @@ with sync_playwright() as p:
     pg.hover(".wsh[data-wsh='w2']")
     pg.click(".wsh[data-wsh='w2'] [data-wsnewtab]")
     check(
-        "W6 + on a header opens a tab in its folder and unfolds it",
-        len(ws_tabs("w2")) == 3 and "~/D/Galera" in pg.inner_text(".tpane .term"),
+        "W6 + on a header opens a tab in that workspace and unfolds it",
+        len(ws_tabs("w2")) == 3
+        and pg.get_attribute(".wsh[data-wsh='w2']", "aria-expanded") == "true",
     )
     drag(pg, ".tab[data-tabid='t3']", ".wsh[data-wsh='w2']", 0.5, 0.5)
-    check(
-        "W7 drag a tab onto a workspace header moves it there by hand",
-        "t3" in ws_tabs("w2") and pg.evaluate("tabs.t3.manual"),
-    )
+    check("W7 drag a tab onto a workspace header moves it there", "t3" in ws_tabs("w2"))
     pg.click(".tab[data-tabid='t3']", button="right")
     pg.click("#ctx [data-mmove][data-to='w1']")
-    check(
-        "W8 back to its folder workspace clears the manual flag",
-        "t3" in ws_tabs("w1") and not pg.evaluate("tabs.t3.manual"),
-    )
+    check("W8 Move to in the tab menu moves it back", "t3" in ws_tabs("w1"))
     pg.click(".tab[data-tabid='t2']", button="right")
     pg.click("#ctx [data-mpin]")
     check("W9 pin from the menu puts the tab on top", "review" in side_tabs()[1])
     drag(pg, ".tab[data-tabid='t4']", ".tab[data-tabid='t3']", 0.5, 0.3)
     order = ws_tabs("w1")
     check("W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order))
-    answers = iter(["home", "~"])
+    answers = iter(["home"])
     pg.on("dialog", lambda d: d.accept(next(answers, "")))
     pg.click("#wsNew")
     home = pg.evaluate("wss.find(w => w.name === 'home')")
     check(
-        "W11 a new workspace with a folder pulls in its open tabs",
-        # Default gave away its only tab, so it hides: tarn, galera, home.
-        home is not None and home["tabs"] == ["t6"] and count(".wsh") == 3,
+        "W11 a new workspace asks a name only, goes last and starts with one tab",
+        home is not None
+        and len(home["tabs"]) == 1
+        and pg.evaluate("wss[wss.length - 1].name") == "home"
+        and pg.evaluate("cur") == home["tabs"][0],
     )
     pg.click(f".wsh[data-wsh='{home['id']}']", button="right")
     pg.click("#ctx [data-wsdel]")
     check(
-        "W12 deleting it moves the tabs to Default",
-        ws_tabs("w0") == ["t6"] and count(".wsh") == 3,
+        "W12 deleting it moves its tabs to the workspace above",
+        home["tabs"][0] in ws_tabs("w0") and count(".wsh") == 3,
     )
-    pg.click(".tab[data-tabid='t6'] .x")
+    for tab_id in ws_tabs("w0"):
+        pg.click(f".tab[data-tabid='{tab_id}'] .x")
     check(
-        "W13 closing Default's last tab hides Default",
+        "W13 closing the last tab of Default closes Default like any workspace",
         count(".wsh") == 2 and count(".wsh[data-wsh='w0']") == 0,
     )
     drag(pg, ".wsh[data-wsh='w2']", ".wsh[data-wsh='w1']", 0.5, 0.5)
@@ -480,28 +478,36 @@ with sync_playwright() as p:
     pg.wait_for_timeout(700)
     check("C3 a tab without an agent opens no card", not vis("#tabcard"))
     pg.mouse.move(700, 500)
-    pg.click("#soloDemo")
-    check(
-        "O1 with one workspace the sidebar is a plain tab list",
-        count(".wsh") == 0
-        and count("#sidebar .tab[data-tabid]") == pg.evaluate("flat().length"),
-    )
+    heads = count(".wsh")
     pg.evaluate("window.prompt = q => q === 'Workspace name' ? 'work' : ''")
     pg.click("#wsNew")
     check(
-        "O2 a second workspace shows headers, Default among them",
-        pg.evaluate("wss.map(w => w.name)") == ["work", "Default"]
-        and count(".wsh") == 2,
+        "O1 a new workspace shows its header with one tab",
+        count(".wsh") == heads + 1 and count(".wsh:has-text('work')") == 1,
     )
-    pg.click(".wsh:has-text('work') [data-wsnewtab]")
     pg.click(".tpane")
     pg.keyboard.press("Meta+w")
     check(
-        "O3 cmd+W on the last tab of a workspace closes the workspace",
-        pg.evaluate("wss.map(w => w.name)") == ["Default"] and count(".wsh") == 0,
+        "O2 cmd+W on the last tab of a workspace closes the workspace",
+        count(".wsh") == heads and count(".wsh:has-text('work')") == 0,
     )
     pg.keyboard.press("Meta+z")
-    check("O4 cmd+Z brings the workspace back", count(".wsh:has-text('work')") == 1)
+    check("O3 cmd+Z brings the workspace back", count(".wsh:has-text('work')") == 1)
+    # Unfold every workspace so each tab has a close button in the sidebar.
+    pg.evaluate("wss.forEach(w => { w.collapsed = false; }); renderSidebar()")
+    while count("#sidebar .tab[data-tabid]"):
+        pg.click("#sidebar .tab[data-tabid] >> nth=0 >> .x")
+    check(
+        "O4 the last tab of the last workspace closes the window",
+        pg.evaluate("wss.length") == 0 and "window closed" in pg.inner_text("#ws"),
+        f"{pg.evaluate('wss.length')} {pg.inner_text('#ws')[:40]!r}",
+    )
+    pg.keyboard.press("Meta+n")
+    check(
+        "O5 a new window starts with Default and one tab",
+        pg.evaluate("wss.map(w => w.name + ':' + w.tabs.length)") == ["Default:1"]
+        and count(".wsh") == 1,
+    )
 
     pg.evaluate("openLink('docs/spec.md')")
     pg.keyboard.press("Meta+d")

@@ -61,11 +61,9 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .wsh:hover .ib { opacity: 1; }
 .wsh .cnt { font-size: 11px; color: #6c6f85; text-transform: none; }
 .chev { width: 10px; color: var(--muted); font-size: 10px; }
-.wsempty { font-size: 12px; color: #6c6f85; padding: 2px 8px 4px 24px; }
 .tab { cursor: pointer; }
 /* Tabs sit indented under their workspace header. */
 .sidebar .tab[data-tabid] { margin-left: 12px; width: calc(100% - 12px); }
-.sidebar.solo .tab[data-tabid] { margin-left: 0; width: 100%; }
 .tab .x { opacity: 0; background: none; border: 0; padding: 0 3px; color: var(--muted); font-size: 11px; }
 .tab:hover .x { opacity: 1; }
 .tab:hover .key { display: none; }
@@ -262,9 +260,8 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
   <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, settings window with the tab style, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
   <span>Terminal grab handle (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="false">always</button><button data-v="auto" aria-pressed="true">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
-  <button class="act" id="agentTab" title="Mock of tarn new from an agent in ~/Dev/Galera">Agent opens a tab in ~/Dev/Galera</button>
+  <button class="act" id="agentTab" title="Mock of tarn new from the agent in Claude · bot">Agent in Claude · bot opens a tab</button>
   <button class="act" id="openSettings">Settings ⌘,</button>
-  <button class="act" id="soloDemo" title="All tabs go to Default, other workspaces are removed">One workspace</button>
   <button class="act" id="resetDemo">Reset demo</button>
   <button class="act" id="agentEdit">Agent edits the file</button>
   <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
@@ -295,8 +292,8 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
       <div class="setgroup">
         <div class="setrow"><span>Tab style</span>
           <div class="radios">
-            <label><input type="radio" name="tabstyle" value="sidebar"><span><b>Sidebar</b><small>Tabs grouped by project with agent state, on the left of the window.</small></span></label>
-            <label><input type="radio" name="tabstyle" value="top"><span><b>Tabs at the top</b><small>The native tab bar, as in Ghostty. Agent state is not shown.</small></span></label>
+            <label><input type="radio" name="tabstyle" value="sidebar"><span><b>Sidebar</b><small>Tabs grouped in workspaces with agent state, on the left of the window.</small></span></label>
+            <label><input type="radio" name="tabstyle" value="top"><span><b>Tabs at the top</b><small>The native tab bar, as in Ghostty. Workspaces and agent state are not shown.</small></span></label>
           </div>
         </div>
       </div>
@@ -483,14 +480,14 @@ const SEED = {
     t1: { title: "Claude · spec", agent: true, state: "waiting", cwd: "~/Dev/self-projects/tarn", pinned: true },
     t2: { title: "Claude · review", agent: true, state: "working", cwd: "~/Dev/self-projects/tarn" },
     t3: { title: "git · tarn", agent: false, cwd: "~/Dev/self-projects/tarn" },
-    t4: { title: "ssh prod", agent: false, cwd: "root@prod:~", manual: true },
+    t4: { title: "ssh prod", agent: false, cwd: "root@prod:~" },
     t5: { title: "Claude · bot", agent: true, state: "working", cwd: "~/Dev/Galera" },
     t6: { title: "~", agent: false, cwd: "~" },
   },
   wss: [
-    { id: "w1", name: "tarn", folder: "~/Dev/self-projects/tarn", tabs: ["t1", "t2", "t3", "t4"] },
-    { id: "w2", name: "galera", folder: "~/Dev/Galera", tabs: ["t5"] },
-    { id: "w0", name: "Default", folder: null, tabs: ["t6"] },
+    { id: "w1", name: "tarn", tabs: ["t1", "t2", "t3", "t4"] },
+    { id: "w2", name: "galera", tabs: ["t5"] },
+    { id: "w0", name: "Default", tabs: ["t6"] },
   ],
   cur: "t1",
 };
@@ -510,7 +507,7 @@ const newTerm = n => ({ type: "term", id: nid("t"), n });
 const newLayout = () => { const t = newTerm(0); return { root: { type: "block", id: nid("b"), root: t }, focus: t.id, lastViewer: null, terms: 1 }; };
 // Workspaces and tab membership persist across reloads, as tarn keeps them across restarts;
 // the layout inside a tab comes back through Ghostty's window restore in the app.
-const STORE = "tarn-mockup-workspaces-v1";
+const STORE = "tarn-mockup-workspaces-v2";
 let tabs = {}, wss = [], cur = null, drag = null, tabSeq = 10;
 function loadState() {
   let st = null;
@@ -682,7 +679,7 @@ function renderSidebar() {
   const sb = $("sidebar");
   sb.classList.toggle("rail", sbRail);
   sb.style.width = sbRail ? "" : `${sbWidth}px`;
-  $("wtitle").textContent = [visibleWss().length > 1 && cur ? W().name : "", cur ? tabs[cur].title : ""].filter(Boolean).join(" · ");
+  $("wtitle").textContent = cur ? `${W().name} · ${tabs[cur].title}` : "";
   const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${sbRail ? "Show Sidebar" : "Hide Sidebar"}" aria-label="${sbRail ? "Show Sidebar" : "Hide Sidebar"}">${SB_ICON}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
   // Collapsed rail, as in the app: icons only, a divider between workspaces.
   if (sbRail) {
@@ -692,26 +689,22 @@ function renderSidebar() {
     }).join("")).join('<div class="sep"></div>');
     return;
   }
-  // Default alone needs no header: the sidebar is a plain list until a second workspace exists.
-  const shown = visibleWss(), solo = shown.length === 1;
-  sb.classList.toggle("solo", solo);
   let h = top;
-  if (solo) h += ordered(shown[0]).map(row).join("");
-  else for (const w of shown) {
+  for (const w of wss) {
     const n = w.tabs.length;
     // A folded workspace still shows how many tabs it has and its most urgent state.
-    h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? esc(short(w.folder)) : "no folder"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.folder ? short(w.folder) : "~")}">+</button></div>`;
-    if (!w.collapsed) h += ordered(w).map(row).join("") + (n ? "" : `<div class="wsempty">No tabs</div>`);
+    h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
+    if (!w.collapsed) h += ordered(w).map(row).join("");
   }
   h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
   sb.innerHTML = h;
 }
 function updateTitleButton() { const v = lastViewer(); $("toggleFiles").setAttribute("aria-pressed", String(!!(v && v.tree))); }
 function renderWorkspace() {
+  // Only after the last tab of the last workspace: the real window is gone, the mockup keeps a stub.
   if (!cur) {
-    const w = W();
     $("ws").className = "ws";
-    $("ws").innerHTML = `<div class="empty">No tabs in ${esc(w.name)}<br><button class="act" id="emptyNew">New tab in ${esc(w.folder ? short(w.folder) : "~")}</button></div>`;
+    $("ws").innerHTML = `<div class="empty">The window closed with its last tab<br><button class="act" id="emptyNew">New window (⌘N)</button></div>`;
     $("toggleFiles").setAttribute("aria-pressed", "false");
     return;
   }
@@ -889,20 +882,16 @@ function selectTab(id) {
   if (w.collapsed) w.collapsed = false;
   cur = id; saveState(); renderSidebar(); renderWorkspace();
 }
-// The workspace whose folder holds the path; nested folders go to the most specific one.
-function wsForPath(cwd) {
-  let best = null;
-  for (const w of wss) if (w.folder && (cwd === w.folder || cwd.startsWith(w.folder + "/")) && (!best || w.folder.length > best.folder.length)) best = w;
-  return best;
-}
 function addTab(w, t) {
   const id = "t" + (++tabSeq);
   tabs[id] = { id, layout: newLayout(), agent: false, ...t };
   w.tabs.push(id);
   return id;
 }
+// A new tab starts in the focused tab's folder, as Ghostty's window-inherit-working-directory.
 function newTab(w = W()) {
-  const cwd = w.folder || "~";
+  if (!w) return newWindow();
+  const cwd = cur && tabs[cur] ? tabs[cur].cwd : "~";
   w.collapsed = false;
   cur = addTab(w, { title: "zsh · " + short(cwd), cwd });
   saveState(); renderSidebar(); renderWorkspace();
@@ -918,56 +907,60 @@ function moveTab(id, to, before = null) {
   const at = before ? w.tabs.indexOf(before) : -1;
   if (at >= 0) w.tabs.splice(at, 0, id); else w.tabs.push(id);
   if (from !== w) {
-    // Dropped into the workspace of its own folder: it follows the folder again.
-    tabs[id].manual = wsForPath(tabs[id].cwd) !== w;
     w.collapsed = false;
     toast(`Moved to ${w.name}`);
   }
   saveState(); renderSidebar(); renderWorkspace();
 }
-// Closing a workspace's last tab closes the workspace too; Default only hides while empty.
-// cmd+Z within 5 s brings back the tab and its workspace, as Ghostty's undo does for a tab.
+// The last tab of a workspace closes the workspace; the last workspace closes the window, as
+// Ghostty closes a window with its last tab. cmd+Z within 5 s brings back the tab and workspace.
 function closeSidebarTab(id) {
   const next = flat()[flat().indexOf(id) + 1] || flat()[flat().indexOf(id) - 1] || null;
   const w = wss.find(x => x.tabs.includes(id));
   undo = { closedTab: tabs[id], ws: { ...w, tabs: [...w.tabs] }, wsAt: wss.indexOf(w), at: Date.now() };
   removeFromWs(id); delete tabs[id];
-  const gone = !w.tabs.length && w.id !== "w0";
+  const gone = !w.tabs.length;
   if (gone) wss = wss.filter(x => x !== w);
   if (cur === id) cur = next;
-  toast(gone ? `Workspace ${w.name} closed with its last tab · ⌘Z restores` : "Tab closed · ⌘Z restores");
+  toast(!wss.length ? "Last tab closed: the window closes · ⌘Z restores" : gone ? `Workspace ${w.name} closed with its last tab · ⌘Z restores` : "Tab closed · ⌘Z restores");
   saveState(); renderSidebar(); renderWorkspace();
 }
-const visibleWss = () => wss.filter(w => w.id !== "w0" || w.tabs.length || wss.length === 1);
+// A new window starts with Default and one tab (D1, D10).
+function newWindow() {
+  const w = { id: "w" + Date.now(), name: "Default", tabs: [] };
+  wss = [w];
+  cur = addTab(w, { title: "zsh · ~", cwd: "~" });
+  saveState(); renderSidebar(); renderWorkspace();
+}
+// A workspace has a name only and starts with one tab, so no workspace is ever empty (D3, S4).
 function newWorkspace() {
   const name = prompt("Workspace name");
   if (!name || !name.trim()) return;
-  const folder = (prompt("Folder (optional): tabs opened in it join this workspace", "") || "").trim().replace(/\/$/, "") || null;
-  const w = { id: "w" + Date.now(), name: name.trim(), folder, tabs: [] };
-  if (wss.length === 1) wss[0].collapsed = false;
-  wss.splice(wss.length - 1, 0, w);
-  // Creating it with a folder pulls in open tabs from that folder once; later a cd never moves a tab.
-  let pulled = 0;
-  if (folder) for (const x of wss) if (x !== w) for (const id of [...x.tabs]) if (!tabs[id].manual && wsForPath(tabs[id].cwd) === w) { removeFromWs(id); w.tabs.push(id); pulled++; }
-  if (pulled) toast(`${pulled} open tab${pulled === 1 ? "" : "s"} from ${short(folder)} joined ${w.name}`);
+  const w = { id: "w" + Date.now(), name: name.trim(), tabs: [] };
+  wss.push(w);
+  cur = addTab(w, { title: "zsh · ~", cwd: "~" });
   saveState(); renderSidebar(); renderWorkspace();
 }
 function renameWorkspace(id) {
   const w = wsById(id), name = prompt("Workspace name", w.name);
   if (name && name.trim()) { w.name = name.trim(); saveState(); renderSidebar(); }
 }
+// Any workspace but the last can go; its tabs move to the one above, or below if it is first (D13).
 function deleteWorkspace(id) {
-  const w = wsById(id), def = wsById("w0");
-  if (!w || w === def || !confirm(`Delete workspace ${w.name}? Its ${w.tabs.length} tab(s) move to Default.`)) return;
-  for (const t of w.tabs) { def.tabs.push(t); tabs[t].manual = false; }
-  def.collapsed = false;
+  const w = wsById(id), i = wss.indexOf(w);
+  if (!w || wss.length < 2) return;
+  const to = wss[i > 0 ? i - 1 : 1];
+  if (!confirm(`Delete workspace ${w.name}? Its ${w.tabs.length} tab(s) move to ${to.name}.`)) return;
+  to.tabs.push(...w.tabs);
+  to.collapsed = false;
   wss = wss.filter(x => x !== w);
   saveState(); renderSidebar(); renderWorkspace();
 }
-// Mock of `tarn new` from an agent: the tab joins the workspace of its folder.
+// Mock of `tarn new` from the agent in "Claude · bot": the tab joins that agent's workspace (S12).
 function agentOpensTab() {
-  const cwd = "~/Dev/Galera", w = wsForPath(cwd) || W();
-  addTab(w, { title: "Claude · tests", agent: true, state: "waiting", cwd });
+  const from = tabs.t5 ? "t5" : cur, w = wss.find(x => x.tabs.includes(from)) || W();
+  if (!w) return;
+  addTab(w, { title: "Claude · tests", agent: true, state: "waiting", cwd: tabs[from] ? tabs[from].cwd : "~" });
   toast(`New agent tab went to workspace ${w.name}`);
   saveState(); renderSidebar();
 }
@@ -979,15 +972,14 @@ function showMenu(items, x, y) {
   document.body.appendChild(m);
 }
 function tabMenu(id, x, y) {
-  const t = tabs[id], here = wss.find(w => w.tabs.includes(id)), home = wsForPath(t.cwd);
+  const t = tabs[id], here = wss.find(w => w.tabs.includes(id));
   showMenu([`<button data-mpin="${id}">${t.pinned ? "Unpin" : "Pin to top"}</button>`]
     .concat(wss.filter(w => w !== here).map(w => `<button data-mmove="${id}" data-to="${w.id}">Move to ${esc(w.name)}</button>`))
-    .concat(t.manual && home && home !== here ? [`<button data-mmove="${id}" data-to="${home.id}">Back to ${esc(home.name)} (its folder)</button>`] : [])
     .concat([`<button data-tabclose="${id}">Close tab</button>`]), x, y);
 }
 function wsMenu(id, x, y) {
   showMenu([`<button data-wsnewtab="${id}">New tab</button>`, `<button data-wsren="${id}">Rename…</button>`]
-    .concat(id === "w0" ? [] : [`<button data-wsdel="${id}">Delete workspace</button>`]), x, y);
+    .concat(wss.length < 2 ? [] : [`<button data-wsdel="${id}">Delete workspace</button>`]), x, y);
 }
 const closeMenu = () => { const m = $("ctx"); if (m) m.remove(); };
 function treeMove(v, delta) {
@@ -1079,7 +1071,7 @@ document.addEventListener("keydown", e => {
   if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) { e.preventDefault(); const id = flat()[+e.key - 1]; if (id) selectTab(id); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") { e.preventDefault(); return newTab(); }
   if (!cur && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); return restoreClosed(); }
-  if (!cur && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w") { e.preventDefault(); return toast("No tabs left: ⌘W closes the window"); }
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n") { e.preventDefault(); return wss.length ? toast("⌘N opens another window with its own Default") : newWindow(); }
   if (!cur) return;
   const p = focused(), inText = e.target.matches && e.target.matches("textarea");
   const isV = p && p.type === "viewer";
@@ -1419,11 +1411,6 @@ document.addEventListener("click", e => {
   if (top && !e.target.closest("[data-tabclose]")) return selectTab(top.dataset.toptab);
   if (e.target.closest("#topNew")) return newTab();
   if (e.target.closest("#openSettings")) return openSettings();
-  if (e.target.closest("#soloDemo")) {
-    const def = wsById("w0");
-    def.tabs = flat(); def.collapsed = false; def.tabs.forEach(id => { tabs[id].manual = false; });
-    wss = [def]; saveState(); return renderSidebar();
-  }
   if (e.target.closest("#settingsClose") || e.target.id === "settings") return closeSettings();
   if (e.target.closest("#ghosttyConfig")) return toast("Opens the Ghostty config file");
 });

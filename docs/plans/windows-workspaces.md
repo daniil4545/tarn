@@ -76,7 +76,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S2 | cmd+T or + at the sidebar top | a tab in the current workspace, after its last tab, focused |
 | S3 | + on a workspace header | a tab in that workspace; the workspace unfolds |
 | S4 | New workspace, type a name | a workspace at the end of the list with one new tab in it, focused, so no workspace is ever empty |
-| S5 | rename from the header menu or double click | name changes in the sidebar and the window title |
+| S5 | rename from the header menu | name changes in the sidebar and the window title |
 | S6 | delete a workspace with tabs | confirmation names the count; tabs move to the workspace above, or below if it is first (D13) |
 | S7 | drag a tab onto a header or between rows | the tab moves there; order is kept after a restart |
 | S8 | right click a tab, Move to | same as S7 without drag |
@@ -95,13 +95,11 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S19 | quit and launch again | windows, tabs, splits and cwd come back (Ghostty `window-save-state`); workspaces, their order, folding and tab membership come back with them; scrollback does not |
 | S20 | cmd+N, a second window | a window with its own `Default` and one tab (D10) |
 | S21 | drag a tab out to another window | Ghostty moves it; it joins that window's current workspace; dropped outside every window it opens a new window with `Default` (D10) |
-| S22 | settings: tabs at the top | per Q5 |
+| S22 | settings: tabs at the top | a flat tab bar, no workspaces or agent state; back to the sidebar style shows the workspaces as they were (D14) |
 | S23 | an agent in a collapsed workspace asks for permission | the header dot turns orange; one notification names the workspace and the tab |
 
-## 5. Open questions
+## 5. Settled for the spec
 
-Q5. Tabs at the top (native tab bar cannot group).
-- A (recommended): no workspaces there; a flat bar of the window's tabs; workspaces return with the sidebar style.
-- B: workspace = window in that style.
-
-Also to settle in the spec: R24 says a top tab shows the agent dot and logo, the app shows none; the settings text "Tabs grouped by project" becomes "Tabs grouped by workspace".
+- D14. Tabs at the top: a flat native tab bar of the window's tabs, no workspaces and no agent state there; workspaces keep working and show again with the sidebar style. R24 changes accordingly; the settings text says "Tabs grouped in workspaces".
+- D15. A new tab starts in the focused tab's folder (Ghostty `window-inherit-working-directory`).
+- D16. The grab handle dots are brighter than Ghostty's (0.6 near, 1.0 on hover); the terminal's handle needs a new insertion point in `SurfaceGrabHandle.swift`.
