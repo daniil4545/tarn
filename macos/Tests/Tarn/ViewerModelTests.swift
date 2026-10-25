@@ -505,13 +505,37 @@ struct ViewerClickAndKeyTests {
             == URL(fileURLWithPath: FileManager.default.currentDirectoryPath).resolvingSymlinksInPath().path)
     }
 
-    @Test func paneKeysFollowThePhysicalKeyInAnyLayout() {
-        // The Russian layout types "ы", "у", "и" on these keys; only the key code is used.
-        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_S), flags: .command) == "save")
-        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_E), flags: .command) == "mode")
-        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_B), flags: .command) == "tree")
-        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_S), flags: [.command, .shift]) == nil)
-        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_S), flags: []) == nil)
-        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_A), flags: .command) == nil)
+    private func key(_ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags = .command) -> String? {
+        ViewerWebView.command(characters: characters, keyCode: UInt16(code), flags: flags)
+    }
+
+    @Test func paneKeysFollowTheTypedLetterOfLatinLayouts() {
+        #expect(key("s", kVK_ANSI_S) == "save")
+        #expect(key("e", kVK_ANSI_E) == "mode")
+        #expect(key("b", kVK_ANSI_B) == "tree")
+        // Dvorak: the B key types "x" (cut), the S key types "o" (open). Neither is a pane command.
+        #expect(key("x", kVK_ANSI_B) == nil)
+        #expect(key("o", kVK_ANSI_S) == nil)
+        // Dvorak types "s" on the semicolon key: that is Cmd+S.
+        #expect(key("s", kVK_ANSI_Semicolon) == "save")
+        // Colemak: the E key types "f" (find), the S key types "r".
+        #expect(key("f", kVK_ANSI_E) == nil)
+        #expect(key("r", kVK_ANSI_S) == nil)
+    }
+
+    @Test func paneKeysFallBackToThePhysicalKeyForNonLatinLayouts() {
+        #expect(key("ы", kVK_ANSI_S) == "save")
+        #expect(key("у", kVK_ANSI_E) == "mode")
+        #expect(key("и", kVK_ANSI_B) == "tree")
+        #expect(key("ы", kVK_ANSI_S, [.command, .shift]) == nil)
+        #expect(key("ф", kVK_ANSI_A) == nil)
+    }
+
+    @Test func otherModifiersOrKeysAreNotPaneCommands() {
+        #expect(key("s", kVK_ANSI_S, [.command, .shift]) == nil)
+        #expect(key("s", kVK_ANSI_S, []) == nil)
+        #expect(key("a", kVK_ANSI_A) == nil)
+        // Caps Lock does not stop the shortcut.
+        #expect(key("s", kVK_ANSI_S, [.command, .capsLock]) == "save")
     }
 }

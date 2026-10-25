@@ -10,22 +10,29 @@ import WebKit
 final class ViewerWebView: WKWebView {
     var onCommand: ((String) -> Void)?
 
-    /// The pane command of a Cmd+key press. It follows the physical key, as Ghostty matches binds, so
-    /// the Russian layout (where the S key types "ы") works the same.
-    static func command(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
-        guard flags.intersection(.deviceIndependentFlagsMask) == .command else { return nil }
-        switch Int(keyCode) {
-        case kVK_ANSI_S: return "save"
-        case kVK_ANSI_E: return "mode"
-        case kVK_ANSI_B: return "tree"
-        default: return nil
+    /// The pane command of a Cmd+key press. The typed letter decides, as for the menu, so Dvorak and
+    /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
+    /// the S key types "ы") the physical key decides.
+    static func command(characters: String?, keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
+        guard flags.intersection([.shift, .control, .option, .command]) == .command else { return nil }
+        let letter: String
+        if let characters, characters.count == 1, characters.unicodeScalars.allSatisfy(\.isASCII) {
+            letter = characters.lowercased()
+        } else {
+            switch Int(keyCode) {
+            case kVK_ANSI_S: letter = "s"
+            case kVK_ANSI_E: letter = "e"
+            case kVK_ANSI_B: letter = "b"
+            default: return nil
+            }
         }
+        return ["s": "save", "e": "mode", "b": "tree"][letter]
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
-              let command = Self.command(keyCode: event.keyCode, flags: event.modifierFlags)
+              let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags)
         else { return super.performKeyEquivalent(with: event) }
         onCommand?(command)
         return true
