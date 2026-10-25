@@ -282,7 +282,8 @@ final class SessionRegistry {
         session.show(waiting: remaining.first?.request)
         guard session != old else { return }
 
-        if session.state != old.state || session.failed != old.failed {
+        let newRequest = session.state == .permission && session.request != nil && session.request != old.request
+        if session.state != old.state || session.failed != old.failed || newRequest {
             Self.logger.info("\(surfaceID, privacy: .public) \(String(describing: old.state), privacy: .public) -> \(String(describing: session.state), privacy: .public) on \(name, privacy: .public)")
             session.since = Date()
             session.seen = surface.focused

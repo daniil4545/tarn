@@ -42,6 +42,13 @@ struct AttentionRegistryTests {
         #expect(banners.list.count == 2)
     }
 
+    @Test func aNewPermissionRequestAfterASeenOneRaises() {
+        hook("PermissionRequest", focused: true, extra: ["tool_name": "Bash", "tool_input": ["command": "make"]])
+        #expect(banners.list.isEmpty)
+        hook("PermissionRequest", extra: ["tool_name": "Bash", "tool_input": ["command": "make test"]])
+        #expect(banners.list.map(\.body) == ["Needs your permission"])
+    }
+
     @Test func aFocusedSurfaceRaisesNothing() {
         hook("Stop", focused: true)
         #expect(banners.list.isEmpty)
