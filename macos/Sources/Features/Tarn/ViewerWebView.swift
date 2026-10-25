@@ -8,40 +8,28 @@ import WebKit
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
 /// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`.
 final class ViewerWebView: WKWebView {
-    /// The keys the web view handles itself: key, exact modifiers, command sent to the host or page,
-    /// text for Help. Help and `command` read this one list; the same keys have View menu items for
-    /// a focus in the terminal.
+    /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
+    /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
     static let keyTable: [Key] = [
-        Key("b", .command, "tree", "Show or hide the file tree (in the terminal: View, Toggle Files)"),
-        Key("b", [.command, .option], "pane", "Hide or show the viewer pane (in the terminal: View, Toggle Pane)"),
-        Key("e", [.command, .shift], "focusTree", "Focus the file tree (in the terminal: View, Focus Files)"),
-        Key("e", .command, "mode", "View or source"),
-        Key("s", .command, "save", "Save the file"),
+        Key("b", "tree", "Toggle File Viewer (also in the terminal: View menu)"),
+        Key("e", "mode", "View or source"),
+        Key("s", "save", "Save the file"),
     ]
 
     struct Key {
         let key: String
-        let modifiers: NSEvent.ModifierFlags
         let command: String
         let help: String
 
-        init(_ key: String, _ modifiers: NSEvent.ModifierFlags, _ command: String, _ help: String) {
+        init(_ key: String, _ command: String, _ help: String) {
             self.key = key
-            self.modifiers = modifiers
             self.command = command
             self.help = help
         }
     }
 
-    /// The key text of a `keyTable` entry, as Help shows it: modifiers in the macOS order, then the key.
-    static func keyText(_ entry: Key) -> String {
-        var text = ""
-        if entry.modifiers.contains(.control) { text += "⌃" }
-        if entry.modifiers.contains(.option) { text += "⌥" }
-        if entry.modifiers.contains(.shift) { text += "⇧" }
-        if entry.modifiers.contains(.command) { text += "⌘" }
-        return text + entry.key.uppercased()
-    }
+    /// The key text of a `keyTable` entry, as Help shows it.
+    static func keyText(_ entry: Key) -> String { "⌘" + entry.key.uppercased() }
 
     var onCommand: ((String) -> Void)?
 
@@ -61,8 +49,9 @@ final class ViewerWebView: WKWebView {
             default: return nil
             }
         }
-        // The modifiers are exact: Cmd+B, Cmd+Alt+B and Cmd+Shift+E are three different keys.
-        return keyTable.first { $0.key == letter && $0.modifiers == modifiers }?.command
+        // The modifiers are exact: Cmd+Alt+B and Cmd+Shift+B are not Cmd+B.
+        guard modifiers == .command else { return nil }
+        return keyTable.first { $0.key == letter }?.command
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
