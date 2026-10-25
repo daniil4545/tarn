@@ -45,6 +45,24 @@ export function remove(n, id) {
   return { ...n, a, b };
 }
 
+// Where a leaf sits: the first leaf of its sibling subtree and the side it is on.
+export function seatOf(root, id) {
+  const path = pathOf(root, id);
+  if (!path) return null;
+  const parent = at(root, path.slice(0, -1)), first = path.at(-1) === "a";
+  const sibling = parent[first ? "b" : "a"];
+  const row = parent.dir === "row";
+  return { neighbor: leafId(leaves(sibling)[0]), zone: row ? (first ? "left" : "right") : first ? "top" : "bottom" };
+}
+
+// Put a closed leaf back at its seat. A viewer never goes inside the terminal block; a lost
+// neighbour means the edge of the whole tree.
+export function reseat(root, node, seat) {
+  const there = pathOf(root, seat.neighbor);
+  const beside = there !== null && !isTerm(node) && isTerm(at(root, there)) ? "block" : there !== null ? { leaf: seat.neighbor } : "root";
+  return place(root, node, seat.zone, beside);
+}
+
 const FIRST = { left: true, top: true };
 export function join(target, node, zone) {
   const first = FIRST[zone] ?? false;

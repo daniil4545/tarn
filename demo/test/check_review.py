@@ -82,6 +82,7 @@ def ui4_dirty_viewer_asks(base):
         frame.locator(".cm-content").click()
         pg.keyboard.type("dirty text")
         frame.locator(".ftab.on .dirty").wait_for()
+        time.sleep(0.5)  # the page sends its text in steps
         cmd(pg, "tab.close", {"id": "t3"})
         buttons = pg.locator(".ask-dialog button").all_inner_texts()
         check(
@@ -93,6 +94,7 @@ def ui4_dirty_viewer_asks(base):
         check("R4a Cancel keeps the tab", "t3" in ws(pg)["tabs"])
         cmd(pg, "tab.close", {"id": "t3"})
         pg.click(".ask-dialog button:has-text('Save')")
+        pg.wait_for_function("!('t3' in __tarn.snapshot().workspaces.tabs)")
         text = pg.evaluate(
             f"__tarn.snapshot().vfs.files['{REPO}/docs/spec.md'].text"
         )

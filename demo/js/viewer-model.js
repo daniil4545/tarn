@@ -137,6 +137,10 @@ export function createViewerModel({ fs, home, root, ui }) {
     return true;
   }
 
+  const dirtyPaths = () => tabs.filter((t) => dirty(t.path)).map((t) => basename(t.path));
+  const saveAll = () => tabs.forEach((t) => dirty(t.path) && save(t.path));
+  const discardAll = () => docs.forEach((d) => { d.text = d.savedText; });
+
   const mayClose = () => tabs.every((t) => confirmDiscard(t.path));
 
   function save(path) {
@@ -256,6 +260,9 @@ export function createViewerModel({ fs, home, root, ui }) {
     toggleTree,
     closeActiveTab: () => closeTab(active),
     closeAt: closeTab,
+    dirtyPaths,
+    saveAll,
+    discardAll,
     mayClose,
     diskChanged,
     setDark(value) { if (dark !== value) { dark = value; pushChrome(); } },

@@ -27,9 +27,16 @@ function onDragEnd(e) {
   const out = e.screenX < window.screenX || e.screenY < window.screenY
     || e.screenX > window.screenX + outerWidth || e.screenY > window.screenY + outerHeight;
   if (drag && out) bus.emit("toast", { text: drag.term ? "Terminal moves to a new window" : drag.viewer ? "Viewer moves to a new window" : "File opens in a new window" });
+  endDrag();
+}
+
+// The drag is over, by dragend or by a drop that moved the source out of the document (a moved
+// pane or frame never gets its dragend): clear the state either way.
+function endDrag() {
   drag = null;
   document.body.classList.remove("dragging");
   clearFrame();
+  bus.emit("drag:end", {});
 }
 
 // Drags that start in another document (the viewer iframe) feed the same zones.
@@ -51,9 +58,9 @@ export function startDnd() {
     if (!drag) return;
     const target = resolve(e);
     clearFrame();
-    if (!target || target.deny) return;
     e.preventDefault();
-    target.run();
+    if (target && !target.deny) target.run();
+    endDrag();
   });
 }
 

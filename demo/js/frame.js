@@ -22,7 +22,7 @@ export function mountFrame(root) {
   root.innerHTML = HTML;
   apply();
   showTitle();
-  bus.on("config:changed", apply);
+  bus.on("config:changed", () => { apply(); showTitle(); });
   bus.on("state:changed", ({ part }) => { if (part === "workspaces") showTitle(); });
   bus.handle("window.fullscreen", () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()));
 }
@@ -40,7 +40,8 @@ function apply() {
 function showTitle() {
   const s = read("workspaces"), tab = currentTab(s);
   const ws = tab && s.wss.find((w) => w.tabs.includes(tab.id));
-  const [title, sub] = tab ? [tab.title, ws.name] : ["tarn", ""];
+  const top = read("config")["tab-style"] === "top";
+  const [title, sub] = tab ? [tab.title, top ? "" : ws.name] : ["tarn", ""];
   document.querySelector(".titlebar .ttl").textContent = title;
   document.querySelector(".titlebar .sub").textContent = sub;
   document.title = sub ? `${title} · ${sub}` : title;

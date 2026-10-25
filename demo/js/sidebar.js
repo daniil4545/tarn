@@ -27,6 +27,7 @@ export function startSidebar() {
   document.addEventListener("click", (e) => { if (!e.target.closest("#ctx")) closeMenu(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeMenu(); });
   document.addEventListener("dragend", () => { if (stale) setTimeout(render); });
+  bus.on("drag:end", () => { if (stale) setTimeout(render); });
   document.getElementById("sbGrip").addEventListener("pointerdown", dragEdge);
 }
 

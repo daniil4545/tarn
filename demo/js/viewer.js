@@ -154,6 +154,9 @@ export function createViewerPane(id) {
     el,
     term: null,
     focus: () => frame.contentWindow?.focus(),
+    dirtyFiles: model.dirtyPaths,
+    saveAll: model.saveAll,
+    discardAll: model.discardAll,
     screenText: () => frame.contentDocument.body.innerText,
     dispose() {
       el.remove();
