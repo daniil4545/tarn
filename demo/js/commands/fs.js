@@ -110,7 +110,8 @@ function rm(ctx) {
   const { flags, operands } = options(ctx.args);
   for (const arg of operands) {
     const path = ctx.vfs.resolve(ctx.cwd, arg);
-    if (ctx.vfs.isDir(path) && !/[rR]/.test(flags)) ctx.out(`rm: ${arg}: is a directory`);
+    if (path === "/" || path === ctx.identity.home) ctx.out(`rm: it is dangerous to operate recursively on '${arg}'`);
+    else if (ctx.vfs.isDir(path) && !/[rR]/.test(flags)) ctx.out(`rm: ${arg}: is a directory`);
     else if (!ctx.vfs.exists(path) && !flags.includes("f")) ctx.out(`rm: ${arg}: ${MESSAGES.ENOENT}`);
     else if (ctx.vfs.exists(path)) ctx.vfs.remove(path, { recursive: true });
   }

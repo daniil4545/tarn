@@ -99,7 +99,7 @@ function ensurePane(id, cwd) {
   return panes.get(id);
 }
 
-const short = (cwd) => cwd.replace("~/Dev/self-projects/", "~/D/s/").replace("~/Dev/", "~/D/");
+const short = (cwd) => cwd.replace("~/code/", "~/c/");
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
 function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
@@ -118,9 +118,10 @@ function openWindow(s) {
 }
 
 // Undo: a closed pane or tab stays alive until the undo window ends, then it is freed.
+let exiting = false; // a shell that exited on its own is gone for good: nothing to undo
 function keepUndo(rec) {
   const ms = parseInt(cfg("undo-timeout"), 10) * 1000; // "5s"
-  if (ms === 0) { expire(rec); return false; }
+  if (ms === 0 || exiting) { expire(rec); return false; }
   rec.timer = clock.after(ms, () => expire(rec));
   undoStack.push(rec);
   return true;
@@ -257,8 +258,13 @@ const COMMANDS = {
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
   },
 
-  "pane.close": ({ id }) => {
+  "pane.close": ({ id, exited = false }) => {
     const s = read("workspaces"), tab = currentTab(s), target = id ?? tab.focus;
+    if (exited) {
+      exiting = true;
+      try { update((d) => closeLeaf(d, target)); } finally { exiting = false; }
+      return;
+    }
     const viewer = target.startsWith("v");
     if (viewer || allowClose([target])) update((d) => closeLeaf(d, target));
   },

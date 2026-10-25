@@ -58,6 +58,7 @@ class Term {
   #optionAsAlt = false;
   #copyOnSelect = true;
   #lastSelection = "";
+  #unwatch = () => {};
 
   constructor(t, parent) {
     this.#t = t;
@@ -94,6 +95,7 @@ class Term {
     }, 0);
     parent.addEventListener("mousedown", () => { this.#lastSelection = this.#t.getSelection(); });
     document.addEventListener("mouseup", settle);
+    this.#unwatch = () => document.removeEventListener("mouseup", settle);
     parent.addEventListener("dblclick", settle);
   }
 
@@ -174,6 +176,7 @@ class Term {
 
   dispose() {
     this.#data.clear();
+    this.#unwatch();
     this.#fit.dispose();
     this.#t.dispose();
   }

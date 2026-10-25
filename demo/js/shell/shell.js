@@ -107,7 +107,7 @@ export function createShell({ vfs, emit, write, clock, identity, history, cols, 
       ctx.out(`zsh: ${error}`);
       return prompt();
     }
-    const command = COMMANDS[words[0]];
+    const command = Object.hasOwn(COMMANDS, words[0]) ? COMMANDS[words[0]] : undefined;
     if (!command) {
       ctx.out(`zsh: command not found: ${words[0]}`);
       return prompt();

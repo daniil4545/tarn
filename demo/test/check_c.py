@@ -13,7 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from lib import Checks, app_page, cmd, server
 
 check = Checks()
-ROOT = "/Users/daniil/Dev/self-projects/tarn"
+ROOT = "/Users/you/code/tarn"
 SPEC = f"{ROOT}/docs/spec.md"
 VIEWER = '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
 FILLER = "\n\n".join(
@@ -177,15 +177,32 @@ def task_checks(pg, v, open_file):
         "p => __tarn.snapshot().vfs.files[p].text.includes('- [x] first task')",
         arg=SPEC,
     )
-    check("C2 ticking a task box writes the file", True)
+    text = vfs_text(pg, SPEC)
+    check(
+        "C2 ticking a task box writes the file",
+        "- [x] first task" in text
+        and "- [x] second task" in text
+        and "- [ ] first task" not in text,
+        text[:120],
+    )
 
     v.locator(".doc a", has_text="the plan").click()
     v.locator(".ftab.on", has_text="s2-files.md").wait_for()
-    check("C3 a relative link opens the file", True)
+    check(
+        "C3 a relative link opens the file",
+        "s2-files.md" in v.locator(".ftab.on").inner_text(),
+        v.locator(".ftab.on").inner_text(),
+    )
     open_file("docs/spec.md")
     v.locator(".doc a", has_text="missing").click()
     v.locator("#toast", has_text="No such file").wait_for()
-    check("C4 a link to a missing file shows a notice", True)
+    notice = v.locator("#toast").inner_text()
+    check(
+        "C4 a link to a missing file shows a notice and opens nothing",
+        "No such file" in notice
+        and "missing" not in v.locator(".ftab.on").inner_text(),
+        notice,
+    )
 
 
 def key_checks(pg, v, open_file):
@@ -456,9 +473,21 @@ def effect_checks(pg):
     cfg("window-save-state", "default")
 
     pg.evaluate("document.activeElement.blur()")
+    pg.evaluate(
+        """async () => {
+          const { bus } = await import('/js/bus.js');
+          window.reloaded = [];
+          bus.on('config:changed', ({ key }) => window.reloaded.push(key));
+        }"""
+    )
     pg.keyboard.press("Meta+Shift+Comma")
     pg.wait_for_selector("#toast:has-text('config reloaded')")
-    check("S18 reload the Ghostty config toasts and re-applies", True)
+    keys = pg.evaluate("window.reloaded")
+    check(
+        "S18 reload the Ghostty config toasts and re-applies every option",
+        len(set(keys)) >= 20 and "font-size" in keys and "theme" in keys,
+        f"{len(set(keys))} keys",
+    )
 
 
 def path_checks(pg):

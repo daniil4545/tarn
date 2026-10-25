@@ -5,16 +5,18 @@ own events, not a hand-sent dragend.
 Run: nice -n 10 uv run --with playwright python -I demo/test/check_review.py
 """
 
+import json
 import pathlib
 import sys
 import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
+from check_a import focus, run, screen, until
 from lib import Checks, app_page, cmd, new_pane, server, show_pane
 
 check = Checks()
-REPO = "/Users/daniil/Dev/self-projects/tarn"
+REPO = "/Users/you/code/tarn"
 VIEWER = '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
 TERM = '.tabview:not([hidden]) .leaf[data-kind="term"]'
 LOADED = (
@@ -95,9 +97,7 @@ def ui4_dirty_viewer_asks(base):
         cmd(pg, "tab.close", {"id": "t3"})
         pg.click(".ask-dialog button:has-text('Save')")
         pg.wait_for_function("!('t3' in __tarn.snapshot().workspaces.tabs)")
-        text = pg.evaluate(
-            f"__tarn.snapshot().vfs.files['{REPO}/docs/spec.md'].text"
-        )
+        text = pg.evaluate(f"__tarn.snapshot().vfs.files['{REPO}/docs/spec.md'].text")
         check(
             "R4b Save writes the file and closes the tab",
             "t3" not in ws(pg)["tabs"] and "dirty text" in text,
@@ -117,23 +117,335 @@ def ui2_real_drag_clears_state(base):
         pg.mouse.move(area["x"] + 8, area["y"] + area["height"] / 2, steps=5)
         pg.mouse.up()
         time.sleep(0.5)
-        state = pg.evaluate("[document.body.className, document.querySelectorAll('#ws > .drop').length]")
+        state = pg.evaluate(
+            "[document.body.className, document.querySelectorAll('#ws > .drop').length]"
+        )
         check(
             "R2 a real drag to the area edge leaves no dragging state behind",
             "dragging" not in state[0] and state[1] == 0,
             str(state),
         )
         layout = layout_ids(pg)
-        check("R2a the drop moved the viewer to the left edge", layout.startswith('{"dir":"row","ratio":0.5,"a":{"viewer"'), layout)
+        check(
+            "R2a the drop moved the viewer to the left edge",
+            layout.startswith('{"dir":"row","ratio":0.5,"a":{"viewer"'),
+            layout,
+        )
 
 
-SUITES = [ui1_undo_keeps_later_layout, ui3_undo_last_tab, ui4_dirty_viewer_asks, ui2_real_drag_clears_state]
+def state(pg, pane):
+    return pg.evaluate(f"__tarn.snapshot().registry['{pane}']?.state")
+
+
+def claude_turn(pg, pane, allow):
+    """Start a turn in the pane, answer the permission card, return (state at the card, final state)."""
+    focus(pg, pane)
+    pg.evaluate("__tarn.clock.freeze()")
+    if "Type a request" not in screen(pg, pane):
+        run(pg, pane, "claude")
+        until(pg, pane, "Type a request")
+    run(pg, pane, "go")
+    pg.evaluate("__tarn.clock.advance(3000)")
+    time.sleep(0.2)
+    asked = state(pg, pane)
+    pg.evaluate(
+        f"window.bus.cmd('card.answer', {{ pane: '{pane}', allow: {str(allow).lower()} }})"
+    )
+    pg.evaluate("__tarn.clock.advance(6000)")
+    time.sleep(0.3)
+    return asked, state(pg, pane)
+
+
+def term5_claude_reaches_stop(base):
+    for allow in (True, False):
+        word = "Allow" if allow else "Deny"
+        bad = []
+        with app_page(base) as (pg, _e, _r):
+            for pane in ("p1", "p2", "p3", "p5", "p6"):
+                got = claude_turn(pg, pane, allow)
+                if got != ("permission", "waiting"):
+                    bad.append(f"{pane}: {got}")
+        check(
+            f"T5 claude in every seeded tab reaches Stop on {word}",
+            not bad,
+            "; ".join(bad),
+        )
+    with app_page(base) as (pg, _e, _r):
+        focus(pg, "p6")
+        run(pg, "p6", "mkdir -p ~/code/bare/.git")
+        pane = new_pane(pg, "~/code/bare")
+        got = claude_turn(pg, pane, True)
+        check(
+            "T5a a repository without docs/spec.md still reaches Stop on Allow",
+            got == ("permission", "waiting"),
+            str(got),
+        )
+
+
+def tabs(pg):
+    return len(ws(pg)["tabs"])
+
+
+def key_event(pg, **init):
+    """Send a keydown to the page body; return whether the page kept it (not default-prevented)."""
+    return pg.evaluate(
+        """(init) => {
+          const e = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+          document.body.dispatchEvent(e);
+          return !e.defaultPrevented;
+        }""",
+        init,
+    )
+
+
+def key5_altgraph(base):
+    with app_page(base) as (pg, _e, _r):
+        before = tabs(pg)
+        kept = key_event(
+            pg, key="t", code="KeyT", ctrlKey=True, altKey=True, modifierAltGraph=True
+        )
+        check(
+            "K1 an AltGr character is not taken as a shortcut",
+            kept and tabs(pg) == before,
+        )
+        before = tabs(pg)
+        kept = key_event(pg, key="t", code="KeyT", ctrlKey=True, altKey=True)
+        check(
+            "K1a the same chord without AltGr still opens a tab",
+            not kept and tabs(pg) == before + 1,
+        )
+
+
+def key6_fields_and_modal(base):
+    with app_page(base) as (pg, _e, _r):
+        cmd(pg, "tab.close", {"id": "t3"})
+        count = tabs(pg)
+        cmd(pg, "find.open", {})
+        pg.locator("#findbar input").click()
+        pg.keyboard.press("Meta+z")
+        pg.keyboard.press("Meta+d")
+        check(
+            "K2 terminal keys in the Find field do not undo or split",
+            tabs(pg) == count and "t3" not in ws(pg)["tabs"],
+        )
+        pg.keyboard.press("Escape")
+        cmd(pg, "settings.open", {})
+        pg.wait_for_selector("#settings:not([hidden])")
+        pg.keyboard.press("Meta+t")
+        pg.keyboard.press("Meta+n")
+        before = ws(pg)
+        check("K3 new-tab keys do nothing under the Settings window", tabs(pg) == count)
+        pg.keyboard.press("Meta+w")
+        pg.wait_for_selector("#settings", state="hidden")
+        check(
+            "K3a Cmd+W closes Settings and leaves the windows alone", ws(pg) == before
+        )
+
+
+def storage1_bad_data(base):
+    bad = {
+        "config": ["null", '"x"', "5", "{bad json"],
+        "config-written": ['"x"', "{}"],
+        "history": ["5", '{"a":1}', "[1,2]"],
+        "vfs": ['{"files":null}', "null", '{"x":1}'],
+        "sidebar": ["5", "[]"],
+    }
+    failed = []
+    for part, values in bad.items():
+        for value in values:
+            init = f"localStorage.setItem('tarn-demo-v1:{part}', {value!r});"
+            with app_page(base, init=init) as (pg, errors, _r):
+                text = pg.inner_text("#toast")
+                if "starting fresh" not in text or errors:
+                    failed.append(f"{part}={value}: {text!r} {errors[:1]}")
+    check(
+        "D1 wrong-shaped saved data gives the seed and a toast",
+        not failed,
+        "; ".join(failed)[:300],
+    )
+
+
+def open_section(pg, name):
+    cmd(pg, "settings.open", {})
+    pg.wait_for_selector("#settings:not([hidden])")
+    pg.click(f'#setNav [data-sec="{name}"]')
+
+
+def set1_settings_match_app(base):
+    with app_page(base) as (pg, _e, _r):
+        open_section(pg, "appearance")
+        note = pg.inner_text('[data-opt="window-padding-x"] .applies')
+        check(
+            "O1 window-padding-x says it applies to new windows",
+            note == "Applies to new windows.",
+            note,
+        )
+        for bad in ("99", "2.5", ""):
+            pg.fill("#g-window-padding-x", bad)
+            pg.dispatch_event("#g-window-padding-x", "change")
+            err = pg.locator('[data-opt="window-padding-x"] .err').count()
+            now = pg.evaluate("__tarn.snapshot().config['window-padding-x']")
+            check(
+                f"O2 padding {bad!r} shows an error and is not written",
+                err == 1 and now == 2,
+                str(now),
+            )
+        pg.fill("#g-font-family", "")
+        pg.dispatch_event("#g-font-family", "change")
+        conf = pg.text_content("#tarnConf")
+        check(
+            "O3 an empty font-family is one line", conf.count("font-family") == 1, conf
+        )
+        pg.fill("#g-font-family", 'My "Mono"')
+        pg.dispatch_event("#g-font-family", "change")
+        family = pg.evaluate(
+            "document.querySelector('.leaf canvas')?.closest('[data-pane]') ? 1 : 0"
+        )
+        check(
+            "O4 a font name with a quote leaves no page error",
+            family == 1 and not _e,
+            str(_e[:1]),
+        )
+        pg.click('[data-opt="font-family"] [data-greset]')
+        pg.click('#setNav [data-sec="terminal"]')
+        pg.select_option("#g-macos-option-as-alt", "left")
+        pg.select_option("#g-macos-option-as-alt", "")
+        pg.click('#setNav [data-sec="windows"]')
+        conf = pg.text_content("#tarnConf")
+        check(
+            "O5 the empty entry writes an empty value",
+            'macos-option-as-alt = ""' in conf,
+            conf,
+        )
+
+
+def model1_workspace_rules(base):
+    with app_page(base) as (pg, _e, _r):
+        focus(pg, "p6")
+        run(pg, "p6", "cd ~/code/tarn/docs")
+        cmd(pg, "tab.new", {})
+        new = ws(pg)
+        tab = new["tabs"][new["cur"]]
+        pane = tab["focus"]
+        focus(pg, pane)
+        run(pg, pane, "pwd")
+        shown = until(pg, pane, r"/Users/you/code/tarn/docs")
+        check(
+            "M1 a new tab starts in the folder the focused shell moved to",
+            tab["cwd"].endswith("code/tarn/docs")
+            and "/Users/you/code/tarn/docs" in shown,
+            f"{tab['cwd']}",
+        )
+    with app_page(base) as (pg, _e, _r):
+        cmd(pg, "ws.delete", {"id": "w1"})
+        first = ws(pg)["wss"][0]
+        check(
+            "M2 deleting the first workspace puts its tabs first in the one below",
+            first["id"] == "w2" and first["tabs"] == ["t1", "t2", "t3", "t4", "t5"],
+            str(first["tabs"]),
+        )
+    with app_page(base) as (pg, _e, _r):
+        cmd(pg, "ws.fold", {"id": "w2"})
+        cmd(pg, "tab.go", {"id": "t4"})
+        cmd(pg, "tab.step", {"delta": 1})
+        s = ws(pg)
+        w2 = next(w for w in s["wss"] if w["id"] == "w2")
+        check(
+            "M3 stepping into a folded workspace unfolds it",
+            s["cur"] == "t5" and not w2.get("collapsed"),
+            s["cur"],
+        )
+    with app_page(base) as (pg, _e, _r):
+        cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
+        sub = pg.text_content(".titlebar .sub")
+        check(
+            "M4 the title bar subtitle is empty in the top style",
+            sub == "" and pg.title() == pg.text_content(".titlebar .ttl"),
+            repr(sub),
+        )
+    with app_page(base) as (pg, _e, _r):
+        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
+        pg.wait_for_selector(VIEWER)
+        pg.reload()
+        pg.wait_for_selector("html[data-ready=true]")
+        check(
+            "M5 after a reload no viewer pane is left empty",
+            pg.locator('.leaf[data-kind="viewer"]').count() == 0
+            and '"viewer"' not in json.dumps(ws(pg)["tabs"]),
+        )
+
+
+def privacy1_no_personal_data(base):
+    """The demo is public: no real names, hosts or paths in any file it ships or tests."""
+    root = pathlib.Path(__file__).resolve().parent.parent
+    words = [
+        "dan" + "iil",
+        "gal" + "era",
+        "self-" + "projects",
+        "mac" + "book",
+        "ssh " + "prod",
+        "gm" + "ail",
+    ]
+    hits = []
+    for path in root.rglob("*"):
+        if not path.is_file() or path.name == pathlib.Path(__file__).name:
+            continue
+        if {"__pycache__", ".ruff_cache"} & set(path.parts) or path.suffix in {
+            ".png",
+            ".woff2",
+            ".wasm",
+            ".ttf",
+        }:
+            continue
+        text = path.read_text(errors="ignore").lower()
+        hits += [f"{path.relative_to(root)}: {w}" for w in words if w in text]
+    check(
+        "P1 no personal name, host or path in the demo", not hits, "; ".join(hits[:5])
+    )
+    with app_page(base) as (pg, _e, _r):
+        seeded = pg.evaluate("JSON.stringify(__tarn.snapshot())").lower()
+        check(
+            "P1a the seed state holds none either",
+            not [w for w in words if w in seeded],
+        )
+
+
+def exit1_no_undo_after_exit(base):
+    with app_page(base) as (pg, _e, _r):
+        focus(pg, "p3")
+        run(pg, "p3", "exit")
+        pg.wait_for_function("!('t3' in __tarn.snapshot().workspaces.tabs)")
+        toast = pg.inner_text("#toast")
+        pg.keyboard.press("Meta+z")
+        check(
+            "X1 a shell that exited is not offered for undo",
+            "⌘Z" not in toast and "t3" not in ws(pg)["tabs"],
+            toast,
+        )
+
+
+SUITES = [
+    exit1_no_undo_after_exit,
+    privacy1_no_personal_data,
+    model1_workspace_rules,
+    key5_altgraph,
+    key6_fields_and_modal,
+    storage1_bad_data,
+    set1_settings_match_app,
+    term5_claude_reaches_stop,
+    ui1_undo_keeps_later_layout,
+    ui3_undo_last_tab,
+    ui4_dirty_viewer_asks,
+    ui2_real_drag_clears_state,
+]
 
 if __name__ == "__main__":
     with server() as base:
         for suite in SUITES:
             try:
                 suite(base)
-            except Exception as error:  # a crashed suite is a red check, not a lost report
+            except (
+                Exception
+            ) as error:  # a crashed suite is a red check, not a lost report
                 check(f"{suite.__name__} ran to the end", False, str(error)[:120])
     check.exit()

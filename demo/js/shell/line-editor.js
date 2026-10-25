@@ -189,7 +189,7 @@ export function createEditor({ write, cols, history = null, complete = null, on 
 
   function handle(token) {
     if (token === `${ESC}[200~`) { pasting = ""; return; }
-    const key = KEYS[token];
+    const key = Object.hasOwn(KEYS, token) ? KEYS[token] : undefined;
     if (key) {
       if (token !== "\t") tabbed = false;
       key();

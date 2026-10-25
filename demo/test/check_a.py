@@ -15,8 +15,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from lib import Checks, app_page, cmd, new_pane, server, show_pane
 
 check = Checks()
-REPO = "/Users/daniil/Dev/self-projects/tarn"
-PROMPT = "daniil@MacBook ~/Dev/self-projects/tarn (main) %"
+REPO = "/Users/you/code/tarn"
+PROMPT = "you@mac ~/code/tarn (main) %"
 
 
 def screen(pg, pane):
@@ -79,7 +79,7 @@ def seeded(base):
     with app_page(base) as (pg, errors, requests):
         texts = {}
         for pane, ready in (
-            ("p4", "root@prod:~#"),
+            ("p4", "root@staging:~#"),
             ("p3", "git status"),
             ("p1", "Done"),
         ):
@@ -96,7 +96,7 @@ def seeded(base):
         )
         check(
             "seed p4 is a remote login with a root prompt",
-            "Welcome to Ubuntu" in text4 and "root@prod:~#" in text4,
+            "Welcome to Ubuntu" in text4 and "root@staging:~#" in text4,
         )
 
         pos = pg.evaluate("__tarn.linkAt('p1', 'docs/spec.md')")
@@ -142,7 +142,7 @@ def seeded(base):
 
 def shell_basics(base):
     with app_page(base) as (pg, errors, _):
-        new_pane(pg, "~/Dev/self-projects/tarn")
+        new_pane(pg, "~/code/tarn")
         until(pg, "p7", re.escape(PROMPT))
         focus(pg, "p7")
         check("prompt shows cwd and git branch", PROMPT in screen(pg, "p7"))
@@ -252,7 +252,7 @@ def shell_basics(base):
         run(pg, "p7", "cd ~")
         check(
             "outside a repo the branch is gone",
-            last_prompt_line(pg, "p7") == "daniil@MacBook ~ %",
+            last_prompt_line(pg, "p7") == "you@mac ~ %",
         )
 
         wrap = pg.evaluate("__tarn.term('p7').cols") + 30
@@ -285,7 +285,7 @@ def shell_basics(base):
 
 def tarn_cli(base):
     with app_page(base) as (pg, errors, _):
-        new_pane(pg, "~/Dev/self-projects/tarn")
+        new_pane(pg, "~/code/tarn")
         until(pg, "p7", re.escape(PROMPT))
         focus(pg, "p7")
         active = pg.evaluate("document.activeElement.tagName")
@@ -343,7 +343,7 @@ def tarn_cli(base):
 
 def claude_session(base):
     with app_page(base) as (pg, errors, _):
-        new_pane(pg, "~/Dev/self-projects/tarn")
+        new_pane(pg, "~/code/tarn")
         until(pg, "p7", re.escape(PROMPT))
         focus(pg, "p7")
         pg.evaluate("__tarn.clock.freeze()")
@@ -494,7 +494,7 @@ def two_sessions(base):
 
 def config_and_keys(base):
     with app_page(base) as (pg, errors, _):
-        new_pane(pg, "~/Dev/self-projects/tarn")
+        new_pane(pg, "~/code/tarn")
         until(pg, "p7", re.escape(PROMPT))
         focus(pg, "p7")
 
@@ -609,7 +609,7 @@ def config_and_keys(base):
         )
         check(
             "the jump lands on a prompt line",
-            row.startswith("daniil@MacBook"),
+            row.startswith("you@mac"),
             row[:40],
         )
         pg.keyboard.press("Meta+ArrowDown")
@@ -689,14 +689,14 @@ def paste_and_notify(base):
 def selection_and_urls(base):
     with app_page(base) as (pg, errors, _):
         pg.context.grant_permissions(["clipboard-read", "clipboard-write"])
-        new_pane(pg, "~/Dev/self-projects/tarn")
+        new_pane(pg, "~/code/tarn")
         until(pg, "p7", re.escape(PROMPT))
         focus(pg, "p7")
         run(pg, "p7", "echo https://example.com/demo")
 
         def select_word():
             a = pg.evaluate("__tarn.term('p7').cellCentre(0, 1)")
-            b = pg.evaluate("__tarn.term('p7').cellCentre(5, 1)")
+            b = pg.evaluate("__tarn.term('p7').cellCentre(2, 1)")
             pg.mouse.move(a["x"] - 3, a["y"])
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
@@ -717,7 +717,7 @@ def selection_and_urls(base):
         select_word()
         check(
             "copy-on-select clipboard copies the selection",
-            pg.evaluate("navigator.clipboard.readText()") == "daniil",
+            pg.evaluate("navigator.clipboard.readText()") == "you",
         )
 
         pg.evaluate("window.open = (url) => { window.opened = url }")

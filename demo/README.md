@@ -35,6 +35,7 @@ uv run --with playwright python -I demo/test/check_a.py     # terminal, shell, c
 uv run --with playwright python -I demo/test/check_b.py     # layout, workspaces, sidebar, drop zones
 uv run --with playwright python -I demo/test/check_c.py     # viewer, settings, Help
 uv run --with playwright python -I demo/test/check_e2e.py   # the whole user story
+uv run --with playwright python -I demo/test/check_review.py # regressions found in code review, privacy scan
 node --test demo/test/unit                                  # the shell without a browser
 ```
 
