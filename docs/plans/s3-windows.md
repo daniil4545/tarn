@@ -119,8 +119,10 @@ Prior art: searched the agent-terminal research notes (landscape.md names forks 
 
 Answered: Q1 end of the current workspace; Q2 header dot only; Q3 `tarn new` is T-141; Q4 `NSWindow.subtitle` if it works with Ghostty titles; Q5 no undo for workspace operations; Q6 viewers not restored.
 
-7. Hover card (`AgentViews.swift:115`) shows `tab.project`, now gone. Options: workspace name; folder only. Recommend workspace name.
-8. Close Other Tabs and Close Tabs Below (`Sidebar.swift:358`) act on the whole window and would close other workspaces. Options: limit to the tab's workspace; keep Ghostty meaning. Recommend limit.
-9. cmd+1..9 into a folded workspace: options: unfold it; leave it folded and show the selected row. Recommend unfold.
-10. The mockup shows `name - tab` in the title (`tarn.html:711`); Q4 gives a subtitle. Recommend subtitle and update the mockup.
-11. Tombstone has its own timer instead of a second action in `ExpiringUndoManager` (C7: second cmd+Z). Needs your yes.
+Decided by the orchestrator (2026-10-25):
+
+- Q7: the hover card shows the workspace name (`AgentViews.swift:115`).
+- Q8: Close Other Tabs and Close Tabs Below act within the tab's workspace.
+- Q9: cmd+1..9 on a tab inside a collapsed workspace unfolds it and selects the tab.
+- Q10: the window title stays Ghostty's; the workspace name goes to `NSWindow.subtitle` (slice 7). The mockup follows later.
+- Q11: Ghostty first: the tombstone is registered in Ghostty's `UndoManager`, grouped with Ghostty's own close undo, not a separate timer. A separate timer only if proven impossible, with the proof in this plan (slice 6 does this; the registry only stays ready for it).
