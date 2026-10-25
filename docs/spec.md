@@ -266,10 +266,10 @@ Dropped: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (no copying) give ideas only
 | Editor-like input | R12 | S0 | plan |
 | Viewer pane, editing | R5, R6 | S1, branch `s2-files` | plan |
 | Click on path | R9 | S1 | plan |
-| Agent CLI | R8 | S1-S3 | plan |
+| Agent CLI | R8 | S1-S3, branch `s7-attention` | built: `open`, `ls`, `notify`; `hook` stays `hook.sh` |
 | Session overview with state | R3 | S2 | plan |
 | Several agents per project | R10 | S2 | plan |
-| Jump and notifications | R4 | S3 | plan |
+| Jump and notifications | R4 | S3, branch `s7-attention` | built: Cmd+U, one notification per need, OSC 9/777 suppressed |
 | hand-over, command for the user, subagents, tracker | R15-R18 | second wave | scoped |
 | HTML and PDF, SSH, phone | R11, R13, R14 | later | moved by session data |
 

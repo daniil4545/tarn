@@ -141,3 +141,16 @@ Not tested, reported as such: `tarn` on PATH in a new surface (build product lis
 | A Ghostty keybinding or the web view eats Cmd+U | binding check in section 4; the viewer's `performKeyEquivalent` checked while implementing |
 | Spec says `tarn hook`; the plugin uses `hook.sh` | left as is; noted in `architecture.md` section 10 |
 | Notification when the app is not authorized | Ghostty's route is silent (gap in section 4 rule 6) |
+
+## 9. Changes after the spec review (2026-10-25)
+
+Decisions of the main window: CLI at `Contents/MacOS/tarn`, executable stays `ghostty`; jump order per spec section 8 with Limpid's cursor (the entry after the focused one, wrapping, so seen sessions keep cycling; beep when none); `notify` on a focused surface stores nothing and raises nothing; focus through `BaseTerminalController.focusSurface`; `ControlSocket.start` leaves a live socket alone.
+
+Done differently from sections 2 to 8:
+
+- The copy phase with `CodeSignOnCopy` does not sign a script (`codesign: code object is not signed at all`, reproduced on a Debug build). The pbxproj hunk is a shell phase that installs and signs `cli/tarn` (insertion point 22, no file reference).
+- Jump: `next` replaces the "skip focused" rule; a record without a live surface is dropped by `liveSessions` (M2); a note counts as unseen and sorts by `noteSince`; the focus observer clears a note also on a seen session (M1).
+- Gate: a new permission request in `permission` counts as a new need; the banner text of a note is cut at 500 characters; one log line per raise plus one when notifications are not authorized.
+- `ls` numbering is screen order (windows in tab groups, tabs, splits) among live records. `cwd` is the surface `pwd`. Replies are written with sorted keys; the CLI decodes in one awk pass and ignores the reply `version`.
+- Prior art: jump order follows Limpid `AttentionState.swift` at 327e41d3c087 (MIT), credited in `THIRD_PARTY.md`. CLI: no analog needed beyond `plugin/hooks/hook.sh`.
+- Not done: addressing the action through `AppDelegate` (Cmd+U is off while the Settings window is key); resetting `agentSessionID` when the agent dies without `SessionEnd` (the spec keys suppression on the id alone); `SessionEnd` after `/clear` keeps the id (spec 5 says empty; a user decision is needed).
