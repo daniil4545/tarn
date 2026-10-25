@@ -71,6 +71,32 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .tab.add { color: #6c6f85; margin-top: 4px; }
 .pin { width: 11px; height: 11px; color: var(--muted); flex: none; }
 .sidebar { position: relative; }
+.wscol { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+/* Tab style "top": Ghostty's native tab bar replaces the sidebar; no agent state on tabs. */
+.toptabs { display: none; flex: none; height: 30px; background: var(--chrome); border-bottom: 1px solid #000; }
+.toptabs button { flex: 1; min-width: 0; background: none; border: 0; border-right: 1px solid #000; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 10px; }
+.toptabs button[aria-selected="true"] { background: var(--term); color: var(--fg); }
+.win.top .sidebar, .win.top .sbgrip { display: none; }
+.win.top .toptabs { display: flex; }
+.setwrap { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,0,0,.35); padding: 16px; }
+.setwin { width: min(640px, 100%); height: 400px; display: flex; background: #2b2d3a; border: 1px solid #000; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); font-size: 13px; }
+.setside { width: 170px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--chrome); border-right: 1px solid #000; }
+.setside .lights { margin: 0 0 14px 4px; }
+.setside .lights i:first-child { cursor: pointer; }
+.setitem { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; }
+.setitem.on { background: var(--blue); color: #fff; }
+.setcfg { margin-top: auto; background: none; border: 0; text-align: left; padding: 4px 8px; color: var(--accent); }
+.setmain { flex: 1; min-width: 0; padding: 14px 20px; overflow: auto; }
+.setmain h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; text-align: center; }
+.setgroup { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.setrow { display: flex; gap: 16px; }
+.setrow > span { flex: none; padding-top: 1px; }
+.radios { display: flex; flex-direction: column; gap: 8px; }
+.radios label { display: flex; gap: 8px; align-items: flex-start; cursor: pointer; }
+.radios input { margin: 3px 0 0; accent-color: var(--blue); }
+.radios b { font-weight: 400; display: block; }
+.radios small { display: block; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+@media (max-width: 760px) { .setside { width: 120px; } .setrow { flex-direction: column; gap: 8px; } }
 /* Invisible strip on the sidebar's right edge that resizes it, as in the app (120-400, default 200). */
 .sbgrip { flex: none; width: 10px; margin-left: -10px; cursor: col-resize; position: relative; z-index: 4; }
 .sbgrip.drag, .sbgrip:hover { box-shadow: inset -2px 0 0 var(--accent); }
@@ -220,10 +246,11 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 </style>
 
 <div class="mock" role="group" aria-label="Mockup controls">
-  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, settings window with the tab style, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
   <span>Terminal header (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="true">always</button><button data-v="auto" aria-pressed="false">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
   <button class="act" id="agentTab" title="Mock of tarn new from an agent in ~/Dev/Galera">Agent opens a tab in ~/Dev/Galera</button>
+  <button class="act" id="openSettings">Settings ⌘,</button>
   <button class="act" id="resetDemo">Reset demo</button>
   <button class="act" id="agentEdit">Agent edits the file</button>
   <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
@@ -234,7 +261,32 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
   <div class="body">
     <nav class="sidebar" id="sidebar" aria-label="Tabs"></nav>
     <div class="sbgrip" id="sbGrip" aria-hidden="true"></div>
-    <main class="ws" id="ws"></main>
+    <div class="wscol">
+      <div class="toptabs" id="topTabs" role="tablist" aria-label="Tabs"></div>
+      <main class="ws" id="ws"></main>
+    </div>
+  </div>
+</div>
+
+<!-- Settings window, as TarnSettings.swift: cmd+, opens it, Escape closes it. -->
+<div class="setwrap" id="settings" hidden>
+  <div class="setwin" role="dialog" aria-modal="true" aria-label="Settings">
+    <div class="setside">
+      <div class="lights"><i style="background:#ff5f57" id="settingsClose" title="Close"></i><i style="background:#56586a"></i><i style="background:#56586a"></i></div>
+      <div class="setitem on"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>Tabs</div>
+      <button class="setcfg" id="ghosttyConfig" title="Terminal settings: fonts, colors, keys. Opens the Ghostty config file.">Ghostty Config…</button>
+    </div>
+    <div class="setmain">
+      <h3>Tabs</h3>
+      <div class="setgroup">
+        <div class="setrow"><span>Tab style</span>
+          <div class="radios">
+            <label><input type="radio" name="tabstyle" value="sidebar"><span><b>Sidebar</b><small>Tabs grouped by project with agent state, on the left of the window.</small></span></label>
+            <label><input type="radio" name="tabstyle" value="top"><span><b>Tabs at the top</b><small>The native tab bar, as in Ghostty. Agent state is not shown.</small></span></label>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -592,6 +644,8 @@ const flat = () => wss.flatMap(ordered);
 const SB_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
 let sbRail = false;
 try { sbRail = localStorage.getItem("tarn-mockup-rail") === "1"; } catch (err) { /* ignore */ }
+let tabStyle = "sidebar";
+try { tabStyle = localStorage.getItem("tarn-mockup-tabstyle") || "sidebar"; } catch (err) { /* ignore */ }
 let sbWidth = 200;
 try { sbWidth = +localStorage.getItem("tarn-mockup-sbw") || 200; } catch (err) { /* ignore */ }
 function renderSidebar() {
@@ -600,6 +654,8 @@ function renderSidebar() {
     const t = tabs[id], i = all.indexOf(id);
     return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${t.pinned ? PIN : ""}${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
   };
+  document.querySelector(".win").classList.toggle("top", tabStyle === "top");
+  $("topTabs").innerHTML = all.map(id => `<button role="tab" aria-selected="${id === cur}" data-toptab="${id}" title="${esc(tabs[id].cwd)}">${esc(tabs[id].title)}</button>`).join("");
   const sb = $("sidebar");
   sb.classList.toggle("rail", sbRail);
   sb.style.width = sbRail ? "" : `${sbWidth}px`;
@@ -1212,6 +1268,30 @@ document.addEventListener("drop", e => {
 });
 
 // Resize splits on both levels.
+function openSettings() {
+  document.querySelectorAll("input[name=tabstyle]").forEach(r => { r.checked = r.value === tabStyle; });
+  $("settings").hidden = false;
+  document.querySelector(`input[name=tabstyle][value=${tabStyle}]`).focus();
+}
+const closeSettings = () => { $("settings").hidden = true; };
+document.addEventListener("click", e => {
+  const top = e.target.closest("[data-toptab]");
+  if (top) return selectTab(top.dataset.toptab);
+  if (e.target.closest("#openSettings")) return openSettings();
+  if (e.target.closest("#settingsClose") || e.target.id === "settings") return closeSettings();
+  if (e.target.closest("#ghosttyConfig")) return toast("Opens the Ghostty config file");
+});
+// Applies to every open window at once, as TabStyle.applyToOpenWindows().
+document.addEventListener("change", e => {
+  if (e.target.name !== "tabstyle") return;
+  tabStyle = e.target.value;
+  try { localStorage.setItem("tarn-mockup-tabstyle", tabStyle); } catch (err) { /* ignore */ }
+  hideCard(); renderSidebar();
+});
+document.addEventListener("keydown", e => {
+  if ((e.metaKey || e.ctrlKey) && e.key === ",") { e.preventDefault(); openSettings(); }
+  else if (e.key === "Escape" && !$("settings").hidden) { e.stopImmediatePropagation(); closeSettings(); }
+}, true);
 $("sbGrip").addEventListener("pointerdown", e => {
   const grip = e.currentTarget, x0 = e.clientX, w0 = sbWidth;
   e.preventDefault(); grip.classList.add("drag"); grip.setPointerCapture(e.pointerId);

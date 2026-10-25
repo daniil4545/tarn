@@ -390,6 +390,28 @@ with sync_playwright() as p:
         "W21 the sidebar width survives a reload",
         pg.locator("#sidebar").bounding_box()["width"] == 400,
     )
+    pg.keyboard.press("Meta+Comma")
+    check("S1 cmd+, opens the settings window", vis("#settings"))
+    pg.check("input[name=tabstyle][value=top]")
+    check(
+        "S2 tabs at the top replace the sidebar with a tab bar",
+        not vis("#sidebar")
+        and count("#topTabs [data-toptab]") == pg.evaluate("flat().length"),
+    )
+    pg.keyboard.press("Escape")
+    check("S3 Escape closes the settings window", not vis("#settings"))
+    pg.click("#topTabs [data-toptab='t3']")
+    check("S4 a top tab selects its tab", pg.evaluate("cur") == "t3")
+    pg.reload()
+    pg.wait_for_selector("#topTabs [data-toptab]")
+    check("S5 the tab style survives a reload", not vis("#sidebar"))
+    pg.click("#openSettings")
+    pg.check("input[name=tabstyle][value=sidebar]")
+    pg.click("#settingsClose")
+    check(
+        "S6 sidebar style brings the sidebar back",
+        vis("#sidebar") and not vis("#settings"),
+    )
     pg.hover(".tab[data-tabid='t1']")
     pg.wait_for_timeout(700)
     card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
