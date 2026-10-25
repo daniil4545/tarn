@@ -535,6 +535,25 @@ with sync_playwright() as p:
         " return p && p.dir === 'col' && p.b.id === b.id && p.a.type === 'viewer'; })()"
     )
     check("V5 a lone terminal dropped at a viewer's bottom edge goes below it", below)
+    dt = pg.evaluate_handle("new DataTransfer()")
+    vb = n(".vpane").first.bounding_box()
+    pg.locator(".ftab").first.dispatch_event("dragstart", {"dataTransfer": dt})
+    pg.locator(".vpane .scroll").first.dispatch_event(
+        "dragover",
+        {
+            "dataTransfer": dt,
+            "clientX": vb["x"] + vb["width"] * 0.25,
+            "clientY": vb["y"] + vb["height"] * 0.5,
+        },
+    )
+    pg.wait_for_timeout(250)
+    frame = pg.locator(".vpane .drop").first.bounding_box()
+    pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+    check(
+        "V6 a file over the left half of a viewer frames the whole left half",
+        frame is not None and abs(frame["width"] - (vb["width"] / 2 - 4)) <= 3,
+        str(frame),
+    )
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")

@@ -142,6 +142,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .sdiv::after { content: ""; position: absolute; inset: -3px; }
 .sdiv:hover, .sdiv.drag { background: var(--accent); }
 .block { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+.drop { transition: top .14s ease, right .14s ease, bottom .14s ease, left .14s ease; }
 .drop { position: absolute; z-index: 5; background: color-mix(in srgb, var(--accent) 20%, transparent); border: 2px solid var(--accent); border-radius: 6px; pointer-events: none; }
 .drop.deny { background: color-mix(in srgb, var(--deny) 18%, transparent); border-color: var(--deny); }
 .drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: var(--chrome); padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
@@ -1135,9 +1136,12 @@ function dropTarget(e) {
     return null;
   }
   if (vp) {
-    const r = vp.getBoundingClientRect(), { edge, zone } = edgeOf(vp, e.clientX, e.clientY);
+    // The half under the pointer; the tab bar and a small box in the middle mean "into this viewer".
+    const r = vp.getBoundingClientRect(), { zone } = edgeOf(vp, e.clientX, e.clientY);
+    const fx = (e.clientX - r.left) / r.width, fy = (e.clientY - r.top) / r.height;
+    const center = e.clientY - r.top < 32 || (Math.abs(fx - 0.5) < 0.15 && Math.abs(fy - 0.5) < 0.15);
     const deny = drag && drag.viewer === vp.dataset.pid ? "Drop on another pane" : null;
-    return { el: vp, id: vp.dataset.pid, zone: e.clientY - r.top < 32 || edge > 0.22 ? "center" : zone, deny };
+    return { el: vp, id: vp.dataset.pid, zone: center ? "center" : zone, deny };
   }
   if (tp) { const bl = tp.closest(".block"); return { el: bl, id: bl.dataset.bid, zone: edgeOf(bl, e.clientX, e.clientY).zone }; }
   return null;
@@ -1147,8 +1151,10 @@ function showDrop(tgt, deny) {
   if (!d) { d = document.createElement("div"); d.className = "drop"; tgt.el.appendChild(d); }
   d.classList.toggle("deny", !!deny);
   d.innerHTML = deny ? `<span>${deny}</span>` : "";
-  const top = tgt.el.classList.contains("vpane") ? 31 : 4;
-  d.style.cssText = { center: `inset:${top}px 4px 4px 4px`, left: `inset:${top}px 50% 4px 4px`, right: `inset:${top}px 4px 4px 50%`, top: `top:${top}px;left:4px;right:4px;height:calc(50% - ${top / 2 + 4}px)`, bottom: "bottom:4px;left:4px;right:4px;height:calc(50% - 4px)" }[tgt.zone];
+  // Always the same four sides, so the frame slides between halves instead of jumping.
+  const top = tgt.el.classList.contains("vpane") ? 31 : 4, mid = `calc(50% + ${top / 2 - 2}px)`;
+  const [t, r, b, l] = { center: [`${top}px`, "4px", "4px", "4px"], left: [`${top}px`, "50%", "4px", "4px"], right: [`${top}px`, "4px", "4px", "50%"], top: [`${top}px`, "4px", mid, "4px"], bottom: [mid, "4px", "4px", "4px"] }[tgt.zone];
+  Object.assign(d.style, { top: t, right: r, bottom: b, left: l });
 }
 const clearDrop = () => document.querySelectorAll(".drop").forEach(d => d.remove());
 document.addEventListener("dragstart", e => {
