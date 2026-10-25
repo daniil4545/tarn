@@ -33,7 +33,7 @@ Searched: npm and GitHub for in-browser shells with a virtual filesystem.
 
 `just-bash` 3.6.0 (vercel-labs, Apache-2.0, pushed 2026-10-22): bash interpreter with in-memory FS, but 16 dependencies, 21 MB unpacked, browser build unverified, and no line editor or tarn-specific output. `@wasmos/ash` 0.0.2 (MIT): early, FS unconfirmed. No maintained xterm.js fake-shell library found.
 
-Decision: own small shell, `shell.js` plus `vfs.js`, about 600 lines, no dependencies. Tarn output (agent states, `tarn open`) cannot come from a generic interpreter anyway. Re-check `just-bash` if users want pipes.
+Decision: own small shell, `shell.js` plus `vfs.js`, about 600 lines, no dependencies. Tarn output (agent states, `tarn open`) cannot come from a generic interpreter anyway.
 
 Commands: `ls [-la]`, `cd`, `pwd`, `cat`, `echo`, `clear`, `mkdir`, `touch`, `rm`, `head`, `whoami`, `date`, `help`, `exit` over an in-memory VFS seeded from the mockup `FILES`/`TREE`; `git status|log|branch` canned from the seed; `tarn open <path>[:line]`, `tarn ls`, `tarn new [name]`, `tarn status` through the bus; `claude` (below); unknown gives `zsh: command not found`.
 
@@ -53,7 +53,7 @@ demo/
 ```
 
 - `docs/mockups/tarn.html` goes away (`git mv` keeps `check.py` history) once the demo passes every old check; links in `s2-files.md` and the spec change in the same commit.
-- No bundler: ES modules and an import map. Vendor files are committed and pinned in `vendor/VERSIONS.md`. The mockup loads libs from CDNs; the demo vendors them (no network rule). Mermaid (about 3 MB) loads lazily.
+- No bundler: ES modules and an import map. Vendor files are committed and pinned in `vendor/VERSIONS.md`. The mockup loads libs from CDNs; the demo vendors them (no network rule). Mermaid loads lazily.
 
 ## 4. Module map
 
@@ -102,7 +102,7 @@ Three workers, after a short slice 0 by one worker (skeleton and contracts). A s
 - All 116 mockup checks stay; fake-terminal selectors move to the real pane. Run: `uv run --with playwright python -I demo/test/check.py` (it starts a static server; modules and WASM do not load from `file://`).
 - Canvas text is not DOM: `window.__tarn.screen(paneId)` returns the buffer text; screenshots cover visuals.
 - New checks: (1) typing, history, Tab, ^C ^L ^U, `clear`; (2) `tarn open/ls/new`; (3) `claude` goes working, waiting (card, orange dot), `y`, done, file changed in viewer; (4) every shortcut, table-driven from `keymap.js` data, fails if a KEYS row has no test; (5) every setting, table-driven from the schema, effect checked and kept after reload; (6) any non-local request fails the run; (7) idle draw count with 6 panes (guards #208); (8) first-load size budget.
-- Shell logic also has Node unit tests (`node --test`). Tests run under `nice -n 10`, one browser.
+- Shell logic also gets Node unit tests (`node --test`).
 
 ## 7. Acceptance
 
@@ -120,10 +120,9 @@ Three workers, after a short slice 0 by one worker (skeleton and contracts). A s
 | Browser reserves ⌘T, ⌘N, ⌘W, ⇧⌘W, ⌘1-9, ⌘D and cannot be overridden by `preventDefault` in a normal tab | Core of "every key works" fails in Chrome/Safari | See question 1. Keyboard Lock API (`navigator.keyboard.lock`, Chromium only) works in full screen; ⌘↩ already is "Full screen" |
 | ghostty-web is 0.x with open bugs (#203, #192, #198, #207, #208) | wrong input or blur at some zoom, idle CPU | spike first; adapter workarounds; xterm.js fallback behind adapter |
 | Many panes (canvas plus WASM each) | slow page | pause hidden tabs, cap at 8 panes, idle check |
-| Size | slow load | under 1.5 MB gzip without mermaid (WASM about 400 KB, subset fonts, hljs core plus 6 languages) |
+| Size | slow load | under 1.5 MB gzip without mermaid |
 | Mobile | no hardware keys | out of scope; notice below 800 px |
 | Drift between demo and app | demo lies | every Swift feature PR checks: demo updated or marked not yet |
-| Vendored licenses | legal | MIT/Apache/ISC/BSD/OFL only, license files kept, NOTICE entry |
 
 ## 9. Questions
 
