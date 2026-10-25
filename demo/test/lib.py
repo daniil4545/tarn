@@ -60,6 +60,52 @@ def browser_page(base, path="index.html", dpr=1, width=1400, height=860, init=No
             browser.close()
 
 
+SPY = """async () => {
+  const { bus } = await import('/js/bus.js');
+  window.bus = bus;
+  window.calls = [];
+  const run = bus.cmd.bind(bus);
+  bus.cmd = (name, payload) => { calls.push([name, payload]); return run(name, payload); };
+}"""
+
+
+@contextmanager
+def app_page(base, **kwargs):
+    """The real index.html once it is ready, with `window.bus` and `window.calls` (every command
+    sent after this point). Browser dialogs are accepted."""
+    with browser_page(base, "index.html", **kwargs) as (page, errors, requests):
+        page.on("dialog", lambda d: d.accept())
+        page.wait_for_selector("html[data-ready=true]")
+        page.evaluate(SPY)
+        yield page, errors, requests
+
+
+def cmd(page, name, payload=None):
+    return page.evaluate(
+        "([n, p]) => window.bus.cmd(n, p)", [name, payload if payload is not None else {}]
+    )
+
+
+def show_pane(page, pane):
+    """Go to the tab that holds the pane (a hidden pane does not start its shell)."""
+    page.evaluate(
+        """(id) => { const s = __tarn.snapshot().workspaces;
+          const tab = Object.values(s.tabs).find((t) => JSON.stringify(t.layout).includes('"' + id + '"'));
+          window.bus.cmd('tab.go', {id: tab.id}); }""",
+        pane,
+    )
+
+
+def new_pane(page, cwd):
+    """Open a tab with a fresh shell in `cwd`; return its pane id. Clears `window.calls`."""
+    cmd(page, "tab.new", {"cwd": cwd})
+    pane = page.evaluate(
+        "(() => { const s = __tarn.snapshot().workspaces; return s.tabs[s.cur].focus })()"
+    )
+    page.evaluate("window.calls.length = 0")
+    return pane
+
+
 class Checks:
     def __init__(self):
         self.results = []

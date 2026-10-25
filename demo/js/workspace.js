@@ -68,7 +68,7 @@ export function startWorkspaces({ createPane, createViewer }) {
   });
   // A viewer command found no viewer on screen: open one right of the terminal block and repeat it.
   bus.on("viewer:needed", (request) => {
-    const pane = bus.cmd("pane.place", { viewer: true, zone: "right", target: "block" });
+    const pane = bus.cmd("pane.place", { viewer: true, zone: "right", target: "block", focus: false });
     if (pane) bus.cmd("viewer.open", { ...request, pane });
   });
   Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => fn(payload)));
@@ -244,13 +244,14 @@ const COMMANDS = {
   "pane.ratio": ({ path, ratio }) => update((s) => { const t = currentTab(s); t.layout = tree.setRatio(t.layout, path, ratio); }),
 
   // Move a leaf, or add a new viewer when `viewer` is true, beside a target (layout.js place).
-  "pane.place": ({ id, viewer = false, zone, target }) => update((s) => {
+  // The moved or new pane takes the focus unless `focus` is false (an agent command opens a viewer).
+  "pane.place": ({ id, viewer = false, zone, target, focus = true }) => update((s) => {
     const tab = currentTab(s), vid = viewer ? nextId("v") : null;
     if (viewer && leafCount(tab) >= CAP) return toast(`At most ${CAP} panes in a tab`);
     const node = viewer ? { viewer: vid } : tree.at(tab.layout, tree.pathOf(tab.layout, id));
     tab.layout = tree.place(tab.layout, node, zone, target);
     tab.zoom = null;
-    tab.focus = vid ?? id;
+    if (focus) tab.focus = vid ?? id;
     if (vid) ensurePane(vid);
     return vid;
   }),

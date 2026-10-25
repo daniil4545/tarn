@@ -26,6 +26,7 @@ export function startView() {
 
 function render() {
   const s = read("workspaces");
+  const active = document.activeElement;
   for (const [id, view] of views) if (!s.tabs[id]) { view.el.remove(); views.delete(id); }
   for (const tab of Object.values(s.tabs)) {
     if (!views.has(tab.id)) {
@@ -38,6 +39,8 @@ function render() {
     view.el.hidden = tab.id !== s.cur;
   }
   host.querySelector("#wsEmpty").hidden = Boolean(s.cur);
+  // Moving a pane in the DOM drops its focus; a redraw must not take the keyboard from the user.
+  if (active !== document.body && active.isConnected && document.activeElement !== active) active.focus();
   applyFocus(currentTab(s));
 }
 

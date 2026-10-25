@@ -2,7 +2,7 @@
 
 Run: nice -n 10 uv run --with playwright python -I demo/test/check_a.py
 Node tests of the shell itself: node --test demo/test/unit
-The pages are test/pane.html (real vfs, config, registry, engine; commands of other slices recorded).
+Every suite runs on the real index.html. A fresh shell is a new tab (new_pane); seeded panes are shown by tab.
 """
 
 import pathlib
@@ -12,7 +12,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import Checks, browser_page, server
+from lib import Checks, app_page, cmd, new_pane, server, show_pane
 
 check = Checks()
 REPO = "/Users/daniil/Dev/self-projects/tarn"
@@ -55,6 +55,7 @@ def type_text(pg, text):
 
 
 def focus(pg, pane):
+    show_pane(pg, pane)
     pg.locator(f"[data-pane='{pane}'] canvas").first.click()
 
 
@@ -63,21 +64,20 @@ def last_prompt_line(pg, pane):
     return lines[-1] if lines else ""
 
 
-def calls(pg, name):
-    return pg.evaluate(f"window.calls.filter(c => c[0] === '{name}').map(c => c[1])")
+def calls(pg, name, from_pane=False):
+    """Payloads of a command sent since the page started. from_pane keeps what a terminal pane sent
+    (the layout repeats viewer.open with the id of the viewer it created)."""
+    found = pg.evaluate(f"window.calls.filter(c => c[0] === '{name}').map(c => c[1])")
+    return [c for c in found if str(c.get("pane", "p")).startswith("p")] if from_pane else found
 
 
 def seeded(base):
-    with browser_page(base, "test/pane.html", height=1400) as (pg, errors, requests):
-        pg.wait_for_function("window.ready")
-        for pane, cwd in (
-            ("p1", "~/Dev/self-projects/tarn"),
-            ("p3", "~/Dev/self-projects/tarn"),
-            ("p4", "root@prod:~"),
-        ):
-            pg.evaluate(f"window.mount('{pane}', '{cwd}')")
-        until(pg, "p4", "root@prod:~#")
-        text1, text3, text4 = (screen(pg, p) for p in ("p1", "p3", "p4"))
+    with app_page(base) as (pg, errors, requests):
+        texts = {}
+        for pane, ready in (("p4", "root@prod:~#"), ("p3", "git status"), ("p1", "Done")):
+            show_pane(pg, pane)
+            texts[pane] = until(pg, pane, ready)
+        text1, text3, text4 = texts["p1"], texts["p3"], texts["p4"]
         check(
             "seed p1 shows the claude transcript and its prompt",
             "Done. Changes:" in text1 and "> " in text1,
@@ -98,9 +98,15 @@ def seeded(base):
         time.sleep(0.2)
         check(
             "click on a path opens it in the viewer",
-            [(c["path"], c["pane"], c.get("line")) for c in calls(pg, "viewer.open")]
+            [(c["path"], c["pane"], c.get("line")) for c in calls(pg, "viewer.open", True)]
             == [(f"{REPO}/docs/spec.md", "p1", None)],
             str(calls(pg, "viewer.open")),
+        )
+        check(
+            "the viewer opens beside the terminal and shows that file",
+            pg.evaluate(
+                "Object.values(__tarn.viewer().state().panes).some(v => v.tabs.some(t => t.path.endsWith('/docs/spec.md')))"
+            ),
         )
         pos = pg.evaluate("__tarn.linkAt('p1', 'Sidebar.swift:9')")
         pg.mouse.move(pos["x"], pos["y"])
@@ -109,8 +115,8 @@ def seeded(base):
         time.sleep(0.2)
         check(
             "click on path:line carries the line",
-            calls(pg, "viewer.open")[-1].get("line") == 9,
-            str(calls(pg, "viewer.open")[-1]),
+            calls(pg, "viewer.open", True)[-1].get("line") == 9,
+            str(calls(pg, "viewer.open", True)[-1]),
         )
         check(
             "seeded panes: no page errors",
@@ -124,37 +130,36 @@ def seeded(base):
 
 
 def shell_basics(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
-        pg.evaluate("window.mount('p6', '~/Dev/self-projects/tarn')")
-        until(pg, "p6", re.escape(PROMPT))
-        focus(pg, "p6")
-        check("prompt shows cwd and git branch", PROMPT in screen(pg, "p6"))
+    with app_page(base) as (pg, errors, _):
+        new_pane(pg, "~/Dev/self-projects/tarn")
+        until(pg, "p7", re.escape(PROMPT))
+        focus(pg, "p7")
+        check("prompt shows cwd and git branch", PROMPT in screen(pg, "p7"))
 
-        run(pg, "p6", "echo hello", "hello\n")
-        check("typing and Enter run a command", has(pg, "p6", r"\nhello *\n"))
+        run(pg, "p7", "echo hello", "hello\n")
+        check("typing and Enter run a command", has(pg, "p7", r"\nhello *\n"))
 
         type_text(pg, "echo 日本")
         pg.keyboard.press("Enter")
         time.sleep(0.25)
-        check("wide characters round trip", has(pg, "p6", r"\n日\s?本"))
+        check("wide characters round trip", has(pg, "p7", r"\n日\s?本"))
         type_text(pg, "echo привет")
         pg.keyboard.press("Enter")
         time.sleep(0.25)
-        check("cyrillic round trips", has(pg, "p6", r"\nпривет"))
+        check("cyrillic round trips", has(pg, "p7", r"\nпривет"))
 
         pg.keyboard.press("ArrowUp")
         time.sleep(0.15)
         check(
             "arrow up recalls the last command",
-            last_prompt_line(pg, "p6").endswith("echo привет"),
+            last_prompt_line(pg, "p7").endswith("echo привет"),
         )
         pg.keyboard.press("ArrowUp")
         pg.keyboard.press("ArrowUp")
         time.sleep(0.15)
         check(
             "more arrow ups go further back",
-            last_prompt_line(pg, "p6").endswith("echo hello"),
+            last_prompt_line(pg, "p7").endswith("echo hello"),
         )
         pg.keyboard.press("ArrowDown")
         pg.keyboard.press("ArrowDown")
@@ -171,21 +176,21 @@ def shell_basics(base):
         time.sleep(0.15)
         check(
             "Home, End and arrows edit in place",
-            last_prompt_line(pg, "p6").endswith("Xecho one tYwo"),
-            last_prompt_line(pg, "p6"),
+            last_prompt_line(pg, "p7").endswith("Xecho one tYwo"),
+            last_prompt_line(pg, "p7"),
         )
         pg.keyboard.press("Control+u")
 
         pg.keyboard.type("cd mac")
         pg.keyboard.press("Tab")
         time.sleep(0.15)
-        check("Tab completes a path", last_prompt_line(pg, "p6").endswith("cd macos/"))
+        check("Tab completes a path", last_prompt_line(pg, "p7").endswith("cd macos/"))
         pg.keyboard.press("Control+u")
         pg.keyboard.type("c")
         pg.keyboard.press("Tab")
         pg.keyboard.press("Tab")
         check(
-            "two Tabs list the candidates", has(pg, "p6", r"cat\s+cd\s+claude\s+clear")
+            "two Tabs list the candidates", has(pg, "p7", r"cat\s+cd\s+claude\s+clear")
         )
         pg.keyboard.press("Control+u")
         pg.keyboard.type("tarn o")
@@ -193,7 +198,7 @@ def shell_basics(base):
         time.sleep(0.15)
         check(
             "Tab completes a subcommand",
-            last_prompt_line(pg, "p6").endswith("tarn open"),
+            last_prompt_line(pg, "p7").endswith("tarn open"),
         )
         pg.keyboard.press("Control+u")
 
@@ -202,61 +207,62 @@ def shell_basics(base):
         time.sleep(0.2)
         check(
             "Ctrl+C drops the line and draws a new prompt",
-            "abandoned^C" in screen(pg, "p6")
-            and last_prompt_line(pg, "p6").endswith("%"),
+            "abandoned^C" in screen(pg, "p7")
+            and last_prompt_line(pg, "p7").endswith("%"),
         )
 
         pg.keyboard.type("echo keep")
         pg.keyboard.press("Control+l")
         time.sleep(0.3)
-        lines = screen(pg, "p6").split("\n")
+        lines = screen(pg, "p7").split("\n")
         check(
             "Ctrl+L clears the screen and keeps the line",
             lines[0].rstrip().endswith("echo keep") and not lines[1].strip(),
         )
         pg.keyboard.press("Control+u")
 
-        run(pg, "p6", "echo before")
-        run(pg, "p6", "clear")
+        run(pg, "p7", "echo before")
+        run(pg, "p7", "clear")
         check(
             "clear empties the screen",
-            screen(pg, "p6").split("\n")[0].rstrip().endswith("%")
-            and "before" not in screen(pg, "p6"),
+            screen(pg, "p7").split("\n")[0].rstrip().endswith("%")
+            and "before" not in screen(pg, "p7"),
         )
 
-        run(pg, "p6", "nosuchcmd")
+        run(pg, "p7", "nosuchcmd")
         check(
             "unknown command message",
-            has(pg, "p6", r"zsh: command not found: nosuchcmd"),
+            has(pg, "p7", r"zsh: command not found: nosuchcmd"),
         )
-        run(pg, "p6", "cd docs")
-        check("cd changes the prompt", has(pg, "p6", r"tarn/docs \(main\) %"))
-        run(pg, "p6", "head -n 1 spec.md")
-        check("head prints a seeded file", has(pg, "p6", r"# Spec: tarn"))
-        run(pg, "p6", "cd ~")
+        run(pg, "p7", "cd docs")
+        check("cd changes the prompt", has(pg, "p7", r"tarn/docs \(main\) %"))
+        run(pg, "p7", "head -n 1 spec.md")
+        check("head prints a seeded file", has(pg, "p7", r"# Spec: tarn"))
+        run(pg, "p7", "cd ~")
         check(
             "outside a repo the branch is gone",
-            last_prompt_line(pg, "p6") == "daniil@MacBook ~ %",
+            last_prompt_line(pg, "p7") == "daniil@MacBook ~ %",
         )
 
-        pg.keyboard.type("x" * 130)
+        wrap = pg.evaluate("__tarn.term('p7').cols") + 30
+        pg.keyboard.type("x" * wrap)
         pg.keyboard.press("Home")
         pg.keyboard.type("Y")
         time.sleep(0.2)
-        text = screen(pg, "p6")
+        text = screen(pg, "p7")
         check(
-            "a wrapped line edits in place", text.count("x") >= 130 and "% Yx" in text
+            "a wrapped line edits in place", text.count("x") >= wrap and "% Yx" in text
         )
         pg.keyboard.press("Control+u")
         time.sleep(0.1)
         check(
-            "kill line clears every wrapped row", "xxxxxxxxxx" not in screen(pg, "p6")
+            "kill line clears every wrapped row", "xxxxxxxxxx" not in screen(pg, "p7")
         )
 
-        run(pg, "p6", "exit")
+        run(pg, "p7", "exit")
         check(
             "exit closes the pane",
-            calls(pg, "pane.close") == [{"id": "p6", "exited": True}],
+            calls(pg, "pane.close") == [{"id": "p7", "exited": True}],
             str(calls(pg, "pane.close")),
         )
         check(
@@ -267,56 +273,55 @@ def shell_basics(base):
 
 
 def tarn_cli(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
-        pg.evaluate("window.mount('p6', '~/Dev/self-projects/tarn', 700)")
-        until(pg, "p6", re.escape(PROMPT))
-        focus(pg, "p6")
+    with app_page(base) as (pg, errors, _):
+        new_pane(pg, "~/Dev/self-projects/tarn")
+        until(pg, "p7", re.escape(PROMPT))
+        focus(pg, "p7")
         active = pg.evaluate("document.activeElement.tagName")
 
-        run(pg, "p6", "tarn open docs/spec.md:7")
+        run(pg, "p7", "tarn open docs/spec.md:7")
         check(
             "tarn open sends path and line to the viewer",
-            calls(pg, "viewer.open")
-            == [{"path": f"{REPO}/docs/spec.md", "line": 7, "pane": "p6"}],
+            calls(pg, "viewer.open", True)
+            == [{"path": f"{REPO}/docs/spec.md", "line": 7, "pane": "p7"}],
             str(calls(pg, "viewer.open")),
         )
-        run(pg, "p6", "tarn open nope.md", r"tarn: no such file: nope\.md")
+        run(pg, "p7", "tarn open nope.md", r"tarn: no such file: nope\.md")
         check(
             "tarn open on a missing file",
-            has(pg, "p6", r"tarn: no such file: nope\.md"),
+            has(pg, "p7", r"tarn: no such file: nope\.md"),
         )
-        run(pg, "p6", "tarn new")
+        run(pg, "p7", "tarn new")
         check(
             "tarn new asks for a tab and does not take focus",
             len(calls(pg, "tab.new")) == 1
-            and calls(pg, "tab.new")[0]["focus"] is False,
+            and calls(pg, "tab.new")[0]["select"] is False,
             str(calls(pg, "tab.new")),
         )
         check(
             "agent commands leave focus and input alone",
             pg.evaluate("document.activeElement.tagName") == active
-            and last_prompt_line(pg, "p6").endswith("%"),
+            and last_prompt_line(pg, "p7").endswith("%"),
         )
 
-        run(pg, "p6", "tarn ls", r"\n\d+\s+tarn\s+main\s+\w+\s+\d+[smh]")
+        run(pg, "p7", "tarn ls", r"\n\d+\s+tarn\s+main\s+\w+\s+\d+[smh]")
         check(
             "tarn ls prints the row format of the spec",
-            has(pg, "p6", r"\n1\s+tarn\s+main\s+waiting\s+\d+[smh]"),
-            screen(pg, "p6")[:300],
+            has(pg, "p7", r"\n1\s+tarn\s+main\s+waiting\s+\d+[smh]"),
+            screen(pg, "p7")[:300],
         )
-        run(pg, "p6", "tarn ls --json", r'"state": "waiting"')
+        run(pg, "p7", "tarn ls --json", r'"state": "waiting"')
         check(
             "tarn ls --json carries Session fields",
-            has(pg, "p6", r'"seen": false') and has(pg, "p6", r'"pane": "p1"'),
-            screen(pg, "p6"),
+            has(pg, "p7", r'"seen": false') and has(pg, "p7", r'"pane": "p1"'),
+            screen(pg, "p7"),
         )
 
-        run(pg, "p6", "touch scratch.txt")
-        run(pg, "p6", "git status -s", r"\?\? scratch\.txt")
+        run(pg, "p7", "touch scratch.txt")
+        run(pg, "p7", "git status -s", r"\?\? scratch\.txt")
         check(
             "git status follows vfs edits",
-            has(pg, "p6", r"\?\? scratch\.txt") and has(pg, "p6", r" M docs/spec\.md"),
+            has(pg, "p7", r"\?\? scratch\.txt") and has(pg, "p7", r" M docs/spec\.md"),
         )
         check(
             "tarn: no page errors",
@@ -326,15 +331,14 @@ def tarn_cli(base):
 
 
 def claude_session(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
-        pg.evaluate("window.mount('p6', '~/Dev/self-projects/tarn')")
-        until(pg, "p6", re.escape(PROMPT))
-        focus(pg, "p6")
+    with app_page(base) as (pg, errors, _):
+        new_pane(pg, "~/Dev/self-projects/tarn")
+        until(pg, "p7", re.escape(PROMPT))
+        focus(pg, "p7")
         pg.evaluate("__tarn.clock.freeze()")
 
         def session():
-            return pg.evaluate("__tarn.snapshot().registry.p6 ?? null")
+            return pg.evaluate("__tarn.snapshot().registry.p7 ?? null")
 
         def state():
             return (session() or {}).get("state")
@@ -343,10 +347,10 @@ def claude_session(base):
             pg.evaluate(f"__tarn.clock.advance({ms})")
             time.sleep(0.15)
 
-        run(pg, "p6", "claude")
-        until(pg, "p6", r"Type a request")
+        run(pg, "p7", "claude")
+        until(pg, "p7", r"Type a request")
         check("claude starts without a state change", session() is None)
-        run(pg, "p6", "update the spec")
+        run(pg, "p7", "update the spec")
         advance(1)
         check(
             "a request moves the registry to working",
@@ -364,11 +368,11 @@ def claude_session(base):
         )
         check(
             "the question is on the screen",
-            has(pg, "p6", r"Do you want to make this edit to docs/spec\.md"),
+            has(pg, "p7", r"Do you want to make this edit to docs/spec\.md"),
         )
 
         pg.evaluate("document.getElementById('toast').hidden = true")
-        pg.evaluate("window.bus.cmd('card.answer', {pane: 'p6', allow: true})")
+        pg.evaluate("window.bus.cmd('card.answer', {pane: 'p7', allow: true})")
         advance(10)
         check(
             "the card answer returns to working at once",
@@ -386,12 +390,12 @@ def claude_session(base):
         check("the turn ends in waiting", s["state"] == "waiting", str(s))
         check(
             "the summary is printed and the claude prompt returns",
-            has(pg, "p6", r"Done\. Request: update the spec")
-            and has(pg, "p6", r"\n> "),
+            has(pg, "p7", r"Done\. Request: update the spec")
+            and has(pg, "p7", r"\n> "),
         )
         check("a turn that ends in the focused pane is seen", s["seen"] is True, str(s))
 
-        run(pg, "p6", "second request")
+        run(pg, "p7", "second request")
         advance(3000)
         check("typing y answers in the terminal", state() == "permission")
         pg.keyboard.type("y")
@@ -411,16 +415,16 @@ def claude_session(base):
         time.sleep(0.2)
         check(
             "Ctrl+C aborts the turn and sends Stop",
-            state() == "waiting" and has(pg, "p6", "Interrupted by user"),
+            state() == "waiting" and has(pg, "p7", "Interrupted by user"),
         )
-        before = pg.evaluate("__tarn.snapshot().registry.p6.since")
+        before = pg.evaluate("__tarn.snapshot().registry.p7.since")
         advance(20000)
         check(
             "an aborted script leaves nothing running",
-            pg.evaluate("__tarn.snapshot().registry.p6.since") == before,
+            pg.evaluate("__tarn.snapshot().registry.p7.since") == before,
         )
 
-        run(pg, "p6", "third")
+        run(pg, "p7", "third")
         advance(3000)
         pg.keyboard.type("n")
         pg.keyboard.press("Enter")
@@ -428,12 +432,12 @@ def claude_session(base):
         advance(2000)
         check(
             "a refused edit ends in waiting and keeps the file",
-            state() == "waiting" and has(pg, "p6", "Understood"),
+            state() == "waiting" and has(pg, "p7", "Understood"),
         )
-        run(pg, "p6", "/exit")
+        run(pg, "p7", "/exit")
         check(
             "/exit returns to the shell and idles the session",
-            state() == "idle" and has(pg, "p6", r"%\s*$"),
+            state() == "idle" and has(pg, "p7", r"%\s*$"),
         )
         check(
             "claude: no page errors",
@@ -443,10 +447,8 @@ def claude_session(base):
 
 
 def two_sessions(base):
-    with browser_page(base, "test/pane.html", height=800) as (pg, _errors, _):
-        pg.wait_for_function("window.ready")
-        pg.evaluate("window.mount('p6', '~')")
-        pg.evaluate("window.mount('p3', '~/Dev/self-projects/tarn')")
+    with app_page(base) as (pg, _errors, _):
+        show_pane(pg, "p3")
         until(pg, "p3", "git status")
         pg.evaluate("__tarn.clock.freeze()")
         for pane in ("p6", "p3"):
@@ -480,14 +482,13 @@ def two_sessions(base):
 
 
 def config_and_keys(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
-        pg.evaluate("window.mount('p6', '~/Dev/self-projects/tarn')")
-        until(pg, "p6", re.escape(PROMPT))
-        focus(pg, "p6")
+    with app_page(base) as (pg, errors, _):
+        new_pane(pg, "~/Dev/self-projects/tarn")
+        until(pg, "p7", re.escape(PROMPT))
+        focus(pg, "p7")
 
         def option(name):
-            return pg.evaluate(f"__tarn.term('p6').options.{name}")
+            return pg.evaluate(f"__tarn.term('p7').options.{name}")
 
         def setting(key, value):
             pg.evaluate(
@@ -501,17 +502,17 @@ def config_and_keys(base):
         check(
             "theme reaches the CSS",
             pg.evaluate(
-                "getComputedStyle(document.querySelector('.pane')).backgroundColor"
+                "getComputedStyle(document.querySelector('[data-pane=p7]')).backgroundColor"
             )
             == "rgb(40, 42, 54)",
         )
         setting("font-size", 18)
         check("font-size reaches the engine", option("fontSize") == 18)
-        cols18 = pg.evaluate("__tarn.term('p6').cols")
+        cols18 = pg.evaluate("__tarn.term('p7').cols")
         setting("font-size", 13)
         check(
             "a smaller font gives more columns",
-            pg.evaluate("__tarn.term('p6').cols") > cols18,
+            pg.evaluate("__tarn.term('p7').cols") > cols18,
         )
         setting("cursor-style", "bar")
         check("cursor-style reaches the engine", option("cursorStyle") == "bar")
@@ -519,15 +520,15 @@ def config_and_keys(base):
         check("cursor blink reaches the engine", option("cursorBlink") is False)
         setting("font-family", "Fira Code")
         check("font-family reaches the engine", "Fira Code" in option("fontFamily"))
-        cols_before = pg.evaluate("__tarn.term('p6').cols")
+        cols_before = pg.evaluate("__tarn.term('p7').cols")
         setting("window-padding-x", 40)
         check(
             "window-padding-x pads the pane and refits",
             pg.evaluate(
-                "getComputedStyle(document.querySelector('.pane-term')).paddingLeft"
+                "getComputedStyle(document.querySelector('[data-pane=p7] .pane-term')).paddingLeft"
             )
             == "40px"
-            and pg.evaluate("__tarn.term('p6').cols") < cols_before,
+            and pg.evaluate("__tarn.term('p7').cols") < cols_before,
         )
         setting("window-padding-x", 2)
 
@@ -535,7 +536,7 @@ def config_and_keys(base):
         pg.keyboard.press("Alt+b")
         pg.keyboard.type("X")
         time.sleep(0.15)
-        plain = last_prompt_line(pg, "p6")
+        plain = last_prompt_line(pg, "p7")
         pg.keyboard.press("Control+u")
         setting("macos-option-as-alt", "true")
         pg.keyboard.type("echo one two")
@@ -549,8 +550,8 @@ def config_and_keys(base):
         )
         check(
             "with option-as-alt on, Alt+b moved the cursor",
-            last_prompt_line(pg, "p6").endswith("echo one Xtwo"),
-            last_prompt_line(pg, "p6"),
+            last_prompt_line(pg, "p7").endswith("echo one Xtwo"),
+            last_prompt_line(pg, "p7"),
         )
         pg.keyboard.press("Control+u")
 
@@ -559,13 +560,13 @@ def config_and_keys(base):
         time.sleep(0.3)
         check(
             "Cmd+K clears the screen",
-            screen(pg, "p6").split("\n")[0].rstrip().endswith("keep"),
+            screen(pg, "p7").split("\n")[0].rstrip().endswith("keep"),
         )
         pg.keyboard.press("Control+u")
-        run(pg, "p6", "echo gone")
+        run(pg, "p7", "echo gone")
         pg.keyboard.press("Control+Alt+k")
         time.sleep(0.3)
-        check("Ctrl+Alt+K is the fallback of Cmd+K", "gone" not in screen(pg, "p6"))
+        check("Ctrl+Alt+K is the fallback of Cmd+K", "gone" not in screen(pg, "p7"))
 
         size = option("fontSize")
         pg.keyboard.press("Meta+Equal")
@@ -584,16 +585,16 @@ def config_and_keys(base):
         pg.keyboard.press("Meta+Digit0")
 
         for i in range(4):
-            run(pg, "p6", "cat docs/spec.md")
+            run(pg, "p7", "cat docs/spec.md")
         for i in range(8):
-            run(pg, "p6", "ls")
-        top = pg.evaluate("__tarn.term('p6').topRow")
+            run(pg, "p7", "ls")
+        top = pg.evaluate("__tarn.term('p7').topRow")
         pg.keyboard.press("Meta+ArrowUp")
         time.sleep(1.2)
-        moved = pg.evaluate("__tarn.term('p6').topRow")
+        moved = pg.evaluate("__tarn.term('p7').topRow")
         check("Cmd+Up jumps to an earlier prompt", moved < top, f"{top} -> {moved}")
         row = pg.evaluate(
-            "(() => { const t = __tarn.term('p6'); return t.lineText(t.topRow) })()"
+            "(() => { const t = __tarn.term('p7'); return t.lineText(t.topRow) })()"
         )
         check(
             "the jump lands on a prompt line",
@@ -602,7 +603,7 @@ def config_and_keys(base):
         )
         pg.keyboard.press("Meta+ArrowDown")
         time.sleep(1.2)
-        check("Cmd+Down moves forward", pg.evaluate("__tarn.term('p6').topRow") > moved)
+        check("Cmd+Down moves forward", pg.evaluate("__tarn.term('p7').topRow") > moved)
 
         check(
             "config: no page errors",
@@ -612,9 +613,8 @@ def config_and_keys(base):
 
 
 def paste_and_notify(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
-        pg.evaluate("window.mount('p6', '~')")
+    with app_page(base) as (pg, errors, _):
+        focus(pg, "p6")
         until(pg, "p6", "ttys001")
         focus(pg, "p6")
 
@@ -676,17 +676,16 @@ def paste_and_notify(base):
 
 
 def selection_and_urls(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
+    with app_page(base) as (pg, errors, _):
         pg.context.grant_permissions(["clipboard-read", "clipboard-write"])
-        pg.evaluate("window.mount('p6', '~/Dev/self-projects/tarn')")
-        until(pg, "p6", re.escape(PROMPT))
-        focus(pg, "p6")
-        run(pg, "p6", "echo https://example.com/demo")
+        new_pane(pg, "~/Dev/self-projects/tarn")
+        until(pg, "p7", re.escape(PROMPT))
+        focus(pg, "p7")
+        run(pg, "p7", "echo https://example.com/demo")
 
         def select_word():
-            a = pg.evaluate("__tarn.term('p6').cellCentre(0, 1)")
-            b = pg.evaluate("__tarn.term('p6').cellCentre(5, 1)")
+            a = pg.evaluate("__tarn.term('p7').cellCentre(0, 1)")
+            b = pg.evaluate("__tarn.term('p7').cellCentre(5, 1)")
             pg.mouse.move(a["x"] - 3, a["y"])
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
@@ -711,7 +710,7 @@ def selection_and_urls(base):
         )
 
         pg.evaluate("window.open = (url) => { window.opened = url }")
-        pos = pg.evaluate("__tarn.linkAt('p6', 'https://example.com/demo')")
+        pos = pg.evaluate("__tarn.linkAt('p7', 'https://example.com/demo')")
         pg.mouse.move(pos["x"], pos["y"])
         time.sleep(0.2)
         pg.mouse.click(pos["x"], pos["y"])
@@ -748,14 +747,12 @@ def selection_and_urls(base):
 
 
 def dispose(base):
-    with browser_page(base, "test/pane.html") as (pg, errors, _):
-        pg.wait_for_function("window.ready")
+    with app_page(base) as (pg, errors, _):
         pg.evaluate(
             "window.disposed = []; void window.bus.on('pane:disposed', d => disposed.push(d.pane))"
         )
-        pg.evaluate("window.mount('p6', '~').then(p => { window.pane6 = p })")
-        until(pg, "p6", "ttys001")
         focus(pg, "p6")
+        until(pg, "p6", "ttys001")
         pg.evaluate("__tarn.clock.freeze()")
         run(pg, "p6", "claude")
         run(pg, "p6", "go")
@@ -765,7 +762,9 @@ def dispose(base):
             "the session exists before dispose",
             pg.evaluate("'p6' in __tarn.snapshot().registry"),
         )
-        pg.evaluate("window.pane6.dispose()")
+        # Closing the tab keeps the pane for the undo window; the window's end frees it.
+        cmd(pg, "tab.close", {"id": "t6"})
+        pg.evaluate("__tarn.clock.advance(6000)")
         time.sleep(0.2)
         check(
             "dispose frees the pane and the registry record",
