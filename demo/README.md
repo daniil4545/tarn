@@ -42,7 +42,7 @@ Every check runs on the real `index.html` with Chrome (`channel="chrome"`). On a
 `nice -n 10` in front. `demo/test/keys.html` is a manual page for the reserved browser keys.
 `window.__tarn` is the only way tests read state (`js/CONTRACT.md`).
 
-The viewer bundle is copied from the app by `demo/tools/sync-viewer.sh`; run it after the viewer changes.
+The viewer bundle is copied from the app by `tools/sync-viewer.sh`; run it after the viewer changes.
 
 ## Modules (`demo/js/`)
 

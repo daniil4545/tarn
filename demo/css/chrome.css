@@ -80,6 +80,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* tab area and splits */
 .ws { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .tabview { flex: 1; min-width: 0; min-height: 0; display: flex; }
+/* A hidden tab with a viewer keeps its layout: mermaid measures its diagram while it draws and
+   returns NaN positions in a frame that has no box. */
+.tabview[hidden]:has(.viewer-pane) { display: flex !important; visibility: hidden; position: absolute; inset: 0; pointer-events: none; }
 .split { flex: 1; min-width: 0; min-height: 0; display: flex; }
 .split.col { flex-direction: column; }
 .cell { min-width: 0; min-height: 0; display: flex; flex-basis: 0; }

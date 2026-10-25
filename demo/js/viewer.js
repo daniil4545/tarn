@@ -20,10 +20,10 @@ const isDark = () => document.documentElement.dataset.theme !== "light";
 
 // The viewer named by `id`, else the one last focused, else any on screen (a terminal's `pane` id names no viewer).
 function visibleTarget(id) {
-  const shown = (key) => panes.has(key) && panes.get(key).el.offsetParent !== null;
+  const on = (p) => p.el.checkVisibility({ visibilityProperty: true });
   if (panes.has(id)) return panes.get(id);
-  if (shown(focused)) return panes.get(focused);
-  return [...panes.values()].find((p) => p.el.offsetParent !== null);
+  if (panes.has(focused) && on(panes.get(focused))) return panes.get(focused);
+  return [...panes.values()].find(on);
 }
 
 function open(payload) {
