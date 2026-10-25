@@ -207,7 +207,7 @@ final class SidebarModel: ObservableObject {
                     .map { (view: view, agent: $0) }
             }
             .first
-        let pwd = (running?.view ?? controller?.focusedSurface)?.pwd
+        let pwd = (running?.view ?? controller?.focusedSurface)?.workingDirectory
         return Tab(
             id: ObjectIdentifier(tabWindow),
             key: key,

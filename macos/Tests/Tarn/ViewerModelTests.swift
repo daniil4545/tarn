@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 import Testing
 import WebKit
@@ -593,5 +594,77 @@ struct ViewerHostTests {
         try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
         host.drop(.file(FileDrag(path: dir + "/b.md", viewer: source, moves: false, sole: false)), .half(.top))
         #expect(host.tree.viewers.count == 2)
+    }
+}
+
+/// Path clicks and pane keys that must not depend on the shell or the layout.
+@Suite
+@MainActor
+struct ViewerClickAndKeyTests {
+    private func folder() throws -> String {
+        let dir = try Scratch.make()
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        try "x".write(toFile: dir + "/pic.png", atomically: true, encoding: .utf8)
+        return dir
+    }
+
+    @Test func relativeAndAbsoluteClicksOpenInTheViewer() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let expected = ViewerRouter.Decision.open(OpenTarget(path: dir + "/a.md", line: nil))
+        #expect(ViewerRouter.decide("./a.md", cwd: dir) == expected)
+        #expect(ViewerRouter.decide("a.md", cwd: dir) == expected)
+        #expect(ViewerRouter.decide(dir + "/a.md", cwd: dir) == expected)
+        #expect(ViewerRouter.decide(dir + "/a.md", cwd: nil) == expected)
+    }
+
+    @Test func refusalsNameTheirReason() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(ViewerRouter.decide("./a.md", cwd: nil) == .upstream(reason: "relative path and the terminal has no working directory"))
+        #expect(ViewerRouter.decide("https://x.org/a.md", cwd: dir) == .upstream(reason: "a URL"))
+        #expect(ViewerRouter.decide("./pic.png", cwd: dir) == .upstream(reason: "a media, document or archive type"))
+        #expect(ViewerRouter.decide(dir, cwd: dir) == .upstream(reason: "a directory"))
+        #expect(ViewerRouter.decide("./nope.md", cwd: dir) == .missing(raw: "./nope.md"))
+    }
+
+    @Test func workingDirectoryOfAProcessIsReadFromTheKernel() {
+        let own = ViewerPaths.cwd(ofPid: getpid())
+        #expect(own.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+            == URL(fileURLWithPath: FileManager.default.currentDirectoryPath).resolvingSymlinksInPath().path)
+    }
+
+    private func key(_ characters: String, _ code: Int, _ flags: NSEvent.ModifierFlags = .command) -> String? {
+        ViewerWebView.command(characters: characters, keyCode: UInt16(code), flags: flags)
+    }
+
+    @Test func paneKeysFollowTheTypedLetterOfLatinLayouts() {
+        #expect(key("s", kVK_ANSI_S) == "save")
+        #expect(key("e", kVK_ANSI_E) == "mode")
+        #expect(key("b", kVK_ANSI_B) == "tree")
+        // Dvorak: the B key types "x" (cut), the S key types "o" (open). Neither is a pane command.
+        #expect(key("x", kVK_ANSI_B) == nil)
+        #expect(key("o", kVK_ANSI_S) == nil)
+        // Dvorak types "s" on the semicolon key: that is Cmd+S.
+        #expect(key("s", kVK_ANSI_Semicolon) == "save")
+        // Colemak: the E key types "f" (find), the S key types "r".
+        #expect(key("f", kVK_ANSI_E) == nil)
+        #expect(key("r", kVK_ANSI_S) == nil)
+    }
+
+    @Test func paneKeysFallBackToThePhysicalKeyForNonLatinLayouts() {
+        #expect(key("ы", kVK_ANSI_S) == "save")
+        #expect(key("у", kVK_ANSI_E) == "mode")
+        #expect(key("и", kVK_ANSI_B) == "tree")
+        #expect(key("ы", kVK_ANSI_S, [.command, .shift]) == nil)
+        #expect(key("ф", kVK_ANSI_A) == nil)
+    }
+
+    @Test func otherModifiersOrKeysAreNotPaneCommands() {
+        #expect(key("s", kVK_ANSI_S, [.command, .shift]) == nil)
+        #expect(key("s", kVK_ANSI_S, []) == nil)
+        #expect(key("a", kVK_ANSI_A) == nil)
+        // Caps Lock does not stop the shortcut.
+        #expect(key("s", kVK_ANSI_S, [.command, .capsLock]) == "save")
     }
 }

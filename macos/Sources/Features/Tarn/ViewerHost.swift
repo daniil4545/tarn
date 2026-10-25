@@ -323,27 +323,64 @@ final class ViewerHost: ObservableObject {
 enum ViewerRouter {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
 
+    /// The `open_url` action as it reaches us, for diagnosing a click that does nothing. Debug level;
+    /// the URL is logged only for kind `unknown` (a path), never for links from terminal output.
+    /// Watch: `log stream --level debug --predicate 'subsystem == "tarn" AND category == "viewer"'`.
+    static func trace(kind: String, url: String, surfaceTarget: Bool) {
+        logger.debug("open_url kind=\(kind, privacy: .public) url=\(kind == "unknown" ? url : "-", privacy: .public) surfaceTarget=\(surfaceTarget)")
+    }
+
+    /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
+    /// must be explainable from `log stream --predicate 'subsystem == "com.mitchellh.ghostty"'`.
+    enum Decision: Equatable {
+        case open(OpenTarget)
+        /// A pane that is already open reports the missing file; otherwise the default opener runs.
+        case missing(raw: String)
+        case upstream(reason: String)
+    }
+
+    /// The pure part of a path click: which of the three outcomes `raw` leads to.
+    static func decide(_ raw: String, cwd: String?) -> Decision {
+        if ViewerPaths.isURL(raw) { return .upstream(reason: "a URL") }
+        guard let target = ViewerPaths.resolve(raw, cwd: cwd) else {
+            return .upstream(reason: cwd == nil ? "relative path and the terminal has no working directory" : "not a path")
+        }
+        switch ViewerPaths.classify(target.path) {
+        case .text: return .open(target)
+        case .system: return .upstream(reason: "a media, document or archive type")
+        case .directory: return .upstream(reason: "a directory")
+        case .special: return .upstream(reason: "not a regular file")
+        case .missing: return .missing(raw: raw)
+        }
+    }
+
     /// Opens a clicked path in the viewer of the clicked surface's window. Returns false to let the
     /// default opener run: URLs, directories, a missing file without a pane, clicks without a
     /// terminal. Files of media, document and archive types open in their own app.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
-        guard !ViewerPaths.isURL(raw), let surface,
-              let controller = surface.window?.windowController as? TerminalController,
-              let target = ViewerPaths.resolve(raw, cwd: surface.pwd)
-        else { return false }
-        switch ViewerPaths.classify(target.path) {
-        case .text:
-            _ = controller.viewerHost.open(target, root: surface.pwd, focus: true)
-        case .system, .directory, .special:
-            // Upstream opens these through its untrusted-target policy.
+        guard let surface else {
+            logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
-        case .missing:
-            // A pane that is already open says so; without one the default opener runs.
+        }
+        guard let controller = surface.window?.windowController as? TerminalController else {
+            logger.debug("click on \(raw, privacy: .public) refused: the surface has no terminal window")
+            return false
+        }
+        let cwd = surface.workingDirectory
+        let decision = decide(raw, cwd: cwd)
+        logger.debug("click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
+        switch decision {
+        case let .open(target):
+            _ = controller.viewerHost.open(target, root: cwd, focus: true)
+            return true
+        case let .missing(raw):
             guard let model = controller.viewerHost.activeModel else { return false }
             model.toast("No such file: \(raw)")
+            return true
+        case .upstream:
+            return false
         }
-        return true
     }
 
     /// Ghostty's split keys when the terminal block has no target in that direction: the keyboard
@@ -389,7 +426,7 @@ enum ViewerRouter {
         case .text where ViewerPaths.isBinary(path): return "tarn: not a text file: \(path)"
         case .text:
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
-            return controller.viewerHost.open(target, root: surface.pwd, focus: false) ? nil : "tarn: cannot open: \(path)"
+            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
         }
     }
 }
