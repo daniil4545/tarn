@@ -1,6 +1,7 @@
 // The asset scheme handler follows MarkEdit EditorViewController.swift (MIT); see THIRD_PARTY.md.
 
 import AppKit
+import Carbon.HIToolbox
 import OSLog
 import WebKit
 
@@ -9,11 +10,22 @@ import WebKit
 final class ViewerWebView: WKWebView {
     var onCommand: ((String) -> Void)?
 
+    /// The pane command of a Cmd+key press. It follows the physical key, as Ghostty matches binds, so
+    /// the Russian layout (where the S key types "ы") works the same.
+    static func command(keyCode: UInt16, flags: NSEvent.ModifierFlags) -> String? {
+        guard flags.intersection(.deviceIndependentFlagsMask) == .command else { return nil }
+        switch Int(keyCode) {
+        case kVK_ANSI_S: return "save"
+        case kVK_ANSI_E: return "mode"
+        case kVK_ANSI_B: return "tree"
+        default: return nil
+        }
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
-              event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
-              let command = ["s": "save", "e": "mode", "b": "tree"][event.charactersIgnoringModifiers ?? ""]
+              let command = Self.command(keyCode: event.keyCode, flags: event.modifierFlags)
         else { return super.performKeyEquivalent(with: event) }
         onCommand?(command)
         return true
