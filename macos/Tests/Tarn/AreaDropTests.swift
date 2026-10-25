@@ -194,4 +194,35 @@ struct AreaDropTests {
         #expect(placed.leaf(id: new.id) != nil)
         #expect(oneViewer.placing(new, .half(.top)).count == 3)
     }
+
+    // MARK: Thresholds: corner 48, strip 24, on both sides
+
+    @Test func theStripEndsAt24() {
+        #expect(target(23, 300, tree: twoViewers, file(from: first))?.plan == .half(.left))
+        #expect(target(25, 300, tree: twoViewers, file(from: first))?.plan == .beside(block.id, .left))
+        #expect(target(300, 23, tree: twoViewers, file(from: first))?.plan == .half(.top))
+        #expect(target(300, 25, tree: twoViewers, file(from: first))?.plan == .beside(block.id, .top))
+        #expect(target(977, 300, tree: twoViewers, file(from: first))?.plan == .half(.right))
+        #expect(target(975, 300, tree: twoViewers, file(from: first))?.plan == .beside(second.id, .right))
+        #expect(target(300, 577, tree: twoViewers, file(from: first))?.plan == .half(.bottom))
+        #expect(target(300, 575, tree: twoViewers, file(from: first))?.plan == .beside(block.id, .bottom))
+    }
+
+    @Test func theCornerEndsAt48() {
+        let inside = target(47, 47, tree: twoViewers, .viewer(second.id))
+        #expect(inside?.plan == .quarter(first: true, edge: .top))
+        // One point further along either axis it is no corner any more: a pane zone of the block.
+        for point in [CGPoint(x: 49, y: 47), CGPoint(x: 47, y: 49)] {
+            let outside = target(point.x, point.y, tree: twoViewers, .viewer(second.id))
+            if case .quarter? = outside?.plan { Issue.record("still a corner at \(point)") }
+            #expect(outside?.plan != nil)
+        }
+        // The far corner starts at width minus 48.
+        let far = target(953, 553, tree: twoViewers, .viewer(first.id))
+        #expect(far?.plan == .quarter(first: false, edge: .bottom))
+        for point in [CGPoint(x: 951, y: 553), CGPoint(x: 953, y: 551)] {
+            let outside = target(point.x, point.y, tree: twoViewers, .viewer(first.id))
+            if case .quarter? = outside?.plan { Issue.record("still a corner at \(point)") }
+        }
+    }
 }

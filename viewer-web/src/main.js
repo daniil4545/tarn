@@ -474,8 +474,8 @@ document.addEventListener("change", e => {
 });
 
 // A file tab or a file row of the tree can be dropped on the layout zones of the window (S14a
-// style, handled natively): the page only tells the app which file is dragged. The path also goes
-// out as plain text, so a drop in the terminal types the path.
+// style, handled natively): the page only tells the app which file is dragged. The plain text is
+// a marker, not the path, so a drop in another app leaks nothing.
 document.addEventListener("dragstart", e => {
   const tab = e.target.closest && e.target.closest(".ftab");
   const row = e.target.closest && e.target.closest(".tr[draggable]");
@@ -483,7 +483,7 @@ document.addEventListener("dragstart", e => {
   if (tab) post({ t: "tab", index: +tab.dataset.idx, pin: true });
   if (!path) return;
   e.dataTransfer.effectAllowed = "move";
-  e.dataTransfer.setData("text/plain", path);
+  e.dataTransfer.setData("text/plain", "tarn");
   post({ t: "dragFile", path, tab: !!tab });
 });
 document.addEventListener("dragend", () => post({ t: "dragEnd" }));

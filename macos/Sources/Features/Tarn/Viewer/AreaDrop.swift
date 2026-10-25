@@ -117,10 +117,6 @@ enum AreaDrop {
             // A lone terminal over its own block is Ghostty's business.
             return payload == .viewer(leaf.id) ? AreaDropTarget(plan: nil, frame: rect, refusal: selfRefusal) : nil
         }
-        if leaf.kind == .block {
-            // Terminals move inside the block by Ghostty's zones.
-            if case .terminal = payload { return nil }
-        }
         let local = CGPoint(x: point.x - rect.minX, y: point.y - rect.minY)
         let edge = AreaEdge(TerminalSplitDropZone.calculate(at: local, in: rect.size))
         if leaf.kind == .viewer, case .viewer = payload, isMiddle(local, in: rect.size) {

@@ -110,15 +110,16 @@ final class ViewerModel {
 
     /// Takes one file from another viewer's tab, edits included, or opens it from disk when it
     /// was not a tab. The caller then calls `release` on the other viewer.
-    func take(_ path: String, from other: ViewerModel) {
+    @discardableResult
+    func take(_ path: String, from other: ViewerModel) -> Bool {
         guard other.docs[path] != nil else {
-            open(OpenTarget(path: path), pin: true)
-            return
+            return open(OpenTarget(path: path), pin: true)
         }
         adopt(path, from: other)
         tabs.open(path, pin: true)
         tree.reveal(path)
         pushAll()
+        return true
     }
 
     /// The file went to another viewer: its tab goes, the document went with it. No question, no

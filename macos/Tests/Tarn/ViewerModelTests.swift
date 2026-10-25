@@ -536,3 +536,62 @@ struct ViewerWebLifetimeTests {
         #expect(weakController == nil)
     }
 }
+
+/// The layout glue of one tab: what a drag from a page leaves behind.
+@Suite
+@MainActor
+struct ViewerHostTests {
+    private func host(with names: [String]) throws -> (ViewerHost, String) {
+        let dir = try Scratch.make()
+        let host = ViewerHost()
+        for name in names {
+            try "one".write(toFile: dir + "/" + name, atomically: true, encoding: .utf8)
+            #expect(host.open(OpenTarget(path: dir + "/" + name), root: dir, focus: false))
+        }
+        return (host, dir)
+    }
+
+    @Test func aFileDragFromThePageEndsWithAClickOrTheDragEnd() throws {
+        let (host, dir) = try host(with: ["a.md"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let model = try #require(host.models.first)
+        model.onFileDrag?(PageFileDrag(path: dir + "/a.md", moves: true, sole: true))
+        #expect(host.drag != nil)
+        host.cancelFileDrag()
+        #expect(host.drag == nil)
+
+        model.onFileDrag?(PageFileDrag(path: dir + "/a.md", moves: true, sole: true))
+        model.onFileDrag?(nil)
+        #expect(host.drag == nil)
+
+        // A terminal drag is Ghostty's session: a click does not cancel it.
+        host.terminalDragged(UUID())
+        host.cancelFileDrag()
+        #expect(host.drag != nil)
+    }
+
+    @Test func plainPointerEventsAreNeverAnswered() {
+        #expect(AreaDropView.isPlainEvent(.leftMouseDown))
+        #expect(AreaDropView.isPlainEvent(.mouseMoved))
+        #expect(AreaDropView.isPlainEvent(.scrollWheel))
+        #expect(!AreaDropView.isPlainEvent(.leftMouseDragged))
+        #expect(!AreaDropView.isPlainEvent(nil))
+    }
+
+    @Test func aFileThatDoesNotOpenLeavesNoEmptyViewer() throws {
+        let (host, dir) = try host(with: ["a.md"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let source = try #require(host.tree.viewers.first).id
+        let missing = dir + "/gone.md"
+
+        host.drop(.file(FileDrag(path: missing, viewer: source, moves: false, sole: false)), .half(.top))
+        #expect(host.tree.viewers.count == 1)
+        host.drop(.file(FileDrag(path: missing, viewer: source, moves: true, sole: false)), .half(.top))
+        #expect(host.tree.viewers.count == 1)
+
+        // A file that opens makes the second viewer.
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        host.drop(.file(FileDrag(path: dir + "/b.md", viewer: source, moves: false, sole: false)), .half(.top))
+        #expect(host.tree.viewers.count == 2)
+    }
+}

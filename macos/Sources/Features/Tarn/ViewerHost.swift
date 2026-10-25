@@ -186,7 +186,10 @@ final class ViewerHost: ObservableObject {
             // S14: the file of the viewer opens in a new viewer beside it.
             guard let path = pane.model.tabs.activePath else { return }
             let new = makeViewer(root: pane.model.tree.root, beside: pane.leaf, edge: edge, share: 0.5)
-            _ = new.model.open(OpenTarget(path: path), pin: true)
+            guard new.model.open(OpenTarget(path: path), pin: true) else {
+                discard(new.leaf.id)
+                return
+            }
             DispatchQueue.main.async { new.model.onFocus?() }
         case let .focus(direction):
             _ = focus(from: pane.leaf, direction)
@@ -222,6 +225,11 @@ final class ViewerHost: ObservableObject {
     // MARK: Drops
 
     /// Called by the terminal pane drag, which Ghostty's grab handle publishes (`DraggingSurfaceKey`).
+    /// A drag that came from a page ends with the AppKit session; a click proves it is over.
+    func cancelFileDrag() {
+        if case .file = drag { drag = nil }
+    }
+
     func terminalDragged(_ id: UUID?) {
         if case .viewer = drag { return }
         drag = id.map { .terminal($0) }
@@ -270,7 +278,7 @@ final class ViewerHost: ObservableObject {
         let destination: Pane
         if case let .into(id) = plan {
             guard id != file.viewer, let existing = panes[id] else { return }
-            if let source, !existing.model.canTake(file.path, from: source.model) {
+            if let source, file.moves, !existing.model.canTake(file.path, from: source.model) {
                 existing.model.toast("\((file.path as NSString).lastPathComponent) is open here with other edits")
                 return
             }
@@ -279,14 +287,21 @@ final class ViewerHost: ObservableObject {
             destination = makePane(AreaLeaf(kind: .viewer), root: source?.model.tree.root ?? NSHomeDirectory())
             tree = tree.placing(destination.leaf, plan)
         }
-        if let source {
-            destination.model.take(file.path, from: source.model)
-            if file.moves {
-                source.model.release(file.path)
-                if source.model.isEmpty { discard(file.viewer) }
-            }
+        // A tab moves with its edits; a tree row opens the file from disk.
+        let placed: Bool
+        if let source, file.moves {
+            placed = destination.model.take(file.path, from: source.model)
         } else {
-            _ = destination.model.open(OpenTarget(path: file.path), pin: true)
+            placed = destination.model.open(OpenTarget(path: file.path), pin: true)
+        }
+        guard placed else {
+            // The file did not open (gone, binary, too big): no empty viewer is left behind.
+            if destination.model.isEmpty { discard(destination.leaf.id) }
+            return
+        }
+        if let source, file.moves {
+            source.model.release(file.path)
+            if source.model.isEmpty { discard(file.viewer) }
         }
         lastViewer = destination.leaf.id
         DispatchQueue.main.async { destination.model.onFocus?() }

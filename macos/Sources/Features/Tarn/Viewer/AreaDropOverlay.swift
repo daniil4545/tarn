@@ -38,7 +38,7 @@ final class AreaDropView: NSView {
         label.wantsLayer = true
         label.isHidden = true
         addSubview(label)
-        // Text: the page of a viewer drags a file as plain text (its path); `host.drag` tells it apart.
+        // Text: the page of a viewer drags a file as a plain-text marker; `host.drag` tells it apart.
         registerForDraggedTypes([.tarnViewer, .ghosttySurfaceId, .string])
     }
 
@@ -46,7 +46,26 @@ final class AreaDropView: NSView {
         fatalError("init(coder:) is not supported")
     }
 
+    /// Events of the pointer and keyboard that are not part of a drag session. The overlay never
+    /// answers them, so a drag state left over from the page cannot take clicks.
+    static func isPlainEvent(_ type: NSEvent.EventType?) -> Bool {
+        guard let type else { return false }
+        switch type {
+        case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp,
+             .mouseMoved, .mouseEntered, .mouseExited, .scrollWheel, .keyDown, .keyUp, .cursorUpdate:
+            return true
+        default:
+            return false
+        }
+    }
+
     override func hitTest(_ point: NSPoint) -> NSView? {
+        let type = NSApp.currentEvent?.type
+        if Self.isPlainEvent(type) {
+            // A click while a page drag is still on record: the session is over.
+            if type == .leftMouseDown { host?.cancelFileDrag() }
+            return nil
+        }
         guard let host, let payload = host.drag else { return nil }
         let local = convert(point, from: superview)
         return host.dropTarget(at: local, in: bounds.size, payload: payload) == nil ? nil : self
@@ -95,7 +114,7 @@ final class AreaDropView: NSView {
         let board = sender.draggingPasteboard
         if let text = board.string(forType: .tarnViewer), let id = UUID(uuidString: text) { return .viewer(id) }
         if let data = board.data(forType: .ghosttySurfaceId), data.count == 16 {
-            return .terminal(data.withUnsafeBytes { $0.load(as: UUID.self) })
+            return .terminal(data.withUnsafeBytes { $0.loadUnaligned(as: UUID.self) })
         }
         return nil
     }
