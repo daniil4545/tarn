@@ -1,6 +1,6 @@
 # Windows and workspaces: model and user scenarios
 
-Draft for the user's review before it goes into `docs/spec.md`. Replaces R3 grouping by project and R21 custom groups; R19 pins are removed (D17); R20 drag applies inside a workspace. The browser demo `demo/` follows this file after approval.
+Status: agreed 2026-10-25, built in `tarn-v1.0.0`. Canon for window, workspace and layout behavior. Replaces R3 grouping by project and R21; R19 pins are removed (D17); R20 drag applies inside a workspace. The browser demo `demo/` follows this file.
 
 ## 1. Terms
 
@@ -97,7 +97,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S22 | settings: tabs at the top | a flat tab bar, no workspaces or agent state; back to the sidebar style shows the workspaces as they were (D14) |
 | S23 | an agent in a collapsed workspace asks for permission | the header dot turns orange; one notification names the workspace and the tab |
 
-## 5. Settled for the spec
+## 5. Further decisions
 
 - D14. Tabs at the top: a flat native tab bar of the window's tabs, no workspaces and no agent state there; workspaces keep working and show again with the sidebar style. R24 changes accordingly; the settings text says "Tabs grouped in workspaces".
 - D15. A new tab starts in the focused tab's folder (Ghostty `window-inherit-working-directory`).

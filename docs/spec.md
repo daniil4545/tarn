@@ -1,6 +1,6 @@
 # Spec: tarn, an agent-first terminal
 
-Status: agreed for the first version (S0-S3); the second wave is scoped, not designed. R6 moved to the first wave on 2026-10-25.
+Status: the first wave shipped as `tarn-v1.0.0`; the second wave is scoped, not designed.
 Canon: this spec; upstream build guides `HACKING.md` and `macos/AGENTS.md`; agent profile `.claude/CLAUDE.md`.
 
 tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. It keeps the Ghostty core and app as they are and adds a narrow set of features for working with CLI coding agents. Claude Code is the primary agent; the `tk` task tracker is its companion.
@@ -20,7 +20,6 @@ tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. I
 11. Text samples
 12. Decisions and open questions
 13. Slicing
-14. Access and readiness
 
 ## 1. Goal and scope
 
@@ -45,9 +44,10 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R7 | Command completion and history in zsh | first, setup guide | - |
 | R9 | Click on a file path in terminal output opens it in the viewer; absolute, `~/` and relative paths, `path:line` | first | ~25 complaints about opening files |
 | R6 | File editing in the viewer pane: one tool for view and edit, file tabs | first (user decision 2026-10-25) | - |
-| R3 | Sidebar with all sessions: a tab running claude, codex or opencode sits in its project's group with the agent's icon and state; other tabs sit below a divider; the collapsed sidebar shows icons only | first | median 5 parallel sessions, peak 16 |
-| R19 | Pins: tabs pinned at the top of the sidebar, reordered among themselves | first | user request 2026-10-23 |
+| R3 | Sidebar with all sessions of a window, grouped in user-named workspaces (`docs/specs/windows-workspaces.md`); a tab running claude, codex or opencode shows the agent's icon and state; the collapsed sidebar shows icons only | first | median 5 parallel sessions, peak 16 |
+| R19 | Pins | removed 2026-10-25 (D17): workspaces group tabs | user request 2026-10-23 |
 | R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
+| R21 | Custom groups | built as workspaces, first wave | user request 2026-10-23 |
 | R24 | Settings window (cmd+,); tab style: sidebar or native tabs at the top, where an agent tab shows its state dot and logo at the right edge | first | user request 2026-10-25 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
 | R10 | Several agents per project shown as separate sessions | first | - |
@@ -60,7 +60,6 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R11 | HTML and PDF in the viewer | later | 5 PDF paths, HTML opened in a browser |
 | R13 | SSH sessions in the sidebar | later | 3-4 mentions |
 | R14 | Phone access to waiting sessions, free, outside the home network | later, guide | - |
-| R21 | Custom groups: the user creates a group and puts tabs into it | later | user request 2026-10-23 |
 | R22 | Preview of a localhost server an agent starts | later | Tellurion trial 2026-10-23 |
 | R23 | State for codex and opencode sessions | later | codex shows no state in the first version |
 
@@ -79,7 +78,7 @@ Out of scope:
 
 ```mermaid
 flowchart LR
-  plug["Claude Code plugin hooks"] -->|"tarn hook, JSON"| sock[("Control socket")]
+  plug["Claude Code plugin hooks"] -->|"hook.sh, JSON"| sock[("Control socket")]
   agent["Agent: tarn open, ls, notify"] -->|"JSON line"| sock
   sock --> reg["Session registry"]
   core["Ghostty core events"] --> reg
@@ -96,8 +95,8 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 | --- | --- | --- |
 | Ghostty core and app (upstream) | rendering, input, tabs, splits, core events, notification route | registry via insertion points |
 | Control socket | unix socket of the running app; one JSON line per request and per reply | `tarn` CLI, registry, viewer |
-| `tarn` CLI | thin client inside the app bundle: `hook`, `open`, `ls`, `notify` | control socket |
-| Claude Code plugin | ships the hook configuration that calls `tarn hook` | Claude Code |
+| `tarn` CLI | thin client inside the app bundle: `open`, `ls`, `notify` | control socket |
+| Claude Code plugin | ships the hook configuration that runs `hook.sh` and `permission.sh` | Claude Code |
 | Session registry | one record per terminal surface; agent state machine | sidebar, notifications |
 | Sidebar | sessions with state; click or shortcut focuses the surface | registry, terminal view |
 | Viewer pane | file tabs, files tree, rendered markdown with mermaid, source editor, code view | terminal view, socket |
@@ -116,15 +115,15 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 
 1. Path `~/Library/Application Support/tarn/tarn.sock`, mode 0600. On start the app removes a stale socket file and binds anew. Any local process of the user can talk to it: an accepted cost.
 2. Request and reply are one JSON line each, with a `version` field. A version mismatch is an error reply.
-3. Error rule for every component: the error goes to the log (`os_log`, subsystem `tarn`) with command, surface and reason; the caller gets `{"ok": false, "error": "<text>"}` and the CLI exits with 1; the app never crashes on bad input and state does not change. Exception: `tarn hook` (2.3).
+3. Error rule for every component: the error goes to the log (`os_log`, subsystem `tarn`) with command, surface and reason; the caller gets `{"ok": false, "error": "<text>"}` and the CLI exits with 1; the app never crashes on bad input and state does not change. Exception: `hook.sh` (2.3).
 
 ### 2.3 Hook bridge
 
 1. Purpose: turn Claude Code hook events into registry updates without ever slowing the agent.
 2. Input: hook JSON on stdin (`session_id`, `cwd`, `hook_event_name`, `notification_type`). Output: one line to the socket.
 3. How it works:
-   1. The `tarn` plugin for Claude Code registers `tarn hook` for `UserPromptSubmit`, `PostToolUse`, `Notification`, `PermissionRequest`, `Stop`, `StopFailure`, `SessionEnd`.
-   2. `tarn hook` reads `TARN_SURFACE`, which the app sets in the environment of each surface.
+   1. The `tarn` plugin for Claude Code registers `hook.sh` for `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SessionEnd`, and `permission.sh` for `PermissionRequest`.
+   2. `hook.sh` reads `TARN_SURFACE`, which the app sets in the environment of each surface.
    3. It sends the event with the surface id and exits; for `PermissionRequest` see rule 5.
 4. Rules, for any input: exit code 0; nothing on stdout or stderr; the whole run within 100 ms, connect and write included; no `TARN_SURFACE` or no socket means an immediate exit; errors go only to the log. The plugin never edits `~/.claude/settings.json`.
 5. Exception, `PermissionRequest`: the hook keeps the connection open while the app holds it (hook timeout 1 h) and prints the decision the card writes. No app, a closed connection, Esc or the timeout print nothing, and Claude Code shows its own dialog.
@@ -142,10 +141,7 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 
 ### 2.5 Viewer pane
 
-1. Purpose: read and edit a file next to a session without another app.
-2. Input: a path from a click (`path`, `path:line`), `tarn open` or the files tree. Output: the file, rendered or as source.
-3. How it works: one pane to the right of the terminal area of a window tab (a temporary host until the window layout is decided). Tabs: a file opens as a preview tab (italic) that the next open replaces; a double click, an edit or a drag pins it. The files tree sits on the right of the pane, rooted at the terminal's cwd; the Files button toggles it inside the pane and Esc hides it. Cmd+B is the one pane key, from the terminal and from the pane. It opens and hides, it never closes: with no pane it opens the pane with the tree only (rooted at the terminal's cwd, no file open) and puts the keyboard in the tree; a hidden pane comes back as it was hidden, with the keyboard in it; a shown pane, with files or not, hides whole (tabs, unsaved edits and tree state are kept; closing a window still asks about the edits) and the keyboard goes to the terminal. Cmd+W with the keyboard in the pane closes the pane when no file is open, otherwise the active tab; the last tab closes the pane. The Files button and Esc toggle the tree inside a pane with files; in a pane with no file they hide the pane. Enter on a file in the tree opens it and moves the keyboard into it. The viewer is optional: a Settings switch, on by default, turns off new panes. Arrows: Left in the tree (not on an open folder) goes to the file, Right in a viewed file goes to the tree. A path click shows a hidden pane and focuses it; `tarn open` leaves it hidden and never moves the keyboard. Markdown shows rendered (highlight, mermaid with a per-diagram Source toggle, Copy on code blocks, task checkboxes written back to the file) or as source in an editor (Cmd+E); Cmd+S saves, an edit marks the tab dirty. Other text files show highlighted with line numbers and edit the same way; `path:line` scrolls to the line and marks it. Markdown is rendered from vendored assets in a WKWebView. A file changed on disk is re-rendered with the scroll kept; with unsaved edits the pane shows "The agent changed this file and you have unsaved edits" with "Take the agent version" and "Keep mine".
-4. Rules: no network: a `WKContentRuleList` blocks everything except `tarn-md://`, which serves bundled assets and local images of allowed folders; raw HTML inside markdown is escaped; `http(s)` links open in the system browser. Files over 5 MB or not UTF-8 get a one-line notice. The theme follows the terminal background. A path click moves focus to the viewer; `tarn open` never does; it needs an absolute path, answers ok or an error, and opens text files only. Cmd+W closes the active tab, the last tab closes the pane, and Ghostty's undo reopens it. Non-text files open in their default app.
+Purpose: read and edit a file next to a session without another app. Input: a path from a click, `tarn open` or the files tree. Output: the file, rendered or as source. Behavior of keys, tabs, tree, editor, disk changes and the no-network rule: `docs/specs/viewer-pane.md`.
 
 ## 3. Scenarios
 
@@ -156,8 +152,8 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 | Finished | Claude Code stops; a minute later `idle_prompt` arrives | `Stop` moves it to `waiting` with one notification; `idle_prompt` changes nothing |
 | Interrupted | the user presses Esc, no `Stop` arrives | `idle_prompt` later moves the session to `waiting`; the next prompt moves it to `working` |
 | Repeat | the same hook event arrives twice | state unchanged, one notification |
-| App not running | a hook fires while tarn is closed or Claude runs in another terminal | `tarn hook` exits 0 at once; Claude Code is not slowed |
-| App hangs | the socket accepts but the app does not read | `tarn hook` gives up at 100 ms and exits 0; a permission hook waits until its timeout |
+| App not running | a hook fires while tarn is closed or Claude runs in another terminal | `hook.sh` exits 0 at once; Claude Code is not slowed |
+| App hangs | the socket accepts but the app does not read | `hook.sh` gives up at 100 ms and exits 0; a permission hook waits until its timeout |
 | Hooks not installed | the plugin is missing | the session stays `idle` from core events only, never a wrong agent state |
 | Bad request | junk JSON or unknown command on the socket | error reply, log line, state unchanged |
 | Notifications denied | macOS has not allowed notifications | the sidebar still marks sessions; one log line |
@@ -167,6 +163,7 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 | No duplicates | Claude Code also sends its terminal notification for the same need | the terminal notification of a live agent session is suppressed; the user sees one notification |
 | Path click | the user clicks `docs/spec.md:12` in agent output | the path resolves against the surface cwd; a text file opens in the viewer; media, document and archive files open in their default macOS app; a missing file shows a one-line notice |
 | Subagent event | a subagent finishes a tool while the main agent waits for permission | events carrying `agent_id` do not change the session state in the first version |
+| Workspaces and layout | the user creates, folds, drags and closes workspaces, tabs and viewers | scenarios S1-S23 of `docs/specs/windows-workspaces.md` |
 
 ## 4. Data and states
 
@@ -174,7 +171,7 @@ See section 8.
 
 ## 5. Code model
 
-- `Session`: `surfaceID` (Ghostty surface UUID, key), `agentSessionID` (Claude Code `session_id`, empty until the first hook and after `SessionEnd`), `cwd`, `project` (git root folder name), `branch` (empty outside git), `state`, `stateSince` (time of entering the current state), `seen` (the user focused the surface since `stateSince`), `failed` (last stop was `StopFailure`), `note` (text from `tarn notify`, cleared on focus).
+- `Session`: `surfaceID` (Ghostty surface UUID, key), `agentSessionID` (Claude Code `session_id`, empty until the first hook; cleared by `SessionEnd` except after `/clear`, where the agent keeps running), `cwd`, `project` (git root folder name), `branch` (empty outside git), `state`, `stateSince` (time of entering the current state), `seen` (the user focused the surface since `stateSince`), `failed` (last stop was `StopFailure`), `note` (text from `tarn notify`, cleared on focus).
 - `AgentState`: `idle`, `working`, `permission`, `waiting`.
 
 ## 6. Stages
@@ -183,13 +180,13 @@ See section 13.
 
 ## 7. Acceptance
 
-- Command: `make -f tarn.mk check` runs `swiftlint lint --strict` on our folders, `macos/build.nu --action test` and the hook bridge tests. Until it is green, the stage is not done.
-- Benchmark: `make -f tarn.mk bench` compares startup, input latency, idle CPU and memory with upstream Ghostty built from the same commit. It runs before a release and does not block a stage; thresholds are set in S0.
+- Command: `make -f tarn.mk check` runs `swiftlint lint --strict` on our folders, the app tests, the hook, CLI and installer tests. Until it is green, the stage is not done.
+- Benchmark: `make -f tarn.mk bench` compares the release app with upstream Ghostty built from the merge base with `upstream/main`, both ReleaseLocal, one window and one surface. Thresholds, tarn against upstream: startup (median of 10) at most +5%, idle CPU (mean over 60 s) at most +0.5 percentage points, memory (RSS and footprint) at most +5%, output throughput (`cat` of 100 MB, median of 5) at most +5%. Input latency is not measured by a tool; check it by hand before a release (at most +1 ms). It runs before a release, does not block a stage, and writes `docs/bench.md`.
 
 | Section 3 rows | Level | How |
 | --- | --- | --- |
 | Happy path, Approval, Finished, Interrupted, Repeat | unit | registry fed with recorded hook payloads |
-| App not running, App hangs, Hooks not installed | unit | `tarn hook` against no socket, a socket that never reads, junk stdin |
+| App not running, App hangs, Hooks not installed | unit | `hook.sh` against no socket, a socket that never reads, junk stdin |
 | Bad request | unit | socket handler with junk lines |
 | Remote image, File rewritten | unit | viewer model with the rule list and a file watcher stub |
 | Notifications denied, Agent asks for attention, No duplicates | unit | notification gate with a stub center and a recorded OSC notification |
@@ -230,7 +227,7 @@ Jump order for R4: `waiting` with `failed`, then `permission`, then `waiting` or
 
 | System | Fact | Source, date | If not so |
 | --- | --- | --- | --- |
-| Ghostty build | Zig 0.17.0 minimum; the macOS app builds and tests through `macos/build.nu`, not `zig build` | `build.zig.zon:6`, `macos/AGENTS.md`, 2026-10-21 | S0 pins versions |
+| Ghostty build | Zig 0.17.0 minimum; the macOS app builds and tests through `macos/build.nu`, not `zig build` | `build.zig.zon:6`, `macos/AGENTS.md`, 2026-10-21 | the build breaks at the pinned version |
 | Ghostty churn | 142 commits touched `macos/` in 90 days | `git log --since=2026-07-23 -- macos`, 2026-10-21 | merge schedule changes |
 | Ghostty core events | notification, title, pwd, bell, child exited, progress, command finished reach the app | `src/apprt/action.zig:203-333`, `macos/Sources/Ghostty/Ghostty.App.swift:653-780`, checked by review | registry needs its own parsing |
 | Ghostty surfaces | each surface has a stable UUID; per-surface environment variables are supported; close is an event | `AppDelegate.swift:969-977`, `SurfaceView.swift:591`, `Ghostty.App.swift:293`, checked by review | surface key changes |
@@ -240,38 +237,21 @@ Jump order for R4: `waiting` with `failed`, then `permission`, then `waiting` or
 | Claude Code OSC 7501 | state escape sequence is not passed through tmux | code.claude.com/docs/en/terminal-config, 2026-10-21 | hooks stay the only source |
 | `tk` | `claim` is `<agent>:<session id>`; `tk list --json` returns `id`, `title`, `project`, `status`, `claim`, `ask` | tracker `docs/spec.md` 2.4; `tk list --json`, 2026-10-21 | second wave changes |
 
-Code sources. Four reference projects were picked from seven MIT agent terminals on libghostty by the same quality signals (GitHub tree, 2026-10-21). Ported code keeps its copyright and an entry in `THIRD_PARTY.md`.
-
-Picked by tests per file (0.4 to 1.3), few files over 40 KB, CI, lint and architecture docs: agterm, Limpid, termio, Calyx (GitHub tree, 2026-10-21).
-
-Dropped: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (no copying) give ideas only.
-
-| Stage | Need | Source | Use |
-| --- | --- | --- | --- |
-| S1 | markdown, highlight, mermaid, editor, no CDN | vendored markdown-it, highlight.js, mermaid, CodeMirror 6; MarkEdit-preview and macdown3000 (MIT) as models | vendor, adapt |
-| S1 | path parsing `path:line:col` | kooky `TerminalOpenTarget.swift` (228 lines, Foundation only, tested), the one file taken from it | port |
-| S1 | socket: newline-delimited JSON, path from the environment | agterm `ControlServer.swift`, `agtermCore` protocol | adapt |
-| S2 | agent status from hooks | agterm `AgentStatus.swift` (161 lines); Calyx `AgentStateResolver` to cross-check | adapt to section 8 |
-| S2 | hooks shipped as a Claude Code plugin | the `tk` plugin layout | reuse the layout |
-| S3 | jump order | Limpid `AttentionState.swift` (`jumpToAttention`) | port, map to section 8 |
-| S3 | notification and click route | Ghostty itself | call |
+Code sources. Reference projects were picked from seven MIT agent terminals on libghostty by tests per file, few files over 40 KB, CI, lint and architecture docs (GitHub tree, 2026-10-21): agterm, Limpid, termio, Calyx. Dropped: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (no copying) give ideas only. Ported or followed code, with commits and licenses, is listed in `THIRD_PARTY.md`; ported code keeps its copyright.
 
 ## 10. Requirement traceability
 
-| PRD line | Requirement | Stage | Status |
-| --- | --- | --- | --- |
-| Tabs and simple split | R1 | S0 | plan |
-| TUIs with mouse and trackpad | R2 | S0 | plan |
-| zsh completion and history | R7 | S0 | plan |
-| Editor-like input | R12 | S0 | plan |
-| Viewer pane, editing | R5, R6 | S1, branch `s2-files` | plan |
-| Click on path | R9 | S1 | plan |
-| Agent CLI | R8 | S1-S3, branch `s7-attention` | built: `open`, `ls`, `notify`; `hook` stays `hook.sh` |
-| Session overview with state | R3 | S2 | plan |
-| Several agents per project | R10 | S2 | plan |
-| Jump and notifications | R4 | S3, branch `s7-attention` | built: Cmd+U, one notification per need, OSC 9/777 suppressed |
-| hand-over, command for the user, subagents, tracker | R15-R18 | second wave | scoped |
-| HTML and PDF, SSH, phone | R11, R13, R14 | later | moved by session data |
+| Requirement | Status in `tarn-v1.0.0` |
+| --- | --- |
+| R1, R2, R12 | upstream, unchanged |
+| R3, R10, R20, R21 | built; groups are workspaces (`docs/specs/windows-workspaces.md`) |
+| R5, R6, R9 | built: viewer pane, editing, path click |
+| R7 | built: zsh setup in `docs/install.md` |
+| R8 | built: `open`, `ls`, `notify`; the hook stays `hook.sh` |
+| R4 | built: Cmd+U, one notification per need, OSC 9/777 suppressed |
+| R24 | built |
+| R15-R18 | second wave, scoped |
+| R11, R13, R14, R22, R23 | later |
 
 - R3 state. When a session gets `permission_prompt`, then it shows `permission` until `UserPromptSubmit` or `PostToolUse`.
 - R4 jump. When one session failed and two wait, then the jump focuses the failed one first, then the unseen waiting one that started waiting earlier.
@@ -289,7 +269,7 @@ Dropped: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (no copying) give ideas only
 
 ## 12. Decisions and open questions
 
-- Decided: fork Ghostty and add features in its Swift app - trusted core, notarized upstream, small Swift part; rejected: fork kooky (prebuilt engine from a cmux fork, root helper with NOPASSWD sudoers, edits other agents' settings), cmux (GPL and BSL, cloud), agterm, Calyx and other agent terminals (decided to build our own; their MIT code is used per section 9); affects: every upstream merge; revisit if merges cost more than a day a month.
+- Decided: fork Ghostty and add features in its Swift app - trusted core, notarized upstream, small Swift part; rejected: fork kooky (prebuilt engine from a cmux fork, root helper with NOPASSWD sudoers, edits other agents' settings), cmux (GPL and BSL, cloud), agterm, Calyx and other agent terminals (decided to build our own; their MIT code is used per `THIRD_PARTY.md`); affects: every upstream merge; revisit if merges cost more than a day a month.
 - Decided: the name is `tarn` (a small mountain lake: small, clear, quiet) - no namesakes among terminals and agent tools on GitHub, Homebrew, Product Hunt or the web, checked 2026-10-21; rejected: `lull`, `wisp`, `aerie` (taken). Trademarks and domains not checked.
 - Decided: the project is public; everything in the repository is in English. Upstream `AGENTS.md`, `README.md`, `Makefile` stay untouched; our profile is `.claude/CLAUDE.md`.
 - Decided: first version in the order core, markdown, sessions, notifications - markdown is what the user uses all the time; the second wave (R15-R18) is designed after the first ships.
@@ -301,9 +281,7 @@ Dropped: kooky, Vesta, Conterm. cmux (GPL) and Mux0 (no copying) give ideas only
 - Decided: agents inside tmux are out of the first version - the shell inside tmux inherits `TARN_SURFACE` from the tmux server, so events would land on the wrong record; revisit with R13 using the client tty as the key.
 - Decided: registry in memory, no persistence - the user keeps the terminal open.
 - Decided: quick answers go back as the permission hook's decision, and the session waits for the user; rejected: key presses matched to the dialog on screen (approved the wrong one with parallel calls), a 30 s wait, the jump shortcut.
-- Decided (2026-10-23): the sidebar has layers from top to bottom - pins (R19), custom groups (R21), agent groups, plain tabs below a divider without a header; the first version ships agent groups and plain tabs, the layer list in code takes the rest without a rework.
-- Decided (2026-10-23): a tab joins an agent group while the foreground process of any of its splits is `claude`, `codex` or `opencode`, read by process name with an argv fallback for a version-like name or an interpreter (ported from macterm, MIT); it returns to plain tabs when the agent exits; rejected: hooks only (Claude only), staying in the group after exit (groups would not show live agents). Not detected: agents inside tmux or ssh, agents behind a wrapper script. Revisit if Ghostty adds a foreground-process event.
-- Decided (2026-10-23): a group is keyed by the full project root (git root, or the folder outside git); the header is the folder name, with its parent folder when two groups share it; rejected: the folder name alone (two `app` projects merged).
+- Decided (2026-10-25): tabs are grouped in user-named workspaces per window, not by project; no pins; model, scenarios and D1-D18 in `docs/specs/windows-workspaces.md` (replaces the decisions of 2026-10-23 on sidebar layers and groups keyed by project root). An agent is found by the foreground process name, with an argv fallback for a version-like name or an interpreter (ported from macterm, MIT), and only while it runs; the tab then shows the agent's icon and state. Not detected: agents inside tmux or ssh, agents behind a wrapper script. Revisit if Ghostty adds a foreground-process event.
 - Decided (2026-10-23): agent icons are the monochrome logos from macterm (MIT), tinted like system icons; the logos are their owners' trademarks and only name the running agent.
 - Decided (2026-10-23): release tags are `tarn-vX.Y.Z` - the repository also holds upstream `vX.Y.Z` tags.
 
@@ -319,25 +297,8 @@ Open for the second wave, from the spec review of 2026-10-21 (resolve before des
 
 ## 13. Slicing
 
-| Stage | Result | Depends on |
+| Wave | Result | State |
 | --- | --- | --- |
-| S0 core | fork builds from source with `macos/build.nu`; `tarn.mk` with `check` and `bench`; baseline numbers against upstream; R1, R2, R12 verified by eye; zsh guide for R7; `docs/architecture.md` with the insertion point list | - |
-| S1 markdown | control socket, `tarn` CLI with `open`, viewer pane with mermaid, editing and the no-network rule, path click (R5, R6, R8 `open`, R9) | S0 |
-| S2 sessions | Claude Code plugin with hooks, hook bridge, session registry, sidebar, `tarn ls` (R3, R8 `ls`, R10) | S1 |
-| S3 attention | notifications through Ghostty's route, suppression of agent-surface terminal notifications, jump shortcut, `tarn notify` (R4, R8 `notify`) | S2 |
-| second wave | design R15-R18 against the open list of section 12 | S3 |
-| later | R11, R13, R14 | - |
-
-Implementation starts after the tracker work; tasks are in `tk` under project `tarn`. S1 measures the real token cost of one stage; later estimates use that number.
-
-## 14. Access and readiness
-
-Ready: Zig, Xcode, nushell and swiftlint are installed and the app builds with `macos/build.nu` (since `tarn-v0.0.1`); Claude Code with plugins is installed.
-
-Readiness for slicing:
-
-- [x] every entity has states, transitions, writer, storage;
-- [x] scenarios cover happy path, repeat, temporary and permanent errors, and the no-network rule;
-- [x] behavior questions of the first version answered;
-- [x] reference projects picked;
-- [ ] second-wave questions of section 12, before the second wave.
+| first | R1-R10, R12, R20, R21, R24: viewer, sessions, workspaces, settings, attention, app identity | shipped as `tarn-v1.0.0` |
+| second | design R15-R18 against the open list of section 12 | next |
+| later | R11, R13, R14, R22, R23 | - |
