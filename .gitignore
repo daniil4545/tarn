@@ -32,4 +32,7 @@ glad.zip
 vgcore.*
 
 /sprite_face_test*
-/dist/
+# tarn release output; dist/ itself holds tracked upstream files
+/dist/tarn-*
+/dist/verify/
+/dist/bench/
