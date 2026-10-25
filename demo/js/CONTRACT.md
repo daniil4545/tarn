@@ -1,6 +1,6 @@
 # Demo module contracts
 
-What every slice may rely on. Source of intent: `docs/plans/s5-demo.md` and `docs/plans/s5-demo-contracts.md`. Checks: `demo/test/check_0.py`.
+What every module may rely on. Module description: `docs/modules/demo.md`. Checks: `demo/test/check_0.py`.
 
 ## State
 
@@ -8,9 +8,10 @@ What every slice may rely on. Source of intent: `docs/plans/s5-demo.md` and `doc
 
 | Part | Writer | Shape |
 |---|---|---|
-| `workspaces` | `main.js` now, `workspace.js` after slice B | `{tabs: {id: {id, title, cwd, layout}}, wss: [{id, name, tabs}], cur}`, seed in `seed.js` |
+| `workspaces` | `workspace.js` | `{tabs: {id: {id, title, cwd, layout}}, wss: [{id, name, tabs}], cur}`, seed in `seed.js` |
 | `registry` | `registry.js` | `{paneId: {state, since, seen, failed, request, sawPermissionRequest, permissionAgent, answerable}}` |
 | `config` | `config.js` | `{key: value}` for every key of `OPTIONS` |
+| `vfs` | `vfs.js` | snapshot of the in-memory disk |
 
 Write a new part only through `register`. A tab's `layout` is a tree owned by `workspace.js`; the seed has one leaf `{pane: "pN"}` per tab.
 
@@ -18,7 +19,18 @@ Write a new part only through `register`. A tab's `layout` is a tree owned by `w
 
 `bus.js`. `bus.on(event, fn)` returns an off function. `bus.emit(event, detail)`. `bus.handle(name, fn)` sets the single handler of a command (a second one throws). `bus.cmd(name, payload)` runs it. A throwing or unknown command is caught: `console.warn`, an entry in `errors`, a `toast` event; `cmd` returns undefined.
 
-Commands and their writers: table in `docs/plans/s5-demo-contracts.md` section 4. Slice 0 owns `hook`, `config.set`, `config.reset`.
+Commands and their writers (the main ones; `rg "bus.handle\(" demo/js` lists all):
+
+| Command | Payload | Writer |
+| --- | --- | --- |
+| `tab.new`, `tab.close`, `tab.go`, `tab.move` | `{ws?, id?, n?, to?}` | `workspace.js` |
+| `pane.split`, `pane.close`, `pane.focus`, `pane.zoom`, `pane.resize`, `pane.equalize`, `pane.undo` | `{id?, dir}` | `workspace.js` |
+| `ws.new`, `ws.rename`, `ws.delete` | `{id?, name}` | `workspace.js` |
+| `hook` | `{pane, name, event}` | `registry.js` |
+| `card.answer` | `{pane, allow}` | `term-pane.js` (the pane's shell answers; the script then emits `hook`) |
+| `viewer.open` | `{path, line?, pane?}` | `viewer.js` |
+| `config.set`, `config.reset` | `{key, value}` | `config.js` |
+| `vfs.write` | `{path, text, by}` | `vfs.js` |
 
 Events: `state:changed {part}`, `config:changed {key, value}` (not sent for the values loaded at start: read `read("config")` once at init), `vfs:changed {path, by}`, `pane:output {id}`, `toast {text}`, `pane:focused {pane}` (the pane module emits it on focus; the registry marks the session seen), `pane:disposed {pane}` (emitted when a pane is freed after the undo window; the registry drops its record).
 
@@ -34,11 +46,11 @@ Labels follow the canon: `waiting` and not `seen` is shown as "done, not seen"; 
 
 ## Keys
 
-Rows are data in `keys/*.js`: `{id, chords, alt, when, group, text, cmd, payload}`; chords like `Cmd+Shift+D`, fallbacks `Ctrl+Alt+<key>`. A slice exports its rows; `main.js` concatenates all rows and calls `installKeys(rows, {focus})`, where `focus()` returns `terminal`, `viewer` or `any` (slice B wires the real focus). `installKeys` throws if `checkRows` finds a duplicate chord in an overlapping `when`, a chord that is shell input (Ctrl+letter, Alt+letter alone), or a fallback that is not Ctrl+Alt+key. Match is by the Latin letter of `e.key`, else by `e.code`; the handler runs in the capture phase and stops the event.
+Rows are data in `keys/*.js`: `{id, chords, alt, when, group, text, cmd, payload}`; chords like `Cmd+Shift+D`, fallbacks `Ctrl+Alt+<key>`. A slice exports its rows; `main.js` concatenates all rows and calls `installKeys(rows, {focus})`, where `focus()` returns `terminal`, `viewer`, `any` or `modal` (a settings window is open). `installKeys` throws if `checkRows` finds a duplicate chord in an overlapping `when`, a chord that is shell input (Ctrl+letter, Alt+letter alone), or a fallback that is not Ctrl+Alt+key. Match is by the Latin letter of `e.key`, else by `e.code`; the handler runs in the capture phase and stops the event.
 
 ## Pane
 
-`createPane(id, {cwd})` returns `{id, el, term, focus(), screenText(), dispose()}`. `pane-stub.js` is the stand-in; `term-pane.js` (slice A) replaces it with the same shape. `dispose()` removes the element and emits `pane:disposed`.
+`createPane(id, {cwd})` returns `{id, el, term, focus(), screenText(), dispose()}`. `createPane` lives in `term-pane.js`. `dispose()` removes the element and emits `pane:disposed`.
 
 ## Terminal adapter
 
@@ -70,6 +82,8 @@ The shell keeps its own prompt rows (engine has no OSC 133 marks): store `cursor
 
 `storage.js`: `load(part, seed)`, `save(part, value)`, `clearAll()`; key `tarn-demo-v1:<part>`; bad JSON gives the seed and a `toast`; a missing or blocked storage is tolerated.
 
+Survives reload: config, workspaces/tabs/layout (if `window-save-state` allows), vfs edits, shell history (last 200). After "Reset demo": config to defaults, workspaces and vfs to the seed (ids `t1`, `w1`), history cleared. Never survives: scrollback, a running `claude`, the undo stack; a reload in the middle of `claude` starts the pane at a fresh prompt.
+
 ## Viewer bundle in an iframe
 
-Checked in slice 0: the app bundle `macos/Sources/Features/Tarn/Viewer/tarn-viewer.{html,js,css}` runs in an iframe on a static server after two changes: the meta CSP is rewritten (`script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:`) and `window.webkit.messageHandlers.tarn.postMessage` is defined by an external script loaded before `tarn-viewer.js` (an inline script is blocked by the CSP). The page then answers `tarn.setChrome(...)` and `tarn.setDoc(...)` calls (shapes: `ViewerModel.swift` `pushChrome`, `pushDocument`) and posts `{t: "ready"}`, `{t: "tab", ...}` and the other messages. Unmodified, the CSP blocks the script and style, and `window.tarn` is undefined. Images use `tarn-md://file/<abs path>` and need the same rewrite.
+The app bundle `macos/Sources/Features/Tarn/Viewer/tarn-viewer.{html,js,css}` runs in an iframe on a static server after two changes: the meta CSP is rewritten (`script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:`) and `window.webkit.messageHandlers.tarn.postMessage` is defined by an external script loaded before `tarn-viewer.js` (an inline script is blocked by the CSP). The page then answers `tarn.setChrome(...)` and `tarn.setDoc(...)` calls (shapes: `ViewerModel.swift` `pushChrome`, `pushDocument`) and posts `{t: "ready"}`, `{t: "tab", ...}` and the other messages. Unmodified, the CSP blocks the script and style, and `window.tarn` is undefined. Images use `tarn-md://file/<abs path>` and need the same rewrite.

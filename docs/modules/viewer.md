@@ -4,7 +4,7 @@
 
 The viewer is a pane beside the terminal that shows files the user or an agent points at: markdown rendered (with an editor), other text as highlighted code, with file tabs, a files tree and live reload when the agent rewrites a file. Swift holds all state; a WKWebView only draws it.
 
-State of this document: branch `s3-windows` (PR #5). A window tab holds any number of viewers around the terminal block; placement, drops and grips are in [layout.md](layout.md). This document covers one viewer.
+A window tab holds any number of viewers around the terminal block; placement, drops and grips are in [layout.md](layout.md). This document covers one viewer.
 
 ## Place in the system
 
@@ -32,9 +32,8 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
 | In | menu split and focus actions while the pane has focus | `ViewerWebView` to `ViewerModel.onLayout`, handled by [layout.md](layout.md) |
 | In | files taken from or dropped into another viewer | `ViewerModel.absorb`, `take`, `release`, `canTake` |
-| In | View menu item "Toggle File Viewer" Cmd+B (action `toggleViewer:`); in the pane `ViewerWebView.command` takes Cmd+B, Cmd+S, Cmd+E with exact modifiers | `TerminalController` extension, `ViewerHost.toggleFromKey` |
+| In | View menu item "Toggle File Viewer", Cmd+B (action `toggleViewer:`, `ViewerHost.toggleFromKey`); in the pane `ViewerWebView.command` takes Cmd+B, Cmd+S, Cmd+E with exact modifiers, and Cmd+E beats Ghostty's selection-for-find. A Ghostty keybind on Cmd+B wins over the menu item, which keeps showing Cmd+B because Ghostty has no action to sync it with | `TerminalController` extension, `ViewerWebView`, `MainMenu.xib` |
 | Out | keyboard: Cmd+B opens into the tree, shows into the pane, hides to the terminal; Enter in the tree moves it into the file; a layout change gives the terminal its first responder back and a focus request waits for the web view to join the window (as `Ghostty.moveFocus`) | `ViewerHost`, `ViewerWebController.focus` |
-| In | (note) a Ghostty keybind on Cmd+B takes the key first and wins over the menu item; the item keeps showing Cmd+B because Ghostty has no action to sync it with | `MainMenu.xib` |
 | In | file events (write, delete, rename, extend) on the file and its folder | `FileWatcher` |
 | In | close of a tab, window or the app | `ViewerClose` |
 | Out | script calls `tarn.setDoc`, `tarn.setChrome`, `tarn.toast`, `tarn.cmd` | `ViewerModel.runScript` |
@@ -63,9 +62,9 @@ Save: any text file (markdown and code; Cmd+E opens the editor for both). Re-rea
 
 Page process: the web content process may die; the controller reloads the page and `ready` makes the model push everything again. Messages built on an older revision than the model's are dropped.
 
-Close: `ViewerClose` is called from the close paths of Ghostty (see insertion points 12 and 13 in [architecture.md](../architecture.md)). It collects dirty paths of all panes of the tab group and shows one sheet (Save, Don't Save, Cancel). Don't Save keeps the edits and lets the repeated close pass once. Closing the last tab closes the viewer and registers an undo that reopens the tabs. `ViewerClose` collects dirty files of every viewer of the group (`viewerHost.models`).
+Close: `ViewerClose` is called from the close paths of Ghostty (see insertion points 12 and 13 in [architecture.md](../architecture.md)). It collects dirty paths of all panes of the tab group and shows one sheet (Save, Don't Save, Cancel). Don't Save keeps the edits and lets the repeated close pass once. Closing the last tab closes the viewer and registers an undo that reopens the tabs.
 
-Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off), code with highlight.js (limit 512 KB), the editor with CodeMirror 6, diagrams with mermaid (layout dagre) loaded on demand. Output is bundled by esbuild into `Viewer/` and committed; the app build needs no node.
+Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off), code with highlight.js (limit 512 KB), the editor with CodeMirror 6, diagrams with mermaid (layout dagre) loaded on demand. Mermaid runs with `securityLevel: "strict"`. Output is bundled by esbuild into `Viewer/` and committed; the app build needs no node.
 
 ## Files
 
@@ -93,8 +92,8 @@ Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off),
 | `Ghostty.moveFocus` | `Ghostty/Surface View/SurfaceView.swift:1075` | focus back to the terminal when the pane closes |
 | `UntrustedURL` | `Helpers/UntrustedURL.swift:6` | policy for a system-type file linked from a document |
 | `open_url` action path | `Ghostty/Ghostty.App.swift:808` | path click entry |
-| `needsConfirmQuit` flow | `Features/Terminal/TerminalController.swift:1360`, `App/AppDelegate.swift:429` | Ghostty's own confirmation runs after ours |
-| Config colors | `Ghostty/Ghostty.Config.swift:463` (`backgroundColor`), `:518` (`splitDividerColor`) | pane theme and divider |
+| `needsConfirmQuit` flow | `Features/Terminal/TerminalController.swift`, `App/AppDelegate.swift` | Ghostty's own confirmation runs after ours |
+| Config colors | `Ghostty/Ghostty.Config.swift` (`backgroundColor`, `splitDividerColor`) | pane theme and divider |
 
 ## Insertion points in upstream files
 

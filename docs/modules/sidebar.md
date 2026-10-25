@@ -4,7 +4,7 @@
 
 The sidebar replaces the native tab bar with a vertical list of the window's tabs, grouped into workspaces. Each row shows the agent state; each workspace header shows the most urgent state of its tabs; a hover card shows the request and answers it.
 
-State of this document: branch `s3-windows` (PR #5). Compared with `s2-files`, grouping by project is gone: groups are workspaces, see [workspaces.md](workspaces.md).
+Groups are workspaces, see [workspaces.md](workspaces.md).
 
 ## Place in the system
 
@@ -39,7 +39,7 @@ Reading: one `SidebarModel` per window controller derives `groups` from the regi
 
 ## How it works
 
-State: `groups` (derived, published; one per workspace with its tabs in tab order, folded or not), `dropSlot` (where a drop in progress would land), card tab id, hovered tab, row anchors. The project root cache of `s2-files` no longer exists.
+State: `groups` (derived, published; one per workspace with its tabs in tab order, folded or not), `dropSlot` (where a drop in progress would land), card tab id, hovered tab, row anchors.
 
 Refresh:
 1. The notification observer calls `refresh()` now and once on the next run loop turn. The timer covers agent start and exit, which the core does not report.
@@ -73,17 +73,17 @@ Titles: a shell path title becomes the full working directory with `~`; under an
 | Mechanism | Where | Use |
 |---|---|---|
 | Tab group of windows, `tabbedWindows` | `macos/Sources/Features/Terminal/TerminalController.swift:600` (`relabelTabs`) | tab order and shortcut labels |
-| `keyboardShortcut(for:)` | `Ghostty/Ghostty.Config.swift:114` | shortcut of `goto_tab:N` |
+| Config shortcut lookup | `Ghostty/Ghostty.Config.swift` (`keyboardShortcut(for:)`) | shortcut of `goto_tab:N` |
 | Tab accessory view stack | `Features/Terminal/Window Styles/TerminalWindow.swift:173` | `NativeTabMark` install |
 | `TerminalTabColor` | `Features/Terminal/TerminalTabColor.swift:4` | row color dot |
-| Close actions, `confirmClose`, `closeTabImmediately`, undo grouping | `TerminalController` (`closeTab` `:1351`, `closeTabImmediately` `:737`) | context menu, grouped close |
+| Close actions, `confirmClose`, `closeTabImmediately`, undo grouping | `TerminalController` (`closeTab`, `closeTabImmediately`) | context menu, grouped close |
 | `move_tab` (through the registry) | `Features/Terminal/BaseTerminalController.swift:1046` | all reordering |
 | `SurfaceDragSourceView` pattern | `Ghostty/Surface View/SurfaceDragSource.swift:82` | tab and workspace drag source |
 | Origin | PR #14562 of ghostty-org/ghostty (see `THIRD_PARTY.md`) | vertical tab list |
 
 ## Insertion points in upstream files
 
-Rows 1 to 6 and 9 of [architecture.md](../architecture.md): `sidebarModel` property, `SidebarLayout` wrap and initial width, notification posts after relabel and tab move, `TerminalWindow` observers, native tab bar hidden while the style is `sidebar`, the menu item "Settings...". PR #5 adds none for the sidebar itself.
+Rows 1 to 6 and 9 of [architecture.md](../architecture.md): `sidebarModel` property, `SidebarLayout` wrap and initial width, notification posts after relabel and tab move, `TerminalWindow` observers, native tab bar hidden while the style is `sidebar`, the menu item "Settings...".
 
 ## Invariants and failure rules
 

@@ -4,7 +4,7 @@
 
 Workspaces group the tabs of one window into named sections of the sidebar (Default, and any the user creates). The module stores which workspace each tab belongs to, keeps that consistent when Ghostty reorders, closes, restores or merges tabs, and brings a tab back to its workspace on undo.
 
-State of this document: branch `s3-windows` (PR #5). Behavior: `docs/plans/windows-workspaces.md`; rules: `docs/plans/s3-windows-contracts.md`.
+Behavior, scenarios and decisions D1-D18: `docs/specs/windows-workspaces.md`.
 
 ## Place in the system
 
@@ -56,7 +56,7 @@ Windows: a tab dragged to another window joins that window's target; a tab dropp
 
 Restore: each window saves `{version, setID, revision, tabKey, workspaces[{id, name, collapsed, tabKeys}]}` as JSON under `tarn.workspaces` beside Ghostty's state. Windows with the same `setID` join one set; the higher revision wins. Viewers are not restored after a relaunch.
 
-Undo (tombstone): on `willClose` the registry notes the tab's set, workspace and place, the surface ids and the viewer snapshot. It registers an action in the window's undo manager with Ghostty's `undoExpiration`, in the same group as Ghostty's close undo. Undo runs ours first and only arms the tombstone; Ghostty's action then creates the window; `claimTombstones` matches the new window by surface ids, recreates the set or workspace if gone (no empty Default) and restores the viewers. Unclaimed tombstones are dropped and logged. Surface ids come from a cache refreshed on every sync, because closing a whole window empties the surface trees first.
+Undo (tombstone): the tombstone joins Ghostty's undo group instead of a second action in `ExpiringUndoManager`: a second action would register after Ghostty's, sit on top of the stack and need a second Cmd+Z. On `willClose` the registry notes the tab's set, workspace and place, the surface ids and the viewer snapshot. It registers an action in the window's undo manager with Ghostty's `undoExpiration`, in the same group as Ghostty's close undo. Undo runs ours first and only arms the tombstone; Ghostty's action then creates the window; `claimTombstones` matches the new window by surface ids, recreates the set or workspace if gone (no empty Default) and restores the viewers. Unclaimed tombstones are dropped and logged. Surface ids come from a cache refreshed on every sync, because closing a whole window empties the surface trees first.
 
 ## Files
 
@@ -100,6 +100,8 @@ Rows 15 and 16 of [architecture.md](../architecture.md): `WorkspaceRestore.encod
 | A second `reconcile` over the same groups changes nothing | `ReconcileTests`, `TargetTests` |
 | No timer of ours for undo | tombstone closure expires with Ghostty's undo |
 | Own key hops do not change fold state or target | `KeyHops`, `TargetExpiryTests` |
+
+Rejected: a store with its own order and a `reconcile` that rewrites the native order (two writers of order); one tab group per workspace (breaks per-window workspaces and Cmd+N). No undo for workspace operations (rename, delete, move): only closed tabs and windows come back.
 
 ## Tests
 

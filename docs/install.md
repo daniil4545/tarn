@@ -2,7 +2,7 @@
 
 tarn is a separate app. It installs next to Ghostty and shares Ghostty's config files. The build is ad-hoc signed, not notarized, so macOS needs one `xattr` command before the first launch.
 
-Requirements: macOS 13 or newer, Apple silicon or Intel (one universal build).
+Requirements: macOS 13.1 or newer, Apple silicon or Intel (one universal build).
 
 ## Install
 
