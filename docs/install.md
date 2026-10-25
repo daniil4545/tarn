@@ -6,6 +6,16 @@ Requirements: macOS 13 or newer, Apple silicon or Intel (one universal build).
 
 ## Install
 
+One command installs or upgrades to the latest release:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/daniil4545/tarn/main/install.sh | sh
+```
+
+It downloads `tarn-<version>-macos.zip` and its `.sha256` from the release, checks the checksum, removes the quarantine flag and puts `Tarn.app` into `/Applications` (`~/Applications` when `/Applications` is not writable). It stops when Tarn is running or when the `Tarn.app` already there is not tarn. `TARN_VERSION=1.0.0` picks a version, `TARN_DEST=<folder>` picks the folder.
+
+By hand:
+
 1. Download `tarn-<version>-macos.zip` from the [releases page](https://github.com/daniil4545/tarn/releases) (tags are `tarn-vX.Y.Z`).
 2. Check the checksum against the one in the release notes: `shasum -a 256 ~/Downloads/tarn-<version>-macos.zip`.
 3. Unzip it and move `Tarn.app` to `/Applications`.
@@ -85,7 +95,7 @@ Run through this list once. It is the acceptance list for the release.
 The build is ad-hoc signed, so every release has a new code signature. macOS ties privacy permissions to that signature, so an upgrade may lose them.
 
 1. Quit Tarn (Cmd+Q).
-2. Replace `/Applications/Tarn.app` with the new one and run the `xattr` command again.
+2. Run the install command again, or replace `/Applications/Tarn.app` by hand and run the `xattr` command again.
 3. Start Tarn. If a global key (`global:` keybind) does nothing, the Accessibility permission is stale: run `tccutil reset Accessibility com.daniil4545.tarn`, or remove Tarn in System Settings, Privacy and Security, Accessibility, then start Tarn and grant it again.
 4. If a tab loses access to Documents, Desktop, Downloads or other protected folders, run `tccutil reset All com.daniil4545.tarn` and grant the access again when asked.
 

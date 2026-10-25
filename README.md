@@ -81,9 +81,13 @@ Next: the second wave of `docs/spec.md` (hand-over between sessions, `tarn run`,
 
 ## Install
 
-Download `tarn-<version>-macos.zip` from the releases page, move `Tarn.app` to `/Applications` and run
-`xattr -dr com.apple.quarantine /Applications/Tarn.app` (the build is ad-hoc signed, not notarized).
-Tarn installs next to Ghostty and reads the same config. Full steps, the Claude Code plugin, zsh
+```sh
+curl -fsSL https://raw.githubusercontent.com/daniil4545/tarn/main/install.sh | sh
+```
+
+The script downloads the latest release, checks its checksum and puts `Tarn.app` into
+`/Applications`. The build is ad-hoc signed, not notarized; installing by hand needs one `xattr`
+command, see the guide. Tarn installs next to Ghostty and reads the same config. Full steps, the Claude Code plugin, zsh
 setup and upgrades: [docs/install.md](docs/install.md).
 
 ## Build from source

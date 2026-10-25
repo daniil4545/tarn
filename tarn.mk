@@ -1,7 +1,7 @@
 # tarn make targets. Usage: make -f tarn.mk check | release
 #
-# check    swiftlint on our folders, the app test suites, the hook contract test
-# release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip
+# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests
+# release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
 #
 # Builds run under nice and with 4 jobs: the machine is shared with other work.
 # Deviation from macos/build.nu: it passes no -jobs limit, so xcodebuild is called directly.
@@ -25,6 +25,9 @@ check:
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
 		-jobs 4 -skip-testing GhosttyUITests test 2>&1 | tail -30
 	python3 -I plugin/test/hook_test.py
+	python3 -I cli/test/cli_test.py
+	shellcheck install.sh cli/tarn cli/test/install_test.sh
+	sh cli/test/install_test.sh
 
 release:
 	@test -z "$$(git status --porcelain --untracked-files=no)" || { echo "release: tracked files are modified, commit first"; exit 1; }
@@ -48,4 +51,5 @@ release:
 	  test -f $(TMP)/Tarn.app/Contents/Resources/terminfo/78/xterm-ghostty && \
 	  test -f $(TMP)/Tarn.app/Contents/Resources/ghostty/shell-integration/zsh/ghostty-integration && \
 	  $(TMP)/Tarn.app/Contents/MacOS/ghostty +version | head -3 && \
-	  rm -r -f $(TMP) && echo "zip: $$zip" && shasum -a 256 $$zip
+	  rm -r -f $(TMP) && echo "zip: $$zip" && \
+	  (cd dist && shasum -a 256 tarn-$$v-macos.zip | tee tarn-$$v-macos.zip.sha256)

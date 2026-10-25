@@ -18,7 +18,8 @@ First release. The build is ad-hoc signed and not notarized; see `docs/install.m
 - Jump: Cmd+U (Window, "Jump to Waiting Session") goes to the session that waits for you. Agents never move focus.
 - `tarn` command inside tarn terminals: `tarn open <path>` opens a file in the viewer, `tarn ls [--json]` lists sessions, `tarn notify <text>` marks the session and notifies. It fails with `tarn: <text>` and exit code 1 when no tarn runs.
 - App identity: `Tarn.app`, bundle id `com.daniil4545.tarn`, version 1.0.0, own icon. It installs next to Ghostty and shares its config files.
-- `tarn.mk` with `check` and `release`; the release is an ad-hoc signed zip with the `tarn` command inside, see `docs/install.md`.
+- `tarn.mk` with `check` and `release`; the release is an ad-hoc signed zip with the `tarn` command inside and a `.sha256` file.
+- `install.sh`: one `curl ... | sh` command installs or upgrades from the latest release, see `docs/install.md`.
 
 ### Changed
 
