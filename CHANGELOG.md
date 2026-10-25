@@ -4,6 +4,15 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ## [Unreleased]
 
+### Added
+
+- App identity: `Tarn.app`, bundle id `com.daniil4545.tarn`, version 1.0.0, own icon. It installs next to Ghostty and shares its config files.
+- `tarn.mk` with `check` and `release`; the release is an ad-hoc signed zip, see `docs/install.md`.
+
+### Changed
+
+- No updater: the menu item is gone and no feed is set. Sidebar settings saved by a Debug build under the old Ghostty bundle id are not carried over.
+
 ## [tarn-v0.0.1] - 2026-10-23
 
 First preview, built from source. The sidebar and Claude Code session state work; the rest of the first version (markdown panel, `tarn` CLI, notifications, app identity, benchmark) is not in yet.
