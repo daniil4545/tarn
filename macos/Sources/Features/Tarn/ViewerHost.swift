@@ -50,29 +50,17 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// What Cmd+B does from the terminal, by the state of the pane.
-    enum TreeKeyAction: Equatable {
-        case openTree, closePane, toggleTree
-    }
-
-    static func treeKeyAction(paneOpen: Bool, hasFiles: Bool) -> TreeKeyAction {
-        if !paneOpen { return .openTree }
-        return hasFiles ? .toggleTree : .closePane
-    }
-
     /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
-    /// takes the key first, so there is one path per focus.
+    /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
+    /// only; otherwise the model decides (an empty pane closes, one with files toggles the tree).
     func toggleFromKey(root: String?) {
-        switch Self.treeKeyAction(paneOpen: model != nil, hasFiles: !(model?.snapshot.isEmpty ?? true)) {
-        case .openTree:
+        guard let model else {
             let responder = window?.firstResponder
             makePane(root: root ?? NSHomeDirectory()).showTreeOnly()
             keepFocus(responder)
-        case .closePane:
-            closePane(saved: [], active: -1)
-        case .toggleTree:
-            model?.toggleTree()
+            return
         }
+        model.toggleTreeKey()
     }
 
     private func makePane(root: String) -> ViewerModel {

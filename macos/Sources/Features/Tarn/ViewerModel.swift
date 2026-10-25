@@ -70,6 +70,8 @@ final class ViewerModel {
             tabs.open(tab.path, pin: !tab.preview)
         }
         tabs.activate(active)
+        // Every file is gone: an empty pane with no tree would hang there; show the tree instead.
+        if tabs.tabs.isEmpty { treeVisible = true }
         pushAll()
     }
 
@@ -89,8 +91,17 @@ final class ViewerModel {
 
     func closeActiveTab() {
         // A pane with no file has no tab to close: the key closes the pane itself.
-        if tabs.tabs.isEmpty { return onClosePane?([], -1) ?? () }
+        if closeIfEmpty() { return }
         closeTab(at: tabs.active)
+    }
+
+    /// A pane with no file has nothing to show but the tree: the keys that end a tab or hide the
+    /// tree close it. The one place of that rule. Returns whether it closed the pane.
+    @discardableResult
+    private func closeIfEmpty() -> Bool {
+        guard tabs.tabs.isEmpty else { return false }
+        onClosePane?([], -1)
+        return true
     }
 
     /// Opens the pane with the tree only, no file (Cmd+B in a terminal with no pane).
@@ -102,7 +113,7 @@ final class ViewerModel {
     /// Cmd+B in the pane: with files it toggles the tree; with no file the pane has nothing else to
     /// show, so it closes.
     func toggleTreeKey() {
-        if tabs.tabs.isEmpty { return onClosePane?([], -1) ?? () }
+        if closeIfEmpty() { return }
         toggleTree()
     }
 
@@ -175,7 +186,7 @@ final class ViewerModel {
         case "closePane": closePane()
         case "toggleTree": toggleTreeKey()
         case "hideTree":
-            if tabs.tabs.isEmpty { return onClosePane?([], -1) ?? () }
+            if closeIfEmpty() { return }
             treeVisible = false
             pushChrome()
             onFocus?()

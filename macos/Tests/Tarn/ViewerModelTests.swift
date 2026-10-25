@@ -544,10 +544,31 @@ struct ViewerClickAndKeyTests {
 @Suite
 @MainActor
 struct ViewerTreeKeyTests {
-    @Test func terminalKeyDependsOnThePaneState() {
-        #expect(ViewerHost.treeKeyAction(paneOpen: false, hasFiles: false) == .openTree)
-        #expect(ViewerHost.treeKeyAction(paneOpen: true, hasFiles: false) == .closePane)
-        #expect(ViewerHost.treeKeyAction(paneOpen: true, hasFiles: true) == .toggleTree)
+    @Test func undoOfACloseWhoseFilesAreGoneShowsTheTree() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.reopen([ViewerTab(path: "/nonexistent/a.md", preview: false, line: nil, jump: 0)], active: 0)
+        #expect(model.snapshot.isEmpty)
+        #expect(model.treeVisible)
+    }
+
+    @Test func hostCreatesATreeOnlyPaneThatSurvivesAFailedOpenAndClosesOnTheNextKey() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let host = ViewerHost()
+        let missing = OpenTarget(path: dir + "/nope.md", line: nil)
+        // An open that fails in a pane it created leaves no pane behind.
+        #expect(!host.open(missing, root: dir, focus: false))
+        #expect(host.model == nil)
+        // Cmd+B from the terminal opens the tree-only pane.
+        host.toggleFromKey(root: dir)
+        #expect(host.model?.treeVisible == true)
+        #expect(host.model?.snapshot.isEmpty == true)
+        // A failed open does not take that pane away.
+        #expect(!host.open(missing, root: dir, focus: false))
+        #expect(host.model != nil)
+        // The next Cmd+B closes the empty pane.
+        host.toggleFromKey(root: dir)
+        #expect(host.model == nil)
     }
 
     @Test func treeOnlyPaneShowsTheTreeWithNoFile() {
