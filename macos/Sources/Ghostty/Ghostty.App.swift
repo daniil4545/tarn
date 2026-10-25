@@ -1372,9 +1372,6 @@ extension Ghostty {
                     guard let surfaceView = self.surfaceView(from: surface) else { return false }
                     guard let controller = surfaceView.window?.windowController as? BaseTerminalController else { return false }
 
-                    // If the window has no splits, the action is not performable
-                    guard controller.surfaceTree.isSplit else { return false }
-
                     // Convert the C API direction to our Swift type
                     guard let splitDirection = SplitFocusDirection.from(direction: direction) else { return false }
 
@@ -1385,8 +1382,10 @@ extension Ghostty {
                     // returning true. This ensures performable keybinds only consume
                     // the key event when we actually perform navigation.
                     let focusDirection: SplitTree<Ghostty.SurfaceView>.FocusDirection = splitDirection.toSplitTreeFocusDirection()
-                    guard controller.surfaceTree.focusTarget(for: focusDirection, from: targetNode) != nil else {
-                        return false
+                    guard controller.surfaceTree.isSplit,
+                          controller.surfaceTree.focusTarget(for: focusDirection, from: targetNode) != nil else {
+                        // tarn: no terminal there, a viewer of the tab may be.
+                        return MainActor.assumeIsolated { ViewerRouter.focusNeighbor(from: surfaceView, direction: splitDirection) }
                     }
 
                     // We have a valid target, post the notification to perform the navigation

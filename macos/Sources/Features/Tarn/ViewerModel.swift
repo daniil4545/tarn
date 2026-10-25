@@ -2,6 +2,13 @@ import AppKit
 import Foundation
 import OSLog
 
+/// What the page's keys ask of the layout around the viewer.
+enum ViewerLayoutCommand {
+    /// Opens the active file in a new viewer on that side.
+    case split(AreaEdge)
+    case focus(AreaTree.FocusDirection)
+}
+
 /// What a viewer pane shows: tabs, documents, the files tree and the watchers. The web page draws
 /// it and reports user actions; this model owns the state. See `docs/plans/s2-files.md` section 4.
 @MainActor
@@ -24,6 +31,8 @@ final class ViewerModel {
     var script: ((String) -> Void)?
     /// Asks to close the pane, with the tabs it had, for undo.
     var onClosePane: (([ViewerTab], Int) -> Void)?
+    /// A key or menu command that changes the layout of the tab: a split or a focus move.
+    var onLayout: ((ViewerLayoutCommand) -> Void)?
     /// Asks to give the page keyboard focus.
     var onFocus: (() -> Void)?
     /// True while the page holds keyboard focus.
@@ -63,6 +72,21 @@ final class ViewerModel {
         pushDocument(target.path, reason: "open")
         pushChrome()
         return true
+    }
+
+    /// Takes over the files of another viewer, edits included: the viewer is dropped into this one.
+    func absorb(_ other: ViewerModel) {
+        let active = other.tabs.activePath
+        for tab in other.tabs.tabs {
+            if docs[tab.path] == nil, let doc = other.docs[tab.path] {
+                docs[tab.path] = doc
+                watchers[tab.path] = FileWatcher(path: tab.path) { [weak self] in self?.diskChanged(tab.path) }
+            }
+            tabs.open(tab.path, pin: true)
+        }
+        if let active { tabs.open(active, pin: true) }
+        if let active { tree.reveal(active) }
+        pushAll()
     }
 
     func reopen(_ saved: [ViewerTab], active: Int) {

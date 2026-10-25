@@ -5,9 +5,12 @@ import OSLog
 import WebKit
 
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
-/// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`.
+/// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`. The
+/// split and focus items of the menu reach it first in the responder chain, before the terminal
+/// controller, so Ghostty's split keys work while a viewer holds the keyboard (D8, S14).
 final class ViewerWebView: WKWebView {
     var onCommand: ((String) -> Void)?
+    var onLayout: ((ViewerLayoutCommand) -> Void)?
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
@@ -23,6 +26,17 @@ final class ViewerWebView: WKWebView {
     @objc func close(_ sender: Any?) {
         onCommand?("closeTab")
     }
+
+    @IBAction func splitRight(_ sender: Any?) { onLayout?(.split(.right)) }
+    @IBAction func splitLeft(_ sender: Any?) { onLayout?(.split(.left)) }
+    @IBAction func splitDown(_ sender: Any?) { onLayout?(.split(.bottom)) }
+    @IBAction func splitUp(_ sender: Any?) { onLayout?(.split(.top)) }
+    @IBAction func splitMoveFocusPrevious(_ sender: Any?) { onLayout?(.focus(.previous)) }
+    @IBAction func splitMoveFocusNext(_ sender: Any?) { onLayout?(.focus(.next)) }
+    @IBAction func splitMoveFocusAbove(_ sender: Any?) { onLayout?(.focus(.spatial(.up))) }
+    @IBAction func splitMoveFocusBelow(_ sender: Any?) { onLayout?(.focus(.spatial(.down))) }
+    @IBAction func splitMoveFocusLeft(_ sender: Any?) { onLayout?(.focus(.spatial(.left))) }
+    @IBAction func splitMoveFocusRight(_ sender: Any?) { onLayout?(.focus(.spatial(.right))) }
 }
 
 /// Owns the web view of one viewer pane: loads the page, serves its assets, forwards messages.
@@ -31,7 +45,7 @@ final class ViewerWebController: NSObject {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
     private static let pageURL = URL(string: "\(ViewerRules.scheme)://app/tarn-viewer.html")!
 
-    let container = NSView()
+    let container = ViewerPaneView()
     private weak var model: ViewerModel?
     private var webView: ViewerWebView?
     private var started = false
@@ -78,14 +92,14 @@ final class ViewerWebController: NSObject {
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
 
         let view = ViewerWebView(frame: container.bounds, configuration: config)
-        view.autoresizingMask = [.width, .height]
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
+        view.onLayout = { [weak model] in model?.onLayout?($0) }
         view.underPageBackgroundColor = model.dark ? NSColor(srgbRed: 0.157, green: 0.165, blue: 0.212, alpha: 1) : .white
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif
-        container.addSubview(view)
+        container.install(view)
         webView = view
         view.load(URLRequest(url: Self.pageURL))
         if wantsFocus { DispatchQueue.main.async { [weak self] in self?.focus() } }
