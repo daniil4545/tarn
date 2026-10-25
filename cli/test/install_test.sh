@@ -33,7 +33,7 @@ fake_app com.daniil4545.tarn 1.0.0
 publish
 python3 -m http.server "$port" --bind 127.0.0.1 --directory "$root/srv" >/dev/null 2>&1 &
 server=$!
-trap 'kill "$server" 2>/dev/null; rm -rf "$root"' EXIT
+trap 'kill "$server" 2>/dev/null; wait "$server" 2>/dev/null; rm -rf "$root"' EXIT
 sleep 1
 
 run; expect "$?:$(installed)" "0:1.0.0" "fresh install"
