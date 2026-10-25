@@ -19,6 +19,8 @@ flowchart LR
 
 Reading: the registry is the only writer of session state; `AgentProcess` only names the agent for grouping. Source: `SessionRegistry.swift`, `AgentProcess.swift`, `plugin/hooks/`.
 
+Attention (notifications, jump, `tarn ls` and `notify`) is in [attention.md](attention.md); it adds `agentSessionID`, `note` and `need` to `AgentSession`.
+
 ## Inputs and outputs
 
 | Direction | What | Where |

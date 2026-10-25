@@ -4,7 +4,7 @@ tarn is an agent-first macOS terminal, a fork of Ghostty. For people who run CLI
 
 How to read: the overall picture is section 1, the module documents are in `docs/modules/`, where to change is section 9. Why it is decided so: section 12 of `docs/spec.md`.
 
-State of this document: it describes branch `s3-windows` (PR #5, on top of PR #3). Module documents marked "with PR #N" arrive with that PR. The `tarn` CLI and `tarn.mk` do not exist here (not verified on other branches). Sections 3 to 7 of the earlier version (processes, data and states, trust boundaries, failures, observability) now live in the module documents.
+State of this document: it describes branch `s7-attention` on top of `main` (PRs #3 and #5). Module documents marked "with PR #N" arrive with that PR. `tarn.mk` does not exist here (not verified on other branches). Sections 3 to 7 of the earlier version (processes, data and states, trust boundaries, failures, observability) now live in the module documents.
 
 ## Contents
 
@@ -64,8 +64,8 @@ flowchart LR
 | Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | works |
 | Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works on `s3-windows` |
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works on `s3-windows` |
-| Demo | demo mode | [demo.md](modules/demo.md) | works on `s5-demo` |
-| `tarn` CLI, notifications | spec sections 2.4, 2.2 | none (the socket accepts `{"cmd":"open"}`; no binary) | not on this branch |
+| Demo | demo mode | [demo.md](modules/demo.md) | works |
+| Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket commands `ls` and `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
 
 Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names its suites.
 
@@ -135,12 +135,15 @@ Branch diff against `origin/main`. Every Swift change outside `macos/Sources/Fea
 | 13 | `macos/Sources/App/AppDelegate.swift` | in `applicationShouldTerminate`: a `ViewerClose.interceptQuit` block before the `needsConfirmQuit` check; replies `.terminateLater`, then continues with Ghostty's own quit flow | one sheet lists the dirty files of all windows on quit |
 | 19 | `macos/Sources/App/MainMenu.xib` | View menu: item "Toggle File Viewer", key equivalent `b`, action `toggleViewer:` to the first responder | Cmd+B from the terminal opens, shows or hides the viewer pane; the action is in `ViewerHost.swift` |
 | 7 | `macos/Sources/Ghostty/Surface View/SurfaceView.swift` | `environmentVariables["TARN_SURFACE"] = view.id.uuidString` before the variables are converted to arrays; replaces an inherited value | hooks learn their surface |
+| 20 | `macos/Sources/App/MainMenu.xib` | Window menu: item "Jump to Waiting Session", key equivalent `u`, action `jumpToWaitingSession:` to the first responder, after "Show/Hide All Terminals" | Cmd+U jump; the action is in `AttentionJump.swift` |
+| 21 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `showDesktopNotification(_ app:target:n:)` surface case: `if MainActor.assumeIsolated({ Attention.suppresses(surfaceView) }) { return }`; `private` removed from `showDesktopNotification(_ surfaceView:title:body:requireFocus:)` | OSC 9/777 of a live agent session is dropped; our notification goes through Ghostty's route |
+| 22 | `macos/Ghostty.xcodeproj/project.pbxproj` | shell phase "Install tarn CLI" in the app target: installs `cli/tarn` into `Contents/MacOS` and signs it | the CLI ships in the bundle; the core puts that folder on `PATH` |
 | 8 | `macos/Assets.xcassets/TarnAgentClaude.imageset`, `TarnAgentCodex.imageset`, `TarnAgentOpenCode.imageset` | new image sets with SVG (`claude.svg`, `openai.svg`, `opencode.svg`) | agent badges |
-| 30 | `macos/Ghostty.xcodeproj/project.pbxproj`, `Ghostty.xcscheme` | bundle ids `com.daniil4545.tarn[.debug|-dock-tile|.tests|.uitests]`, `PRODUCT_NAME = Tarn` with `PRODUCT_MODULE_NAME = Ghostty`, display name, usage strings, `MARKETING_VERSION = 1.0.0`, icon name `AppIcon`, `Tarn.app` in `TEST_HOST`; `images/Ghostty.icon` out of Resources | the app installs next to Ghostty |
-| 31 | `macos/Ghostty-Info.plist`, `SurfaceView+Transferable.swift` | UTI `com.daniil4545.tarn.surfaceId`; `GhosttyCommit` from `$(GHOSTTY_COMMIT)` | two apps never export one type id |
-| 32 | `DockTilePlugin.swift`, `Notification+AppIcon.swift` | defaults suite and notification name use `com.daniil4545.tarn` | the dock tile reads tarn's defaults, not Ghostty's |
-| 33 | `MainMenu.xib`, five window-style xibs, `QuickTerminal.xib`, `AppDelegate.swift`, `AboutView.swift`, `UntrustedURLAlert.swift`, `IntentPermission.swift`, `GhosttyIntentError.swift`, `ErrorView.swift`, `SecureInputOverlay.swift`, `main.swift`, `AppDelegate+AppleScript.swift`, two titlebar window files | the name `Tarn` in menus, alerts and titles; Help and About link to the tarn repository; About shows the app icon and "Based on Ghostty <core version>" | user-visible name |
-| 34 | `UpdateDelegate.swift`, `UpdateController.swift`, `AppDelegate.swift` | `feedURLString` returns nil; `checkForUpdates` stops at `isEnabled = false`; `startUpdater` not called; the menu item hidden | Sparkle never offers a Ghostty build |
+| 23 | `macos/Ghostty.xcodeproj/project.pbxproj`, `Ghostty.xcscheme` | bundle ids `com.daniil4545.tarn[.debug|-dock-tile|.tests|.uitests]`, `PRODUCT_NAME = Tarn` with `PRODUCT_MODULE_NAME = Ghostty`, display name, usage strings, `MARKETING_VERSION = 1.0.0`, icon name `AppIcon`, `Tarn.app` in `TEST_HOST`; `images/Ghostty.icon` out of Resources | the app installs next to Ghostty |
+| 24 | `macos/Ghostty-Info.plist`, `SurfaceView+Transferable.swift` | UTI `com.daniil4545.tarn.surfaceId`; `GhosttyCommit` from `$(GHOSTTY_COMMIT)` | two apps never export one type id |
+| 25 | `DockTilePlugin.swift`, `Notification+AppIcon.swift` | defaults suite and notification name use `com.daniil4545.tarn` | the dock tile reads tarn's defaults, not Ghostty's |
+| 26 | `MainMenu.xib`, five window-style xibs, `QuickTerminal.xib`, `AppDelegate.swift`, `AboutView.swift`, `UntrustedURLAlert.swift`, `IntentPermission.swift`, `GhosttyIntentError.swift`, `ErrorView.swift`, `SecureInputOverlay.swift`, `main.swift`, `AppDelegate+AppleScript.swift`, two titlebar window files | the name `Tarn` in menus, alerts and titles; Help and About link to the tarn repository; About shows the app icon and "Based on Ghostty <core version>" | user-visible name |
+| 27 | `UpdateDelegate.swift`, `UpdateController.swift`, `AppDelegate.swift` | `feedURLString` returns nil; `checkForUpdates` stops at `isEnabled = false`; `startUpdater` not called; the menu item hidden | Sparkle never offers a Ghostty build |
 | 14 | `macos/Sources/Ghostty/Ghostty.Config.swift` | `loadConfig` takes `tarnFile: URL? = nil`; after `ghostty_config_load_recursive_files` it calls `TarnConfigFile.load(into:from:)`; `init(at:finalize:)` passes `TarnConfigFile.activeURL()` | tarn's options file loads after the user's config and its includes, before `finalize`; tests and `TemporaryConfig` pass nothing |
 | 15 | `macos/Sources/Features/Terminal/TerminalController.swift` | in `willEncodeRestorableState`: `WorkspaceRestore.encode(window, into: state)` | the workspace table is saved beside Ghostty's state under the key `tarn.workspaces`, `TerminalRestorableState` stays at version 7 |
 | 16 | `macos/Sources/Features/Terminal/TerminalRestorable.swift` | in `restoreWindow`: `let workspaceCoder = state` before the `guard let state` that shadows it; `WorkspaceRestore.decode(workspaceCoder, for: window)` after the window exists | the restored tab gets its table and key back |
@@ -169,4 +172,5 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 - Liveness depends on Claude Code title prefix `✳`, "Interrupted" and "1. Yes": a UI change breaks it silently.
 - Detection latency: up to 2 s on a visible window; hidden windows refresh on notifications only.
 - Viewer: many viewers per window tab around the terminal block (`ViewerHost`, `AreaTree`); not restored after a relaunch, restored by an undo of the tab (tombstone); unsaved edits are asked on every close of a tab, window, all windows, an AppleScript close and on quit, but not on a system shutdown or an update install. `ViewerModelTests.directClosesAreAllReviewed` fails when a new direct close call appears.
-- Not on this branch: notifications, `tarn` CLI binary (`hook`, `open`, `ls`, `notify`), `tarn.mk`, `docs/api/` cards, CI.
+- Attention: the notification banner and its click were not run in a live app (the check would replace the user's control socket file); the gate, jump order, socket replies and CLI are tested. `tarn hook` is not part of the CLI: the plugin keeps `hook.sh`. A `tarn` earlier in `PATH` hides ours (the core appends the app folder). After `/clear` the session id is kept, so a shell notification in that surface stays suppressed.
+- Not on this branch: `tarn.mk`, `docs/api/` cards, CI.

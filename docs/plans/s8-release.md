@@ -75,7 +75,7 @@ Consequences of the unchanged Zig `bundle_id = "com.mitchellh.ghostty"` (`src/bu
 
 Two apps with one config share `keybind = global:...` and `quick-terminal` bindings: running both at once means both react (documented in the install guide).
 
-New insertion points go into `docs/architecture.md` section 9 as rows 30 onward (rows 14-18 may be taken by other branches): one row per file group (pbxproj and scheme, xib menu titles, About and alert texts, dock tile suite and UTI, updater, help URL).
+New insertion points go into `docs/architecture.md` section 9 as rows 23 to 27 (rows 14-18 may be taken by other branches): one row per file group (pbxproj and scheme, xib menu titles, About and alert texts, dock tile suite and UTI, updater, help URL).
 
 ## 5. Updater off
 
