@@ -990,7 +990,7 @@ struct ViewerSaveTests {
         try "one".write(toFile: path, atomically: true, encoding: .utf8)
         let host = ViewerHost()
         host.open(OpenTarget(path: path), root: dir, focus: false)
-        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        host.activeModel?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
         return (host, path)
     }
 
@@ -999,7 +999,7 @@ struct ViewerSaveTests {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let (host, path) = try editedPane(name, in: dir)
-        host.model?.handle(["t": "save", "path": path])
+        host.activeModel?.handle(["t": "save", "path": path])
         #expect(try String(contentsOfFile: path, encoding: .utf8) == "mine")
     }
 
@@ -1015,7 +1015,7 @@ struct ViewerSaveTests {
         let (host, path) = try editedPane("a.md", in: dir)
         try disk.write(to: URL(fileURLWithPath: path))
         try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(5)], ofItemAtPath: path)
-        host.model?.handle(["t": "save", "path": path])
+        host.activeModel?.handle(["t": "save", "path": path])
         #expect(try Data(contentsOf: URL(fileURLWithPath: path)) == disk)
     }
 }
