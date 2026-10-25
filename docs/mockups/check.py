@@ -123,6 +123,17 @@ with sync_playwright() as p:
     check("20 again restores the layout", count("[data-pid]") == 4)
     pg.keyboard.press("Meta+w")
     check("21 cmd+W closes a terminal", count(".tpane") == 2)
+    check("21a every terminal has a header", count(".tph") == count(".tpane"))
+    drag(pg, ".tpane >> nth=0 >> .tph", ".tpane >> nth=1", 0.5, 0.95)
+    check(
+        "21b drag a terminal header to a terminal bottom edge stacks them",
+        count(".block > .split.col") == 1 and count(".tpane") == 2,
+    )
+    drag(pg, ".tpane >> nth=0 >> .tph", ".vpane", 0.9, 0.5)
+    check(
+        "21c a terminal dropped on a viewer is refused",
+        count(".block .tpane") == 2 and count(".block > .split.col") == 1,
+    )
 
     drag(pg, ".ftab:has-text('spec.md')", ".vpane", 0.5, 0.95)
     check(
@@ -131,7 +142,7 @@ with sync_playwright() as p:
     )
     drag(pg, ".vpane >> nth=0 >> .ftab", ".tpane", 0.02, 0.5)
     check("23 a drop that adds a fifth pane is refused", count("[data-pid]") == 4)
-    pg.click(".tpane >> nth=1")
+    pg.click(".tpane:not(:has(.path)) .term")
     pg.keyboard.press("Meta+w")
     drag(pg, ".vpane >> nth=0 >> .ftab", ".tpane", 0.02, 0.5)
     first = n("[data-pid]").first.get_attribute("class")

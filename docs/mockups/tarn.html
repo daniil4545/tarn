@@ -69,7 +69,12 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .drop.deny { background: color-mix(in srgb, var(--deny) 18%, transparent); border-color: var(--deny); }
 .drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: var(--chrome); padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
 
-.tpane { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
+.tpane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.tph { flex: none; height: 27px; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; background: var(--chrome); border-bottom: 1px solid #000; font-size: 12px; color: var(--muted); cursor: grab; user-select: none; }
+.tpane.focus .tph { color: var(--fg); box-shadow: inset 0 2px 0 var(--purple); }
+.tph .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tph .ib { color: var(--muted); }
+.tph .ib:hover { background: rgba(255,255,255,.08); color: var(--fg); }
 .tpane:not(.focus)::after { content: ""; position: absolute; inset: 0; background: rgba(0,0,0,.22); pointer-events: none; }
 .term { flex: 1; min-width: 0; padding: 10px 12px; font: 13px/1.55 var(--mono); overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .term .p { color: var(--green); } .term .dim { color: var(--muted); } .term .tool { color: var(--purple); }
@@ -165,7 +170,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 </style>
 
 <div class="mock" role="group" aria-label="Mockup controls">
-  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> viewer panes, up to 4 panes a window.</span>
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> viewer panes, terminal pane header, up to 4 panes a window.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
   <button class="act" id="agentEdit">Agent edits the file</button>
   <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
@@ -492,7 +497,11 @@ function moveFocus(key) {
 function nodeHtml(n) {
   if (n.type === "split") return `<div class="split ${n.dir}"><div class="pane" style="flex-grow:${n.ratio}">${nodeHtml(n.a)}</div><div class="sdiv ${n.dir}" data-sdiv="${n.id}" role="separator"></div><div class="pane" style="flex-grow:${1 - n.ratio}">${nodeHtml(n.b)}</div></div>`;
   if (n.type === "block") return `<div class="block" data-bid="${n.id}">${nodeHtml(n.root)}</div>`;
-  if (n.type === "term") return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal"><div class="term">${n.n === 0 ? TABS[cur].term : SHELL}</div></section>`;
+  if (n.type === "term") {
+    const t = TABS[cur], main = n.n === 0, agent = main && t.agent;
+    const head = `<div class="tph" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${agent ? AGENT : TERM_ICON}<span class="t">${main ? t.title : "zsh · ~/Dev/self-projects/tarn"}</span>${agent && t.dot ? `<span class="dot" style="background:${t.dot}"></span>` : ""}<button class="ib" data-tclose="${n.id}" title="Close terminal (⌘W)">✕</button></div>`;
+    return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? t.term : SHELL}</div></section>`;
+  }
   return viewerHtml(n);
 }
 function viewerHtml(v) {
@@ -662,6 +671,7 @@ document.addEventListener("click", async e => {
   if (t.classList.contains("tr")) { if (t.classList.contains("off")) { toast("No content in the mockup"); return; } return treeEnter(byId(t.dataset.vid), t.dataset.tpath, t.dataset.tkind, e.detail > 1); }
   if (t.dataset.vmode) return setMode(byId(t.dataset.vmode));
   if (t.dataset.vtree) { const v = byId(t.dataset.vtree); v.tree = !v.tree; return rerenderViewer(v); }
+  if (t.dataset.tclose) return closeTerm(byId(t.dataset.tclose));
   if (t.dataset.vclose) { closeViewer(byId(t.dataset.vclose)); return renderWorkspace(); }
   if (t.dataset.take) { const d = docs[t.dataset.take]; d.text = d.disk; d.saved = d.disk; d.banner = false; d.v++; return renderWorkspace(); }
   if (t.dataset.keep) { docs[t.dataset.keep].banner = false; return renderWorkspace(); }
@@ -727,7 +737,7 @@ document.addEventListener("keydown", e => {
 
 // Drag a file tab or a tree file. Over a viewer: the middle moves the tab there, an edge splits
 // that viewer. Over a terminal: an edge of the whole terminal block, since viewers do not go
-// inside the Ghostty split tree.
+// inside the Ghostty split tree. A terminal header drags within the block only, as in Ghostty.
 function edgeOf(el, x, y) {
   const r = el.getBoundingClientRect(), fx = (x - r.left) / r.width, fy = (y - r.top) / r.height;
   const edge = Math.min(fx, 1 - fx, fy, 1 - fy);
@@ -735,6 +745,11 @@ function edgeOf(el, x, y) {
 }
 function dropTarget(e) {
   const vp = e.target.closest(".vpane"), tp = e.target.closest(".tpane");
+  if (drag && drag.term) {
+    if (vp) return { el: vp, id: vp.dataset.pid, zone: "center", deny: "Terminals stay in the terminal block" };
+    if (tp) return { el: tp, id: tp.dataset.pid, zone: edgeOf(tp, e.clientX, e.clientY).zone, deny: tp.dataset.pid === drag.term ? "Drop on another terminal" : null };
+    return null;
+  }
   if (vp) {
     const r = vp.getBoundingClientRect(), { edge, zone } = edgeOf(vp, e.clientX, e.clientY);
     return { el: vp, id: vp.dataset.pid, zone: e.clientY - r.top < 32 || edge > 0.22 ? "center" : zone };
@@ -743,22 +758,23 @@ function dropTarget(e) {
   return null;
 }
 function addsPane(d, tgt) {
-  if (tgt.zone === "center") return false;
+  if (d.term || tgt.zone === "center") return false;
   if (d.vid !== undefined && d.idx !== undefined) { const src = byId(d.vid); return !(src.tabs.length === 1 && !src.tree); }
   return true;
 }
 function showDrop(tgt, deny) {
   let d = tgt.el.querySelector(":scope > .drop");
   if (!d) { d = document.createElement("div"); d.className = "drop"; tgt.el.appendChild(d); }
-  d.classList.toggle("deny", deny);
-  d.innerHTML = deny ? `<span>Up to ${MAX_PANES} panes</span>` : "";
-  const top = tgt.el.classList.contains("vpane") ? 31 : 4;
+  d.classList.toggle("deny", !!deny);
+  d.innerHTML = deny ? `<span>${deny}</span>` : "";
+  const top = tgt.el.classList.contains("vpane") ? 31 : tgt.el.classList.contains("tpane") ? 27 : 4;
   d.style.cssText = { center: `inset:${top}px 4px 4px 4px`, left: `inset:${top}px 50% 4px 4px`, right: `inset:${top}px 4px 4px 50%`, top: `top:${top}px;left:4px;right:4px;height:calc(50% - ${top / 2 + 4}px)`, bottom: "bottom:4px;left:4px;right:4px;height:calc(50% - 4px)" }[tgt.zone];
 }
 const clearDrop = () => document.querySelectorAll(".drop").forEach(d => d.remove());
 document.addEventListener("dragstart", e => {
-  const ft = e.target.closest(".ftab"), tr = e.target.closest(".tr[draggable]");
-  if (ft) { drag = { vid: ft.dataset.vid, idx: +ft.dataset.idx }; ft.classList.add("dragging"); }
+  const ft = e.target.closest(".ftab"), tr = e.target.closest(".tr[draggable]"), th = e.target.closest("[data-tdrag]");
+  if (th) drag = { term: th.dataset.tdrag };
+  else if (ft) { drag = { vid: ft.dataset.vid, idx: +ft.dataset.idx }; ft.classList.add("dragging"); }
   else if (tr) drag = { path: tr.dataset.tpath };
   else return;
   e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn");
@@ -768,13 +784,22 @@ document.addEventListener("dragover", e => {
   const tgt = dropTarget(e); if (!tgt) { clearDrop(); return; }
   e.preventDefault();
   document.querySelectorAll(".drop").forEach(d => { if (d.parentElement !== tgt.el) d.remove(); });
-  showDrop(tgt, addsPane(drag, tgt) && all().length >= MAX_PANES);
+  showDrop(tgt, tgt.deny || (addsPane(drag, tgt) && all().length >= MAX_PANES ? `Up to ${MAX_PANES} panes` : null));
 });
+function moveTerm(id, tgt) {
+  const b = findBlock(L().root), node = byId(id);
+  removeFrom(b, id);
+  replaceIn(b, tgt.id, splitNode(byId(tgt.id), node, tgt.zone));
+  L().focus = id;
+  renderWorkspace();
+}
 document.addEventListener("drop", e => {
   const tgt = dropTarget(e); clearDrop();
   if (!drag || !tgt) return;
   e.preventDefault();
   const d = drag; drag = null;
+  if (tgt.deny) return;
+  if (d.term) return moveTerm(d.term, tgt);
   if (addsPane(d, tgt) && !canAdd()) return;
   let tab;
   const src = d.vid !== undefined ? byId(d.vid) : null;
