@@ -32,8 +32,8 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
 | In | menu split and focus actions while the pane has focus | `ViewerWebView` to `ViewerModel.onLayout`, handled by [layout.md](layout.md) |
 | In | files taken from or dropped into another viewer | `ViewerModel.absorb`, `take`, `release`, `canTake` |
-| In | View menu items "Toggle Files" Cmd+B, "Toggle Pane" Cmd+Alt+B, "Focus Files" Cmd+Shift+E (actions `toggleViewerTree:`, `toggleViewerPane:`, `focusViewerTree:`); in the pane `ViewerWebView.command` takes the same keys with exact modifiers | `TerminalController` extension, `ViewerHost.toggleFromKey`, `togglePane`, `focusTreeFromKey` |
-| Out | keyboard moves with the tree: Cmd+B opens or shows it into the tree, hides it back to the file, closes the pane to the terminal; a layout change gives the terminal its first responder back, and a focus request waits for the web view to join the window (as `Ghostty.moveFocus`) | `ViewerHost`, `ViewerWebController.focus` |
+| In | View menu item "Toggle File Viewer" Cmd+B (action `toggleViewer:`); in the pane `ViewerWebView.command` takes Cmd+B, Cmd+S, Cmd+E with exact modifiers | `TerminalController` extension, `ViewerHost.toggleFromKey` |
+| Out | keyboard: Cmd+B opens into the tree, shows into the pane, hides to the terminal; Enter in the tree moves it into the file; a layout change gives the terminal its first responder back and a focus request waits for the web view to join the window (as `Ghostty.moveFocus`) | `ViewerHost`, `ViewerWebController.focus` |
 | In | (note) a Ghostty keybind on Cmd+B takes the key first and wins over the menu item; the item keeps showing Cmd+B because Ghostty has no action to sync it with | `MainMenu.xib` |
 | In | file events (write, delete, rename, extend) on the file and its folder | `FileWatcher` |
 | In | close of a tab, window or the app | `ViewerClose` |

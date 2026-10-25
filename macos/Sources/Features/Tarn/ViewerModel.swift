@@ -46,16 +46,10 @@ final class ViewerModel {
     var onFocus: (() -> Void)?
     /// True while the page holds keyboard focus.
     var hasFocus: () -> Bool = { false }
-    /// Cmd+Alt+B and Cmd+Shift+E typed in the pane; the host owns the pane's lifetime and focus.
+    /// Cmd+B typed in the pane; the host owns the pane's lifetime and focus.
     var onPaneKey: (() -> Void)?
-    var onFocusTreeKey: (() -> Void)?
-    /// Reported by the page: the focus is inside the files tree.
-    private var treeFocused = false
-
-    /// The tree has the keyboard right now: the page says so and the web view is the first responder.
-    /// A hidden tree cannot hold the focus, whatever the page last said: WebKit does not always send
-    /// the focusout of an element that is hidden or replaced.
-    var treeInFocus: Bool { treeFocused && treeVisible && hasFocus() }
+    /// Asks to hide the pane (Esc or the Files button in a pane with no file).
+    var onHidePane: (() -> Void)?
 
     init(root: String) {
         tree = FileTree(root: root)
@@ -178,17 +172,24 @@ final class ViewerModel {
     }
 
     func closeActiveTab() {
-        // A pane with no file has no tab to close: the key closes the pane itself.
-        if closeIfEmpty() { return }
+        // A pane with no file has no tab to close: Cmd+W closes the pane itself.
+        if closePaneIfEmpty() { return }
         closeTab(at: tabs.active)
     }
 
-    /// A pane with no file has nothing to show but the tree: the keys that end a tab or hide the
-    /// tree close it. The one place of that rule. Returns whether it closed the pane.
+    /// Cmd+W in a pane with no file closes the pane (there is no tab to close). Returns whether it did.
     @discardableResult
-    private func closeIfEmpty() -> Bool {
+    private func closePaneIfEmpty() -> Bool {
         guard tabs.tabs.isEmpty else { return false }
         onClosePane?([], -1)
+        return true
+    }
+
+    /// Esc and the Files button in a pane with no file: the pane hides with its tree state kept.
+    @discardableResult
+    private func hidePaneIfEmpty() -> Bool {
+        guard tabs.tabs.isEmpty else { return false }
+        onHidePane?()
         return true
     }
 
@@ -210,14 +211,6 @@ final class ViewerModel {
     func revealTree() {
         treeVisible = true
         pushChrome()
-    }
-
-    /// Cmd+B: with files it toggles the tree and moves the keyboard with it (shown: into the tree,
-    /// hidden: back to the file); with no file the pane has nothing else to show, so it closes.
-    func toggleTreeKey() {
-        if closeIfEmpty() { return }
-        toggleTree()
-        if treeVisible { focusTreeInPage() } else { focusContentInPage() }
     }
 
     func closeTab(at index: Int) {
@@ -263,9 +256,7 @@ final class ViewerModel {
     func command(_ name: String) {
         switch name {
         case "save", "mode": runScript("tarn.cmd(\(literal(name)))")
-        case "tree": toggleTreeKey()
-        case "pane": onPaneKey?()
-        case "focusTree": onFocusTreeKey?()
+        case "tree": onPaneKey?()
         case "closeTab": closeActiveTab()
         default: break
         }
@@ -292,10 +283,12 @@ final class ViewerModel {
         case "dragFile":
             if let path { onFileDrag?(PageFileDrag(path: path, moves: body["tab"] as? Bool == true, sole: tabs.tabs.count == 1)) }
         case "dragEnd": onFileDrag?(nil)
-        case "toggleTree": toggleTreeKey()
-        case "treeFocus": treeFocused = body["on"] as? Bool == true
+        case "toggleTree":
+            // The Files button: the tree of a pane with files; a pane with no file has nothing else.
+            if hidePaneIfEmpty() { return }
+            toggleTree()
         case "hideTree":
-            if closeIfEmpty() { return }
+            if hidePaneIfEmpty() { return }
             treeVisible = false
             pushChrome()
             onFocus?()
@@ -303,7 +296,11 @@ final class ViewerModel {
             if let path { tree.toggle(path) }
             pushChrome()
         case "treeOpen":
-            if let path { open(OpenTarget(path: path), pin: body["pin"] as? Bool == true) }
+            if let path {
+                let opened = open(OpenTarget(path: path), pin: body["pin"] as? Bool == true)
+                // Enter on a file moves the keyboard into it; a file that did not open leaves it in the tree.
+                if opened, body["enter"] as? Bool == true { focusContentInPage() }
+            }
         case "edit":
             if let path, let text = body["text"] as? String, isCurrent(path, body) { edit(path, text) }
         case "save":

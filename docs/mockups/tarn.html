@@ -285,7 +285,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
   <button class="act" id="openSettings">Settings ⌘,</button>
   <button class="act" id="resetDemo">Reset demo</button>
   <button class="act" id="agentEdit">Agent edits the file</button>
-  <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
+  <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> open or hide the viewer · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
 </div>
 
 <div class="win">
@@ -771,7 +771,7 @@ function viewerHtml(v) {
   const tabs = v.tabs.map((t, i) => { const dd = docs[t.path]; return `<div class="ftab${i === v.active ? " on" : ""}${t.preview ? " preview" : ""}" draggable="true" data-vid="${v.id}" data-idx="${i}" title="${t.path}${t.preview ? " (preview: the next file replaces this tab)" : ""}"><span class="nm">${name(t.path)}</span>${dd.text !== dd.saved ? '<span class="dirty"></span>' : ""}<button class="x" data-close="${i}" data-vid="${v.id}" aria-label="Close tab">✕</button></div>`; }).join("");
   let h = `<section class="vpane${L().focus === v.id ? " focus" : ""}${opt.theme === "light" ? " light" : ""}" data-pid="${v.id}" aria-label="Viewer"><div class="grip" draggable="true" data-vdrag="${v.id}" title="Drag the viewer with its files">${GRIP_DOTS}</div><div class="vh"><div class="vtabs">${tabs}</div><span class="vact">`;
   h += `<button class="ib" data-vmode="${v.id}" ${!path || !isMd(path) ? "disabled" : ""} aria-pressed="${m === "raw"}" title="View or source (⌘E)">${m === "raw" ? "Source" : "View"}</button>`;
-  h += `<button class="ib" data-vtree="${v.id}" aria-pressed="${v.tree}" title="Files tree (⌘B)">Files</button>`;
+  h += `<button class="ib" data-vtree="${v.id}" aria-pressed="${v.tree}" title="Files tree (Esc hides it)">Files</button>`;
   h += `<button class="ib" data-vclose="${v.id}" title="Close viewer">✕</button></span></div>`;
   if (d && d.banner) h += `<div class="banner"><span>The agent changed this file and you have unsaved edits.</span><button data-take="${path}">Take the agent version</button><button data-keep="${path}">Keep mine</button></div>`;
   h += `<div class="vbody"><div class="vcontent" id="vc-${v.id}"></div>${v.tree ? `<aside class="vtree" aria-label="Files">${treeHtml(v)}</aside>` : ""}</div></section>`;
@@ -1476,7 +1476,7 @@ const KEYS = [
     ["⌘↑ ⌘↓", "Jump to the previous or next prompt"], ["⇧⌘P", "Command palette"], ["⇧⌘,", "Reload the Ghostty config"], ["⌘,", "Settings"],
   ]],
   ["Viewer", [
-    ["⌘B", "Show or hide the file tree"], ["⌘E", "View or source"], ["⌘S", "Save the file"],
+    ["⌘B", "Open or hide the file viewer"], ["⌘E", "View or source"], ["⌘S", "Save the file"],
     ["⌘D ⇧⌘D", "The file in a new viewer, right or below"], ["⌘W", "Close the file tab"],
   ]],
 ];
