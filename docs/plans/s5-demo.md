@@ -1,132 +1,85 @@
 # Plan: S5 browser demo
 
-Status: draft for review, branch `s5-demo`. Date: 2026-10-25.
-Canon: `docs/spec.md`; look and behavior: `docs/mockups/tarn.html` (1700 lines, KEYS at line 1463, GHOSTTY settings at 1433, `check.py` 116 checks).
+Status: pass 2, closes review `sr-demo.md` (M1-M13). Branch `s5-demo`. Date 2026-10-25.
+Details, contracts, tables: `docs/plans/s5-demo-contracts.md` ("C" below). Canon: `docs/spec.md` (states in section 8), `docs/architecture.md`.
+
 ## 1. Goal and scope
 
-- In: the mockup becomes `demo/`, a static site. Each terminal pane is a real terminal emulator fed by a simulated shell. Every key in the Help page (KEYS) works. Every setting in the settings window applies live. Workspaces, viewer (markdown, mermaid, code), drag-and-drop zones, agent states, permission card.
-- Out: backend, network calls beyond our static files, publishing (Pages is later), real PTY, touch UI.
-- Rule: a new feature lands in the demo first, then in Swift.
+- `demo/` is a static site: the tarn window with a real terminal emulator per pane, a simulated shell, every Help (KEYS) row working, every settings option live, workspaces, viewer, drag-and-drop zones, agent states, permission card.
+- It serves two jobs: a storefront before download, and the first place a new feature is tried. It replaces `docs/mockups/` (living mockup moves to `demo/`).
+- Out: backend, network beyond our own static files, real PTY, touch UI, publishing (Pages comes later).
+- Supported browsers: current Chrome and Edge (full screen plus Keyboard Lock gives the real keys); Safari and Firefox work with the fallback keys.
 
-## 2. Research (facts with sources, checked 2026-10-25)
+## 2. Choices (research and sources in C section 1)
 
-### 2.1 Terminal engine
-
-| | ghostty-web | xterm.js |
+| Need | Choice | Why |
 |---|---|---|
-| Repo | github.com/coder/ghostty-web | github.com/xtermjs/xterm.js |
-| License | MIT | MIT |
-| Latest release | v0.4.0, 2025-12-09 (npm `ghostty-web@0.4.0`, modified 2026-06-28) | `@xterm/xterm` 6.0.0, 2025-12-22 |
-| Activity | last push 2026-10-15, about 3.0k stars, open PRs and issues through #208 | very active, years of use |
-| Size | about 400 KB WASM (README); npm unpacked 2.2 MB | npm unpacked 5.9 MB (source and maps; shipped JS is far smaller) |
-| Engine | Ghostty's own VT parser compiled to WASM, canvas renderer, xterm.js-compatible API (`init()`, `new Terminal`, `open`, `write`, `onData`, `onResize`, `loadAddon`, FitAddon in `lib/addons/`) | hand-written JS parser, DOM/canvas/WebGL renderers |
-| Options | `fontSize`, `fontFamily`, `theme`, `cursorStyle`, `cursorBlink`, `allowTransparency` (lib/interfaces.ts) | all, plus `letterSpacing`, `lineHeight` |
-| Maturity | young (0.x), one author team (Coder). Open bugs that touch us: #203 Alt+key sends no ESC prefix; #192 `attachCustomKeyEventHandler` return value is inverted vs xterm.js; #198 and #207 fractional devicePixelRatio and cell-width seams; #208 render loop redraws every frame (idle CPU); #184/#185 Powerline glyphs; #205 `translateToString` empty cells | stable |
+| Engine | ghostty-web 0.4.0 (MIT, coder/ghostty-web), `term-adapter.js` hides it; fallback xterm.js 6.0.0 (MIT) | same VT parser as the app; 0.x risk bounded by a pass/fail spike (C section 2) |
+| Shell | own, pure function `createShell({vfs, emit, write, clock})`, about 600 lines | no maintained lib fits (just-bash: 16 deps, 21 MB, browser build unverified) |
+| Viewer | the app's built bundle `macos/Sources/Features/Tarn/Viewer/tarn-viewer.{html,js,css}` (source `viewer-web/`: markdown-it, highlight.js, mermaid 12, CodeMirror), in an iframe with a `window.webkit.messageHandlers.tarn` shim | one renderer for demo and app; no second markdown stack. Shim replaces `ViewerModel.swift` role in `viewer.js` |
+| Build | none: ES modules, import map, vendored files | static hosting, no toolchain |
 
-Decision: ghostty-web (sources: repo README, `lib/`, `gh api`, `npm view`, 2026-10-25). It is the project rule and the same parser as the app; the API matches xterm.js, so the fallback is one import line behind `term-adapter.js`. Spike first (slice 0); on a blocker (#203, #192, idle CPU with 6 panes) switch and report.
+## 3. State model (closes M1, M2, M3)
 
-Workarounds: our keymap handles shortcuts in the capture phase on `document` (so #192 is moot); Alt+key encoded in the adapter (#203); hidden panes get `display:none` and closed ones `dispose` (#208).
+One store, `state.js`. Each part has one writer; everything else sends a command on the bus and reads a frozen snapshot.
 
-### 2.2 Simulated shell
+| Part | Single writer | Source of input | Canon |
+|---|---|---|---|
+| `registry` (agent sessions) | `registry.js`, transition table of spec section 8 | hook events only (`UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `Stop`, `SessionEnd`) | `SessionRegistry.swift:6-44`, `AgentSession.handle` |
+| `workspaces`, tabs, layout trees | `workspace.js` (in `state.js`) | commands `tab.*`, `pane.*`, `ws.*` | architecture sidebar model |
+| `undo` stack | `workspace.js` | close commands; window = config `undo-timeout` | `ExpiringUndoManager` |
+| `config` | `config.js` | settings UI, reset | `TarnSettings.swift` |
+| `vfs` | `vfs.js` | shell commands, viewer save, agent script | disk |
 
-Searched: npm and GitHub for in-browser shells with a virtual filesystem.
+Rules: `layout.js` holds pure tree functions only (no writes). The permission card sends an answer, never a state. The agent script emits hook events like the real hook bridge; states are `idle, working, permission, waiting` plus `seen`, `failed`; "done, not seen" is `waiting` and not `seen` (Question 3). Rollup order and jump order follow spec section 8.
 
-`just-bash` 3.6.0 (vercel-labs, Apache-2.0, pushed 2026-10-22): bash interpreter with in-memory FS, but 16 dependencies, 21 MB unpacked, browser build unverified, and no line editor or tarn-specific output. `@wasmos/ash` 0.0.2 (MIT): early, FS unconfirmed. No maintained xterm.js fake-shell library found.
+## 4. Pane lifecycle (closes M3)
 
-Decision: own small shell, `shell.js` plus `vfs.js`, about 600 lines, no dependencies. Tarn output (agent states, `tarn open`) cannot come from a generic interpreter anyway.
+`PaneRegistry` (in `term-pane.js`): `id -> {el, engine, shell, script, subs}`. A pane is created once. Layout render moves (reparent) the element; it never rebuilds it. A tab not shown gets `display:none`. Close detaches the pane and keeps it until the undo window ends, then `dispose()`: stops script timers, drops bus subscriptions, frees the engine. Undo re-attaches the same instance (scrollback, history, running `claude` survive). Cap: 8 panes; the 9th split shows a toast and does nothing.
 
-Commands: `ls [-la]`, `cd`, `pwd`, `cat`, `echo`, `clear`, `mkdir`, `touch`, `rm`, `head`, `whoami`, `date`, `help`, `exit` over an in-memory VFS seeded from the mockup `FILES`/`TREE`; `git status|log|branch` canned from the seed; `tarn open <path>[:line]`, `tarn ls`, `tarn new [name]`, `tarn status` through the bus; `claude` (below); unknown gives `zsh: command not found`.
+## 5. Modules and slices (closes M4)
 
-Shell features: line editing (arrows, ^A ^E ^U ^K ^W ^C ^L ^D), history, Tab completion of commands and paths, ANSI colors, OSC 7 cwd (new tab inherits it), OSC 133 prompt marks (cmd+up/down), `path:line` links (cmd+click opens the viewer).
+Module map and the app counterpart with file:line are in C section 3. Slice 0 creates every shared file; later slices own disjoint files and never edit another slice's file.
 
-`claude` script (`agent-script.js`): timed steps `{at, text | state | action}`: spinner and thoughts, tab state `working`, a VFS file edit (viewer shows it), `waiting` with the permission card (Allow/Deny, keys y/n), then the diff and `done`. Same state machine as the mockup `STATE`, `agentEdit()`, `agentOpensTab()`.
-
-## 3. Repo layout and the fate of docs/mockups
-
-```
-demo/
-  index.html            shell of the page, import map, no inline logic
-  css/                  tarn.css (moved from the mockup), themes.css
-  js/                   modules, section 4
-  vendor/               ghostty-web (js + wasm), markdown-it, highlight.js, mermaid; pinned, license files kept
-  test/check.py         moved from docs/mockups, plus new checks
-```
-
-- `docs/mockups/tarn.html` goes away (`git mv` keeps `check.py` history) once the demo passes every old check; links in `s2-files.md` and the spec change in the same commit.
-- No bundler: ES modules and an import map. Vendor files are committed and pinned in `vendor/VERSIONS.md`. The mockup loads libs from CDNs; the demo vendors them (no network rule). Mermaid loads lazily.
-
-## 4. Module map
-
-Mirrors the app (`macos/Sources/Features/Tarn/`): one JS module per Swift area.
-
-| Module | Owns | App counterpart |
+| Slice | Owns | Done when |
 |---|---|---|
-| `bus.js` | tiny event emitter and command registry (`bus.emit('open', {...})`, `bus.on`); the only coupling between modules | control socket |
-| `state.js` | store: workspaces, tabs, layout trees, closed-stack for undo (5 s), `localStorage` persistence | session registry |
-| `config.js` | settings schema (from mockup `GHOSTTY`), values, `apply(key)` fan-out, config text export | Ghostty config |
-| `vfs.js` | in-memory filesystem, seed, watch events | disk |
-| `shell.js` | line editor, parser, commands (`commands/*.js`), prompt, OSC output | zsh |
-| `agent-script.js` | scripted `claude` session, states, permission card trigger | the agent + hooks |
-| `term-adapter.js` | wraps ghostty-web: create, fit, write, focus, dispose, `applyOptions`; the only file that imports the engine | Ghostty surface |
-| `term-pane.js` | one pane: adapter + shell + padding box + drag handle + find bar | SurfaceView |
-| `layout.js` | split tree (split, close, zoom, equalize, resize, focus by direction), render | SplitTree |
-| `dnd.js` | drag sources, drop zones (Rectangle-style, `windows-workspaces.md` 3a), drop preview | drag and drop |
-| `sidebar.js` | workspaces, tab list, rollup state dots, tab hover card, menus | Sidebar |
-| `tabs.js` | tab actions: new, close, move, undo, go to N | tab model |
-| `viewer.js` | viewer pane: file tabs, tree, view/source, save, links | viewer |
-| `markdown.js` | markdown-it + highlight.js + mermaid lazy | markdown panel |
-| `settings.js` | settings window UI from `config.js` schema, Help page from `keymap.js` | settings window |
-| `keymap.js` | KEYS table as data (single source for Help and handler), capture-phase dispatcher | key bindings |
-| `palette.js`, `find.js` | command palette, find | palette, search |
-| `main.js` | boot order, wiring | app delegate |
+| 0 Skeleton (worker 1) | `index.html`, `css/base.css`, `bus.js`, `state.js`, `registry.js`, `config.js` (store, emits `config:changed`), `keymap.js` (dispatcher, `when`), `keys/schema`, `THIRD_PARTY.md`, `vendor/`, `CONTRACT` (C), `test/lib.py`, pane stub, spike report | spike all pass/fail items decided; page boots; contract tests green |
+| A Terminal and shell (worker 1) | `term-adapter.js`, `term-pane.js`, `shell.js`, `commands/`, `vfs.js`, `agent-script.js`, `keys/terminal.js`, `css/pane.css`, `test/check_a.py`, Node tests | typing, history, Tab, `tarn`, `claude` pass; old terminal/link checks ported |
+| B Layout and chrome (worker 2) | `layout.js`, `workspace.js`, `tabs.js`, `sidebar.js`, `dnd.js` (incl. drag handle), `find.js` (incl. find bar), `palette.js`, `keys/tabs.js`, `keys/splits.js`, `css/chrome.css`, `test/check_b.py` | old sidebar, tab, split, dnd checks ported and pass on the stub pane; real pane after A |
+| C Viewer, settings, close (worker 3) | `viewer.js`, `viewer-shim.js`, `tools/sync-viewer.sh`, `settings.js`, `keys/viewer.js`, `keys/help.js`, `css/viewer.css`, `css/settings.css`, `test/check_c.py`; last: delete `docs/mockups/`, update `.claude/CLAUDE.md` and links | viewer, settings checks pass; gate in section 8 met |
 
-Data flow: key event -> `keymap.js` (capture phase on `document`) -> `bus` command -> `state.js` mutates -> `layout`/`sidebar` re-render. Shell: engine `onData` -> `shell.js` -> `adapter.write`; `tarn open` -> `bus` -> `viewer.js`. Settings: `config.js` -> `apply` fan-out.
+A and B start after slice 0 merges; each owner subscribes to its own `config:changed` keys (A: font, size, theme, cursor, padding, option-as-alt; B: undo, confirm-close, cwd inherit, titlebar, tab style, unfocused opacity, drag-handle; C: window-theme, save-state, reset). Estimate: slice 0 one day, A/B/C three to four days.
 
-Settings apply through `config.js` fan-out: engine options (font, size, theme, cursor, blink, `allowTransparency` for opacity), CSS variables (padding then refit, split dimming, titlebar and tab style, drag-handle, blur by `backdrop-filter`), and state hooks (copy-on-select, paste confirm, option-as-alt in the adapter, links, notifications as toasts, undo timeout, cwd inherit, save state, close confirm). One schema row per option, taken from the mockup `GHOSTTY`.
+## 6. Keys (closes M5)
 
-## 5. Slices and ownership
+Rows are data in `keys/*.js`: `{id, chords, alt, when, group, text}` (one chord per entry, no "1 ... 8"). Dispatcher: capture phase on `document`, match by `e.code`, `e.key` only as fallback (Cyrillic layouts). `when` encodes focus (terminal, viewer, any), so Cmd+D, Cmd+W resolve by focus. Fallback set `alt`: Ctrl+Alt+<same key> for rows the spike shows as browser-reserved; Help shows both. Auto-checks: no two rows share a chord in one `when`; no chord equals a shell input (Ctrl+letter, Alt+letter alone); fallback never collides with Ctrl+Cmd or Alt+Cmd rows. Playwright cannot see browser accelerators, so a pass proves only our handler; a manual step on a real Chrome (full screen, Keyboard Lock), Safari and a Russian layout is part of acceptance (C section 2).
 
-Three workers, after a short slice 0 by one worker (skeleton and contracts). A slice owns its files; nobody edits another's file, they ask through `bus` names listed in `demo/js/CONTRACT.md` (written in slice 0, 1 page: bus event names, state shape, config keys).
+## 7. Errors, invariants, persistence (closes M9, M10, M13)
 
-| Slice | Who | Owns | Depends | Done when |
-|---|---|---|---|---|
-| 0 Skeleton | worker 1 | `index.html`, `css/`, `vendor/`, `bus.js`, `state.js`, `config.js` (schema only), `main.js`, `CONTRACT.md`, server in `check.py` | none | page boots, one ghostty-web terminal echoes typed keys, spike verdict on the engine |
-| A Terminal and shell | worker 1 | `term-adapter.js`, `term-pane.js`, `shell.js`, `commands/`, `vfs.js`, `agent-script.js` | 0 | typing, history, completion, `tarn`, `claude` script run in a pane; shell unit tests (Node, no browser) |
-| B Layout and chrome | worker 2 | `layout.js`, `tabs.js`, `sidebar.js`, `dnd.js`, `keymap.js` (Tabs, Splits, Terminal groups), `palette.js`, `find.js` | 0 | all mockup layout/sidebar/dnd checks pass on real panes; all non-Viewer KEYS work |
-| C Viewer and settings | worker 3 | `viewer.js`, `markdown.js`, `settings.js`, `config.js` (apply fan-out), `keymap.js` Viewer group, fonts, themes | 0 | viewer checks pass; every setting applies live |
+- Error rule: catch at the module boundary, `console.warn` with pane id and command, never `console.error`; the user sees one line in the pane (`tarn-demo: <cmd>: internal error`) or a toast; the app lives. Broken storage: seed plus toast. Engine missing: message in the pane. `file://`: hint to start a static server.
+- Invariants, each with a test: (1) no network request except same-origin; (2) no agent command (`tarn open`, `tarn new`, `claude`) moves focus or presses Enter; (3) the registry is the only writer of agent state; (4) a pane instance survives reparent and undo; (5) ported code keeps its license header and a `THIRD_PARTY.md` entry (ghostty-web, fonts, themes, viewer bundle).
+- Persistence and "Reset demo" (settings and palette): table in C section 5. Mid-`claude` reload starts the pane at a fresh prompt; it never resumes a script.
 
-`keymap.js`: B owns the file; C adds the Viewer group after B lands. Order: 0, then A/B/C, then one integration commit (seed, mockup removal).
+## 8. Tests and acceptance (closes M6, M7, M8)
 
-## 6. Test plan (Playwright, `demo/test/check.py`)
+- Surface `window.__tarn` (C section 4) is the only way tests read state; old checks keep their name and user path, only the measuring changes; seed keeps ids `t1`, `w1`. `test/lib.py` (server, helpers) from slice 0; each slice writes `test/check_<slice>.py`. Gate for deleting the mockup: a script compares the 115 old check names with the new ones; none missing, all green.
+- New checks: typing/history/Tab/^C; `tarn open`, `tarn ls`; `claude` through card with fake clock; every KEYS row from data (fails on a row without test); every setting row (C section 5 measure); no external request; idle draws 0 per second with blink off and 6 panes; gzip size computed by the test.
+- Budgets (assumptions, to be measured in slice 0): first load under 1 MB gzip without viewer; viewer bundle and mermaid load on first open.
+- Acceptance: (1) static server, zero console errors; (2) typing in a pane works, selection and scrollback behave; (3) all Help rows and settings work and persist; (4) workspaces, splits, zones, viewer (markdown, mermaid, code, save, `tarn open`, `path:line` click) match the mockup; (5) `claude` runs through the card; (6) all checks green and budgets met; (7) manual Chrome/Safari/Russian-layout pass done and noted in the PR.
 
-- All 116 mockup checks stay; fake-terminal selectors move to the real pane. Run: `uv run --with playwright python -I demo/test/check.py` (it starts a static server; modules and WASM do not load from `file://`).
-- Canvas text is not DOM: `window.__tarn.screen(paneId)` returns the buffer text; screenshots cover visuals.
-- New checks: (1) typing, history, Tab, ^C ^L ^U, `clear`; (2) `tarn open/ls/new`; (3) `claude` goes working, waiting (card, orange dot), `y`, done, file changed in viewer; (4) every shortcut, table-driven from `keymap.js` data, fails if a KEYS row has no test; (5) every setting, table-driven from the schema, effect checked and kept after reload; (6) any non-local request fails the run; (7) idle draw count with 6 panes (guards #208); (8) first-load size budget.
-- Shell logic also gets Node unit tests (`node --test`).
+## 9. Risks
 
-## 7. Acceptance
+| Risk | Mitigation |
+|---|---|
+| ghostty-web 0.x bugs | spike checklist; adapter; xterm.js fallback |
+| Browser keys (Cmd+T/N/W, digits) | Keyboard Lock in full screen plus fallback keys; table from spike |
+| Many panes | cap 8; hidden tabs paused; idle check |
+| Viewer bundle is IIFE with a strict CSP for `tarn-md:` | `sync-viewer.sh` copies and rewrites CSP and paths; if iframe load fails the viewer slice stops and asks |
+| Drift demo vs app | every Swift feature PR checks "demo updated or marked not yet" |
+| Mobile | notice below 800 px |
 
-1. Static server, no console error, no external request.
-2. Typing in a pane gets shell answers; selection, scrollback, wheel work.
-3. Every Help row works; every setting applies at once, persists, and resets.
-4. Workspaces, splits, zones, viewer (markdown, mermaid, code, save, `tarn open`, `path:line` click) work as in the mockup.
-5. `claude` script runs through the permission card.
-6. All checks green, size and idle CPU within budget.
+## 10. Questions
 
-## 8. Risks
-
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Browser reserves ⌘T, ⌘N, ⌘W, ⇧⌘W, ⌘1-9, ⌘D and cannot be overridden by `preventDefault` in a normal tab | Core of "every key works" fails in Chrome/Safari | See question 1. Keyboard Lock API (`navigator.keyboard.lock`, Chromium only) works in full screen; ⌘↩ already is "Full screen" |
-| ghostty-web is 0.x with open bugs (#203, #192, #198, #207, #208) | wrong input or blur at some zoom, idle CPU | spike first; adapter workarounds; xterm.js fallback behind adapter |
-| Many panes (canvas plus WASM each) | slow page | pause hidden tabs, cap at 8 panes, idle check |
-| Size | slow load | under 1.5 MB gzip without mermaid |
-| Mobile | no hardware keys | out of scope; notice below 800 px |
-| Drift between demo and app | demo lies | every Swift feature PR checks: demo updated or marked not yet |
-
-## 9. Questions
-
-1. Browser-reserved keys (⌘T, ⌘N, ⌘W, ⌘1-9, ...). Options: (a) accept that these work only in full screen (Keyboard Lock, Chromium) and give a second binding that always works (for example ⌥ plus the key, shown in Help as "in the browser"); (b) only alternate bindings, Help shows both; (c) a browser extension or installed PWA only. Recommendation (a): full screen gives the real keys, the page tells the user once ("press ⌘↩ for the real shortcuts").
-2. Engine: ghostty-web, xterm.js fallback after a 1-day spike (recommended), or xterm.js at once. Cost: 0.x bugs; gain: same parser as the app.
-3. Shell: own (recommended) or `just-bash` for real pipes; revisit on demand.
-4. Smaller choices, recommended: commit libraries into `demo/vendor/` (no npm); delete the mockup after the demo passes; mobile gets a notice only; ship 3 OFL fonts (JetBrains Mono, Fira Code, Source Code Pro) so the font setting is visible.
+1. Spec and canon: add the demo to `docs/spec.md` section 1 and replace "Mockup first" in `.claude/CLAUDE.md` with "Demo first". Recommend yes (slice C does the text after your OK).
+2. `tarn new` is open in spec section 12 question 4. Recommend: demo opens a new tab with a plain shell, no auto `claude`, until you decide.
+3. Labels: demo follows the canon (`waiting`, unseen), so the mockup's "done" label changes. Recommend yes; show "done, not seen" as the text of unseen `waiting`.
