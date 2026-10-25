@@ -2,12 +2,16 @@
 
 Run: uv run --with playwright python -I viewer-web/test-mermaid.py (uses the installed Chrome).
 """
+
 import pathlib
 import sys
 
 from playwright.sync_api import sync_playwright
 
-BUNDLE = pathlib.Path(__file__).resolve().parent.parent / "macos/Sources/Features/Tarn/Viewer/tarn-mermaid.js"
+BUNDLE = (
+    pathlib.Path(__file__).resolve().parent.parent
+    / "macos/Sources/Features/Tarn/Viewer/tarn-mermaid.js"
+)
 
 DIAGRAMS = {
     "flowchart": "flowchart TD\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]\n  B -->|no| A",
@@ -25,9 +29,14 @@ def main() -> int:
         page = browser.new_page()
         page.set_content("<html><body></body></html>")
         page.add_script_tag(path=str(BUNDLE))
-        page.evaluate("mermaid.initialize({startOnLoad: false, securityLevel: 'strict', layout: 'dagre'})")
+        page.evaluate(
+            "mermaid.initialize({startOnLoad: false, securityLevel: 'strict', layout: 'dagre'})"
+        )
         for name, source in DIAGRAMS.items():
-            svg = page.evaluate("([id, src]) => mermaid.render(id, src).then(r => r.svg)", [f"d-{name}", source])
+            svg = page.evaluate(
+                "([id, src]) => mermaid.render(id, src).then(r => r.svg)",
+                [f"d-{name}", source],
+            )
             ok = "<svg" in svg and "Syntax error" not in svg
             print(f"{name}: {'ok' if ok else 'FAIL'} ({len(svg)} bytes)")
             if not ok:
@@ -37,7 +46,8 @@ def main() -> int:
             """async () => {
               try { await mermaid.render('d-elk', '---\\nconfig:\\n  layout: elk\\n---\\nflowchart TD\\n A-->B'); return ''; }
               catch (e) { return String(e); }
-            }""")
+            }"""
+        )
         print("elk:", error[:120] or "rendered (unexpected)")
         browser.close()
     return 1 if failures else 0

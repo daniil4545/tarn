@@ -10,8 +10,9 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2] / "demo" / "test"))
 
-from lib import server  # noqa: E402,F401
-from playwright.sync_api import sync_playwright  # noqa: E402,F401
+from playwright.sync_api import sync_playwright  # noqa: F401
+
+from lib import server, show_pane  # noqa: F401
 
 TAB = ".sidebar .tab[data-tabid]"
 
@@ -75,12 +76,3 @@ def run(pg, line, delay=0):
 
 def focus(pg, pane):
     pg.locator(f"[data-pane='{pane}'] canvas").first.click()
-
-
-def show_pane(pg, pane):
-    pg.evaluate(
-        """(id) => { const s = __tarn.snapshot().workspaces;
-          const tab = Object.values(s.tabs).find((t) => JSON.stringify(t.layout).includes('"' + id + '"'));
-          window.bus.cmd('tab.go', {id: tab.id}); }""",
-        pane,
-    )
