@@ -539,3 +539,83 @@ struct ViewerClickAndKeyTests {
         #expect(key("s", kVK_ANSI_S, [.command, .capsLock]) == "save")
     }
 }
+
+/// Cmd+B: opens a tree-only pane, closes a pane with no file, toggles the tree of a pane with files.
+@Suite
+@MainActor
+struct ViewerTreeKeyTests {
+    @Test func undoOfACloseWhoseFilesAreGoneShowsTheTree() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.reopen([ViewerTab(path: "/nonexistent/a.md", preview: false, line: nil, jump: 0)], active: 0)
+        #expect(model.snapshot.isEmpty)
+        #expect(model.treeVisible)
+    }
+
+    @Test func hostCreatesATreeOnlyPaneThatSurvivesAFailedOpenAndClosesOnTheNextKey() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let host = ViewerHost()
+        let missing = OpenTarget(path: dir + "/nope.md", line: nil)
+        // An open that fails in a pane it created leaves no pane behind.
+        #expect(!host.open(missing, root: dir, focus: false))
+        #expect(host.model == nil)
+        // Cmd+B from the terminal opens the tree-only pane.
+        host.toggleFromKey(root: dir)
+        #expect(host.model?.treeVisible == true)
+        #expect(host.model?.snapshot.isEmpty == true)
+        // A failed open does not take that pane away.
+        #expect(!host.open(missing, root: dir, focus: false))
+        #expect(host.model != nil)
+        // The next Cmd+B closes the empty pane.
+        host.toggleFromKey(root: dir)
+        #expect(host.model == nil)
+    }
+
+    @Test func treeOnlyPaneShowsTheTreeWithNoFile() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.showTreeOnly()
+        #expect(model.treeVisible)
+        #expect(model.snapshot.isEmpty)
+    }
+
+    @Test func theKeyInAnEmptyPaneClosesItAndKeepsNothingToReopen() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.showTreeOnly()
+        var closed: [([ViewerTab], Int)] = []
+        model.onClosePane = { closed.append(($0, $1)) }
+        model.toggleTreeKey()
+        #expect(closed.count == 1 && closed[0].0.isEmpty && closed[0].1 == -1)
+        // Cmd+W and the tree's own hide button end an empty pane the same way.
+        model.closeActiveTab()
+        model.handle(["t": "hideTree"])
+        #expect(closed.count == 3)
+    }
+
+    @Test func theKeyInAPaneWithFilesOnlyTogglesTheTree() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        model.open(OpenTarget(path: dir + "/a.md"))
+        var closes = 0
+        model.onClosePane = { _, _ in closes += 1 }
+        let before = model.treeVisible
+        model.toggleTreeKey()
+        #expect(model.treeVisible != before)
+        model.toggleTreeKey()
+        #expect(model.treeVisible == before)
+        #expect(closes == 0 && model.snapshot.count == 1)
+    }
+
+    @Test func lastTabStillClosesThePane() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        model.open(OpenTarget(path: dir + "/a.md"))
+        var saved: [ViewerTab] = []
+        model.onClosePane = { tabs, _ in saved = tabs }
+        model.closeActiveTab()
+        #expect(saved.map(\.path) == [dir + "/a.md"])
+    }
+}

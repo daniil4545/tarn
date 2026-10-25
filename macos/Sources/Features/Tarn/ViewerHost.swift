@@ -24,22 +24,43 @@ final class ViewerHost: ObservableObject {
         // A layout change takes the first responder from the terminal; an agent's open gives it back.
         let responder = focus ? nil : window?.firstResponder
         let typingInPane = !focus && (model?.hasFocus() ?? false)
+        let created = model == nil
         let model = model ?? makePane(root: root ?? NSHomeDirectory())
         guard model.open(target, background: typingInPane) else {
-            if model.snapshot.isEmpty { closePane(saved: [], active: -1) }
+            // A pane this call created for a file that cannot open does not stay; a tree-only pane does.
+            if created, model.snapshot.isEmpty { closePane(saved: [], active: -1) }
             return false
         }
         if focus {
             DispatchQueue.main.async { model.onFocus?() }
-        } else if let responder {
-            for delay in [0.0, 0.15] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let window = self?.window, window.firstResponder !== responder else { return }
-                    window.makeFirstResponder(responder)
-                }
-            }
+        } else {
+            keepFocus(responder)
         }
         return true
+    }
+
+    /// A layout change takes the first responder from the terminal; give it back.
+    private func keepFocus(_ responder: NSResponder?) {
+        guard let responder else { return }
+        for delay in [0.0, 0.15] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                guard let window = self?.window, window.firstResponder !== responder else { return }
+                window.makeFirstResponder(responder)
+            }
+        }
+    }
+
+    /// Cmd+B from the terminal (the View menu item "Toggle Files"). From the pane itself the web view
+    /// takes the key first, so there is one path per focus. With no pane it opens one with the tree
+    /// only; otherwise the model decides (an empty pane closes, one with files toggles the tree).
+    func toggleFromKey(root: String?) {
+        guard let model else {
+            let responder = window?.firstResponder
+            makePane(root: root ?? NSHomeDirectory()).showTreeOnly()
+            keepFocus(responder)
+            return
+        }
+        model.toggleTreeKey()
     }
 
     private func makePane(root: String) -> ViewerModel {
@@ -70,6 +91,13 @@ final class ViewerHost: ObservableObject {
             reopened.reopen(saved, active: active)
             DispatchQueue.main.async { reopened.onFocus?() }
         }
+    }
+}
+
+extension TerminalController {
+    /// The View menu item "Toggle Files" (Cmd+B), found through the responder chain from the terminal.
+    @IBAction func toggleViewerTree(_ sender: Any?) {
+        viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
     }
 }
 
