@@ -97,27 +97,32 @@ def story_drag(pg):
     time.sleep(1.5)
 
 
-def story_settings(pg):
-    """Font size and theme in Settings reach the terminal."""
-    pg.keyboard.press("Meta+Comma")
+def story_split(pg):
+    """Split right, then drag the new terminal under the first one: the split turns horizontal."""
+    focus(pg, "p1")
     time.sleep(0.8)
-    pg.click("#setNav [data-sec='appearance']")
-    time.sleep(0.8)
-    pg.fill("#g-font-size", "")
-    pg.type("#g-font-size", "17", delay=150)
-    pg.press("#g-font-size", "Tab")
+    pg.keyboard.press("Meta+d")
+    terms = pg.locator('.leaf[data-kind="term"]')
+    terms.nth(1).wait_for()
+    time.sleep(1.2)
+    gx, gy = center(pg, '.leaf[data-kind="term"] >> nth=1 >> .grip')
+    glide(pg, gx, gy)
+    time.sleep(0.6)
+    pg.mouse.down()
+    first = terms.nth(0).bounding_box()
+    glide(pg, gx - 150, gy + 120, steps=15)
+    glide(pg, first["x"] + first["width"] / 2, first["y"] + first["height"] * 0.85, steps=25)
+    pg.wait_for_selector("#ws > .drop")
     time.sleep(1.0)
-    pg.select_option("#g-theme", "dracula")
-    time.sleep(1.2)
-    pg.keyboard.press("Escape")
-    time.sleep(1.2)
+    pg.mouse.up()
+    time.sleep(1.5)
 
 
 STORIES = {
     "agent-permission": story_permission,
     "viewer-edit": story_viewer,
     "viewer-drag": story_drag,
-    "settings": story_settings,
+    "terminal-split": story_split,
 }
 
 
