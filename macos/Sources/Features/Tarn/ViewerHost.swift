@@ -109,7 +109,10 @@ final class ViewerHost: ObservableObject {
     /// with the keyboard in them; shown viewers (with files or not) hide whole, tabs, unsaved edits and
     /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
-        guard activeModel != nil else { return openTreeOnly(root: root) }
+        guard activeModel != nil else {
+            if FileViewerSetting.isOn { openTreeOnly(root: root) }
+            return
+        }
         if hidden { return show() }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
         for model in models { model.flushPendingEdit() }
@@ -428,6 +431,10 @@ enum ViewerRouter {
     /// terminal. Files of media, document and archive types open in their own app.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
+        guard FileViewerSetting.isOn else {
+            logger.debug("click on \(raw, privacy: .public) refused: the file viewer is off")
+            return false
+        }
         guard let surface else {
             logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
@@ -444,7 +451,8 @@ enum ViewerRouter {
             _ = controller.viewerHost.open(target, root: cwd, focus: true)
             return true
         case let .missing(raw):
-            guard let model = controller.viewerHost.activeModel else { return false }
+            // Only a shown pane can tell the user; otherwise the default opener reports it.
+            guard let model = controller.viewerHost.activeModel, !controller.viewerHost.hidden else { return false }
             model.toast("No such file: \(raw)")
             return true
         case .upstream:
@@ -481,6 +489,7 @@ enum ViewerRouter {
     @MainActor
     private static func openFromSocket(_ message: [String: Any]) -> String? {
         guard message["version"] as? Int == 1 else { return "tarn: unsupported version" }
+        guard FileViewerSetting.isOn else { return "tarn: the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
             return "tarn: the path must be absolute"
         }

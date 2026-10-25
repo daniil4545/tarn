@@ -10,6 +10,29 @@ import WebKit
 /// split and focus items of the menu reach it first in the responder chain, before the terminal
 /// controller, so Ghostty's split keys work while a viewer holds the keyboard (D8, S14).
 final class ViewerWebView: WKWebView {
+    /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
+    /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
+    static let keyTable: [Key] = [
+        Key("b", "tree", "Toggle File Viewer (also in the terminal: View menu)"),
+        Key("e", "mode", "View or source"),
+        Key("s", "save", "Save the file"),
+    ]
+
+    struct Key {
+        let key: String
+        let command: String
+        let help: String
+
+        init(_ key: String, _ command: String, _ help: String) {
+            self.key = key
+            self.command = command
+            self.help = help
+        }
+    }
+
+    /// The key text of a `keyTable` entry, as Help shows it.
+    static func keyText(_ entry: Key) -> String { "⌘" + entry.key.uppercased() }
+
     var onCommand: ((String) -> Void)?
     var onLayout: ((ViewerLayoutCommand) -> Void)?
 
@@ -30,12 +53,8 @@ final class ViewerWebView: WKWebView {
             }
         }
         // The modifiers are exact: Cmd+Alt+B and Cmd+Shift+B are not Cmd+B.
-        switch (modifiers, letter) {
-        case (.command, "s"): return "save"
-        case (.command, "e"): return "mode"
-        case (.command, "b"): return "tree"
-        default: return nil
-        }
+        guard modifiers == .command else { return nil }
+        return keyTable.first { $0.key == letter }?.command
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
