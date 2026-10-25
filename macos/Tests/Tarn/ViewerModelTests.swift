@@ -850,3 +850,42 @@ struct ViewerPaneKeyTests {
         #expect(window.firstResponder === view)
     }
 }
+
+@Suite
+@MainActor
+struct ViewerSaveTests {
+    /// A pane with `name` open and edited to "mine"; returns the host and the file path.
+    private func editedPane(_ name: String, in dir: String) throws -> (ViewerHost, String) {
+        let path = dir + "/" + name
+        try "one".write(toFile: path, atomically: true, encoding: .utf8)
+        let host = ViewerHost()
+        host.open(OpenTarget(path: path), root: dir, focus: false)
+        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        return (host, path)
+    }
+
+    @Test(arguments: ["a.md", "main.go"])
+    func writesAnEditedTextFile(name: String) throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let (host, path) = try editedPane(name, in: dir)
+        host.model?.handle(["t": "save", "path": path])
+        #expect(try String(contentsOfFile: path, encoding: .utf8) == "mine")
+    }
+
+    /// The agent rewrote the file after the edit: as text, over 5 MB, or not UTF-8.
+    @Test(arguments: [
+        Data("agent".utf8),
+        Data(repeating: 0x61, count: FileRead.maxBytes + 1),
+        Data([0xFF, 0xFE, 0x00, 0x61]),
+    ])
+    func neverWritesOverTheAgentsVersion(disk: Data) throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let (host, path) = try editedPane("a.md", in: dir)
+        try disk.write(to: URL(fileURLWithPath: path))
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(5)], ofItemAtPath: path)
+        host.model?.handle(["t": "save", "path": path])
+        #expect(try Data(contentsOf: URL(fileURLWithPath: path)) == disk)
+    }
+}
