@@ -1,6 +1,6 @@
 """Slice B checks: layouts and splits, undo, workspaces, sidebar, top tabs, tab card, drop zones, keys.
 
-Ported from docs/mockups/check.py under the same names (1, 13-26, 38-42, W*, S2-S5, C*, O*, V*, A*);
+Ported from the old mockup checks (docs/mockups/check.py, removed) under the same names (1, 13-26, 38-42, W*, S2-S5, C*, O*, V*, A*);
 names that start with N or K are new. The page is the real index.html: terminal panes, viewer and chrome together.
 Run: nice -n 10 uv run --with playwright python -I demo/test/check_b.py
 """
@@ -789,6 +789,15 @@ def run(base):
         area_over(n(f"{TERM} .grip"), box["width"] - 10, 300)
         check("A5 split terminals cannot go to the area edge", vis("#ws > .drop.deny"))
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+
+        while count(VIEWER):
+            cmd(pg, "pane.close", {"id": layout("L.viewers(tab.layout)[0].viewer")})
+        check("36 closing viewers leaves terminals", count(VIEWER) == 0 and count(TERM) >= 1)
+
+        pg.set_viewport_size({"width": 420, "height": 860})
+        width = pg.evaluate("document.documentElement.scrollWidth")
+        check("43 phone width: no horizontal page scroll", width <= 420, f"scrollWidth={width}")
+        pg.set_viewport_size({"width": 1400, "height": 860})
 
         check("N18 no page errors", not errors, "; ".join(errors[:3]))
         check(

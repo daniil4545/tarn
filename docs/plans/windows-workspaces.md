@@ -1,6 +1,6 @@
 # Windows and workspaces: model and user scenarios
 
-Draft for the user's review before it goes into `docs/spec.md`. Replaces R3 grouping by project and R21 custom groups; R19 pins are removed (D17); R20 drag applies inside a workspace. The mockup `docs/mockups/tarn.html` follows this file after approval.
+Draft for the user's review before it goes into `docs/spec.md`. Replaces R3 grouping by project and R21 custom groups; R19 pins are removed (D17); R20 drag applies inside a workspace. The browser demo `demo/` follows this file after approval.
 
 ## 1. Terms
 

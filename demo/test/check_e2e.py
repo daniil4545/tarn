@@ -50,7 +50,7 @@ def story(base):
     with app_page(base) as (pg, errors, requests):
         s = snap(pg)
         check(
-            "1 the demo opens on the seed: six tabs, three workspaces",
+            "E1 the demo opens on the seed: six tabs, three workspaces",
             len(s["workspaces"]["tabs"]) == 6 and len(s["workspaces"]["wss"]) == 3,
         )
 
@@ -62,7 +62,7 @@ def story(base):
         check("2 typing in the shell runs a command", until(pg, "p6", r"\nhello\s*\n"))
         run(pg, "tarn --help")
         check(
-            "2a tarn says it is planned, not in the app yet",
+            "E2a tarn says it is planned, not in the app yet",
             until(pg, "p6", r"planned: not in the app yet\s*\nusage: tarn"),
         )
 
@@ -74,7 +74,7 @@ def story(base):
         pg.evaluate("__tarn.clock.advance(3000)")
         time.sleep(0.3)
         check(
-            "3 claude asks for permission",
+            "E3 claude asks for permission",
             snap(pg)["registry"]["p6"]["state"] == "permission",
         )
         pg.hover(f"{TAB}[data-tabid='t6']")
@@ -84,7 +84,7 @@ def story(base):
         time.sleep(0.3)
         reg = snap(pg)["registry"]["p6"]
         check(
-            "4 Allow in the card lets the turn end in waiting",
+            "E4 Allow in the card lets the turn end in waiting",
             reg["state"] == "waiting",
         )
 
@@ -99,7 +99,7 @@ def story(base):
             "Object.values(__tarn.viewer().state().panes).flatMap((v) => v.tabs.map((t) => t.path))"
         )
         check(
-            "6 a click on the path opens the file in a viewer beside the terminal",
+            "E6 a click on the path opens the file in a viewer beside the terminal",
             any(t.endswith("/docs/spec.md") for t in tabs),
             str(tabs),
         )
@@ -132,7 +132,7 @@ def story(base):
             "JSON.stringify(__tarn.snapshot().workspaces.tabs.t6.layout)"
         )
         check(
-            "8 dragging the viewer to the left edge frames the zone and moves it",
+            "E8 dragging the viewer to the left edge frames the zone and moves it",
             framed and before != after and pg.locator(TERM).count() == 2,
         )
 
@@ -150,7 +150,7 @@ def story(base):
             "[__tarn.term('p6').options.fontSize, __tarn.term('p6').options.theme.background]"
         )
         check(
-            "9 font-size and theme in Settings reach the terminal",
+            "E9 font-size and theme in Settings reach the terminal",
             opts == [16, "#282a36"],
             str(opts),
         )
@@ -162,7 +162,7 @@ def story(base):
         pg.keyboard.press("Meta+t")
         pg.keyboard.press("Control+Alt+t")
         check(
-            "10 Cmd+T and its Ctrl+Alt+T fallback open tabs",
+            "E10 Cmd+T and its Ctrl+Alt+T fallback open tabs",
             len(snap(pg)["workspaces"]["tabs"]) == n + 2,
         )
         pg.keyboard.press("Meta+1")
@@ -170,7 +170,7 @@ def story(base):
         pg.keyboard.press("Control+Alt+2")
         second = snap(pg)["workspaces"]["cur"]
         check(
-            "11 Cmd+1 and Ctrl+Alt+2 switch tabs",
+            "E11 Cmd+1 and Ctrl+Alt+2 switch tabs",
             first == "t1" and second == "t2",
             f"{first} {second}",
         )
@@ -181,7 +181,7 @@ def story(base):
         ready(pg)
         s = snap(pg)
         check(
-            "12 a reload keeps tabs and settings",
+            "E12 a reload keeps tabs and settings",
             len(s["workspaces"]["tabs"]) == total
             and s["config"]["font-size"] == 16
             and s["config"]["theme"] == "dracula",
@@ -195,17 +195,17 @@ def story(base):
         ready(pg)
         s = snap(pg)
         check(
-            "13 Reset demo returns to the seed and the default settings",
+            "E13 Reset demo returns to the seed and the default settings",
             len(s["workspaces"]["tabs"]) == 6
             and s["config"]["font-size"] == 13
             and s["config"]["theme"] == "",
         )
 
         check(
-            "14 no console errors in the whole walk", not errors, "; ".join(errors[:3])
+            "E14 no console errors in the whole walk", not errors, "; ".join(errors[:3])
         )
         check(
-            "15 no request leaves the demo origin",
+            "E15 no request leaves the demo origin",
             all(u.startswith((base, "data:")) for u in requests),
             str([u for u in requests if not u.startswith((base, "data:"))][:3]),
         )
@@ -218,7 +218,7 @@ def readme():
         text.split("Built vs planned", 1)[-1] if "Built vs planned" in text else ""
     )
     check(
-        "17 the README lists what is built and what is planned",
+        "E17 the README lists what is built and what is planned",
         "CLI" in section
         and "planned" in section.lower()
         and "built" in section.lower(),

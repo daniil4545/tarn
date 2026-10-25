@@ -1,4 +1,4 @@
-/* Look of the viewer pane: docs/mockups/tarn.html (.vpane rules). */
+/* Look of the viewer pane: the demo, demo/ (viewer pane rules). */
 :root {
   color-scheme: dark;
   --p-bg: #282a36; --p-bar: #21222c; --p-fg: #e6e6ef; --p-muted: #9a9cb3; --p-line: #3a3c4e;
