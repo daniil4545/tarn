@@ -45,6 +45,16 @@ enum TabStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// Whether the file viewer opens new panes. Off: Cmd+B opens nothing, path clicks go to
+/// Ghostty's opener, agents get an error; a pane already open stays until it is closed.
+enum FileViewerSetting {
+    static let key = "TarnFileViewer"
+
+    static var isOn: Bool {
+        UserDefaults.standard.object(forKey: key) as? Bool ?? true
+    }
+}
+
 /// The tarn settings window: tarn's own features, a short list of Ghostty options (written to
 /// tarn's options file) and Help. Everything else stays in the Ghostty config file.
 final class TarnSettingsController: NSWindowController, NSWindowDelegate {
@@ -90,13 +100,14 @@ extension AppDelegate {
 
 struct TarnSettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case tabs, appearance, terminal, windows, help
+        case tabs, viewer, appearance, terminal, windows, help
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .tabs: "Tabs"
+            case .viewer: "File Viewer"
             case .appearance: "Appearance"
             case .terminal: "Terminal"
             case .windows: "Windows"
@@ -107,6 +118,7 @@ struct TarnSettingsView: View {
         var icon: String {
             switch self {
             case .tabs: "sidebar.left"
+            case .viewer: "doc.richtext"
             case .appearance: "paintpalette"
             case .terminal: "terminal"
             case .windows: "macwindow"
@@ -128,6 +140,7 @@ struct TarnSettingsView: View {
         } detail: {
             switch section ?? .tabs {
             case .tabs: TabsSettingsPane()
+            case .viewer: ViewerSettingsPane()
             case .appearance: GhosttyOptionsPane(section: .appearance, title: "Appearance", store: store)
             case .terminal: GhosttyOptionsPane(section: .terminal, title: "Terminal", store: store)
             case .windows: GhosttyOptionsPane(section: .windows, title: "Windows", store: store)
@@ -173,5 +186,25 @@ private struct TabsSettingsPane: View {
         .onChange(of: style) { _ in
             TabStyle.applyToOpenWindows()
         }
+    }
+}
+
+private struct ViewerSettingsPane: View {
+    @AppStorage(FileViewerSetting.key) private var isOn = true
+
+    var body: some View {
+        Form {
+            Toggle(isOn: $isOn) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("File viewer")
+                    Text("Cmd+B, path clicks and agents open files in a pane beside the terminal. "
+                        + "When off, path clicks open files in their default app; an open pane stays until you close it.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .navigationTitle("File Viewer")
     }
 }

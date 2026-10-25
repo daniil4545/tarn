@@ -84,7 +84,7 @@ struct ViewerDocument: Equatable {
     }
 
     mutating func edit(_ newText: String) {
-        guard case .markdown = content else { return }
+        if case .notice = content { return }
         text = newText
     }
 
