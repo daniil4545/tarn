@@ -66,6 +66,8 @@ flowchart LR
 | SessionRegistry | owns session state, state machine, liveness check, pending answers | `macos/Sources/Features/Tarn/SessionRegistry.swift` | works |
 | AgentProcess | names the agent from a surface's foreground process | `macos/Sources/Features/Tarn/AgentProcess.swift` | works |
 | SidebarModel, SidebarLayout, Sidebar | builds groups per window, draws the sidebar | `macos/Sources/Features/Tarn/Sidebar.swift` | works |
+| TarnSettings | settings window (cmd+,), tab style in `UserDefaults` `TarnTabStyle`, applies it to open windows | `macos/Sources/Features/Tarn/TarnSettings.swift` | works |
+| NativeTabMark | state dot and agent logo in a native tab's accessory stack when tabs are at the top | `macos/Sources/Features/Tarn/Sidebar.swift` | works |
 | AgentViews | agent badge, quick actions, card content | `macos/Sources/Features/Tarn/AgentViews.swift` | works |
 | TabCardPopover | popover with the card beside a row | `macos/Sources/Features/Tarn/TabCardPopover.swift` | works |
 | Tests | process detection and session state machine | `macos/Tests/Tarn/` (`AgentProcessTests.swift`, `AgentSessionTests.swift`) | works |
@@ -221,6 +223,7 @@ One environment: the local macOS app. No config file of ours.
 | `TARN_SURFACE` | tells hooks which surface they run in | the app, for each surface shell |
 | socket path | `~/Library/Application Support/tarn/tarn.sock` | constant in `ControlSocket.path` |
 | sidebar width, collapsed, folded roots | layout | `UserDefaults` |
+| tab style `TarnTabStyle`: `sidebar` (default) or `top` | sidebar or native tab bar | settings window, `UserDefaults` |
 | plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.2.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`CHANGELOG.md`, Setup) |
 
 Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (`permission.sh`, 3600 s): `UserPromptSubmit`, `PermissionRequest`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SessionEnd`.
@@ -234,11 +237,12 @@ Branch diff against `origin/main`. Every Swift change outside `macos/Sources/Fea
 | # | File | What was inserted | Why |
 |---|---|---|---|
 | 1 | `macos/Sources/Features/Terminal/TerminalController.swift` | property `private let sidebarModel = SidebarModel()` | one sidebar model per window |
-| 2 | same | in the content view setup: `sidebarModel.window = window`; `TerminalView` wrapped in `SidebarLayout(model:ghostty:)`; initial content width plus `Sidebar.occupiedWidth` | draws the sidebar beside the terminal and keeps the terminal's requested size |
+| 2 | same | in the content view setup: `sidebarModel.window = window`; `NativeTabMark.install`; `TerminalView` wrapped in `SidebarLayout(model:ghostty:)`; initial content width plus `Sidebar.occupiedWidth` | draws the sidebar beside the terminal and keeps the terminal's requested size |
 | 3 | same | at the end of the tab relabel function: post `.terminalTabsDidChange` | refresh the sidebar when tabs are relabeled |
 | 4 | same | after a tab move: `relabelTabs()` | the window is already key, so nothing else relabels moved tabs |
 | 5 | `macos/Sources/Features/Terminal/Window Styles/TerminalWindow.swift` | post `.terminalTabsDidChange` in the `tabColor` and `title` observers | sidebar shows color and title |
-| 6 | same | when the native tab bar controller is added: `childViewController.isHidden = true` and its view hidden | the sidebar replaces the native tab bar |
+| 6 | same | when the native tab bar controller is added: controller and view hidden while the tab style is `sidebar` | the sidebar replaces the native tab bar |
+| 9 | `macos/Sources/App/MainMenu.xib` | menu item "Preferences…" renamed "Settings…", action `showTarnSettings:` | cmd+, opens the tarn settings window; its button opens the Ghostty config file |
 | 7 | `macos/Sources/Ghostty/Surface View/SurfaceView.swift` | `environmentVariables["TARN_SURFACE"] = view.id.uuidString` before the variables are converted to arrays; replaces an inherited value | hooks learn their surface |
 | 8 | `macos/Assets.xcassets/TarnAgentClaude.imageset`, `TarnAgentCodex.imageset`, `TarnAgentOpenCode.imageset` | new image sets with SVG (`claude.svg`, `openai.svg`, `opencode.svg`) | agent badges |
 

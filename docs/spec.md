@@ -29,7 +29,7 @@ tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. I
 
 Principles:
 
-1. **Simplicity.** A part stays only if something breaks without it. Everything outside this section is cut, not hidden behind a setting.
+1. **Simplicity.** A part stays only if something breaks without it. Everything outside this section is cut, not hidden behind a setting. The tarn settings window holds only settings of tarn's own features; terminal settings stay in the Ghostty config file.
 2. **Speed.** Startup, input latency, idle CPU and memory stay at the level of upstream Ghostty built from the same commit. Numbers come from a benchmark, not from impressions.
 3. **Reliability.** The Ghostty core is not modified. Our code lives in its own files; upstream files change only at insertion points listed in `docs/architecture.md`.
 4. **Lightweight and local.** No account, cloud, telemetry, subscription, built-in AI model or network requests from our code.
@@ -47,6 +47,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R3 | Sidebar with all sessions: a tab running claude, codex or opencode sits in its project's group with the agent's icon and state; other tabs sit below a divider; the collapsed sidebar shows icons only | first | median 5 parallel sessions, peak 16 |
 | R19 | Pins: tabs pinned at the top of the sidebar, reordered among themselves | first | user request 2026-10-23 |
 | R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
+| R24 | Settings window (cmd+,); tab style: sidebar or native tabs at the top, where an agent tab shows its state dot and logo at the right edge | first | user request 2026-10-25 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
 | R10 | Several agents per project shown as separate sessions | first | - |
 | R4 | One notification per need; jump to the next session that needs the user by a click | first | 13.5% of replies come after more than 10 min |
@@ -336,13 +337,7 @@ Implementation starts after the tracker work; tasks are in `tk` under project `t
 
 ## 14. Access and readiness
 
-| Need | Who | How | Stages | Check | Ready |
-| --- | --- | --- | --- | --- | --- |
-| Zig 0.17.0 | agent | install per `HACKING.md` | S0 | `zig version` | no |
-| Xcode and macOS SDK | user | installed: Xcode 27.0; upstream guide names Xcode 26 | S0 | `xcodebuild -version` | check in S0 |
-| nushell for `macos/build.nu` | agent | Homebrew | S0 | `nu --version` | no |
-| swiftlint | agent | Homebrew | S0 | `swiftlint version` | no |
-| Claude Code with plugins | user | installed | S2 | `claude --version` | yes |
+Ready: Zig, Xcode, nushell and swiftlint are installed and the app builds with `macos/build.nu` (since `tarn-v0.0.1`); Claude Code with plugins is installed.
 
 Readiness for slicing:
 
