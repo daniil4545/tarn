@@ -24,7 +24,8 @@ export function addPaneLinks(term, { vfs, cwd, home, openFile, urlEnabled }) {
   term.addLinkProvider(
     (line) => (urlEnabled() ? find(line, URL, () => true) : []),
     (text, e) => {
-      if (e.metaKey || e.ctrlKey) window.open(text, "_blank", "noopener");
+      // The engine caches found links, so the switch is also read at click time.
+      if (urlEnabled() && (e.metaKey || e.ctrlKey)) window.open(text, "_blank", "noopener");
     },
   );
 }

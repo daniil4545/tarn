@@ -1,6 +1,6 @@
 // clipboard-paste-protection: a multi-line paste waits for a confirmation, as in Ghostty.
 
-function confirmPaste(el, text, lines, paste) {
+function confirmPaste(el, text, lines, { paste, focus }) {
   const dialog = document.createElement("div");
   dialog.className = "paste-dialog";
   dialog.setAttribute("role", "dialog");
@@ -9,6 +9,7 @@ function confirmPaste(el, text, lines, paste) {
   const close = (ok) => {
     dialog.remove();
     if (ok) paste(text);
+    focus();
   };
   dialog.querySelector("[data-paste]").addEventListener("click", () => close(true));
   dialog.querySelector("[data-cancel]").addEventListener("click", () => close(false));
@@ -16,14 +17,15 @@ function confirmPaste(el, text, lines, paste) {
   dialog.querySelector("[data-paste]").focus();
 }
 
-// `enabled()` is read at paste time; `paste(text)` sends the text to the terminal.
-export function guardPaste(el, { enabled, paste }) {
+// `enabled()` is read at paste time; `paste(text)` sends the text to the terminal and
+// `focus()` gives the keyboard back to it when the dialog closes.
+export function guardPaste(el, { enabled, paste, focus }) {
   el.addEventListener("paste", (e) => {
     const text = e.clipboardData?.getData("text") ?? "";
     const lines = text.replace(/\r?\n$/, "").split(/\r?\n/).length;
     if (!enabled() || lines < 2) return;
     e.preventDefault();
     e.stopPropagation();
-    confirmPaste(el, text, lines, paste);
+    confirmPaste(el, text, lines, { paste, focus });
   }, true);
 }

@@ -140,6 +140,8 @@ export function createShell({ vfs, emit, write, clock, identity, history, cols, 
         finish();
       }
     },
+    // Called when the terminal width changed.
+    resize() { if (!job) editor.reflow(); },
     answer(allow) { job?.answer?.(allow); },
     clear(withScrollback) { if (!job) clear(withScrollback); },
     dispose() {

@@ -231,6 +231,11 @@ export function createEditor({ write, cols, history = null, complete = null, on 
       }
     },
 
+    // The terminal changed its width: the line wrapped differently, draw it again where it is.
+    reflow() {
+      rowsUp = Math.floor((width(prompt) + columnsTo(cursor)) / cols());
+      render();
+    },
     // Draw prompt and text again at the top of a cleared screen.
     redraw() { rowsUp = 0; render(); },
     get text() { return text(); },

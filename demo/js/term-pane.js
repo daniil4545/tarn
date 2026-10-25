@@ -76,8 +76,6 @@ export function createPane(id, { cwd }) {
     focusedId = id;
     bus.emit("pane:focused", { pane: id });
   });
-  el.addEventListener("keydown", () => el.classList.add("typing"), true);
-  el.addEventListener("mousemove", () => el.classList.remove("typing"));
 
   function write(data) {
     term.write(data);
@@ -147,7 +145,7 @@ export function createPane(id, { cwd }) {
       openFile: (path, line) => bus.cmd("viewer.open", { path, line, pane: id }),
       urlEnabled: () => urlLinks,
     });
-    guardPaste(el, { enabled: () => read("config")["clipboard-paste-protection"], paste: (t) => term.paste(t) });
+    guardPaste(el, { enabled: () => read("config")["clipboard-paste-protection"], paste: (t) => term.paste(t), focus: () => term.focus() });
   }
 
   // The shell starts when the pane first has a size, so a hidden tab prints at its real width.
@@ -185,6 +183,7 @@ export function createPane(id, { cwd }) {
       paneId: id,
     });
     sub(term.onData((d) => shell.input(d)));
+    sub(term.onResize(() => shell.resize()));
     shell.start({ resume: seeded.agent });
   }
 
@@ -213,7 +212,6 @@ export function startPanes({ vfs: disk }) {
       root.style.setProperty("--term-fg", themeFor(v).foreground);
     },
     "window-padding-x": (v) => root.style.setProperty("--pad-x", `${v}px`),
-    "mouse-hide-while-typing": (v) => root.classList.toggle("hide-mouse-typing", v),
   };
   const config = read("config");
   for (const [key, apply] of Object.entries(windowEffects)) apply(config[key]);

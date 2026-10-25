@@ -61,13 +61,13 @@ test("prompt shows user, host, cwd and git branch", () => {
 
 test("typing, backspace and arrows edit the line", () => {
   const { screen, type, shell } = setup();
-  type("echo helo");
-  type("\x1b[D\x1b[D");
-  type("l");
+  type("echo hllo");
+  type("\x1b[D\x1b[D\x1b[D");
+  type("e");
   assert.match(screen.lines()[0], /% echo hello$/);
   type("\x7f");
-  assert.match(screen.lines()[0], /% echo helo$/);
-  assert.deepEqual(screen.cursor, { x: screen.lines()[0].length - 2, y: 0 });
+  assert.match(screen.lines()[0], /% echo hllo$/);
+  assert.deepEqual(screen.cursor, { x: screen.lines()[0].length - 3, y: 0 });
   assert.equal(shell.busy, null);
 });
 

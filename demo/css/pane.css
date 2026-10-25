@@ -5,7 +5,6 @@
 .pane[hidden] { display: none; }
 .pane-term { flex: 1; min-width: 0; min-height: 0; padding: 0 var(--pad-x, 2px); overflow: hidden; }
 .pane-term canvas { display: block; }
-.hide-mouse-typing .pane.typing, .hide-mouse-typing .pane.typing * { cursor: none !important; }
 
 .paste-dialog {
   position: absolute; left: 50%; top: 20%; transform: translateX(-50%); z-index: 5;

@@ -37,9 +37,10 @@ startPanes({ vfs: startVfs() });
 installKeys(TERMINAL_KEYS, { focus: () => "terminal" });
 installTestContract();
 
-window.mount = async (id, cwd) => {
+window.mount = async (id, cwd, height = 300) => {
   const slot = document.createElement("div");
   slot.className = "slot";
+  slot.style.height = `${height}px`;
   document.getElementById("slots").append(slot);
   const pane = createPane(id, { cwd });
   slot.append(pane.el);
