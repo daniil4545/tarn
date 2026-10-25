@@ -412,7 +412,7 @@ def run(base):
         new_tab = snap()["tabs"][cur()]
         check(
             "W5 cmd+T opens a tab in the workspace of the current tab",
-            len(ws_tabs("w1")) == 5 and "~/D/s/tarn" in new_tab["title"],
+            len(ws_tabs("w1")) == 5 and "~/c/tarn" in new_tab["title"],
         )
         pg.hover(".wsh[data-wsh='w2']")
         pg.click(".wsh[data-wsh='w2'] [data-wsnewtab]")
@@ -792,11 +792,18 @@ def run(base):
 
         while count(VIEWER):
             cmd(pg, "pane.close", {"id": layout("L.viewers(tab.layout)[0].viewer")})
-        check("36 closing viewers leaves terminals", count(VIEWER) == 0 and count(TERM) >= 1)
+        check(
+            "36 closing viewers leaves terminals",
+            count(VIEWER) == 0 and count(TERM) >= 1,
+        )
 
         pg.set_viewport_size({"width": 420, "height": 860})
         width = pg.evaluate("document.documentElement.scrollWidth")
-        check("43 phone width: no horizontal page scroll", width <= 420, f"scrollWidth={width}")
+        check(
+            "43 phone width: no horizontal page scroll",
+            width <= 420,
+            f"scrollWidth={width}",
+        )
         pg.set_viewport_size({"width": 1400, "height": 860})
 
         check("N18 no page errors", not errors, "; ".join(errors[:3]))

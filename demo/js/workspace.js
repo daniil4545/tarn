@@ -3,9 +3,10 @@
 // ExpiringUndoManager). Views read snapshots and send the commands registered here.
 import { bus } from "./bus.js";
 import { register, read } from "./state.js";
-import { load, save } from "./storage.js";
+import { isObject, load, save } from "./storage.js";
 import { clock } from "./clock.js";
 import { WORKSPACES } from "./seed.js";
+import { ask } from "./ask-dialog.js";
 import * as tree from "./layout.js";
 
 const CAP = 8; // panes per tab
@@ -29,12 +30,24 @@ const nextId = (prefix) => `${prefix}${++ids[prefix]}`;
 // Which key rows apply: the kind of the focused leaf.
 export function focusArea() {
   const tab = currentTab();
-  if (!tab) return "any";
+  if (!tab) return "terminal"; // no window: only Cmd+Z (bring it back) and the new-window keys apply
   return tree.isTerm(tree.at(tab.layout, tree.pathOf(tab.layout, tab.focus))) ? "terminal" : "viewer";
 }
 
+// Shape of saved workspaces: anything else (hand-edited storage) is dropped before it can throw.
+const isNode = (n) => isObject(n) && (typeof n.pane === "string" || typeof n.viewer === "string"
+  || (["row", "col"].includes(n.dir) && typeof n.ratio === "number" && isNode(n.a) && isNode(n.b)));
+const hasTerminal = (n) => typeof n.pane === "string" || (n.a !== undefined && (hasTerminal(n.a) || hasTerminal(n.b)));
+const isTab = (t) => isObject(t) && typeof t.id === "string" && typeof t.title === "string" && typeof t.cwd === "string"
+  && isNode(t.layout) && hasTerminal(t.layout);
+const isWs = (w) => isObject(w) && typeof w.id === "string" && typeof w.name === "string"
+  && Array.isArray(w.tabs) && w.tabs.every((id) => typeof id === "string");
+const hasShape = (s) => isObject(s) && isObject(s.tabs) && Object.values(s.tabs).every(isTab)
+  && Array.isArray(s.wss) && s.wss.every(isWs) && (s.cur === null || typeof s.cur === "string");
+
 function usable(state) {
-  const ok = state?.tabs && Array.isArray(state.wss) && state.tabs[state.cur] !== undefined
+  const ok = state?.tabs && Array.isArray(state.wss)
+    && (state.cur === null ? state.wss.length === 0 : state.tabs[state.cur] !== undefined)
     && state.wss.every((w) => w.tabs.every((id) => state.tabs[id]));
   if (!ok) toast("Saved workspaces could not be used, starting fresh");
   return ok;
@@ -52,10 +65,13 @@ function scanIds(state) {
 export function startWorkspaces({ createPane, createViewer }) {
   makePane = createPane;
   makeViewer = createViewer;
-  const stored = cfg("window-save-state") === "never" ? WORKSPACES : load("workspaces", WORKSPACES);
+  const stored = cfg("window-save-state") === "never" ? WORKSPACES : load("workspaces", WORKSPACES, hasShape);
   const initial = structuredClone(usable(stored) ? stored : WORKSPACES);
   scanIds(initial);
   for (const tab of Object.values(initial.tabs)) {
+    // A viewer's files are not stored, so after a reload its leaf would be empty: drop it.
+    for (const v of tree.viewers(tab.layout)) tab.layout = tree.remove(tab.layout, v.viewer);
+    if (!tree.pathOf(tab.layout, tab.focus)) tab.focus = null;
     tab.focus ??= tree.terminals(tab.layout)[0].pane;
     tab.zoom ??= null;
     tree.leaves(tab.layout).forEach((l) => ensurePane(tree.leafId(l), tab.cwd));
@@ -66,12 +82,19 @@ export function startWorkspaces({ createPane, createViewer }) {
     const tab = currentTab();
     if (tab && tab.focus !== pane && tree.pathOf(tab.layout, pane) !== null) bus.cmd("pane.focus", { id: pane });
   });
+  // The tab follows the folder of its shell: a new tab or split starts there.
+  bus.on("pane:cwd", ({ pane, cwd }) => update((s) => {
+    const tab = tabOfLeaf(s, pane);
+    if (!tab) return;
+    tab.cwd = cwd;
+    if (tab.title.startsWith("zsh · ")) tab.title = `zsh · ${short(cwd)}`;
+  }));
   // A viewer command found no viewer on screen: open one right of the terminal block and repeat it.
   bus.on("viewer:needed", (request) => {
     const pane = bus.cmd("pane.place", { viewer: true, zone: "right", target: "block", focus: false });
     if (pane) bus.cmd("viewer.open", { ...request, pane });
   });
-  Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => fn(payload)));
+  Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => (NEEDS_TAB.test(name) && !currentTab() ? undefined : fn(payload))));
 }
 
 function update(fn) {
@@ -87,7 +110,7 @@ function ensurePane(id, cwd) {
   return panes.get(id);
 }
 
-const short = (cwd) => cwd.replace("~/Dev/self-projects/", "~/D/s/").replace("~/Dev/", "~/D/");
+const short = (cwd) => cwd.replace("~/code/", "~/c/");
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
 function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
@@ -106,11 +129,13 @@ function openWindow(s) {
 }
 
 // Undo: a closed pane or tab stays alive until the undo window ends, then it is freed.
+let exiting = false; // a shell that exited on its own is gone for good: nothing to undo
 function keepUndo(rec) {
   const ms = parseInt(cfg("undo-timeout"), 10) * 1000; // "5s"
-  if (ms === 0) return expire(rec);
+  if (ms === 0 || exiting) { expire(rec); return false; }
   rec.timer = clock.after(ms, () => expire(rec));
   undoStack.push(rec);
+  return true;
 }
 
 function expire(rec) {
@@ -129,21 +154,42 @@ function allowClose(leafIds) {
   return !busy || confirm("Close and stop the running program?");
 }
 
+// Make a tab current; a folded workspace unfolds to show it.
+function select(s, id) {
+  s.cur = id;
+  const ws = id && wsOf(s, id);
+  if (ws) ws.collapsed = false;
+}
+
+// Viewers with unsaved text ask first, as the app does: Save, Don't Save or Cancel. Then `go` runs.
+function settleViewers(tabs, go) {
+  const dirty = tabs.flatMap((t) => tree.viewers(t.layout)).map((v) => panes.get(v.viewer)).filter((p) => p?.dirtyFiles().length);
+  if (!dirty.length) return go();
+  const names = dirty.flatMap((p) => p.dirtyFiles()).join(", ");
+  return ask(`Save changes to ${names} before closing?`, ["Save", "Don't Save", "Cancel"]).then((choice) => {
+    if (choice === "Cancel") return;
+    dirty.forEach((p) => (choice === "Save" ? p.saveAll() : p.discardAll()));
+    go();
+  });
+}
+
 function closeTab(s, id) {
   const tab = s.tabs[id], ws = wsOf(s, id), order = flatTabs(s), at = order.indexOf(id);
-  keepUndo({ kind: "tab", what: tab.title, tab, wsId: ws.id, wsAt: s.wss.indexOf(ws), wsName: ws.name, wsFolded: !!ws.collapsed, index: ws.tabs.indexOf(id), leafIds: tree.leaves(tab.layout).map(tree.leafId) });
+  const kept = keepUndo({ kind: "tab", what: tab.title, tab, wsId: ws.id, wsAt: s.wss.indexOf(ws), wsName: ws.name, wsFolded: !!ws.collapsed, index: ws.tabs.indexOf(id), leafIds: tree.leaves(tab.layout).map(tree.leafId) });
   ws.tabs = ws.tabs.filter((x) => x !== id);
   delete s.tabs[id];
   if (!ws.tabs.length) s.wss = s.wss.filter((w) => w !== ws);
-  if (s.cur === id) s.cur = order[at + 1] ?? order[at - 1] ?? null;
-  toast(!s.wss.length ? "Last tab closed: the window closes · ⌘Z restores"
-    : !ws.tabs.length ? `Workspace ${ws.name} closed with its last tab · ⌘Z restores` : "Tab closed · ⌘Z restores");
+  if (s.cur === id) select(s, order[at + 1] ?? order[at - 1] ?? null);
+  const undo = kept ? " · ⌘Z restores" : "";
+  toast(!s.wss.length ? `Last tab closed: the window closes${undo}`
+    : !ws.tabs.length ? `Workspace ${ws.name} closed with its last tab${undo}` : `Tab closed${undo}`);
 }
 
 function closeLeaf(s, id) {
   const tab = tabOfLeaf(s, id);
   if (tree.terminals(tab.layout).length === 1 && tree.isTerm(tree.at(tab.layout, tree.pathOf(tab.layout, id)))) return closeTab(s, tab.id);
-  keepUndo({ kind: "layout", what: id.startsWith("v") ? "viewer" : "pane", tabId: tab.id, layout: tab.layout, focus: tab.focus, leafIds: [id] });
+  const node = tree.at(tab.layout, tree.pathOf(tab.layout, id));
+  keepUndo({ kind: "layout", what: id.startsWith("v") ? "viewer" : "pane", tabId: tab.id, node, seat: tree.seatOf(tab.layout, id), leafIds: [id] });
   tab.layout = tree.remove(tab.layout, id);
   tab.zoom = null;
   // Focus goes back to the terminal block, so cmd+Z (a terminal key) can bring the pane back.
@@ -162,12 +208,16 @@ function restore(s, rec) {
     s.tabs[rec.tab.id] = rec.tab;
     s.cur = rec.tab.id;
   } else {
-    Object.assign(s.tabs[rec.tabId], { layout: rec.layout, focus: rec.focus, zoom: null });
+    const tab = s.tabs[rec.tabId];
+    tab.layout = tree.reseat(tab.layout, rec.node, rec.seat);
+    Object.assign(tab, { focus: tree.leafId(rec.node), zoom: null });
   }
 }
 
 const leafCount = (tab) => tree.leaves(tab.layout).length;
 const ZONE = { right: "right", down: "bottom" };
+
+const NEEDS_TAB = /^(pane\.(?!undo)|tab\.(close|step))/;
 
 const COMMANDS = {
   "tab.new": ({ ws, pane, cwd, title, select = true }) => update((s) => {
@@ -179,19 +229,17 @@ const COMMANDS = {
 
   "tab.close": ({ id }) => {
     const s = read("workspaces"), tab = s.tabs[id ?? s.cur];
-    if (tab && allowClose(tree.terminals(tab.layout).map((t) => t.pane))) update((d) => closeTab(d, tab.id));
+    if (tab && allowClose(tree.terminals(tab.layout).map((t) => t.pane))) settleViewers([tab], () => update((d) => closeTab(d, tab.id)));
   },
 
   "tab.go": ({ id, n }) => update((s) => {
     const order = flatTabs(s), target = id ?? (n === 9 ? order.at(-1) : order[n - 1]);
-    if (!s.tabs[target]) return;
-    wsOf(s, target).collapsed = false;
-    s.cur = target;
+    if (s.tabs[target]) select(s, target);
   }),
 
   "tab.step": ({ delta }) => update((s) => {
     const order = flatTabs(s);
-    s.cur = order[(order.indexOf(s.cur) + delta + order.length) % order.length];
+    select(s, order[(order.indexOf(s.cur) + delta + order.length) % order.length]);
   }),
 
   // Before another tab or at the end of a workspace.
@@ -221,10 +269,20 @@ const COMMANDS = {
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
   },
 
-  "pane.close": ({ id }) => {
+  "pane.close": ({ id, exited = false }) => {
     const s = read("workspaces"), tab = currentTab(s), target = id ?? tab.focus;
+    if (exited) {
+      exiting = true;
+      try { update((d) => closeLeaf(d, target)); } finally { exiting = false; }
+      return;
+    }
     const viewer = target.startsWith("v");
-    if (viewer || allowClose([target])) update((d) => closeLeaf(d, target));
+    if (viewer) return update((d) => closeLeaf(d, target));
+    if (!allowClose([target])) return;
+    // The last terminal takes the tab with it, so unsaved viewer text is asked about first.
+    const lastTerminal = tree.terminals(tab.layout).length === 1;
+    if (lastTerminal) settleViewers([tab], () => update((d) => closeLeaf(d, target)));
+    else update((d) => closeLeaf(d, target));
   },
 
   "pane.focus": ({ id }) => {
@@ -280,7 +338,7 @@ const COMMANDS = {
     const at = s.wss.findIndex((w) => w.id === id);
     if (s.wss.length < 2) return;
     const into = s.wss[at > 0 ? at - 1 : 1];
-    into.tabs.push(...s.wss[at].tabs);
+    if (at > 0) into.tabs.push(...s.wss[at].tabs); else into.tabs.unshift(...s.wss[at].tabs);
     into.collapsed = false;
     s.wss.splice(at, 1);
   }),
@@ -301,8 +359,10 @@ const COMMANDS = {
   "window.close": () => {
     const tabs = Object.values(read("workspaces").tabs);
     if (!tabs.every((t) => allowClose(tree.terminals(t.layout).map((x) => x.pane)))) return;
-    for (const tab of tabs) tree.leaves(tab.layout).forEach((l) => expire({ leafIds: [tree.leafId(l)] }));
-    update((s) => { s.tabs = {}; s.wss = []; s.cur = null; });
-    toast("Window closed · ⌘N opens a new one");
+    settleViewers(tabs, () => {
+      for (const tab of tabs) tree.leaves(tab.layout).forEach((l) => expire({ leafIds: [tree.leafId(l)] }));
+      update((s) => { s.tabs = {}; s.wss = []; s.cur = null; });
+      toast("Window closed · ⌘N opens a new one");
+    });
   },
 };

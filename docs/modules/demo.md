@@ -65,6 +65,7 @@ Keys: rows are data in `keys/*.js`; `keymap.js` runs in the capture phase and ma
 | --- | --- |
 | Sidebar and agent states | built (PR #3-#5) |
 | Viewer (markdown, mermaid, code, save) | built (PR #3-#5) |
+| Cmd+B from the terminal (Ctrl+Alt+B fallback) | built (PR #3): no viewer opens a pane with the tree only, an empty viewer closes, a viewer with files toggles its tree |
 | Workspaces, splits, layout | built (PR #3-#5) |
 | Settings | built (PR #3-#5) |
 | `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`) | planned: the app only has the socket command that opens a file, and a click on a path does the same. The demo keeps the commands to try the idea and prints "planned: not in the app yet" on `tarn --help` and on the first run of each subcommand |
@@ -93,7 +94,7 @@ The viewer page is the same code in both; the rest is a second implementation of
 | `demo/js/` | modules above; `CONTRACT.md` lists the contracts |
 | `demo/viewer/` | copy of the app viewer bundle (generated, do not edit) |
 | `demo/vendor/` | ghostty-web (JS and WASM), fonts; entries in `THIRD_PARTY.md` |
-| `demo/test/` | `check_0.py`, `check_a.py`, `check_b.py`, `check_c.py`, `check_e2e.py`, `lib.py`, `unit/`, `keys.html` (manual page for reserved browser keys) |
+| `demo/test/` | `check_0.py`, `check_a.py`, `check_b.py`, `check_c.py`, `check_e2e.py`, `check_review.py`, `lib.py`, `unit/`, `keys.html` (manual page for reserved browser keys) |
 | `tools/sync-viewer.sh` | copies and patches the app viewer bundle |
 | `demo/README.md` | run, test, built vs planned |
 
@@ -131,6 +132,7 @@ Failures: bad stored JSON gives the seed and a toast; blocked storage is tolerat
 | `check_b.py` | layout, workspaces, sidebar, drop zones, tab switches |
 | `check_c.py` | viewer, settings, Help |
 | `check_e2e.py` | the whole user story, README lists built and planned |
+| `check_review.py` | regressions from the code reviews (undo, drag, keys, storage, settings), no personal data in the demo |
 | `node --test demo/test/unit` | the shell without a browser |
 
 Run (Chrome installed; under load put `nice -n 10` in front):

@@ -6,14 +6,16 @@ import { read } from "./state.js";
 import { OPTIONS, DEFAULTS, isWritten } from "./config.js";
 import { SECTIONS, GHOSTTY, APPLIES, TAB_STYLES } from "./settings-data.js";
 import { helpGroups, symbols } from "./settings-help.js";
+import { esc } from "./esc.js";
 
-const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const ALL = Object.values(GHOSTTY).flat();
 
 let rows = [];
 let root = null;
 let section = "tabs";
 let opener = null;
+let replacing = false;
+const problems = new Map(); // option key -> the line shown under a rejected input
 
 function control(key) {
   const o = OPTIONS[key];
@@ -36,7 +38,8 @@ function optionRow({ key, help, applies }) {
     ? `<span class="set" title="Set here; overrides the same line in the Ghostty config">set in tarn</span><button class="reset" data-greset="${key}">Reset</button>`
     : "";
   const note = APPLIES[applies] ? `<small class="applies">${APPLIES[applies]}</small>` : "";
-  return `<div class="opt" data-opt="${key}"><label for="g-${key}">${key}</label><span class="ctl">${mark}${control(key)}</span><small>${esc(help)}</small>${note}</div>`;
+  const problem = problems.has(key) ? `<small class="err">${esc(problems.get(key))}</small>` : "";
+  return `<div class="opt" data-opt="${key}"><label for="g-${key}">${key}</label><span class="ctl">${mark}${control(key)}</span><small>${esc(help)}</small>${note}${problem}</div>`;
 }
 
 // The lines tarn writes: a repeatable option such as font-family first clears the list.
@@ -45,7 +48,7 @@ export function configLines() {
   const lines = ALL.filter((o) => isWritten(o.key)).flatMap(({ key }) => {
     const value = config[key];
     const line = `${key} = ${value === "" ? '""' : value}`;
-    return key === "font-family" ? [`${key} = ""`, line] : [line];
+    return key === "font-family" && value !== "" ? [`${key} = ""`, line] : [line];
   });
   return lines.length ? lines.join("\n") : "# empty: every value comes from the Ghostty config";
 }
@@ -103,20 +106,32 @@ function close() {
 function refreshRow(key) {
   const row = root.querySelector(`[data-opt="${key}"]`);
   const option = ALL.find((o) => o.key === key);
-  if (row && option) row.outerHTML = optionRow(option);
+  if (row && option) {
+    const next = document.createElement("template");
+    next.innerHTML = optionRow(option);
+    replacing = true; // removing a focused field fires its change event once more
+    row.replaceWith(next.content);
+    replacing = false;
+  }
   const conf = root.querySelector("#tarnConf");
   if (conf) conf.textContent = configLines();
 }
 
 function onChange(e) {
+  if (replacing) return;
   const key = e.target.dataset?.gkey;
   if (key) {
     const o = OPTIONS[key];
     let value = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     if (o.type === "number") {
-      if (value === "") return refreshRow(key);
-      value = Math.min(o.max, Math.max(o.min, Number(value)));
+      value = Number(value);
+      const whole = Number.isInteger(o.step);
+      if (e.target.value === "" || Number.isNaN(value) || value < o.min || value > o.max || (whole && !Number.isInteger(value))) {
+        problems.set(key, `Enter ${whole ? "a whole number" : "a number"} from ${o.min} to ${o.max}.`);
+        return refreshRow(key);
+      }
     }
+    problems.delete(key);
     return bus.cmd("config.set", { key, value });
   }
   if (e.target.name === "tabstyle") bus.cmd("config.set", { key: "tab-style", value: e.target.value });
@@ -130,6 +145,7 @@ function onClick(e) {
   if (nav) return show(nav.dataset.sec);
   const reset = e.target.closest("[data-greset]");
   if (!reset) return;
+  problems.delete(reset.dataset.greset);
   bus.cmd("config.reset", { key: reset.dataset.greset });
   refreshRow(reset.dataset.greset);
 }
@@ -140,6 +156,8 @@ function reload() {
   for (const key of Object.keys(DEFAULTS)) bus.emit("config:changed", { key, value: config[key] });
   bus.emit("toast", { text: "config reloaded" });
 }
+
+export const settingsOpen = () => root !== null && !root.hidden;
 
 // `keyRows`: all key rows of the demo, for the Help section.
 export function startSettings(keyRows) {
@@ -155,7 +173,8 @@ export function startSettings(keyRows) {
     if (e.target.type === "range") e.target.nextElementSibling.textContent = e.target.value;
   });
   document.addEventListener("keydown", (e) => {
-    if (e.key !== "Escape" || root.hidden) return;
+    const closeKey = e.key === "Escape" || (e.code === "KeyW" && (e.metaKey || (e.ctrlKey && e.altKey)));
+    if (!closeKey || root.hidden) return;
     e.stopImmediatePropagation();
     close();
   }, true);

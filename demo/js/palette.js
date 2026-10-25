@@ -1,6 +1,7 @@
 // Command palette (Shift+Cmd+P): every key row is a command; type to filter, Enter runs.
 import { bus } from "./bus.js";
 import { currentTab, paneOf } from "./workspace.js";
+import { esc } from "./esc.js";
 
 let box;
 let input;
@@ -9,7 +10,6 @@ let rows = [];
 let shown = [];
 let pick = 0;
 
-const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export function startPalette(keyRows) {
   rows = keyRows;

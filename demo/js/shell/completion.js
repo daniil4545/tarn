@@ -25,7 +25,7 @@ export function createCompleter({ vfs, cwd, home, commands }) {
       const pathLike = prefix.includes("/") || prefix.startsWith(".");
       return { from, items: pathLike ? paths(prefix, false) : pick(commands, prefix) };
     }
-    const sub = SUBCOMMANDS[words[0]];
+    const sub = Object.hasOwn(SUBCOMMANDS, words[0]) ? SUBCOMMANDS[words[0]] : undefined;
     if (sub && words.length === 1) return { from, items: pick(sub, prefix) };
     return { from, items: paths(prefix, DIRS_ONLY.has(words[0])) };
   };

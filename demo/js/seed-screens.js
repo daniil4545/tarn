@@ -30,16 +30,16 @@ const AGENT_SCREENS = {
     dim("✻ Working… (esc to interrupt)"),
   ],
   p5: [
-    `${green(">")} fix the reminder schedule in the bot`,
+    `${green(">")} fix the navigation links on the website`,
     "",
-    tool("Edit", "bot/schedule.py"),
+    tool("Edit", "src/nav.js"),
     "",
     dim("✻ Working… (esc to interrupt)"),
   ],
 };
 
 // Panes that run a remote login instead of the local shell.
-const REMOTE = { user: "root", host: "prod", home: "/root", start: "/root", remote: true };
+const REMOTE = { user: "root", host: "staging", home: "/root", start: "/root", remote: true };
 
 // Returns {text, agent, identity?}: text is written before the shell starts; `agent` means a
 // claude session is already open there.
@@ -52,7 +52,7 @@ export function seedScreen(paneId, { prompt, identity }) {
   }
   if (paneId === "p4") {
     return {
-      text: `${prompt} ssh prod\r\n${dim("Welcome to Ubuntu 24.04 LTS")}\r\n`,
+      text: `${prompt} ssh staging\r\n${dim("Welcome to Ubuntu 24.04 LTS")}\r\n`,
       agent: false,
       identity: REMOTE,
     };

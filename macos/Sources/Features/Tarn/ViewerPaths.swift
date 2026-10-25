@@ -1,5 +1,12 @@
 import Foundation
 
+extension Ghostty.SurfaceView {
+    /// The reported working directory (OSC 7), or the foreground process's when the shell reports none.
+    var workingDirectory: String? {
+        pwd ?? surfaceModel?.foregroundPID.flatMap { ViewerPaths.cwd(ofPid: pid_t($0)) }
+    }
+}
+
 /// A file a path click or `tarn open` asks for.
 struct OpenTarget: Equatable {
     var path: String
@@ -90,6 +97,17 @@ enum ViewerPaths {
         let values = try? URL(fileURLWithPath: path).resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey])
         guard values?.isRegularFile == true else { return .special }
         return systemExtensions.contains((path as NSString).pathExtension.lowercased()) ? .system : .text
+    }
+
+    /// The working directory of a process, for a terminal that reports none (no shell integration).
+    static func cwd(ofPid pid: pid_t) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
+        let path = withUnsafePointer(to: &info.pvi_cdir.vip_path) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { String(cString: $0) }
+        }
+        return path.isEmpty ? nil : path
     }
 
     /// Binary by content, as git decides: a NUL byte or invalid UTF-8 in the first 8 KB. A multibyte

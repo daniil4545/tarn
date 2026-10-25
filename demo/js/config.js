@@ -3,7 +3,7 @@
 // modules that subscribe to `config:changed`.
 import { bus } from "./bus.js";
 import { register, read } from "./state.js";
-import { load, save } from "./storage.js";
+import { isObject, load, save } from "./storage.js";
 
 const bool = (def) => ({ def, type: "bool" });
 const num = (def, min, max, step = 1) => ({ def, type: "number", min, max, step });
@@ -46,18 +46,17 @@ function valid(key, value) {
   return typeof value === "string";
 }
 
-// Keys whose line is in tarn's own config file: a set writes the line, only a reset removes it.
-// An option with an empty default entry ("default (auto)") drops its line when that entry is chosen.
+// Keys whose line is in tarn's own config file: a set writes the line (the empty "default (auto)"
+// entry writes an empty value), only a reset removes it.
 let written = new Set();
 export const isWritten = (key) => written.has(key);
 export const writtenKeys = () => [...written];
-const hasAutoEntry = (key) => OPTIONS[key].type === "enum" && OPTIONS[key].values.includes("");
 
 export function startConfig() {
-  const stored = load("config", {});
+  const stored = load("config", {}, isObject);
   const initial = { ...DEFAULTS };
   for (const [key, value] of Object.entries(stored)) if (valid(key, value)) initial[key] = value;
-  written = new Set(load("config-written", []).filter((key) => key in OPTIONS));
+  written = new Set(load("config-written", [], Array.isArray).filter((key) => key in OPTIONS));
   const write = register("config", initial);
 
   const persistWritten = () => save("config-written", [...written]);
@@ -67,7 +66,7 @@ export function startConfig() {
     const next = { ...read("config"), [key]: value };
     write(next);
     save("config", next);
-    if (reset || (hasAutoEntry(key) && value === "")) written.delete(key);
+    if (reset) written.delete(key);
     else written.add(key);
     persistWritten();
     bus.emit("config:changed", { key, value });

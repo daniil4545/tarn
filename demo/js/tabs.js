@@ -3,8 +3,8 @@
 import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { flatTabs } from "./workspace.js";
+import { esc } from "./esc.js";
 
-const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 export function startTopTabs() {
   const bar = document.getElementById("topTabs");

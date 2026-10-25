@@ -5,8 +5,8 @@ import { createShell } from "../../js/shell/shell.js";
 import { createVfs, seedDisk } from "../../js/vfs.js";
 import { createScreen } from "./vt.mjs";
 
-const HOME = "/Users/daniil";
-const REPO = `${HOME}/Dev/self-projects/tarn`;
+const HOME = "/Users/you";
+const REPO = `${HOME}/code/tarn`;
 
 function fakeClock() {
   let now = 1_000_000;
@@ -42,7 +42,7 @@ function setup({ cols = 100, cwd = REPO, history = [] } = {}) {
     cols: () => cols,
     write: (d) => screen.write(d),
     emit: (name, data) => events.push([name, data]),
-    identity: { user: "daniil", host: "MacBook", home: HOME, start: cwd },
+    identity: { user: "you", host: "mac", home: HOME, start: cwd },
     sessions: () => [],
     paneId: "p1",
   });
@@ -56,7 +56,7 @@ const hooks = (events) => events.filter(([n]) => n === "hook").map(([, d]) => d.
 
 test("prompt shows user, host, cwd and git branch", () => {
   const { screen } = setup();
-  assert.equal(screen.lines()[0], "daniil@MacBook ~/Dev/self-projects/tarn (main) %");
+  assert.equal(screen.lines()[0], "you@mac ~/code/tarn (main) %");
 });
 
 test("typing, backspace and arrows edit the line", () => {
@@ -100,7 +100,7 @@ test("ctrl-C abandons the line and draws a fresh prompt", () => {
   const { screen, type } = setup();
   type("garbage\x03");
   const lines = screen.lines();
-  assert.equal(lines[0], "daniil@MacBook ~/Dev/self-projects/tarn (main) % garbage^C");
+  assert.equal(lines[0], "you@mac ~/code/tarn (main) % garbage^C");
   assert.match(lines[1], /%$/);
 });
 
@@ -109,7 +109,7 @@ test("ctrl-L clears the screen and keeps the typed text", () => {
   run("pwd");
   type("ls do");
   type("\x0c");
-  assert.equal(screen.lines()[0], "daniil@MacBook ~/Dev/self-projects/tarn (main) % ls do");
+  assert.equal(screen.lines()[0], "you@mac ~/code/tarn (main) % ls do");
   assert.equal(screen.lines()[1], "");
 });
 
@@ -119,7 +119,7 @@ test("a long line wraps and editing it redraws every row", () => {
   type("\x01");
   type("Y");
   const text = screen.lines().join("\n");
-  assert.match(text, /% Yxxx/);
+  assert.match(text, /% Y\nxxx/);
   assert.equal(text.match(/x/g).length, 40);
 });
 
@@ -174,7 +174,7 @@ test("unknown command and unsupported operators", () => {
   run("ls | head");
   assert.match(screen.text(), /zsh: not supported in the demo: \|/);
   run('echo "a  b" $HOME ~');
-  assert.match(screen.text(), /a {2}b \/Users\/daniil \/Users\/daniil/);
+  assert.match(screen.text(), /a {2}b \/Users\/you \/Users\/you/);
 });
 
 test("git status follows vfs edits", () => {
@@ -301,4 +301,21 @@ test("claude --continue resumes without a banner", () => {
   const { screen, shell } = setup();
   shell.start({ resume: true });
   assert.doesNotMatch(screen.text(), /Claude Code/);
+});
+
+test("a name from Object.prototype is not a command", () => {
+  const { screen, run } = setup();
+  run("constructor");
+  run("__proto__");
+  assert.match(screen.text(), /zsh: command not found: constructor/);
+  assert.match(screen.text(), /zsh: command not found: __proto__/);
+});
+
+test("rm -rf refuses the root and the home folder", () => {
+  const { screen, run, vfs } = setup();
+  run("rm -rf /");
+  run("rm -rf ~");
+  assert.match(screen.text(), /dangerous to operate recursively on '\/'/);
+  assert.match(screen.text(), /dangerous to operate recursively on '\/Users\/you'/);
+  assert.ok(vfs.exists(HOME) && vfs.exists(REPO));
 });

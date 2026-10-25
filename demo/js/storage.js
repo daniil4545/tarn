@@ -1,18 +1,23 @@
-// Versioned localStorage. A bad version or bad JSON gives the seed and a toast; no storage still works.
+// Versioned localStorage. Bad JSON or a wrong shape gives the seed and a toast; no storage still works.
 import { bus } from "./bus.js";
 
 const PREFIX = "tarn-demo-v1:";
 
-export function load(part, seed) {
+// isValid checks the parsed shape: a value of the wrong shape is as bad as broken JSON.
+export function load(part, seed, isValid = () => true) {
   try {
     const raw = localStorage.getItem(PREFIX + part);
     if (raw === null) return seed;
-    return JSON.parse(raw);
+    const value = JSON.parse(raw);
+    if (!isValid(value)) throw new Error("unexpected shape");
+    return value;
   } catch (e) {
     bus.emit("toast", { text: `Saved ${part} could not be read, starting fresh` });
     return seed;
   }
 }
+
+export const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 export function save(part, value) {
   try {

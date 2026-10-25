@@ -131,9 +131,16 @@ export function startAgentSession(ctx, { banner }) {
       later(800, () => finish(`Understood. I left ${show(editPath)} unchanged.`));
       return;
     }
-    const text = ctx.vfs.read(editPath);
-    ctx.vfs.write(editPath, `${text}${text.endsWith("\n") ? "" : "\n"}\nDemo edit ${turns}: reviewed by claude.\n`, "claude");
-    say(`  ⎿ Updated ${show(editPath)}`);
+    // A missing file or folder must not stop the session before its Stop event.
+    let note;
+    try {
+      const text = ctx.vfs.exists(editPath) ? ctx.vfs.read(editPath) : "";
+      ctx.vfs.write(editPath, `${text}${text.endsWith("\n") || !text ? "" : "\n"}\nDemo edit ${turns}: reviewed by claude.\n`, "claude");
+      note = `  ⎿ Updated ${show(editPath)}`;
+    } catch (e) {
+      note = `  ⎿ Could not update ${show(editPath)}: ${e.code ?? e.message}`;
+    }
+    say(note);
     if (source === "card") hook("PostToolUse");
     later(1200, () => tool("Read", `${root}/${READ_FILE}`));
     later(1800, () => hook("PostToolUse"));

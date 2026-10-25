@@ -1,8 +1,8 @@
 // Start content of the virtual disk. Paths of the tarn repository are relative to REPO.
 // Files are the ones the viewer shows; `DIRTY` are files git reports as modified at start.
-export const HOME = "/Users/daniil";
-export const REPO = `${HOME}/Dev/self-projects/tarn`;
-export const GALERA = `${HOME}/Dev/Galera`;
+export const HOME = "/Users/you";
+export const REPO = `${HOME}/code/tarn`;
+export const SITE = `${HOME}/code/website`;
 
 export const REPO_FILES = {
   "docs/spec.md": `# Spec: tarn, an agent-first terminal
@@ -143,15 +143,14 @@ b7d03e5 feat(sidebar): agent state dot per tab
 
 export const DIRTY = ["docs/spec.md", "macos/Sources/Features/Tarn/TarnSettings.swift"];
 
-export const GALERA_FILES = {
-  "README.md": "# Galera\n\nTelegram reminder bot.\n",
-  "bot/schedule.py": `"""Reminder schedule of the bot."""
-from datetime import time
-
-REMINDERS = {"morning": time(9, 0), "evening": time(20, 30)}
+export const SITE_FILES = {
+  "README.md": "# website\n\nStatic site of the project.\n",
+  "docs/spec.md": "# Spec: website\n\nA static site with a home page and a docs section.\n",
+  "src/nav.js": `// Links of the top navigation.
+export const LINKS = [\n  { label: "Home", href: "/" },\n  { label: "Docs", href: "/docs" },\n];
 `,
   ".git/HEAD": "ref: refs/heads/main\n",
-  ".git/log": "c0a7e41 feat(bot): reminder schedule\n6d2b9f3 chore: init\n",
+  ".git/log": "c0a7e41 feat(site): top navigation\n6d2b9f3 chore: init\n",
 };
 
 export const EXTRA_DIRS = [`${HOME}/Desktop`, `${HOME}/Documents`, "/root"];

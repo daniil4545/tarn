@@ -40,11 +40,23 @@ export function installKeys(rows, { focus }) {
   document.addEventListener("keydown", dispatch, true);
 }
 
+// A field of the page itself (Find, Settings), not the terminal's own input.
+const inPageField = (t) => t instanceof Element && t.closest("input, textarea") !== null && !t.closest(".pane");
+const TEXT_CHORDS = new Set(["Cmd+Z", "Cmd+Shift+Z"]);
+
+// While a modal window is open ("modal" area) only its own rows work.
+const applies = (row, area) => (area === "modal" ? row.cmd.startsWith("settings.") : row.when === "any" || row.when === area);
+
 function dispatch(e) {
   if (e.isComposing) return;
+  // AltGr types a character on many layouts; it reports as Ctrl+Alt and must reach the field.
+  if (e.getModifierState?.("AltGraph") && e.key.length === 1) return;
+  const chord = eventChord(e);
   const area = focusArea();
-  const row = table.get(eventChord(e))?.find((r) => r.when === "any" || r.when === area);
+  const row = table.get(chord)?.find((r) => applies(r, area));
   if (!row) return;
+  // In a text field the terminal's keys and the text edit keys belong to the field. Find keeps its own.
+  if (inPageField(e.target) && !row.cmd.startsWith("find.") && (row.when !== "any" || TEXT_CHORDS.has(chord))) return;
   e.preventDefault();
   e.stopPropagation();
   bus.cmd(row.cmd, row.payload);

@@ -38,8 +38,14 @@ function command({ name, pane }) {
   const entry = visibleTarget(pane);
   if (!entry) return name === "tree" ? bus.emit("viewer:needed", { tree: true }) : undefined;
   if (name === "save" || name === "mode") entry.frame.contentWindow.tarn.cmd(name);
-  else if (name === "tree") entry.model.toggleTree();
+  else if (name === "tree") toggleTree(entry);
   else if (name === "closeTab") entry.model.closeActiveTab();
+}
+
+// Cmd+B as the app does it: a pane with no file has nothing else to show and closes; otherwise the tree toggles.
+function toggleTree(entry) {
+  if (entry.model.state().tabs.length) return entry.model.toggleTree();
+  bus.cmd("pane.close", { id: [...panes].find(([, p]) => p === entry)[0] });
 }
 
 function split({ dir, pane }) {
@@ -154,6 +160,9 @@ export function createViewerPane(id) {
     el,
     term: null,
     focus: () => frame.contentWindow?.focus(),
+    dirtyFiles: model.dirtyPaths,
+    saveAll: model.saveAll,
+    discardAll: model.discardAll,
     screenText: () => frame.contentDocument.body.innerText,
     dispose() {
       el.remove();
