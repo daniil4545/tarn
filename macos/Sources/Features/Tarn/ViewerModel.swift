@@ -12,6 +12,7 @@ final class ViewerModel {
     private(set) var tree: FileTree
     private(set) var treeVisible = false
     private var docs: [String: ViewerDocument] = [:]
+    private var rowCache: [TreeRow] = []
     private var watchers: [String: FileWatcher] = [:]
     private var ready = false
 
@@ -38,6 +39,15 @@ final class ViewerModel {
     }
 
     var snapshot: [ViewerTab] { tabs.tabs }
+
+    /// Set when the user chose Don't Save in a close sheet; the repeated close consumes it. The edits
+    /// stay in place until the window really closes, so a Cancel in a later dialog loses nothing.
+    var discardOnce = false
+
+    /// Paths with unsaved edits, in tab order.
+    var dirtyPaths: [String] {
+        tabs.tabs.map(\.path).filter { docs[$0]?.isDirty == true }
+    }
 
     // MARK: Actions
 
@@ -96,6 +106,12 @@ final class ViewerModel {
         } else {
             pushChrome()
         }
+    }
+
+    /// Saves every dirty document. False when one stays dirty (conflict or write error).
+    func saveAll() -> Bool {
+        for path in dirtyPaths { save(path) }
+        return dirtyPaths.isEmpty
     }
 
     func closePane() {
@@ -188,7 +204,7 @@ final class ViewerModel {
         doc.edit(text)
         docs[path] = doc
         tabs.pin(path: path)
-        pushChrome()
+        pushChrome(rescan: false)
     }
 
     private func update(_ path: String?, _ change: (inout ViewerDocument) -> Void) {
@@ -278,6 +294,8 @@ final class ViewerModel {
 
     private func diskChanged(_ path: String) {
         guard var doc = docs[path] else { return }
+        // Folder events are frequent: the stamp is cheap, the read is not.
+        if let stamp = FileStamp.of(path), stamp == doc.stamp, !doc.isMissing { return }
         let change = doc.diskChanged(FileRead.read(path))
         docs[path] = doc
         switch change {
@@ -344,8 +362,11 @@ final class ViewerModel {
         runScript("tarn.setDoc(\(json(object)))")
     }
 
-    private func pushChrome() {
-        let rows: [[String: Any]] = treeVisible ? tree.rows().map { row in
+    /// `rescan: false` reuses the last folder listing: a keystroke changes only the dirty marks, and
+    /// listing up to 5000 entries on the main thread every 120 ms is not free.
+    private func pushChrome(rescan: Bool = true) {
+        if rescan { rowCache = treeVisible ? tree.rows() : [] }
+        let rows: [[String: Any]] = treeVisible ? rowCache.map { row in
             [
                 "path": row.path, "name": row.name, "depth": row.depth,
                 "kind": row.isDirectory ? "dir" : "file", "open": row.isOpen,

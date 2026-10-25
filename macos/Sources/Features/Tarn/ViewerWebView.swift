@@ -78,7 +78,7 @@ final class ViewerWebController: NSObject {
     private func makeWebView(rules: WKContentRuleList) {
         guard let model else { return }
         let config = WKWebViewConfiguration()
-        config.setURLSchemeHandler(self, forURLScheme: ViewerRules.scheme)
+        config.setURLSchemeHandler(SchemeProxy(self), forURLScheme: ViewerRules.scheme)
         config.userContentController.add(rules)
         config.userContentController.add(MessageProxy(self), name: "tarn")
         config.websiteDataStore = .nonPersistent()
@@ -109,6 +109,22 @@ final class ViewerWebController: NSObject {
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "tarn")
         webView?.removeFromSuperview()
         webView = nil
+    }
+
+    /// Keeps the configuration, which the web view retains, from retaining the controller.
+    private final class SchemeProxy: NSObject, WKURLSchemeHandler {
+        private weak var target: ViewerWebController?
+
+        init(_ target: ViewerWebController) {
+            self.target = target
+        }
+
+        func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
+            guard let target else { return urlSchemeTask.didFailWithError(URLError(.cancelled)) }
+            MainActor.assumeIsolated { target.serve(urlSchemeTask) }
+        }
+
+        func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {}
     }
 
     /// Keeps the content controller from retaining the controller.
@@ -148,8 +164,8 @@ extension ViewerWebController: WKNavigationDelegate {
     }
 }
 
-extension ViewerWebController: WKURLSchemeHandler {
-    func webView(_ webView: WKWebView, start urlSchemeTask: any WKURLSchemeTask) {
+extension ViewerWebController {
+    fileprivate func serve(_ urlSchemeTask: any WKURLSchemeTask) {
         let url = urlSchemeTask.request.url
         guard let url, let bundle = Bundle.main.resourceURL,
               let asset = ViewerRules.asset(for: url, bundle: bundle, roots: model?.assetRoots ?? []),
@@ -166,6 +182,4 @@ extension ViewerWebController: WKURLSchemeHandler {
         urlSchemeTask.didReceive(data)
         urlSchemeTask.didFinish()
     }
-
-    func webView(_ webView: WKWebView, stop urlSchemeTask: any WKURLSchemeTask) {}
 }

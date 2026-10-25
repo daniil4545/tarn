@@ -172,6 +172,7 @@ enum ViewerRouter {
         case .missing: return "tarn: no such file: \(path)"
         case .directory, .special: return "tarn: not a file: \(path)"
         case .system: return "tarn: not a text file: \(path)"
+        case .text where ViewerPaths.isBinary(path): return "tarn: not a text file: \(path)"
         case .text:
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
             return controller.viewerHost.open(target, root: surface.pwd, focus: false) ? nil : "tarn: cannot open: \(path)"
