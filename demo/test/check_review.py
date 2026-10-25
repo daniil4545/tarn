@@ -75,17 +75,7 @@ def ui3_undo_last_tab(base):
 
 def ui4_dirty_viewer_asks(base):
     with app_page(base) as (pg, _e, _r):
-        cmd(pg, "tab.go", {"id": "t3"})
-        cmd(pg, "viewer.open", {"path": "docs/spec.md", "pane": None})
-        pg.wait_for_selector(VIEWER)
-        pg.wait_for_function(LOADED)
-        frame = pg.frame_locator(f"{VIEWER} iframe").first
-        frame.locator(".ftab.on").click()
-        pg.keyboard.press("Meta+e")
-        frame.locator(".cm-content").click()
-        pg.keyboard.type("dirty text")
-        frame.locator(".ftab.on .dirty").wait_for()
-        time.sleep(0.5)  # the page sends its text in steps
+        dirty_viewer(pg)
         cmd(pg, "tab.close", {"id": "t3"})
         buttons = pg.locator(".ask-dialog button").all_inner_texts()
         check(
