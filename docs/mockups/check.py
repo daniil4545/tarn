@@ -105,8 +105,13 @@ with sync_playwright() as p:
         count(".tpane") == 3 and count(".split.col") == 1,
     )
     pg.keyboard.press("Meta+d")
-    check("15 a fifth pane is refused", count(".tpane") == 3 and vis(".toast"))
-    check("16 terminals stay in one block", count(".block .tpane") == 3)
+    check("15 no pane limit: a fifth pane opens", count("[data-pid]") == 5)
+    check("16 terminals stay in one block", count(".block .tpane") == 4)
+    pg.keyboard.press("Meta+w")
+    pg.keyboard.press("Meta+z")
+    check("16a cmd+Z brings back a closed terminal", count(".tpane") == 4)
+    pg.keyboard.press("Meta+w")
+    pg.click(".tpane >> nth=-1 >> .term")
 
     focus0 = n(".focus").get_attribute("data-pid")
     pg.keyboard.press("Meta+Alt+ArrowRight")
@@ -141,19 +146,28 @@ with sync_playwright() as p:
         count(".vpane") == 2 and count(".split.col") >= 1,
     )
     drag(pg, ".vpane >> nth=0 >> .ftab", ".tpane", 0.02, 0.5)
-    check("23 a drop that adds a fifth pane is refused", count("[data-pid]") == 4)
-    pg.click(".tpane:not(:has(.path)) .term")
-    pg.keyboard.press("Meta+w")
-    drag(pg, ".vpane >> nth=0 >> .ftab", ".tpane", 0.02, 0.5)
     first = n("[data-pid]").first.get_attribute("class")
     check(
-        "24 drop on a terminal edge puts the viewer beside the block",
+        "23 drop on a terminal edge puts the viewer beside the block",
         count(".vpane") == 3
         and first.startswith("vpane")
         and count(".block .vpane") == 0,
     )
     drag(pg, ".vpane >> nth=0 >> .ftab", ".vpane >> nth=1", 0.5, 0.6)
     check("25 drop the only tab in a viewer center merges", count(".vpane") == 2)
+    pg.click("[data-vclose] >> nth=0")
+    pg.keyboard.press("Meta+z")
+    check("25a cmd+Z brings back a closed viewer", count(".vpane") == 2)
+
+    pg.click("[data-seg='header'] [data-v='auto']")
+    hidden = pg.evaluate("getComputedStyle(document.querySelector('.tph')).opacity")
+    check("25b header on hover is hidden until hover", hidden == "0")
+    pg.click("[data-seg='header'] [data-v='never']")
+    check("25c header never", not vis(".tph"))
+    pg.click("[data-seg='header'] [data-v='always']")
+    pg.once("dialog", lambda d: d.accept("agent: spec"))
+    pg.dblclick(".tph .t >> nth=0")
+    check("25d double click renames a terminal", "agent: spec" in pg.inner_text(".tph"))
 
     sd = n(".sdiv.row").first.bounding_box()
     w0 = n("[data-pid]").first.bounding_box()["width"]

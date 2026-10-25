@@ -71,6 +71,10 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 
 .tpane { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; position: relative; }
 .tph { flex: none; height: 27px; display: flex; align-items: center; gap: 6px; padding: 0 4px 0 10px; background: var(--chrome); border-bottom: 1px solid #000; font-size: 12px; color: var(--muted); cursor: grab; user-select: none; }
+/* Header follows Ghostty's drag-handle option: always, auto (on hover), never. */
+.ws.h-auto .tph { position: absolute; top: 0; left: 0; right: 0; z-index: 3; opacity: 0; transition: opacity .12s; }
+.ws.h-auto .tpane:hover .tph { opacity: 1; }
+.ws.h-never .tph { display: none; }
 .tpane.focus .tph { color: var(--fg); box-shadow: inset 0 2px 0 var(--purple); }
 .tph .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tph .ib { color: var(--muted); }
@@ -173,10 +177,11 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 </style>
 
 <div class="mock" role="group" aria-label="Mockup controls">
-  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> viewer panes, terminal pane header, up to 4 panes a window.</span>
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar, state dot, agent logo, terminal splits (Ghostty). <span class="planned">Planned:</span> viewer panes, terminal pane header, viewers in the split keys and undo.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
+  <span>Terminal header (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="true">always</button><button data-v="auto" aria-pressed="false">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
   <button class="act" id="agentEdit">Agent edits the file</button>
-  <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
+  <span class="keys">Click a path: file opens. <kbd>⌘B</kbd> files tree · <kbd>⌘D</kbd> <kbd>⌘⇧D</kbd> split · <kbd>⌘⌥←↑→↓</kbd> <kbd>⌘[</kbd> <kbd>⌘]</kbd> move between panes · <kbd>⌘⇧↩</kbd> zoom · <kbd>⌘W</kbd> close · <kbd>⌘Z</kbd> undo close · <kbd>⌘E</kbd> view/source · <kbd>⌘S</kbd> save · drag a file tab to a pane edge</span>
 </div>
 
 <div class="win">
@@ -351,7 +356,6 @@ The README is fine. The module map in ${lnk("docs/architecture.md")} matches the
  M ${lnk("macos/Sources/Features/Tarn/TarnSettings.swift")}
 ${PROMPT} <span class="cursor"></span>` }
 ];
-const MAX_PANES = 4;
 
 // ---- state ----
 // Documents are shared, as files on disk are. Each sidebar tab has its own layout:
@@ -359,7 +363,7 @@ const MAX_PANES = 4;
 // its own split tree of terminal panes (the Ghostty split tree in the app).
 const docs = {};
 for (const k in FILES) docs[k] = { text: FILES[k], saved: FILES[k], v: 0, banner: false, disk: null, edits: 0 };
-const opt = { theme: "dark" };
+const opt = { theme: "dark", header: "always" };
 const folded = new Set(["plugin"]);
 let seq = 0;
 const nid = p => p + (++seq);
@@ -408,7 +412,13 @@ function splitNode(target, node, zone) {
   const first = zone === "left" || zone === "top";
   return { type: "split", id: nid("s"), dir: zone === "left" || zone === "right" ? "row" : "col", ratio: 0.5, a: first ? node : target, b: first ? target : node };
 }
-function canAdd() { if (all().length < MAX_PANES) return true; toast(`A window holds up to ${MAX_PANES} panes`); return false; }
+// A closed pane can be brought back with cmd+Z for 5 s, as Ghostty's undo-timeout does for splits.
+let undo = null;
+const keepUndo = what => { undo = { tab: cur, state: JSON.stringify(L()), at: Date.now(), what }; };
+function restoreClosed() {
+  if (!undo || undo.tab !== cur || Date.now() - undo.at > 5000) { toast("Nothing to undo"); return; }
+  layouts[cur] = JSON.parse(undo.state); toast(`Restored: ${undo.what}`); undo = null; renderWorkspace();
+}
 const activePath = v => v && v.tabs[v.active] ? v.tabs[v.active].path : null;
 const modeFor = (v, path) => isMd(path) ? (v.modeOf[path] || "rendered") : "code";
 const focused = () => byId(L().focus);
@@ -483,6 +493,7 @@ function renderSidebar() {
 function updateTitleButton() { const v = lastViewer(); $("toggleFiles").setAttribute("aria-pressed", String(!!(v && v.tree))); }
 function renderWorkspace() {
   const z = L().zoom && byId(L().zoom);
+  $("ws").className = "ws h-" + opt.header;
   $("ws").innerHTML = z ? nodeHtml(z) : nodeHtml(L().root);
   viewers().forEach(fillViewer);
   updateTitleButton();
@@ -504,7 +515,7 @@ function nodeHtml(n) {
   if (n.type === "block") return `<div class="block" data-bid="${n.id}">${nodeHtml(n.root)}</div>`;
   if (n.type === "term") {
     const t = TABS[cur], main = n.n === 0, agent = main && t.agent;
-    const head = `<div class="tph" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${agent ? AGENT : TERM_ICON}<span class="t">${main ? t.title : "zsh · ~/Dev/self-projects/tarn"}</span>${agent && t.dot ? `<span class="dot" style="background:${t.dot}"></span>` : ""}<button class="ib" data-tclose="${n.id}" title="Close terminal (⌘W)">✕</button></div>`;
+    const head = `<div class="tph" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${agent ? AGENT : TERM_ICON}<span class="t" title="Double click to rename">${esc(n.title || (main ? t.title : "zsh · ~/Dev/self-projects/tarn"))}</span>${agent && t.dot ? `<span class="dot" style="background:${t.dot}"></span>` : ""}<button class="ib" data-tclose="${n.id}" title="Close terminal (⌘W)">✕</button></div>`;
     return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? t.term : shell(n.n + 1)}</div></section>`;
   }
   return viewerHtml(n);
@@ -583,7 +594,6 @@ function openIn(v, path, { pin = false, line = null } = {}) {
 }
 // A new viewer opens to the right of the terminal block.
 function addViewer(tree) {
-  if (!canAdd()) return null;
   const v = newViewer(tree), b = findBlock(L().root);
   replaceIn(L(), b.id, splitNode(b, v, "right"));
   return v;
@@ -601,20 +611,21 @@ function toggleFiles() {
   v.tree = !v.tree; L().focus = v.id; L().lastViewer = v.id;
   renderWorkspace();
 }
-function closeViewer(v) {
+function closeViewer(v, snap = true) {
+  if (snap) keepUndo("viewer");
   removeFrom(L(), v.id);
   const rest = viewers();
   L().lastViewer = rest.length ? rest[0].id : null;
   if (L().focus === v.id) L().focus = rest.length ? rest[0].id : terms()[0].id;
 }
 function closeTab(v, i) {
+  if (v.tabs.length === 1 && !v.tree) keepUndo("viewer");
   v.tabs.splice(i, 1);
   if (v.active >= v.tabs.length) v.active = v.tabs.length - 1;
-  if (!v.tabs.length && !v.tree) closeViewer(v);
+  if (!v.tabs.length && !v.tree) closeViewer(v, false);
   renderWorkspace();
 }
 function splitTerm(t, zone) {
-  if (!canAdd()) return;
   const b = findBlock(L().root), nt = newTerm(L().terms++);
   replaceIn(b, t.id, splitNode(t, nt, zone));
   L().focus = nt.id;
@@ -622,6 +633,7 @@ function splitTerm(t, zone) {
 }
 function closeTerm(t) {
   const b = findBlock(L().root);
+  if (b.root.id !== t.id) keepUndo("terminal");
   if (!removeFrom(b, t.id)) { toast("Closing the last terminal closes the tab"); return; }
   L().focus = terms()[0].id;
   renderWorkspace();
@@ -696,6 +708,11 @@ document.addEventListener("click", async e => {
   if (t.id === "toggleFiles") return toggleFiles();
   if (t.id === "agentEdit") return agentEdit();
 });
+document.addEventListener("dblclick", e => {
+  const tt = e.target.closest(".tph .t"); if (!tt) return;
+  const t = byId(tt.closest("[data-pid]").dataset.pid), name = prompt("Terminal title", tt.textContent);
+  if (name !== null) { t.title = name.trim() || null; renderWorkspace(); }
+});
 document.addEventListener("input", e => {
   const ta = e.target.closest("textarea[data-src]"); if (!ta) return;
   const d = docs[ta.dataset.src]; d.text = ta.value; d.v++;
@@ -714,11 +731,12 @@ document.addEventListener("keydown", e => {
     if (e.altKey && e.key.startsWith("Arrow")) return run(() => moveFocus(e.key));
     if (k === "[" || k === "]") return run(() => { const ps = all(), i = ps.findIndex(x => x.id === L().focus); focusPane(ps[(i + (k === "]" ? 1 : ps.length - 1)) % ps.length].id); });
     if (k === "enter" && e.shiftKey) return run(() => { L().zoom = L().zoom ? null : L().focus; renderWorkspace(); });
+    if (k === "z" && !e.shiftKey && !(isV && inText)) return run(restoreClosed);
     if (k === "b") return run(toggleFiles);
     if (k >= "1" && k <= "3") return run(() => switchTab(+k - 1));
     if (k === "d") return run(() => {
       if (!isV) return splitTerm(p, e.shiftKey ? "bottom" : "right");
-      const tab = p.tabs[p.active]; if (!tab || !canAdd()) return;
+      const tab = p.tabs[p.active]; if (!tab) return;
       const v = newViewer(false); v.tabs = [{ ...tab, preview: false }]; v.active = 0;
       replaceIn(L(), p.id, splitNode(p, v, e.shiftKey ? "bottom" : "right")); L().focus = v.id; L().lastViewer = v.id; renderWorkspace();
     });
@@ -762,11 +780,6 @@ function dropTarget(e) {
   if (tp) { const bl = tp.closest(".block"); return { el: bl, id: bl.dataset.bid, zone: edgeOf(bl, e.clientX, e.clientY).zone }; }
   return null;
 }
-function addsPane(d, tgt) {
-  if (d.term || tgt.zone === "center") return false;
-  if (d.vid !== undefined && d.idx !== undefined) { const src = byId(d.vid); return !(src.tabs.length === 1 && !src.tree); }
-  return true;
-}
 function showDrop(tgt, deny) {
   let d = tgt.el.querySelector(":scope > .drop");
   if (!d) { d = document.createElement("div"); d.className = "drop"; tgt.el.appendChild(d); }
@@ -789,7 +802,7 @@ document.addEventListener("dragover", e => {
   const tgt = dropTarget(e); if (!tgt) { clearDrop(); return; }
   e.preventDefault();
   document.querySelectorAll(".drop").forEach(d => { if (d.parentElement !== tgt.el) d.remove(); });
-  showDrop(tgt, tgt.deny || (addsPane(drag, tgt) && all().length >= MAX_PANES ? `Up to ${MAX_PANES} panes` : null));
+  showDrop(tgt, tgt.deny);
 });
 function moveTerm(id, tgt) {
   const b = findBlock(L().root), node = byId(id);
@@ -805,7 +818,6 @@ document.addEventListener("drop", e => {
   const d = drag; drag = null;
   if (tgt.deny) return;
   if (d.term) return moveTerm(d.term, tgt);
-  if (addsPane(d, tgt) && !canAdd()) return;
   let tab;
   const src = d.vid !== undefined ? byId(d.vid) : null;
   if (src) {
@@ -824,11 +836,15 @@ document.addEventListener("drop", e => {
     const target = tgt.el.classList.contains("block") ? findBlock(L().root) : byId(tgt.id);
     replaceIn(L(), target.id, splitNode(target, dest, tgt.zone));
   }
-  if (src && !src.tabs.length && !src.tree) closeViewer(src);
+  if (src && !src.tabs.length && !src.tree) closeViewer(src, false);
   L().focus = dest.id; L().lastViewer = dest.id;
   renderWorkspace();
 });
-document.addEventListener("dragend", () => { drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
+// Ghostty opens a split dropped outside every window in a new window; file tabs do the same.
+document.addEventListener("dragend", e => {
+  const out = e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
+  if (drag && out && (drag.term || drag.vid)) toast(drag.term ? "Terminal moves to a new window" : "File opens in a new window");
+  drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
 
 // Resize splits on both levels.
 document.addEventListener("pointerdown", e => {
