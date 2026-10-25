@@ -137,10 +137,9 @@ final class WorkspaceRegistry {
 
     private func windowWillClose(_ window: NSWindow) {
         guard let entry = entries[ObjectIdentifier(window)] else { return }
-        let order = group(of: window).map(key(for:))
         closing.add(window)
         entries[ObjectIdentifier(window)] = nil
-        guard let closed = book.closing(entry.key, order: order) else { return }
+        guard let closed = book.closing(entry.key) else { return }
         shelve(window, closed: closed)
         publish([closed.set.id])
     }
@@ -163,7 +162,7 @@ final class WorkspaceRegistry {
             Self.logger.error("workspace: tombstone without surfaces window=\(closed.tab, privacy: .public) set=\(closed.set.id, privacy: .public)")
             return
         }
-        let token = shelf.add(.init(closed: closed, surfaces: surfaces, viewers: controller.viewerHost.snapshot()))
+        let token = TombstoneToken(.init(closed: closed, surfaces: surfaces, viewers: controller.viewerHost.snapshot()))
         undoManager.registerUndo(withTarget: controller.ghostty, expiresAfter: controller.undoExpiration) { [weak self] _ in
             self?.undoRan(token)
         }
@@ -330,11 +329,5 @@ final class WorkspaceRegistry {
         }
         entries[ObjectIdentifier(window)] = Entry(window: window, key: snapshot.tabKey)
         book.adopt(snapshot)
-    }
-
-    /// Puts a reopened tab window back where `closed` says (S15 to S18).
-    func reinsert(_ window: NSWindow, from closed: WorkspaceBook.ClosedTab) {
-        book.reinsert(key(for: window), from: closed)
-        publish([closed.set.id])
     }
 }

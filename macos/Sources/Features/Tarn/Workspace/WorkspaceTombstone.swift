@@ -24,22 +24,12 @@ final class TombstoneToken {
 /// undo creates next claims it by its surface ids.
 @MainActor
 final class TombstoneShelf {
-    private let waiting = NSHashTable<TombstoneToken>.weakObjects()
     private var armed: [TombstoneToken] = []
 
-    /// Tombstones whose undo is still on the stack.
-    var waitingCount: Int { waiting.allObjects.count }
     var armedCount: Int { armed.count }
-
-    func add(_ tombstone: WorkspaceTombstone) -> TombstoneToken {
-        let token = TombstoneToken(tombstone)
-        waiting.add(token)
-        return token
-    }
 
     /// The undo of this tombstone ran: its window is about to appear.
     func arm(_ token: TombstoneToken) {
-        waiting.remove(token)
         armed.append(token)
     }
 

@@ -12,14 +12,14 @@ struct TombstoneTests {
         var book = WorkspaceBook()
         let key = tab ?? TabKey()
         _ = book.pass([[key]])
-        let closed = book.closing(key, order: [key])!
+        let closed = book.closing(key)!
         return WorkspaceTombstone(closed: closed, surfaces: Set(surfaces), viewers: nil)
     }
 
     @Test func aTombstoneIsMatchedBySurfaceIdsOnlyAfterItsUndoRan() {
         let shelf = TombstoneShelf()
         let surface = UUID()
-        let token = shelf.add(tombstone([surface]))
+        let token = TombstoneToken(tombstone([surface]))
         #expect(shelf.claim(surfaces: [surface]) == nil)
 
         shelf.arm(token)
@@ -31,8 +31,8 @@ struct TombstoneTests {
     @Test func theTombstoneWithTheMostSharedSurfacesWins() {
         let shelf = TombstoneShelf()
         let a = UUID(), b = UUID(), c = UUID()
-        let one = shelf.add(tombstone([a]))
-        let two = shelf.add(tombstone([b, c]))
+        let one = TombstoneToken(tombstone([a]))
+        let two = TombstoneToken(tombstone([b, c]))
         shelf.arm(one)
         shelf.arm(two)
         #expect(shelf.claim(surfaces: [a, b, c])?.surfaces == [b, c])
@@ -41,7 +41,7 @@ struct TombstoneTests {
 
     @Test func whatNoWindowClaimedIsDroppedAndCounted() {
         let shelf = TombstoneShelf()
-        shelf.arm(shelf.add(tombstone([UUID()])))
+        shelf.arm(TombstoneToken(tombstone([UUID()])))
         #expect(shelf.settle() == 1)
         #expect(shelf.armedCount == 0)
         #expect(shelf.settle() == 0)
@@ -62,7 +62,7 @@ struct TombstoneTests {
             // Ghostty's action: the window appears and asks the shelf.
             claimed = shelf.claim(surfaces: [surface])
         }
-        let token = shelf.add(tombstone([surface]))
+        let token = TombstoneToken(tombstone([surface]))
         manager.registerUndo(withTarget: owner, expiresAfter: .seconds(5)) { _ in shelf.arm(token) }
         manager.endUndoGrouping()
 
@@ -70,21 +70,26 @@ struct TombstoneTests {
         #expect(claimed != nil)
     }
 
-    @Test func aTombstoneExpiresWithGhosttysUndo() async throws {
+    /// The undo closure is the only owner of the token: when Ghostty's undo expires, ExpiringTarget
+    /// removes the actions of its target and the tombstone goes with them. Expiry is driven by
+    /// `removeAllActions(withTarget:)`, the call its timer makes, so the test needs no clock.
+    @Test func aTombstoneExpiresWithGhosttysUndo() {
         let manager = ExpiringUndoManager()
         manager.groupsByEvent = false
         let shelf = TombstoneShelf()
         let owner = NSObject()
+        weak var weakToken: TombstoneToken?
         manager.beginUndoGrouping()
         do {
-            let token = shelf.add(tombstone([UUID()]))
-            manager.registerUndo(withTarget: owner, expiresAfter: .milliseconds(50)) { _ in shelf.arm(token) }
+            let token = TombstoneToken(tombstone([UUID()]))
+            weakToken = token
+            manager.registerUndo(withTarget: owner, expiresAfter: .seconds(60)) { _ in shelf.arm(token) }
         }
         manager.endUndoGrouping()
-        #expect(shelf.waitingCount == 1)
+        #expect(weakToken != nil)
 
-        try await Task.sleep(for: .milliseconds(400))
-        #expect(shelf.waitingCount == 0)
+        manager.removeAllActions(withTarget: owner)
+        #expect(weakToken == nil)
         #expect(!manager.canUndo)
     }
 
@@ -101,7 +106,7 @@ struct TombstoneTests {
         var order = Array(t[0...3])
         var closed: [WorkspaceBook.ClosedTab] = []
         for tab in t[0...3] {
-            closed.append(book.closing(tab, order: order)!)
+            closed.append(book.closing(tab)!)
             order.removeAll { $0 == tab }
         }
         #expect(book.sets.isEmpty)
@@ -121,7 +126,7 @@ struct TombstoneTests {
         _ = book.pass([[t[0], t[1], t[2]]])
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[2]) { $0.join(t[2], to: work) }
-        let closed = book.closing(t[2], order: [t[0], t[1], t[2]])!
+        let closed = book.closing(t[2])!
         _ = book.pass([[t[0], t[1]]])
         #expect(book.names([t[0], t[1]]) == ["Default"])
 

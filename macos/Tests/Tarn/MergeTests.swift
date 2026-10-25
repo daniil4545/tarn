@@ -26,9 +26,8 @@ struct MergeTests {
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.edit(t[2]) { $0.join(t[2], to: work) }
-        let closed = book.closing(t[2], order: [t[0], t[1], t[2]])
+        let closed = book.closing(t[2])
         #expect(closed?.workspace.name == "Work")
-        #expect(closed?.runIndex == 1)
 
         book.reinsert(t[3], from: closed!)
         #expect(book.workspace(of: t[3])?.id == work)
@@ -41,7 +40,7 @@ struct MergeTests {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])
         _ = book.edit(t[0]) { $0.rename($0.workspaces[0].id, to: "Solo") }
-        let closed = book.closing(t[0], order: [t[0]])!
+        let closed = book.closing(t[0])!
         #expect(book.sets.isEmpty)
 
         book.reinsert(t[1], from: closed)
@@ -56,7 +55,7 @@ struct MergeTests {
         _ = book.pass([[t[0], t[1]]])
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
-        _ = book.closing(t[1], order: [t[0], t[1]])
+        _ = book.closing(t[1])
         _ = book.pass([[t[0]]])
         #expect(book.names([t[0]]) == ["Default"])
         #expect(book.set(of: t[0])?.workspaces.count == 1)
@@ -104,5 +103,67 @@ struct MergeTests {
         _ = book.pass([[t[0], t[1]]])
         #expect(book.names([t[0], t[1]]) == ["Work"])
         #expect(book.set(of: t[0])?.id == setID)
+    }
+
+    // MARK: Same result for any order of the groups
+
+    private func workWindowSplit(_ groups: [[TabKey]]) -> WorkspaceBook {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[2]]])
+        let work = book.newWorkspace("Work", in: t[0])
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        _ = book.edit(t[2]) { $0.join(t[2], to: work) }
+        // t2 leaves for its own window.
+        _ = book.pass(groups)
+        return book
+    }
+
+    @Test func aTabTakenOutOfANamedWorkspaceGivesTheSameResultInAnyGroupOrder() {
+        for groups in [[[t[0], t[1]], [t[2]]], [[t[2]], [t[0], t[1]]]] {
+            let book = workWindowSplit(groups)
+            #expect(book.names([t[0], t[1]]) == ["Default", "Work"])
+            #expect(book.names([t[2]]) == ["Default"])
+            #expect(book.set(of: t[2])?.id != book.set(of: t[0])?.id)
+        }
+    }
+
+    @Test func aRestoreSeenOneWindowAtATimeKeepsTheSetInAnyGroupOrder() {
+        for order in [[0, 1], [1, 0]] {
+            var book = WorkspaceBook()
+            let setID = UUID()
+            let ws = Workspace(name: "Work")
+            func snap(_ key: TabKey) -> WorkspaceSnapshot {
+                WorkspaceSnapshot(
+                    version: 1, setID: setID, revision: 1, tabKey: key,
+                    workspaces: [.init(id: ws.id, name: "Work", collapsed: false, tabKeys: [t[0], t[1]])]
+                )
+            }
+            book.adopt(snap(t[0]))
+            _ = book.pass([[t[0]]])
+            book.adopt(snap(t[1]))
+            _ = book.pass(order.map { [t[$0]] })
+            #expect(book.set(of: t[0])?.id == setID)
+            #expect(book.set(of: t[1])?.id == setID)
+            #expect(book.names([t[0], t[1]]) == ["Work"])
+        }
+    }
+
+    // MARK: A window of one tab
+
+    @Test func mergeAllKeepsTheNameOfAOneTabWindowsWorkspace() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1]], [t[2]]])
+        let docs = book.newWorkspace("Docs", in: t[2])
+        _ = book.edit(t[2]) { $0.join(t[2], to: docs) }
+        _ = book.pass([[t[0], t[1], t[2]]])
+        #expect(book.names([t[0], t[1], t[2]]) == ["Default", "Docs"])
+        #expect(book.sets.count == 1)
+    }
+
+    @Test func aStockDefaultWindowOfOneTabJoinsTheTargetInsteadOfAddingASecondDefault() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1]], [t[2]]])
+        _ = book.pass([[t[0], t[1], t[2]]])
+        #expect(book.names([t[0], t[1], t[2]]) == ["Default"])
     }
 }
