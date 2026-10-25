@@ -350,7 +350,7 @@ function renderTree() {
   const current = activePath();
   if (!treeSel || !tree.rows.some(r => r.path === treeSel)) treeSel = current || (tree.rows[0] && tree.rows[0].path) || null;
   const rows = tree.rows.map(r =>
-    `<div class="tr${r.path === treeSel ? " sel" : ""}${r.path === current ? " cur" : ""}" data-path="${esc(r.path)}" data-kind="${r.kind}" style="padding-left:${6 + r.depth * 12}px" title="${esc(r.path)}"><span class="chev">${r.kind === "dir" ? (r.open ? "▾" : "▸") : ""}</span>${esc(r.name)}${r.mod ? '<span class="mod">M</span>' : ""}</div>`).join("");
+    `<div class="tr${r.path === treeSel ? " sel" : ""}${r.path === current ? " cur" : ""}" data-path="${esc(r.path)}" data-kind="${r.kind}"${r.kind === "file" ? ' draggable="true"' : ""} style="padding-left:${6 + r.depth * 12}px" title="${esc(r.path)}"><span class="chev">${r.kind === "dir" ? (r.open ? "▾" : "▸") : ""}</span>${esc(r.name)}${r.mod ? '<span class="mod">M</span>' : ""}</div>`).join("");
   const hadFocus = el.contains(document.activeElement);
   el.innerHTML = `<div class="tree" tabindex="0"><div class="th">${esc(tree.root || "")}<span>Enter open · Esc hide</span></div>${rows}</div>`;
   const sel = el.querySelector(".tr.sel");
@@ -473,10 +473,20 @@ document.addEventListener("change", e => {
   post({ t: "task", path, rev: docs[path].rev, line: +box.dataset.line, checked: box.checked });
 });
 
+// A file tab or a file row of the tree can be dropped on the layout zones of the window (S14a
+// style, handled natively): the page only tells the app which file is dragged. The path also goes
+// out as plain text, so a drop in the terminal types the path.
 document.addEventListener("dragstart", e => {
   const tab = e.target.closest && e.target.closest(".ftab");
+  const row = e.target.closest && e.target.closest(".tr[draggable]");
+  const path = tab ? (chrome.tabs[+tab.dataset.idx] || {}).path : row && row.dataset.path;
   if (tab) post({ t: "tab", index: +tab.dataset.idx, pin: true });
+  if (!path) return;
+  e.dataTransfer.effectAllowed = "move";
+  e.dataTransfer.setData("text/plain", path);
+  post({ t: "dragFile", path, tab: !!tab });
 });
+document.addEventListener("dragend", () => post({ t: "dragEnd" }));
 
 $("vtree").addEventListener("keydown", e => {
   const rows = chrome.tree.rows;

@@ -336,6 +336,37 @@ struct ViewerCloseTests {
         return (model, dir)
     }
 
+    @Test func aDraggedTabMovesToAnotherViewerWithItsEdits() throws {
+        let (source, dir) = try model(editing: ["a.md": "x", "b.md": ""])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let destination = ViewerModel(root: dir)
+        #expect(destination.canTake(dir + "/a.md", from: source))
+        destination.take(dir + "/a.md", from: source)
+        source.release(dir + "/a.md")
+        #expect(destination.dirtyPaths == [dir + "/a.md"])
+        #expect(source.dirtyPaths.isEmpty)
+        #expect(source.snapshot.map(\.path) == [dir + "/b.md"])
+        source.release(dir + "/b.md")
+        #expect(source.isEmpty)
+    }
+
+    @Test func aTabWithEditsIsNotTakenOverACopyThatWouldHideThem() throws {
+        let (source, dir) = try model(editing: ["a.md": "x"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let destination = ViewerModel(root: dir)
+        destination.open(OpenTarget(path: dir + "/a.md"), pin: true)
+        #expect(!destination.canTake(dir + "/a.md", from: source))
+    }
+
+    @Test func aTreeRowFileOpensFromDiskInTheDestination() throws {
+        let (source, dir) = try model(editing: [:])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "one".write(toFile: dir + "/t.md", atomically: true, encoding: .utf8)
+        let destination = ViewerModel(root: dir)
+        destination.take(dir + "/t.md", from: source)
+        #expect(destination.snapshot.map(\.path) == [dir + "/t.md"])
+    }
+
     @Test func collectsOnlyDirtyFilesInTabOrder() throws {
         let (model, dir) = try model(editing: ["a.md": "x", "b.md": "", "c.md": "y"])
         defer { try? FileManager.default.removeItem(atPath: dir) }

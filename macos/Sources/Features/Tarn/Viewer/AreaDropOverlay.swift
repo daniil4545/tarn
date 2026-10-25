@@ -38,7 +38,8 @@ final class AreaDropView: NSView {
         label.wantsLayer = true
         label.isHidden = true
         addSubview(label)
-        registerForDraggedTypes([.tarnViewer, .ghosttySurfaceId])
+        // Text: the page of a viewer drags a file as plain text (its path); `host.drag` tells it apart.
+        registerForDraggedTypes([.tarnViewer, .ghosttySurfaceId, .string])
     }
 
     required init?(coder: NSCoder) {
@@ -90,6 +91,7 @@ final class AreaDropView: NSView {
     }
 
     private func payload(of sender: NSDraggingInfo) -> AreaPayload? {
+        if case .file = host?.drag { return host?.drag }
         let board = sender.draggingPasteboard
         if let text = board.string(forType: .tarnViewer), let id = UUID(uuidString: text) { return .viewer(id) }
         if let data = board.data(forType: .ghosttySurfaceId), data.count == 16 {

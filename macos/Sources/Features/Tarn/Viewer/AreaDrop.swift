@@ -37,10 +37,22 @@ enum AreaEdge: Equatable {
     var isFirst: Bool { self == .left || self == .top }
 }
 
+/// A file dragged out of a viewer page: a tab of the viewer, or a row of its files tree.
+struct FileDrag: Equatable {
+    let path: String
+    /// The viewer whose page started the drag.
+    let viewer: UUID
+    /// A tab moves with its edits; a tree row only opens the file.
+    let moves: Bool
+    /// The tab is the only one of its viewer, so a drop on that viewer changes nothing.
+    let sole: Bool
+}
+
 /// What is being dragged. A terminal is the surface that Ghostty's grab handle drags.
 enum AreaPayload: Equatable {
     case viewer(UUID)
     case terminal(UUID)
+    case file(FileDrag)
 }
 
 /// What a drop does to the layout.
@@ -79,7 +91,7 @@ enum AreaDrop {
         at point: CGPoint, in size: CGSize, tree: AreaTree, payload: AreaPayload, loneTerminal: Bool
     ) -> AreaDropTarget? {
         guard let root = tree.root, let block = tree.block else { return nil }
-        let moving: AreaLeaf
+        let moving: AreaLeaf?
         var refusal: String?
         switch payload {
         case let .viewer(id):
@@ -90,8 +102,11 @@ enum AreaDrop {
             guard !tree.viewers.isEmpty else { return nil }
             moving = block
             if !loneTerminal { refusal = splitRefusal }
+        case .file:
+            // A file opens a new viewer or joins one; nothing leaves the layout yet.
+            moving = nil
         }
-        let rest = tree.removing(moving).root
+        let rest = (moving.map { tree.removing($0) } ?? tree).root
         if let found = areaZone(at: point, in: size, rest: rest) {
             return AreaDropTarget(plan: refusal == nil ? found.plan : nil, frame: found.frame, refusal: refusal)
         }
@@ -110,6 +125,16 @@ enum AreaDrop {
         let edge = AreaEdge(TerminalSplitDropZone.calculate(at: local, in: rect.size))
         if leaf.kind == .viewer, case .viewer = payload, isMiddle(local, in: rect.size) {
             return AreaDropTarget(plan: .into(leaf.id), frame: rect, refusal: nil)
+        }
+        if leaf.kind == .viewer, case let .file(drag) = payload {
+            // Onto its own viewer a file changes nothing, unless a tab splits off by an edge.
+            let own = leaf.id == drag.viewer
+            if own, drag.moves ? drag.sole || isMiddle(local, in: rect.size) : isMiddle(local, in: rect.size) {
+                return AreaDropTarget(plan: nil, frame: rect, refusal: selfRefusal)
+            }
+            if !own, isMiddle(local, in: rect.size) {
+                return AreaDropTarget(plan: .into(leaf.id), frame: rect, refusal: nil)
+            }
         }
         return AreaDropTarget(
             plan: refusal == nil ? .beside(leaf.id, edge) : nil, frame: half(edge, of: rect), refusal: refusal)

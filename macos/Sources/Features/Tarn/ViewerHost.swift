@@ -105,6 +105,9 @@ final class ViewerHost: ObservableObject {
         let web = ViewerWebController(model: model)
         model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active) }
         model.onLayout = { [weak self] command in self?.layout(command, from: id) }
+        model.onFileDrag = { [weak self] file in
+            self?.drag = file.map { .file(FileDrag(path: $0.path, viewer: id, moves: $0.moves, sole: $0.sole)) }
+        }
         let grip = web.container.grip
         grip.viewerID = id
         grip.title = { [weak model] in (model?.tabs.activePath).map { ($0 as NSString).lastPathComponent } ?? "Viewer" }
@@ -244,6 +247,8 @@ final class ViewerHost: ObservableObject {
             tree = tree.placing(pane.leaf, plan)
             lastViewer = id
             DispatchQueue.main.async { pane.model.onFocus?() }
+        case let .file(file):
+            dropFile(file, plan)
         case .terminal:
             let surface = controller?.focusedSurface
             tree = tree.placing(blockLeaf, plan)
@@ -251,6 +256,36 @@ final class ViewerHost: ObservableObject {
                 if let surface { Ghostty.moveFocus(to: surface) }
             }
         }
+    }
+
+    /// A file tab or tree row dropped on a zone: it joins the viewer under the pointer or opens in a
+    /// new viewer there. A tab leaves its viewer with its edits; an emptied viewer closes.
+    private func dropFile(_ file: FileDrag, _ plan: AreaPlan) {
+        drag = nil
+        let source = panes[file.viewer]
+        let destination: Pane
+        if case let .into(id) = plan {
+            guard id != file.viewer, let existing = panes[id] else { return }
+            if let source, !existing.model.canTake(file.path, from: source.model) {
+                existing.model.toast("\((file.path as NSString).lastPathComponent) is open here with other edits")
+                return
+            }
+            destination = existing
+        } else {
+            destination = makePane(AreaLeaf(kind: .viewer), root: source?.model.tree.root ?? NSHomeDirectory())
+            tree = tree.placing(destination.leaf, plan)
+        }
+        if let source {
+            destination.model.take(file.path, from: source.model)
+            if file.moves {
+                source.model.release(file.path)
+                if source.model.isEmpty { discard(file.viewer) }
+            }
+        } else {
+            _ = destination.model.open(OpenTarget(path: file.path), pin: true)
+        }
+        lastViewer = destination.leaf.id
+        DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
     /// S14a: a viewer dropped outside every window opens in a new window.

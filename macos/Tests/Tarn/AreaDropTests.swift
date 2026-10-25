@@ -153,4 +153,45 @@ struct AreaDropTests {
         #expect(ViewerGripView.opacity(near: true, hovering: false) == 0.6)
         #expect(ViewerGripView.opacity(near: true, hovering: true) == 1.0)
     }
+
+    // MARK: Files from a viewer page
+
+    private func file(from viewer: AreaLeaf, moves: Bool = true, sole: Bool = false) -> AreaPayload {
+        .file(FileDrag(path: "/tmp/a.md", viewer: viewer.id, moves: moves, sole: sole))
+    }
+
+    @Test func aFileTabOnTheTabBarOfAnotherViewerJoinsIt() {
+        let result = target(900, 28, tree: twoViewers, file(from: first))
+        #expect(result?.plan == .into(second.id))
+    }
+
+    @Test func aFileDroppedOnItsOwnViewerChangesNothingUnlessATabSplitsOffAnEdge() {
+        // The middle of the own viewer, and the only tab on any part of it: refused in red.
+        #expect(target(700, 300, tree: twoViewers, file(from: first))?.plan == nil)
+        #expect(target(700, 300, tree: twoViewers, file(from: first))?.refusal == AreaDrop.selfRefusal)
+        #expect(target(620, 300, tree: twoViewers, file(from: first, sole: true))?.plan == nil)
+        // Not the only tab: the left edge of the own viewer splits a new viewer off.
+        #expect(target(620, 300, tree: twoViewers, file(from: first))?.plan == .beside(first.id, .left))
+    }
+
+    @Test func aTreeRowOnTheMiddleOfItsOwnViewerIsRefused() {
+        #expect(target(700, 300, tree: twoViewers, file(from: first, moves: false))?.plan == nil)
+        #expect(target(620, 300, tree: twoViewers, file(from: first, moves: false, sole: true))?.plan == .beside(first.id, .left))
+    }
+
+    @Test func aFileOnTheTerminalBlockOpensAViewerBesideIt() {
+        #expect(target(100, 300, tree: twoViewers, file(from: first))?.plan == .beside(block.id, .left))
+    }
+
+    @Test func aFileOnAnAreaStripTakesThatHalfOfTheWholeArea() {
+        #expect(target(10, 300, tree: twoViewers, file(from: first))?.plan == .half(.left))
+    }
+
+    @Test func aNewViewerLeafCanBePlacedByAPlan() {
+        let new = AreaLeaf(kind: .viewer)
+        let placed = oneViewer.placing(new, .beside(first.id, .left))
+        #expect(placed.count == 3)
+        #expect(placed.leaf(id: new.id) != nil)
+        #expect(oneViewer.placing(new, .half(.top)).count == 3)
+    }
 }
