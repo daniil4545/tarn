@@ -4,7 +4,7 @@ tarn is an agent-first macOS terminal, a fork of Ghostty. For people who run CLI
 
 How to read: the overall picture is section 1, the module documents are in `docs/modules/`, where to change is section 9. Why it is decided so: section 12 of `docs/spec.md`.
 
-State of this document: it describes branch `s4-settings` (PR #4, on top of PR #3). Module documents marked "with PR #N" arrive with that PR. The `tarn` CLI and `tarn.mk` do not exist here (not verified on other branches). Sections 3 to 7 of the earlier version (processes, data and states, trust boundaries, failures, observability) now live in the module documents.
+State of this document: it describes branch `s3-windows` (PR #5, on top of PR #3). Module documents marked "with PR #N" arrive with that PR. The `tarn` CLI and `tarn.mk` do not exist here (not verified on other branches). Sections 3 to 7 of the earlier version (processes, data and states, trust boundaries, failures, observability) now live in the module documents.
 
 ## Contents
 
@@ -61,9 +61,9 @@ flowchart LR
 | Control socket | binds the unix socket, reads one JSON line per connection, keeps a connection open for an answer | [control-socket.md](modules/control-socket.md) | works |
 | Sessions | agent state machine, liveness, pending answers, agent naming, plugin hooks | [sessions.md](modules/sessions.md) | works |
 | Sidebar | groups tabs per window, rows, hover card, quick answers | [sidebar.md](modules/sidebar.md) | works |
-| Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | works on `s4-settings` |
-| Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | with PR #5 |
-| Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | with PR #5 |
+| Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | works |
+| Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works on `s3-windows` |
+| Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works on `s3-windows` |
 | Demo | demo mode | [demo.md](modules/demo.md) | with the demo PR |
 | `tarn` CLI, notifications | spec sections 2.4, 2.2 | none (the socket accepts `{"cmd":"open"}`; no binary) | not on this branch |
 
@@ -137,8 +137,12 @@ Branch diff against `origin/main`. Every Swift change outside `macos/Sources/Fea
 | 7 | `macos/Sources/Ghostty/Surface View/SurfaceView.swift` | `environmentVariables["TARN_SURFACE"] = view.id.uuidString` before the variables are converted to arrays; replaces an inherited value | hooks learn their surface |
 | 8 | `macos/Assets.xcassets/TarnAgentClaude.imageset`, `TarnAgentCodex.imageset`, `TarnAgentOpenCode.imageset` | new image sets with SVG (`claude.svg`, `openai.svg`, `opencode.svg`) | agent badges |
 | 14 | `macos/Sources/Ghostty/Ghostty.Config.swift` | `loadConfig` takes `tarnFile: URL? = nil`; after `ghostty_config_load_recursive_files` it calls `TarnConfigFile.load(into:from:)`; `init(at:finalize:)` passes `TarnConfigFile.activeURL()` | tarn's options file loads after the user's config and its includes, before `finalize`; tests and `TemporaryConfig` pass nothing |
+| 15 | `macos/Sources/Features/Terminal/TerminalController.swift` | in `willEncodeRestorableState`: `WorkspaceRestore.encode(window, into: state)` | the workspace table is saved beside Ghostty's state under the key `tarn.workspaces`, `TerminalRestorableState` stays at version 7 |
+| 16 | `macos/Sources/Features/Terminal/TerminalRestorable.swift` | in `restoreWindow`: `let workspaceCoder = state` before the `guard let state` that shadows it; `WorkspaceRestore.decode(workspaceCoder, for: window)` after the window exists | the restored tab gets its table and key back |
+| 17 | `macos/Sources/Ghostty/Ghostty.App.swift` | `gotoSplit`: `isSplit` and `focusTarget` joined in one `guard`; when it fails, `ViewerRouter.focusNeighbor(from:direction:)` is the result | Ghostty's split keys cross from the terminal block into a viewer (D8) |
+| 18 | `macos/Sources/Ghostty/Surface View/SurfaceGrabHandle.swift` | dot opacity 0.3 and 0.8 become 0.6 and 1.0, comment `tarn:` | the grab handle is easier to see (D16) |
 
-Rows 1 to 4, 10 and 12 are in `TerminalController.swift`. Row 14 was numbered after the s2-files rows 12 and 13. Line numbers are not recorded: they shift with upstream; search by the names above.
+Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows 15 to 18 were numbered after the s2-files rows 12 and 13 and the settings row 14 (PR #4). Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
 
@@ -150,6 +154,8 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 | Change the socket path or protocol; add a socket command | [control-socket.md](modules/control-socket.md) |
 | Change grouping, order, layout or width of the sidebar | [sidebar.md](modules/sidebar.md) |
 | Change the viewer pane, its file rules or close questions | [viewer.md](modules/viewer.md) |
+| Change workspaces, their rules or order; change what an undo brings back | [workspaces.md](modules/workspaces.md) |
+| Change the viewer layout, drop zones or grips | [layout.md](modules/layout.md) |
 
 ## 10. Limits and open items
 
@@ -157,5 +163,5 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 - Sessions in tabs without hooks stay `idle`: the state needs the plugin; detection alone only groups the tab.
 - Liveness depends on Claude Code title prefix `✳`, "Interrupted" and "1. Yes": a UI change breaks it silently.
 - Detection latency: up to 2 s on a visible window; hidden windows refresh on notifications only.
-- Viewer: one pane per window tab (temporary host `ViewerHost.swift`); unsaved edits are asked on every close of a tab, window, all windows, an AppleScript close and on quit, but not on a system shutdown or an update install. `ViewerModelTests.directClosesAreAllReviewed` fails when a new direct close call appears.
+- Viewer: many viewers per window tab around the terminal block (`ViewerHost`, `AreaTree`); not restored after a relaunch, restored by an undo of the tab (tombstone); unsaved edits are asked on every close of a tab, window, all windows, an AppleScript close and on quit, but not on a system shutdown or an update install. `ViewerModelTests.directClosesAreAllReviewed` fails when a new direct close call appears.
 - Not on this branch: notifications, `tarn` CLI binary (`hook`, `open`, `ls`, `notify`), `tarn.mk`, `docs/api/` cards, CI.

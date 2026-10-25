@@ -348,6 +348,75 @@ struct ViewerCloseTests {
         return (model, dir)
     }
 
+    @Test func aDraggedTabMovesToAnotherViewerWithItsEdits() throws {
+        let (source, dir) = try model(editing: ["a.md": "x", "b.md": ""])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let destination = ViewerModel(root: dir)
+        #expect(destination.canTake(dir + "/a.md", from: source))
+        destination.take(dir + "/a.md", from: source)
+        source.release(dir + "/a.md")
+        #expect(destination.dirtyPaths == [dir + "/a.md"])
+        #expect(source.dirtyPaths.isEmpty)
+        #expect(source.snapshot.map(\.path) == [dir + "/b.md"])
+        source.release(dir + "/b.md")
+        #expect(source.isEmpty)
+    }
+
+    private func pair(source: String, target: String) throws -> (ViewerModel, ViewerModel, String) {
+        let (src, dir) = try model(editing: ["a.md": source])
+        let dst = ViewerModel(root: dir)
+        dst.open(OpenTarget(path: dir + "/a.md"), pin: true)
+        if !target.isEmpty { dst.handle(["t": "edit", "path": dir + "/a.md", "text": target, "rev": 1]) }
+        return (src, dst, dir)
+    }
+
+    @Test func absorbKeepsTheSourceEditsWhenOnlyTheSourceHasThem() throws {
+        let (src, dst, dir) = try pair(source: "src", target: "")
+        let path = dir + "/a.md"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(dst.canAbsorb(src))
+        dst.absorb(src)
+        #expect(dst.dirtyPaths == [path])
+        #expect(dst.snapshot.count == 1)
+    }
+
+    @Test func absorbKeepsTheTargetEditsWhenOnlyTheTargetHasThem() throws {
+        let (src, dst, dir) = try pair(source: "", target: "dst")
+        let path = dir + "/a.md"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(dst.canAbsorb(src))
+        dst.absorb(src)
+        #expect(dst.dirtyPaths == [path])
+        #expect(dst.snapshot.count == 1)
+    }
+
+    @Test func absorbRefusesTwoDifferentEditsAndChangesNothing() throws {
+        let (src, dst, dir) = try pair(source: "src", target: "dst")
+        let path = dir + "/a.md"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(!dst.canAbsorb(src))
+        #expect(!dst.canTake(path, from: src))
+        #expect(src.dirtyPaths == [path])
+        #expect(dst.dirtyPaths == [path])
+    }
+
+    @Test func absorbMergesEqualEditsIntoOne() throws {
+        let (src, dst, dir) = try pair(source: "same", target: "same")
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(dst.canAbsorb(src))
+        dst.absorb(src)
+        #expect(dst.snapshot.count == 1)
+    }
+
+    @Test func aTreeRowFileOpensFromDiskInTheDestination() throws {
+        let (source, dir) = try model(editing: [:])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "one".write(toFile: dir + "/t.md", atomically: true, encoding: .utf8)
+        let destination = ViewerModel(root: dir)
+        destination.take(dir + "/t.md", from: source)
+        #expect(destination.snapshot.map(\.path) == [dir + "/t.md"])
+    }
+
     @Test func collectsOnlyDirtyFilesInTabOrder() throws {
         let (model, dir) = try model(editing: ["a.md": "x", "b.md": "", "c.md": "y"])
         defer { try? FileManager.default.removeItem(atPath: dir) }
@@ -396,6 +465,7 @@ struct ViewerCloseTests {
             "TerminalController.swift": 19,
             "ScriptWindow.swift": 2,
             "ScriptTab.swift": 2,
+            "Sidebar.swift": 1, // Close Other / Below, behind ViewerClose.intercept (Sidebar.close(_:title:from:))
         ]
         var found: [String: Int] = [:]
         let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
@@ -476,6 +546,65 @@ struct ViewerWebLifetimeTests {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         #expect(weakController == nil)
+    }
+}
+
+/// The layout glue of one tab: what a drag from a page leaves behind.
+@Suite
+@MainActor
+struct ViewerHostTests {
+    private func host(with names: [String]) throws -> (ViewerHost, String) {
+        let dir = try Scratch.make()
+        let host = ViewerHost()
+        for name in names {
+            try "one".write(toFile: dir + "/" + name, atomically: true, encoding: .utf8)
+            #expect(host.open(OpenTarget(path: dir + "/" + name), root: dir, focus: false))
+        }
+        return (host, dir)
+    }
+
+    @Test func aFileDragFromThePageEndsWithAClickOrTheDragEnd() throws {
+        let (host, dir) = try host(with: ["a.md"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let model = try #require(host.models.first)
+        model.onFileDrag?(PageFileDrag(path: dir + "/a.md", moves: true, sole: true))
+        #expect(host.drag != nil)
+        host.cancelFileDrag()
+        #expect(host.drag == nil)
+
+        model.onFileDrag?(PageFileDrag(path: dir + "/a.md", moves: true, sole: true))
+        model.onFileDrag?(nil)
+        #expect(host.drag == nil)
+
+        // A terminal drag is Ghostty's session: a click does not cancel it.
+        host.terminalDragged(UUID())
+        host.cancelFileDrag()
+        #expect(host.drag != nil)
+    }
+
+    @Test func plainPointerEventsAreNeverAnswered() {
+        #expect(AreaDropView.isPlainEvent(.leftMouseDown))
+        #expect(AreaDropView.isPlainEvent(.mouseMoved))
+        #expect(AreaDropView.isPlainEvent(.scrollWheel))
+        #expect(!AreaDropView.isPlainEvent(.leftMouseDragged))
+        #expect(!AreaDropView.isPlainEvent(nil))
+    }
+
+    @Test func aFileThatDoesNotOpenLeavesNoEmptyViewer() throws {
+        let (host, dir) = try host(with: ["a.md"])
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let source = try #require(host.tree.viewers.first).id
+        let missing = dir + "/gone.md"
+
+        host.drop(.file(FileDrag(path: missing, viewer: source, moves: false, sole: false)), .half(.top))
+        #expect(host.tree.viewers.count == 1)
+        host.drop(.file(FileDrag(path: missing, viewer: source, moves: true, sole: false)), .half(.top))
+        #expect(host.tree.viewers.count == 1)
+
+        // A file that opens makes the second viewer.
+        try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
+        host.drop(.file(FileDrag(path: dir + "/b.md", viewer: source, moves: false, sole: false)), .half(.top))
+        #expect(host.tree.viewers.count == 2)
     }
 }
 
@@ -575,10 +704,10 @@ struct ViewerPaneKeyTests {
         let host = ViewerHost()
         host.toggleFromKey(root: NSTemporaryDirectory())
         var calls: [String] = []
-        host.model?.handle(["t": "ready"])
-        host.model?.script = { calls.append($0) }
+        host.activeModel?.handle(["t": "ready"])
+        host.activeModel?.script = { calls.append($0) }
         try await spin(0.2)
-        #expect(host.model?.treeVisible == true && host.model?.snapshot.isEmpty == true && !host.hidden)
+        #expect(host.activeModel?.treeVisible == true && host.activeModel?.snapshot.isEmpty == true && !host.hidden)
         #expect(calls.contains("tarn.focusTree()"))
     }
 
@@ -586,16 +715,16 @@ struct ViewerPaneKeyTests {
         let (host, dir) = try hostWithFile()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let path = dir + "/a.md"
-        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
-        host.model?.revealTree()
+        host.activeModel?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        host.activeModel?.revealTree()
         host.toggleFromKey(root: nil)
         #expect(host.hidden)
         var grabs = 0
-        host.model?.onFocus = { grabs += 1 }
+        host.activeModel?.onFocus = { grabs += 1 }
         host.toggleFromKey(root: nil)
         try await spin(0.1)
-        #expect(!host.hidden && host.model?.snapshot.map(\.path) == [path] && host.model?.treeVisible == true)
-        #expect(host.model?.dirtyPaths == [path] && grabs == 1)
+        #expect(!host.hidden && host.activeModel?.snapshot.map(\.path) == [path] && host.activeModel?.treeVisible == true)
+        #expect(host.activeModel?.dirtyPaths == [path] && grabs == 1)
     }
 
     @Test func shownPaneWithNoFileHidesAndKeepsItsTreeState() throws {
@@ -604,25 +733,25 @@ struct ViewerPaneKeyTests {
         try FileManager.default.createDirectory(atPath: dir + "/sub", withIntermediateDirectories: true)
         let host = ViewerHost()
         host.toggleFromKey(root: dir)
-        host.model?.handle(["t": "treeToggle", "path": dir + "/sub"])
-        let rows = host.model?.tree.rows().count
+        host.activeModel?.handle(["t": "treeToggle", "path": dir + "/sub"])
+        let rows = host.activeModel?.tree.rows().count
         host.toggleFromKey(root: nil)
-        #expect(host.hidden && host.model != nil)
+        #expect(host.hidden && host.activeModel != nil)
         host.toggleFromKey(root: nil)
-        #expect(!host.hidden && host.model?.tree.rows().count == rows && host.model?.treeVisible == true)
+        #expect(!host.hidden && host.activeModel?.tree.rows().count == rows && host.activeModel?.treeVisible == true)
     }
 
     @Test(arguments: [true, false]) func shownPaneWithFilesHidesWholeKeepingTabsEditsAndTree(tree: Bool) throws {
         let (host, dir) = try hostWithFile()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let path = dir + "/a.md"
-        if tree { host.model?.revealTree() }
-        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        if tree { host.activeModel?.revealTree() }
+        host.activeModel?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
         host.toggleFromKey(root: nil)
         #expect(host.hidden)
-        #expect(host.model?.snapshot.map(\.path) == [path] && host.model?.treeVisible == tree)
+        #expect(host.activeModel?.snapshot.map(\.path) == [path] && host.activeModel?.treeVisible == tree)
         // A hidden pane with unsaved edits still reaches the close dialog.
-        #expect(ViewerClose.dirtyPaths(in: host.model.map { [$0] } ?? []) == [path])
+        #expect(ViewerClose.dirtyPaths(in: host.activeModel.map { [$0] } ?? []) == [path])
     }
 
     @Test func cmdBNeverClosesInAnyState() throws {
@@ -633,7 +762,7 @@ struct ViewerPaneKeyTests {
             host.toggleFromKey(root: dir)
             for _ in 0..<4 {
                 host.toggleFromKey(root: nil)
-                #expect(host.model != nil)
+                #expect(host.activeModel != nil)
             }
         }
     }
@@ -756,10 +885,10 @@ struct ViewerPaneKeyTests {
         let host = ViewerHost()
         let missing = OpenTarget(path: dir + "/nope.md", line: nil)
         #expect(!host.open(missing, root: dir, focus: false))
-        #expect(host.model == nil)
+        #expect(host.activeModel == nil)
         host.toggleFromKey(root: dir)
         #expect(!host.open(missing, root: dir, focus: false))
-        #expect(host.model != nil)
+        #expect(host.activeModel != nil)
     }
 
     @Test func undoOfACloseWhoseFilesAreGoneShowsTheTree() {
@@ -773,8 +902,8 @@ struct ViewerPaneKeyTests {
         defer { try? FileManager.default.removeItem(atPath: dir) }
         try "two".write(toFile: dir + "/b.md", atomically: true, encoding: .utf8)
         host.toggleFromKey(root: nil)
-        host.restore([ViewerTab(path: dir + "/b.md", preview: false, line: nil, jump: 0)], active: 0, root: dir)
-        #expect(!host.hidden && host.model?.snapshot.map(\.path).contains(dir + "/b.md") == true)
+        host.reopen([ViewerTab(path: dir + "/b.md", preview: false, line: nil, jump: 0)], active: 0, root: dir)
+        #expect(!host.hidden && host.activeModel?.snapshot.map(\.path).contains(dir + "/b.md") == true)
     }
 
     @Test func undoOfAnEmptyPaneCloseBringsBackThePaneWithItsTree() throws {
@@ -782,10 +911,10 @@ struct ViewerPaneKeyTests {
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let host = ViewerHost()
         host.toggleFromKey(root: dir)
-        host.model?.command("closeTab")
-        #expect(host.model == nil)
-        host.restore([], active: -1, root: dir)
-        #expect(host.model?.treeVisible == true && host.model?.snapshot.isEmpty == true)
+        host.activeModel?.command("closeTab")
+        #expect(host.activeModel == nil)
+        host.reopen([], active: -1, root: dir)
+        #expect(host.activeModel?.treeVisible == true && host.activeModel?.snapshot.isEmpty == true)
     }
 
     @Test func aPathClickShowsAHiddenPaneAndAnAgentOpenLeavesItHidden() throws {
@@ -803,16 +932,16 @@ struct ViewerPaneKeyTests {
         let (host, dir) = try hostWithFile()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         host.toggleFromKey(root: nil)
-        host.closePane(saved: [], active: -1)
-        #expect(host.model == nil && !host.hidden)
+        host.activeModel?.onClosePane?([], -1)
+        #expect(host.activeModel == nil && !host.hidden)
     }
 
     @Test func hidingThePaneSendsThePendingEditFirst() throws {
         let (host, dir) = try hostWithFile()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         var calls: [String] = []
-        host.model?.handle(["t": "ready"])
-        host.model?.script = { calls.append($0) }
+        host.activeModel?.handle(["t": "ready"])
+        host.activeModel?.script = { calls.append($0) }
         host.toggleFromKey(root: nil)
         #expect(calls.contains("tarn.flush()"))
     }
@@ -841,8 +970,9 @@ struct ViewerPaneKeyTests {
         let model = ViewerModel(root: NSTemporaryDirectory())
         let web = ViewerWebController(model: model)
         web.start()
-        for _ in 0..<100 where web.container.subviews.isEmpty { try await spin(0.1) }
-        let view = try #require(web.container.subviews.first)
+        // The container also holds the drag handle: look for the page itself.
+        for _ in 0..<100 where !web.container.subviews.contains(where: { $0 is ViewerWebView }) { try await spin(0.1) }
+        let view = try #require(web.container.subviews.first { $0 is ViewerWebView })
         let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
         web.focus()
         window.contentView = web.container
@@ -860,7 +990,7 @@ struct ViewerSaveTests {
         try "one".write(toFile: path, atomically: true, encoding: .utf8)
         let host = ViewerHost()
         host.open(OpenTarget(path: path), root: dir, focus: false)
-        host.model?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
+        host.activeModel?.handle(["t": "edit", "path": path, "text": "mine", "rev": 1])
         return (host, path)
     }
 
@@ -869,7 +999,7 @@ struct ViewerSaveTests {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let (host, path) = try editedPane(name, in: dir)
-        host.model?.handle(["t": "save", "path": path])
+        host.activeModel?.handle(["t": "save", "path": path])
         #expect(try String(contentsOfFile: path, encoding: .utf8) == "mine")
     }
 
@@ -885,7 +1015,7 @@ struct ViewerSaveTests {
         let (host, path) = try editedPane("a.md", in: dir)
         try disk.write(to: URL(fileURLWithPath: path))
         try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(5)], ofItemAtPath: path)
-        host.model?.handle(["t": "save", "path": path])
+        host.activeModel?.handle(["t": "save", "path": path])
         #expect(try Data(contentsOf: URL(fileURLWithPath: path)) == disk)
     }
 }

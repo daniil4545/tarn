@@ -1,0 +1,121 @@
+# Module: layout
+
+## Purpose
+
+The layout places any number of viewer panes around the terminal block of one tab, lets the user split, resize, focus and drag them, and replaces the temporary one-pane host of PR #3. The terminal block stays Ghostty's own split tree; the layout treats it as one leaf.
+
+State of this document: branch `s3-windows` (PR #5). Behavior: `docs/plans/windows-workspaces.md` section 3a; rules: `docs/plans/s3-windows-contracts.md` section 10. The viewer itself is in [viewer.md](viewer.md).
+
+## Place in the system
+
+```mermaid
+flowchart LR
+  host["ViewerHost"] --> tree["AreaTree"]
+  tree --> view["ViewerLayout"]
+  view -->|"leaf block"| term["TerminalView"]
+  view -->|"leaf viewer"| pane["Viewer pane"]
+  over["AreaDropOverlay"] -->|"target, plan"| drop["AreaDrop"]
+  drop --> host
+  grip["ViewerGrip"] -->|"drag state"| host
+  gh["Grab handle"] -->|"dragged terminal"| host
+```
+
+Reading: `ViewerHost` owns one `AreaTree` per window tab and one pane (model and web controller) per viewer leaf. Drops are pure math in `AreaDrop`; the overlay draws and applies them. Source: `ViewerHost.swift`, `Viewer/Area*.swift`, `Viewer/ViewerGrip.swift`.
+
+## Inputs and outputs
+
+| Direction | What | Where |
+|---|---|---|
+| In | path click or socket open | `ViewerRouter`, `ViewerHost.open` |
+| In | menu split and focus actions while a viewer holds the keyboard (right, left, down, up; previous, next, spatial) | `ViewerWebView` to `ViewerModel.onLayout` |
+| In | Ghostty split keys with no terminal target | `ViewerRouter.focusNeighbor` to `ViewerHost.focusFromBlock` |
+| In | drags: a viewer by its grip, a file tab or tree row from the page, a terminal by Ghostty's grab handle | `ViewerGripView`, `PageFileDrag`, `DraggingSurfaceKey` |
+| In | divider moves and equalize | `ViewerHost.resize`, `equalize` |
+| Out | the layout view | `ViewerLayout` |
+| Out | `ViewerSnapshot` (layout JSON, open files of each viewer) for a tombstone; `restore` brings it back | `ViewerHost.snapshot`, `restore` |
+
+## How it works
+
+State: `AreaTree` is Ghostty's `SplitTree<AreaLeaf>`. An `AreaLeaf` is a placeholder view with an id and a kind (`block` or `viewer`); it is never put into a window. A tab starts as the block alone; with no viewer `ViewerLayout` returns the terminal view unchanged.
+
+Open: the first open creates a viewer to the right of the block with 60 percent for the block; later opens use the viewer that has the keyboard, else the one used last. An agent's open never moves focus (see [viewer.md](viewer.md)).
+
+Split from a viewer: the active file opens in a new viewer on the chosen side with half the room. If the file does not open, the new viewer is discarded.
+
+Closing: closing the last file tab closes the viewer. A close with files registers an undo with Ghostty's timeout; undo puts the viewer back beside its old neighbour (or right of the block) and reopens the tabs. A viewer moved elsewhere leaves with no undo.
+
+Drops (`AreaDrop.target`, checked first to last): corner (48 pt), strip (24 pt), viewer tab bar (32 pt) and middle box (15 percent), elsewhere in a pane, the pane itself.
+1. Corner or strip of the whole area: the dragged pane takes a half of the area; in a corner of an already split area it takes a quarter of that part.
+2. Tab bar or middle of a viewer: the dragged viewer or file goes into that viewer.
+3. Elsewhere in a pane: the pane takes the half on the nearest edge, by Ghostty's `TerminalSplitDropZone.calculate`.
+4. Over the dragged pane itself: refused, red frame, text "Drop on another pane".
+5. A lone terminal dropped at a viewer edge moves the block; split terminals are refused with the hint "Split terminals stay together: drag the viewer to the block edge".
+6. A pointer in the block with no matching zone gives nil: Ghostty's own drop zones work.
+
+The frame is neutral (text color), red only for a refusal. A file tab moves with its edits (refused if both viewers hold different edited copies); a tree row only opens the file. An emptied source viewer closes. A viewer dropped outside every window opens in a new window (S14a).
+
+Focus: `focusFromBlock` and viewer-to-neighbour moves use `SplitTree.focusTarget`; moving to the block calls `Ghostty.moveFocus` on the focused surface.
+
+Grip: each viewer pane has a three-dot handle on top (`ViewerGripView`) that drags the whole viewer. It follows Ghostty's `drag-handle` setting (auto shows in the top fifth of the pane, always, never). Dots are 0.6 and 1.0 opaque.
+
+## Files
+
+| Path | Role |
+|---|---|
+| `macos/Sources/Features/Tarn/ViewerHost.swift` | host per window tab, panes, open, split, close with undo, drops, `ViewerRouter` |
+| `macos/Sources/Features/Tarn/Viewer/AreaTree.swift` | `AreaLeaf`, tree helpers: open beside, remove, neighbour, slot |
+| `macos/Sources/Features/Tarn/Viewer/AreaView.swift` | `ViewerLayout` with Ghostty's `SplitView` per split |
+| `macos/Sources/Features/Tarn/Viewer/AreaDrop.swift` | zone math, `AreaPlan`, `AreaPayload`, `placing` |
+| `macos/Sources/Features/Tarn/Viewer/AreaDropOverlay.swift` | drop surface and frame |
+| `macos/Sources/Features/Tarn/Viewer/ViewerGrip.swift` | `ViewerPaneView`, `ViewerGripView` |
+| `macos/Sources/Features/Tarn/Viewer/ViewerSnapshot.swift` | layout and files for a tombstone |
+
+## Ghostty mechanisms used
+
+| Mechanism | Where | Use |
+|---|---|---|
+| `SplitTree` generic over a view | `macos/Sources/Features/Splits/SplitTree.swift:5` (`focusTarget` `:177`, `equalized` `:236`) | layout structure, focus, resize |
+| `SplitView` | `Features/Splits/SplitView.swift:8` | dividers |
+| `TerminalSplitDropZone` | `Features/Splits/TerminalSplitTreeView.swift:194` | nearest-edge zone inside a pane |
+| `DraggingSurfaceKey` | `Ghostty/Surface View/SurfaceDragSource.swift:7` | know a terminal is dragged |
+| `SurfaceDragSourceView` drag pattern | `SurfaceDragSource.swift` | grip drag session |
+| Grab handle, `drag-handle` setting | `Ghostty/Surface View/SurfaceGrabHandle.swift`, `Ghostty/Ghostty.Config.swift:274` | grip look and visibility |
+| Undo manager and `undoExpiration` | `Features/Terminal/BaseTerminalController.swift:113` | close viewer undo |
+| `Ghostty.moveFocus` | `Ghostty/Surface View/SurfaceView.swift:1075` | focus back to a terminal |
+| `TerminalController.newWindow` | `Features/Terminal/TerminalController.swift:254` | viewer dropped outside |
+| `gotoSplit` | `Ghostty/Ghostty.App.swift:1361` | split keys |
+
+## Insertion points in upstream files
+
+Row 10 and 12 (carried over from PR #3, see [architecture.md](../architecture.md)); row 17: `Ghostty.App.gotoSplit` joins `isSplit` and `focusTarget` in one guard and, when it fails, returns `ViewerRouter.focusNeighbor`; row 18: `SurfaceGrabHandle` dot opacity 0.6 and 1.0.
+
+## Invariants and failure rules
+
+| Rule | Enforced by |
+|---|---|
+| The terminal block is one leaf; its terminals stay in Ghostty's tree | `AreaTree`; no own terminal tree |
+| The overlay answers hit tests only inside our zones and only during a drag | `AreaDropView`; elsewhere the drop falls to Ghostty's `onDrop` |
+| No viewer is left empty after a failed open or move | `discard` in `open`, `dropFile`, `layout` |
+| A drop never loses edits: two different edited copies of one file refuse the drop | `canTake`, `canAbsorb` |
+| An agent's open never moves focus | as in [viewer.md](viewer.md) |
+| Drag state from a page ends with the session | `cancelFileDrag`, `dragEnd` |
+
+Not restored after a relaunch: viewers. Restored by undo of a tab or window: layout and files, not unsaved edits (a close settles them first).
+
+## Tests
+
+| Suite | Pins |
+|---|---|
+| `AreaTreeTests` (`macos/Tests/Tarn/AreaTreeTests.swift`) | one block leaf, open beside with shares, remove, snapshot round trip, neighbour by direction, slot of a closed viewer |
+| `AreaDropTests` (`AreaDropTests.swift`) | one case per zone row, corner and strip sizes, refusals, lone terminal and split terminals, file drops, `placing` results, brighter dots |
+| `ViewerHostTests` (`ViewerModelTests.swift`) | a page file drag ends with a click or the drag end |
+| `ViewerCloseTests` | close questions across several viewers |
+
+## Extending it
+
+| Change | Goes to |
+|---|---|
+| New drop zone | `AreaDrop.target` and `placing`, plus a case in `AreaDropTests` |
+| New draggable thing | `AreaPayload`, the source view, `ViewerHost.drop` |
+| New layout command from the page | `ViewerLayoutCommand`, `ViewerWebView` action, `ViewerHost.layout` |
+| Restore viewers after relaunch | `ViewerSnapshot` into a coder; hook next to [workspaces.md](workspaces.md) restore |
