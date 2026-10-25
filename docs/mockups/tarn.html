@@ -151,7 +151,9 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
    drag-handle auto shows it while the pointer is in the top 20% of the pane; always and never as named. */
 .grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 12px; z-index: 3; display: grid; place-items: center; cursor: grab; color: var(--fg); }
 .grip svg { opacity: 0; transition: opacity .12s; margin-top: -3px; }
-.tpane.near .grip svg, .ws.h-always .grip svg { opacity: .3; }
+.tpane.near .grip svg, .vpane.near .grip svg, .ws.h-always .grip svg { opacity: .3; }
+/* The same handle drags a whole viewer; it sits over the top edge of the file tab bar. */
+.vpane .grip { color: var(--p-fg); height: 9px; }
 .grip:hover svg { opacity: .8; }
 .ws.h-never .grip { display: none; }
 /* Ghostty dims an unfocused split (unfocused-split-opacity 0.7). */
@@ -731,15 +733,16 @@ function nodeHtml(n) {
   if (n.type === "block") return `<div class="block" data-bid="${n.id}">${nodeHtml(n.root)}</div>`;
   if (n.type === "term") {
     const t = tabs[cur], main = n.n === 0, agent = main && t.agent;
-    const head = `<div class="grip" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge"><svg width="16" height="4" viewBox="0 0 16 4" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="14" cy="2" r="1.6"/></svg></div>`;
+    const head = `<div class="grip" draggable="true" data-tdrag="${n.id}" title="Drag to another terminal edge">${GRIP_DOTS}</div>`;
     return `<section class="tpane${L().focus === n.id ? " focus" : ""}" data-pid="${n.id}" aria-label="Terminal">${head}<div class="term">${main ? (SEED_TERM[t.id] || shell(1, t.cwd)) : shell(n.n + 1, t.cwd)}</div></section>`;
   }
   return viewerHtml(n);
 }
+const GRIP_DOTS = '<svg width="16" height="4" viewBox="0 0 16 4" fill="currentColor" aria-hidden="true"><circle cx="2" cy="2" r="1.6"/><circle cx="8" cy="2" r="1.6"/><circle cx="14" cy="2" r="1.6"/></svg>';
 function viewerHtml(v) {
   const path = activePath(v), d = path && docs[path], m = path ? modeFor(v, path) : null;
   const tabs = v.tabs.map((t, i) => { const dd = docs[t.path]; return `<div class="ftab${i === v.active ? " on" : ""}${t.preview ? " preview" : ""}" draggable="true" data-vid="${v.id}" data-idx="${i}" title="${t.path}${t.preview ? " (preview: the next file replaces this tab)" : ""}"><span class="nm">${name(t.path)}</span>${dd.text !== dd.saved ? '<span class="dirty"></span>' : ""}<button class="x" data-close="${i}" data-vid="${v.id}" aria-label="Close tab">✕</button></div>`; }).join("");
-  let h = `<section class="vpane${L().focus === v.id ? " focus" : ""}${opt.theme === "light" ? " light" : ""}" data-pid="${v.id}" aria-label="Viewer"><div class="vh"><div class="vtabs">${tabs}</div><span class="vact">`;
+  let h = `<section class="vpane${L().focus === v.id ? " focus" : ""}${opt.theme === "light" ? " light" : ""}" data-pid="${v.id}" aria-label="Viewer"><div class="grip" draggable="true" data-vdrag="${v.id}" title="Drag the viewer with its files">${GRIP_DOTS}</div><div class="vh"><div class="vtabs">${tabs}</div><span class="vact">`;
   h += `<button class="ib" data-vmode="${v.id}" ${!path || !isMd(path) ? "disabled" : ""} aria-pressed="${m === "raw"}" title="View or source (⌘E)">${m === "raw" ? "Source" : "View"}</button>`;
   h += `<button class="ib" data-vtree="${v.id}" aria-pressed="${v.tree}" title="Files tree (⌘B)">Files</button>`;
   h += `<button class="ib" data-vclose="${v.id}" title="Close viewer">✕</button></span></div>`;
@@ -1048,7 +1051,7 @@ document.addEventListener("click", async e => {
   if (t.id === "agentEdit") return agentEdit();
 });
 document.addEventListener("mousemove", e => {
-  document.querySelectorAll(".tpane").forEach(p => {
+  document.querySelectorAll(".tpane, .vpane").forEach(p => {
     const r = p.getBoundingClientRect(), band = Math.max(12, r.height * 0.2);
     p.classList.toggle("near", e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.top + band);
   });
@@ -1126,7 +1129,8 @@ function dropTarget(e) {
   }
   if (vp) {
     const r = vp.getBoundingClientRect(), { edge, zone } = edgeOf(vp, e.clientX, e.clientY);
-    return { el: vp, id: vp.dataset.pid, zone: e.clientY - r.top < 32 || edge > 0.22 ? "center" : zone };
+    const deny = drag && drag.viewer === vp.dataset.pid ? "Drop on another pane" : null;
+    return { el: vp, id: vp.dataset.pid, zone: e.clientY - r.top < 32 || edge > 0.22 ? "center" : zone, deny };
   }
   if (tp) { const bl = tp.closest(".block"); return { el: bl, id: bl.dataset.bid, zone: edgeOf(bl, e.clientX, e.clientY).zone }; }
   return null;
@@ -1141,8 +1145,9 @@ function showDrop(tgt, deny) {
 }
 const clearDrop = () => document.querySelectorAll(".drop").forEach(d => d.remove());
 document.addEventListener("dragstart", e => {
-  const ft = e.target.closest(".ftab"), tr = e.target.closest(".tr[draggable]"), th = e.target.closest("[data-tdrag]");
+  const ft = e.target.closest(".ftab"), tr = e.target.closest(".tr[draggable]"), th = e.target.closest("[data-tdrag]"), vg = e.target.closest("[data-vdrag]");
   if (th) drag = { term: th.dataset.tdrag };
+  else if (vg) drag = { viewer: vg.dataset.vdrag };
   else if (ft) { drag = { vid: ft.dataset.vid, idx: +ft.dataset.idx }; ft.classList.add("dragging"); }
   else if (tr) drag = { path: tr.dataset.tpath };
   else return;
@@ -1155,6 +1160,24 @@ document.addEventListener("dragover", e => {
   document.querySelectorAll(".drop").forEach(d => { if (d.parentElement !== tgt.el) d.remove(); });
   showDrop(tgt, tgt.deny);
 });
+// A whole viewer: the middle of another viewer takes its files, an edge puts it beside that
+// viewer or beside the terminal block.
+function moveViewer(id, tgt) {
+  const src = byId(id);
+  if (tgt.zone === "center") {
+    const dest = byId(tgt.id), act = activePath(src);
+    src.tabs.forEach(t => { if (!dest.tabs.some(x => x.path === t.path)) dest.tabs.push({ ...t, preview: false }); });
+    if (act) dest.active = dest.tabs.findIndex(t => t.path === act);
+    closeViewer(src, false);
+    L().focus = dest.id; L().lastViewer = dest.id;
+    return renderWorkspace();
+  }
+  removeFrom(L(), id);
+  const target = tgt.el.classList.contains("block") ? findBlock(L().root) : byId(tgt.id);
+  replaceIn(L(), target.id, splitNode(target, src, tgt.zone));
+  L().focus = id; L().lastViewer = id;
+  renderWorkspace();
+}
 function moveTerm(id, tgt) {
   const b = findBlock(L().root), node = byId(id);
   removeFrom(b, id);
@@ -1169,6 +1192,7 @@ document.addEventListener("drop", e => {
   const d = drag; drag = null;
   if (tgt.deny) return;
   if (d.term) return moveTerm(d.term, tgt);
+  if (d.viewer) return moveViewer(d.viewer, tgt);
   let tab;
   const src = d.vid !== undefined ? byId(d.vid) : null;
   if (src) {
@@ -1194,7 +1218,7 @@ document.addEventListener("drop", e => {
 // Ghostty opens a split dropped outside every window in a new window; file tabs do the same.
 document.addEventListener("dragend", e => {
   const out = e.clientX < 0 || e.clientY < 0 || e.clientX > innerWidth || e.clientY > innerHeight;
-  if (drag && out && (drag.term || drag.vid)) toast(drag.term ? "Terminal moves to a new window" : "File opens in a new window");
+  if (drag && out && (drag.term || drag.vid || drag.viewer)) toast(drag.term ? "Terminal moves to a new window" : drag.viewer ? "Viewer moves to a new window" : "File opens in a new window");
   drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
 
 document.addEventListener("dragstart", e => {

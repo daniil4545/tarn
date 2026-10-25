@@ -72,6 +72,7 @@ The last workspace has no delete action (D4); closing its last tab closes the wi
 | S12 | agent runs `tarn new` | a tab in the workspace of the agent's own tab; focus does not move |
 | S13 | click a path in agent output | the file opens in a viewer of the same tab; tree hidden; cmd+B shows it |
 | S14 | cmd+D, cmd+shift+D | Ghostty split in the terminal block; in a viewer: the file in a new viewer |
+| S14a | drag a viewer by its three dots (same handle as a terminal) | to the middle of another viewer: that viewer takes all its files; to an edge of a viewer or of the terminal block: the viewer moves there with its files and tree; onto itself: refused; outside every window: a new window |
 | S15 | cmd+W on a pane | the pane closes; cmd+Z within 5 s brings it back |
 | S16 | cmd+W on the last terminal of a tab | the tab closes with its viewers; cmd+Z within 5 s brings it back |
 | S17 | close the last tab of a workspace | the workspace closes; cmd+Z within 5 s brings both back (D12) |

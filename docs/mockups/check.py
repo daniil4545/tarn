@@ -128,7 +128,7 @@ with sync_playwright() as p:
     check("20 again restores the layout", count("[data-pid]") == 4)
     pg.keyboard.press("Meta+w")
     check("21 cmd+W closes a terminal", count(".tpane") == 2)
-    check("21a every terminal has a grab handle", count(".grip") == count(".tpane"))
+    check("21a every terminal has a grab handle", count(".tpane .grip") == count(".tpane"))
     drag(pg, ".tpane >> nth=0 >> .grip", ".tpane >> nth=1", 0.5, 0.95)
     check(
         "21b drag a terminal grab handle to a terminal bottom edge stacks them",
@@ -500,6 +500,33 @@ with sync_playwright() as p:
     )
     pg.keyboard.press("Meta+z")
     check("O4 cmd+Z brings the workspace back", count(".wsh:has-text('work')") == 1)
+
+    pg.evaluate("openLink('docs/spec.md')")
+    pg.keyboard.press("Meta+d")
+    pg.evaluate("openLink('README.md')")
+    files = sorted(pg.locator(".vpane .ftab .nm").all_inner_texts())
+    check(
+        "V1 every viewer has a grab handle",
+        count(".vpane .grip") == count(".vpane") == 2,
+    )
+    drag(pg, ".vpane >> nth=0 >> .grip", ".vpane >> nth=1", 0.5, 0.5)
+    merged = sorted(pg.locator(".vpane .ftab .nm").all_inner_texts())
+    check(
+        "V2 a viewer dropped in the middle of another hands over all its files",
+        count(".vpane") == 1 and set(files) <= set(merged),
+        str(merged),
+    )
+    pg.keyboard.press("Meta+d")
+    drag(pg, ".vpane >> nth=1 >> .grip", ".tpane", 0.02, 0.5)
+    first = n("[data-pid]").first.get_attribute("class")
+    check(
+        "V3 a viewer dropped on a terminal edge moves beside the block with its files",
+        count(".vpane") == 2
+        and first.startswith("vpane")
+        and count(".block .vpane") == 0,
+    )
+    drag(pg, ".vpane >> nth=0 >> .grip", ".vpane >> nth=0", 0.9, 0.5)
+    check("V4 a viewer cannot drop on itself", count(".vpane") == 2)
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")
