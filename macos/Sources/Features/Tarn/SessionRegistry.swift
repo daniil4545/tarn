@@ -190,6 +190,15 @@ struct PendingAnswer<Reply: AnyObject> {
     }
 }
 
+/// What the registry needs to know about a surface; tests build one without a window.
+struct SurfaceContext {
+    let id: UUID
+    var focused: Bool
+    var pwd: String?
+    /// Starts watching the surface's focus, which marks its session seen.
+    var watchFocus: () -> Void = {}
+}
+
 /// The only owner of agent state. Hook events arrive through the control socket; the
 /// surface's own title and progress report close the gaps where Claude Code sends no event.
 @MainActor
@@ -204,6 +213,9 @@ final class SessionRegistry {
     private var socket: ControlSocket?
     private var timer: Timer?
     private var focusObservers: [UUID: AnyCancellable] = [:]
+
+    /// Shows a banner (surface, title, body); tests replace it.
+    var deliver: (UUID, String, String) -> Void = { Attention.show(surface: $0, title: $1, body: $2) }
 
     /// When a working surface first looked idle by its own signals (Esc gives no event).
     private var idleSince: [UUID: Date] = [:]
@@ -241,9 +253,14 @@ final class SessionRegistry {
             Self.logger.info("event \(name, privacy: .public) for unknown surface")
             return
         }
+        process(name, event, message: message, reply: reply, surface: context(for: view))
+    }
 
+    /// Applies one hook event to the session of `surface`.
+    func process(_ name: String, _ event: [String: Any], message: [String: Any], reply: ControlSocket.Reply?, surface: SurfaceContext) {
+        let surfaceID = surface.id
         var waiting = pending[surfaceID] ?? []
-        if name == "PermissionRequest", message["reply"] as? Bool == true {
+        if name == "PermissionRequest", message["reply"] as? Bool == true, let reply {
             let request = AgentSession.request(from: event)
             // The card has no buttons for several questions or a multi-select; the dialog answers.
             if request.kind == .question && request.options.isEmpty {
@@ -268,11 +285,13 @@ final class SessionRegistry {
         if session.state != old.state || session.failed != old.failed {
             Self.logger.info("\(surfaceID, privacy: .public) \(String(describing: old.state), privacy: .public) -> \(String(describing: session.state), privacy: .public) on \(name, privacy: .public)")
             session.since = Date()
-            session.seen = Self.isFocused(view)
+            session.seen = surface.focused
             idleSince[surfaceID] = nil
         }
-        update(session, view: view)
-        Attention.consider(old: old, new: session, view: view)
+        update(session, surface: surface)
+        if let body = Attention.body(old: old, new: session, focused: surface.focused) {
+            raise(surface, body: body)
+        }
     }
 
     // MARK: Liveness
@@ -312,7 +331,7 @@ final class SessionRegistry {
             // The user pressed Esc in this surface, so there is nothing new to see.
             next.seen = true
             idleSince[id] = nil
-            update(next, view: view)
+            update(next, surface: context(for: view))
         }
     }
 
@@ -336,7 +355,7 @@ final class SessionRegistry {
             session.since = Date()
         }
         session.show(waiting: waiting.first?.request)
-        update(session, view: view)
+        update(session, surface: context(for: view))
     }
 
     /// The hook output that gives `option` to `request`: allow or deny a tool, or allow a
@@ -379,18 +398,40 @@ final class SessionRegistry {
     /// (`docs/spec.md` section 3). Returns the error text, or nil.
     func notify(_ surfaceID: UUID, text: String) -> String? {
         guard let view = Self.surfaceView(surfaceID) else { return "unknown surface" }
+        return notify(text, surface: context(for: view))
+    }
+
+    func notify(_ text: String, surface: SurfaceContext) -> String? {
         let note = Attention.trimmed(note: text)
         guard !note.isEmpty else { return "empty text" }
-        let old = sessions[surfaceID] ?? AgentSession(surfaceID: surfaceID)
-        // The user is looking at the surface: nothing to flag.
-        guard !Self.isFocused(view) else { return nil }
-        guard note != old.note else { return nil }
-        var session = old
-        session.note = note
-        session.noteSince = Date()
-        update(session, view: view)
-        Attention.raise(view: view, body: note)
+        let old = sessions[surface.id] ?? AgentSession(surfaceID: surface.id)
+        guard let change = Attention.note(note, on: old, focused: surface.focused, now: Date()) else { return nil }
+        update(change.session, surface: surface)
+        if change.raise { raise(surface, body: note) }
         return nil
+    }
+
+    /// The user focused the surface: its session is seen and its note is read.
+    func markFocused(_ id: UUID) {
+        guard var session = sessions[id], session.markFocused() else { return }
+        sessions[id] = session
+        NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
+    }
+
+    /// True when a live agent session owns the surface, so its OSC 9/777 notifications are dropped.
+    func suppresses(_ surfaceID: UUID) -> Bool {
+        !(sessions[surfaceID]?.agentSessionID.isEmpty ?? true)
+    }
+
+    private func raise(_ surface: SurfaceContext, body: String) {
+        Self.logger.info("raised for \(surface.id, privacy: .public)")
+        deliver(surface.id, Attention.title(cwd: surface.pwd), body)
+    }
+
+    private func context(for view: Ghostty.SurfaceView) -> SurfaceContext {
+        SurfaceContext(id: view.id, focused: Self.isFocused(view), pwd: view.pwd) { [weak self, weak view] in
+            if let view { self?.observeFocus(view) }
+        }
     }
 
     // MARK: Pending answers
@@ -402,9 +443,9 @@ final class SessionRegistry {
 
     // MARK: Store
 
-    private func update(_ session: AgentSession, view: Ghostty.SurfaceView) {
+    private func update(_ session: AgentSession, surface: SurfaceContext) {
         sessions[session.surfaceID] = session
-        observeFocus(view)
+        surface.watchFocus()
         NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
     }
 
@@ -420,16 +461,18 @@ final class SessionRegistry {
     private func observeFocus(_ view: Ghostty.SurfaceView) {
         let id = view.id
         guard focusObservers[id] == nil else { return }
-        focusObservers[id] = view.$focusInstant
-            .compactMap { $0 }
-            .receive(on: DispatchQueue.main)
+        focusObservers[id] = Self.focusEvents(view.$focusInstant)
             .sink { [weak self] _ in
-                MainActor.assumeIsolated {
-                    guard let self, var session = self.sessions[id], session.markFocused() else { return }
-                    self.sessions[id] = session
-                    NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
-                }
+                MainActor.assumeIsolated { self?.markFocused(id) }
             }
+    }
+
+    /// Focus events of a surface. `focusInstant` is `@Published`, so a subscriber first gets the
+    /// value from before it subscribed; that is not a focus after the session was marked.
+    static func focusEvents<P: Publisher>(_ instant: P) -> AnyPublisher<Void, Never>
+        where P.Output == ContinuousClock.Instant?, P.Failure == Never {
+        instant.dropFirst().compactMap { $0 }.map { _ in }
+            .receive(on: DispatchQueue.main).eraseToAnyPublisher()
     }
 
     // MARK: Surfaces
@@ -442,18 +485,24 @@ final class SessionRegistry {
         return nil
     }
 
-    /// Surfaces in screen order: windows in tab groups, tabs left to right, splits in tree order.
+    /// Surfaces in screen order: windows in tab groups, tabs left to right, splits in tree order,
+    /// then windows outside any tab group such as the quick terminal.
     static func orderedSurfaces() -> [Ghostty.SurfaceView] {
-        var seen = Set<ObjectIdentifier>()
-        var views: [Ghostty.SurfaceView] = []
-        for controller in TerminalController.all {
-            guard let window = controller.window else { continue }
-            for member in window.tabGroup?.windows ?? [window] where seen.insert(ObjectIdentifier(member)).inserted {
-                guard let tab = member.windowController as? BaseTerminalController else { continue }
-                views.append(contentsOf: tab.surfaceTree)
-            }
+        let windows = screenOrder(
+            terminals: TerminalController.all.compactMap(\.window),
+            all: NSApp.windows.filter { $0.windowController is BaseTerminalController }
+        ) { $0.tabGroup?.windows ?? [$0] }
+        return windows.flatMap { ($0.windowController as? BaseTerminalController).map { Array($0.surfaceTree) } ?? [] }
+    }
+
+    /// Terminal windows first, each followed by the rest of its tab group, then every other window.
+    nonisolated static func screenOrder<W: Hashable>(terminals: [W], all: [W], group: (W) -> [W]) -> [W] {
+        var seen = Set<W>()
+        var ordered: [W] = []
+        for member in terminals.flatMap(group) + all where seen.insert(member).inserted {
+            ordered.append(member)
         }
-        return views
+        return ordered
     }
 
     static func isFocused(_ view: Ghostty.SurfaceView) -> Bool {

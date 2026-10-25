@@ -33,11 +33,6 @@ enum Attention {
     /// A note longer than this is cut: it is shown in a banner and in `tarn ls`.
     static let maxNote = 500
 
-    /// Replaced by tests; the default shows the notification through Ghostty (insertion point 21).
-    @MainActor static var deliver: (Ghostty.SurfaceView, _ title: String, _ body: String) -> Void = { view, title, body in
-        Ghostty.App.showDesktopNotification(view, title: title, body: body)
-    }
-
     // MARK: Gate
 
     /// The body to raise when `new` entered a need `old` did not have. The same state repeated
@@ -60,27 +55,46 @@ enum Attention {
     /// tarn names the project and the need (`docs/spec.md` section 12).
     @MainActor
     static func suppresses(_ view: Ghostty.SurfaceView) -> Bool {
-        guard let session = SessionRegistry.shared.sessions[view.id] else { return false }
-        return !session.agentSessionID.isEmpty
+        SessionRegistry.shared.suppresses(view.id)
     }
+
+    // MARK: Notes
+
+    /// What `tarn notify` does to a session.
+    struct NoteChange: Equatable {
+        let session: AgentSession
+        /// Raise a banner: only for the first note since the user last focused the surface.
+        let raise: Bool
+    }
+
+    /// The effect of `note` (already trimmed, not empty) on `old`, or nil when nothing changes:
+    /// the user looks at the surface, or the text is the current note. While a note is
+    /// unseen a new text replaces it without a new banner and sound (one banner per
+    /// surface per need; `docs/spec.md` 2.4); after the user focuses the surface the next
+    /// note banners again.
+    static func note(_ note: String, on old: AgentSession, focused: Bool, now: Date) -> NoteChange? {
+        guard !focused, note != old.note else { return nil }
+        var session = old
+        let first = old.note.isEmpty
+        session.note = note
+        if first { session.noteSince = now }
+        return NoteChange(session: session, raise: first)
+    }
+
+    /// The banner title: the project name of the surface's working directory.
+    static func title(cwd: String?) -> String { ProjectInfo.resolve(cwd: cwd).name }
 
     // MARK: Delivery
 
+    /// Shows the notification through Ghostty's route (insertion point 21).
     @MainActor
-    static func consider(old: AgentSession, new: AgentSession, view: Ghostty.SurfaceView) {
-        guard let body = body(old: old, new: new, focused: SessionRegistry.isFocused(view)) else { return }
-        raise(view: view, body: body)
-    }
-
-    @MainActor
-    static func raise(view: Ghostty.SurfaceView, body: String) {
-        let title = ProjectInfo.resolve(cwd: view.pwd).name
-        logger.info("raised for \(view.id, privacy: .public)")
+    static func show(surface id: UUID, title: String, body: String) {
+        guard let view = SessionRegistry.surfaceView(id) else { return }
         UNUserNotificationCenter.current().getNotificationSettings { settings in
             if settings.authorizationStatus != .authorized {
                 logger.info("notifications are not authorized; the sidebar still marks the session")
             }
         }
-        deliver(view, title, body)
+        Ghostty.App.showDesktopNotification(view, title: title, body: body)
     }
 }

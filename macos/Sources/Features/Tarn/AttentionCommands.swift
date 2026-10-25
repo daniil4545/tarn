@@ -93,13 +93,25 @@ enum AttentionCommands {
         return "\(s / 86400)d"
     }
 
-    /// Answers `ls`, `notify` and any other `cmd` the earlier handlers did not take.
-    /// Returns false for lines without `cmd`, which are hook events.
+    /// True for a line that is not a JSON object (junk, invalid UTF-8) and not a permission hook's.
+    static func isMalformed(_ line: Data) -> Bool {
+        if (try? JSONSerialization.jsonObject(with: line)) is [String: Any] { return false }
+        return line.range(of: Data("\"reply\":true".utf8)) == nil
+    }
+
+    /// Answers `ls`, `notify` and any other `cmd` the earlier handlers did not take. A line that
+    /// is not a JSON object gets an error reply (`docs/spec.md` 2.2), except a permission hook's
+    /// line (`"reply":true`): that hook prints whatever the app answers, so it gets silence.
+    /// Returns false for JSON without `cmd`, which are hook events.
     @MainActor
     static func handle(_ line: Data, reply sink: ControlSocket.Reply) -> Bool {
-        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
-              let command = message["cmd"] as? String
-        else { return false }
+        if isMalformed(line) {
+            logger.info("malformed request refused")
+            sink.send(failure("malformed request"))
+            return true
+        }
+        guard let message = try? JSONSerialization.jsonObject(with: line) as? [String: Any] else { return false }
+        guard let command = message["cmd"] as? String else { return false }
         sink.send(answer(command: command, message: message))
         return true
     }
