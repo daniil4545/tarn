@@ -61,7 +61,7 @@ flowchart LR
 | Control socket | binds the unix socket, reads one JSON line per connection, keeps a connection open for an answer | [control-socket.md](modules/control-socket.md) | works |
 | Sessions | agent state machine, liveness, pending answers, agent naming, plugin hooks | [sessions.md](modules/sessions.md) | works |
 | Sidebar | groups tabs per window, rows, hover card, quick answers | [sidebar.md](modules/sidebar.md) | works |
-| Settings | settings window, `tarn.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | with PR #4 |
+| Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | with PR #4 |
 | Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | with PR #5 |
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | with PR #5 |
 | Demo | demo mode | [demo.md](modules/demo.md) | with the demo PR |
