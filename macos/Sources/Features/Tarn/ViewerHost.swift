@@ -61,7 +61,10 @@ final class ViewerHost: ObservableObject {
     /// with the keyboard in it; a shown pane (with files or not) hides whole, tabs, unsaved edits and
     /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
-        guard let model else { return openTreeOnly(root: root) }
+        guard let model else {
+            if FileViewerSetting.isOn { openTreeOnly(root: root) }
+            return
+        }
         if hidden { return show() }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
         model.flushPendingEdit()
@@ -229,6 +232,10 @@ enum ViewerRouter {
     /// terminal. Files of media, document and archive types open in their own app.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
+        guard FileViewerSetting.isOn else {
+            logger.debug("click on \(raw, privacy: .public) refused: the file viewer is off")
+            return false
+        }
         guard let surface else {
             logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
@@ -273,6 +280,7 @@ enum ViewerRouter {
     @MainActor
     private static func openFromSocket(_ message: [String: Any]) -> String? {
         guard message["version"] as? Int == 1 else { return "tarn: unsupported version" }
+        guard FileViewerSetting.isOn else { return "tarn: the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
             return "tarn: the path must be absolute"
         }
