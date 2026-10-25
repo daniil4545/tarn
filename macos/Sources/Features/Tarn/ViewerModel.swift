@@ -30,6 +30,7 @@ final class ViewerModel {
     var hasFocus: () -> Bool = { false }
     /// Cmd+Alt+B and Cmd+Shift+E typed in the pane; the host owns the pane's lifetime and focus.
     var onPaneKey: (() -> Void)?
+    var onHidePane: (() -> Void)?
     var onFocusTreeKey: (() -> Void)?
     /// Reported by the page: the focus is inside the files tree.
     private var treeFocused = false
@@ -100,17 +101,25 @@ final class ViewerModel {
     }
 
     func closeActiveTab() {
-        // A pane with no file has no tab to close: the key closes the pane itself.
-        if closeIfEmpty() { return }
+        // A pane with no file has no tab to close: Cmd+W closes the pane itself.
+        if closePaneIfEmpty() { return }
         closeTab(at: tabs.active)
     }
 
-    /// A pane with no file has nothing to show but the tree: the keys that end a tab or hide the
-    /// tree close it. The one place of that rule. Returns whether it closed the pane.
+    /// Cmd+W in a pane with no file closes the pane (there is no tab to close). Returns whether it did.
     @discardableResult
-    private func closeIfEmpty() -> Bool {
+    private func closePaneIfEmpty() -> Bool {
         guard tabs.tabs.isEmpty else { return false }
         onClosePane?([], -1)
+        return true
+    }
+
+    /// Cmd+B and Esc in a pane with no file: Cmd+B opens and hides, it never closes. The pane is
+    /// hidden with its tree state kept; the host owns that.
+    @discardableResult
+    private func hidePaneIfEmpty() -> Bool {
+        guard tabs.tabs.isEmpty else { return false }
+        onHidePane?()
         return true
     }
 
@@ -135,9 +144,9 @@ final class ViewerModel {
     }
 
     /// Cmd+B: with files it toggles the tree and moves the keyboard with it (shown: into the tree,
-    /// hidden: back to the file); with no file the pane has nothing else to show, so it closes.
+    /// hidden: back to the file); with no file the pane has nothing else to show, so it hides.
     func toggleTreeKey() {
-        if closeIfEmpty() { return }
+        if hidePaneIfEmpty() { return }
         toggleTree()
         if treeVisible { focusTreeInPage() } else { focusContentInPage() }
     }
@@ -214,7 +223,7 @@ final class ViewerModel {
         case "toggleTree": toggleTreeKey()
         case "treeFocus": treeFocused = body["on"] as? Bool == true
         case "hideTree":
-            if closeIfEmpty() { return }
+            if hidePaneIfEmpty() { return }
             treeVisible = false
             pushChrome()
             onFocus?()

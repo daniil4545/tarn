@@ -71,7 +71,7 @@ final class ViewerHost: ObservableObject {
     func togglePane(root: String?) {
         guard let model else { return openTreeOnly(root: root) }
         if hidden { return show() }
-        if model.snapshot.isEmpty { return closePane(saved: [], active: -1) }
+        if model.snapshot.isEmpty { return closePane(saved: [], active: -1, undoable: true) }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
         model.flushPendingEdit()
         hidden = true
@@ -125,6 +125,12 @@ final class ViewerHost: ObservableObject {
         if focusTree { focusTreeSoon() } else { keepFocus(responder) }
     }
 
+    /// Cmd+B in a pane with no file: hide the pane, keep its tree state, keyboard to the terminal.
+    func hideEmptyPane() {
+        hidden = true
+        returnFocusToTerminal()
+    }
+
     /// Brings a hidden pane back. The layout change takes the first responder from the terminal;
     /// give it back, as Ghostty's `moveFocus` does after a split change (SurfaceView.swift:1075).
     private func show() {
@@ -140,7 +146,8 @@ final class ViewerHost: ObservableObject {
     private func makePane(root: String) -> ViewerModel {
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
-        model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active) }
+        model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active, undoable: true) }
+        model.onHidePane = { [weak self] in self?.hideEmptyPane() }
         model.onPaneKey = { [weak self] in self?.togglePane(root: nil) }
         model.onFocusTreeKey = { [weak self] in self?.focusTreeFromKey(root: nil) }
         self.model = model
@@ -151,8 +158,8 @@ final class ViewerHost: ObservableObject {
 
     var container: NSView? { web?.container }
 
-    /// Closes the pane. A close with tabs registers an undo that reopens them, with Ghostty's timeout.
-    func closePane(saved: [ViewerTab], active: Int) {
+    /// Closes the pane. A close by the user (`undoable`) registers an undo that reopens its tabs, or the empty tree pane, with Ghostty's timeout.
+    func closePane(saved: [ViewerTab], active: Int, undoable: Bool = false) {
         guard let model else { return }
         model.shutdown()
         web?.stop()
@@ -160,7 +167,7 @@ final class ViewerHost: ObservableObject {
         self.model = nil
         hidden = false
         returnFocusToTerminal()
-        guard !saved.isEmpty, let controller, let undoManager = controller.undoManager else { return }
+        guard undoable, let controller, let undoManager = controller.undoManager else { return }
         let root = model.tree.root
         undoManager.setActionName("Close Viewer")
         undoManager.registerUndo(withTarget: self, expiresAfter: controller.undoExpiration) { host in
