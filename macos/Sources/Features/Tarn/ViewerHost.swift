@@ -118,27 +118,57 @@ private struct ViewerPane: NSViewRepresentable {
 enum ViewerRouter {
     private static let logger = Logger(subsystem: "tarn", category: "viewer")
 
+    /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
+    /// must be explainable from `log stream --predicate 'subsystem == "com.mitchellh.ghostty"'`.
+    enum Decision: Equatable {
+        case open(OpenTarget)
+        /// A pane that is already open reports the missing file; otherwise the default opener runs.
+        case missing(raw: String)
+        case upstream(reason: String)
+    }
+
+    /// The pure part of a path click: which of the three outcomes `raw` leads to.
+    static func decide(_ raw: String, cwd: String?) -> Decision {
+        if ViewerPaths.isURL(raw) { return .upstream(reason: "a URL") }
+        guard let target = ViewerPaths.resolve(raw, cwd: cwd) else {
+            return .upstream(reason: cwd == nil ? "relative path and the terminal has no working directory" : "not a path")
+        }
+        switch ViewerPaths.classify(target.path) {
+        case .text: return .open(target)
+        case .system: return .upstream(reason: "a media, document or archive type")
+        case .directory: return .upstream(reason: "a directory")
+        case .special: return .upstream(reason: "not a regular file")
+        case .missing: return .missing(raw: raw)
+        }
+    }
+
     /// Opens a clicked path in the viewer of the clicked surface's window. Returns false to let the
     /// default opener run: URLs, directories, a missing file without a pane, clicks without a
     /// terminal. Files of media, document and archive types open in their own app.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
-        guard !ViewerPaths.isURL(raw), let surface,
-              let controller = surface.window?.windowController as? TerminalController,
-              let target = ViewerPaths.resolve(raw, cwd: surface.pwd)
-        else { return false }
-        switch ViewerPaths.classify(target.path) {
-        case .text:
-            _ = controller.viewerHost.open(target, root: surface.pwd, focus: true)
-        case .system, .directory, .special:
-            // Upstream opens these through its untrusted-target policy.
+        guard let surface else {
+            Ghostty.logger.info("viewer: click on \(raw, privacy: .public) refused: no surface")
             return false
-        case .missing:
-            // A pane that is already open says so; without one the default opener runs.
+        }
+        guard let controller = surface.window?.windowController as? TerminalController else {
+            Ghostty.logger.info("viewer: click on \(raw, privacy: .public) refused: the surface has no terminal window")
+            return false
+        }
+        let cwd = surface.pwd ?? surface.surfaceModel?.foregroundPID.flatMap { ViewerPaths.cwd(ofPid: pid_t($0)) }
+        let decision = decide(raw, cwd: cwd)
+        Ghostty.logger.info("viewer: click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
+        switch decision {
+        case let .open(target):
+            _ = controller.viewerHost.open(target, root: cwd, focus: true)
+            return true
+        case let .missing(raw):
             guard let model = controller.viewerHost.model else { return false }
             model.toast("No such file: \(raw)")
+            return true
+        case .upstream:
+            return false
         }
-        return true
     }
 
     /// `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` from the control

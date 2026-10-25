@@ -1,3 +1,4 @@
+import Carbon.HIToolbox
 import Foundation
 import Testing
 import WebKit
@@ -464,5 +465,53 @@ struct ViewerWebLifetimeTests {
             try await Task.sleep(nanoseconds: 100_000_000)
         }
         #expect(weakController == nil)
+    }
+}
+
+/// Path clicks and pane keys that must not depend on the shell or the layout.
+@Suite
+@MainActor
+struct ViewerClickAndKeyTests {
+    private func folder() throws -> String {
+        let dir = try Scratch.make()
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        try "x".write(toFile: dir + "/pic.png", atomically: true, encoding: .utf8)
+        return dir
+    }
+
+    @Test func relativeAndAbsoluteClicksOpenInTheViewer() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let expected = ViewerRouter.Decision.open(OpenTarget(path: dir + "/a.md", line: nil))
+        #expect(ViewerRouter.decide("./a.md", cwd: dir) == expected)
+        #expect(ViewerRouter.decide("a.md", cwd: dir) == expected)
+        #expect(ViewerRouter.decide(dir + "/a.md", cwd: dir) == expected)
+        #expect(ViewerRouter.decide(dir + "/a.md", cwd: nil) == expected)
+    }
+
+    @Test func refusalsNameTheirReason() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(ViewerRouter.decide("./a.md", cwd: nil) == .upstream(reason: "relative path and the terminal has no working directory"))
+        #expect(ViewerRouter.decide("https://x.org/a.md", cwd: dir) == .upstream(reason: "a URL"))
+        #expect(ViewerRouter.decide("./pic.png", cwd: dir) == .upstream(reason: "a media, document or archive type"))
+        #expect(ViewerRouter.decide(dir, cwd: dir) == .upstream(reason: "a directory"))
+        #expect(ViewerRouter.decide("./nope.md", cwd: dir) == .missing(raw: "./nope.md"))
+    }
+
+    @Test func workingDirectoryOfAProcessIsReadFromTheKernel() {
+        let own = ViewerPaths.cwd(ofPid: getpid())
+        #expect(own.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
+            == URL(fileURLWithPath: FileManager.default.currentDirectoryPath).resolvingSymlinksInPath().path)
+    }
+
+    @Test func paneKeysFollowThePhysicalKeyInAnyLayout() {
+        // The Russian layout types "ы", "у", "и" on these keys; only the key code is used.
+        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_S), flags: .command) == "save")
+        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_E), flags: .command) == "mode")
+        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_B), flags: .command) == "tree")
+        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_S), flags: [.command, .shift]) == nil)
+        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_S), flags: []) == nil)
+        #expect(ViewerWebView.command(keyCode: UInt16(kVK_ANSI_A), flags: .command) == nil)
     }
 }

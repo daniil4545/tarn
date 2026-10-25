@@ -92,6 +92,17 @@ enum ViewerPaths {
         return systemExtensions.contains((path as NSString).pathExtension.lowercased()) ? .system : .text
     }
 
+    /// The working directory of a process, for a terminal that reports none (no shell integration).
+    static func cwd(ofPid pid: pid_t) -> String? {
+        var info = proc_vnodepathinfo()
+        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
+        let path = withUnsafePointer(to: &info.pvi_cdir.vip_path) {
+            $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXPATHLEN)) { String(cString: $0) }
+        }
+        return path.isEmpty ? nil : path
+    }
+
     /// Binary by content, as git decides: a NUL byte or invalid UTF-8 in the first 8 KB. A multibyte
     /// character cut by the 8 KB edge is not invalid.
     static func isBinary(_ path: String) -> Bool {
