@@ -360,12 +360,40 @@ struct ViewerCloseTests {
         #expect(try String(contentsOfFile: dir + "/b.md", encoding: .utf8) == "y")
     }
 
-    @Test func discardEditsLeavesTheDiskAndClearsTheFlags() throws {
+    @Test func dontSaveKeepsTheEditsAndSkipsTheQuestionOnce() throws {
         let (model, dir) = try model(editing: ["a.md": "x"])
         defer { try? FileManager.default.removeItem(atPath: dir) }
-        model.discardEdits()
-        #expect(model.dirtyPaths.isEmpty)
+        #expect(ViewerClose.unsettled([model]).count == 1)
+        // Don't Save, then the repeated close passes once.
+        model.discardOnce = true
+        #expect(ViewerClose.unsettled([model]).isEmpty)
+        // Ghostty's own dialog was cancelled: the edits are intact and the next close asks again.
+        #expect(model.dirtyPaths == [dir + "/a.md"])
+        #expect(ViewerClose.unsettled([model]).count == 1)
         #expect(try String(contentsOfFile: dir + "/a.md", encoding: .utf8) == "one")
+    }
+
+    /// Every direct close of a window or tab must be reachable only after `ViewerClose.intercept`.
+    /// A new call site fails this test until it is reviewed and listed here.
+    @Test func directClosesAreAllReviewed() throws {
+        let sources = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("Sources")
+        let reviewed: [String: Int] = [
+            // callers behind ViewerClose.intercept, plus undo and redo (asked at the original close)
+            "TerminalController.swift": 19,
+            "ScriptWindow.swift": 2,
+            "ScriptTab.swift": 2,
+        ]
+        var found: [String: Int] = [:]
+        let files = try #require(FileManager.default.enumerator(at: sources, includingPropertiesForKeys: nil))
+        for case let url as URL in files where url.pathExtension == "swift" {
+            let text = try String(contentsOf: url, encoding: .utf8)
+            let count = text.components(separatedBy: "closeWindowImmediately(").count - 1
+                + text.components(separatedBy: "closeTabImmediately(").count - 1
+            if count > 0 { found[url.lastPathComponent] = count }
+        }
+        #expect(found == reviewed)
     }
 
     @Test func buttonsMapToChoices() {
@@ -389,5 +417,27 @@ struct ViewerCloseTests {
         #expect(text.title == "Save changes to 10 files?")
         #expect(text.detail.contains("f8.md") && !text.detail.contains("f9.md"))
         #expect(text.detail.contains("and 2 more"))
+    }
+}
+
+/// The web view must not outlive its controller: a window closed without `stop()` frees it.
+@Suite
+@MainActor
+struct ViewerWebLifetimeTests {
+    @Test func controllerIsFreedWhenNothingHoldsIt() async throws {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        var controller: ViewerWebController? = ViewerWebController(model: model)
+        weak var weakController = controller
+        let container = try #require(controller?.container)
+        controller?.start()
+        for _ in 0..<100 where container.subviews.isEmpty {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        #expect(!container.subviews.isEmpty)
+        controller = nil
+        for _ in 0..<20 where weakController != nil {
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
+        #expect(weakController == nil)
     }
 }

@@ -42,17 +42,31 @@ enum ViewerClose {
         return (title, (["Your changes are lost if you do not save them."] + names + more).joined(separator: "\n"))
     }
 
+    /// The panes that still need a question. A pane the user just answered Don't Save for is
+    /// skipped once: that answer is consumed by the repeated close.
+    @MainActor
+    static func unsettled(_ models: [ViewerModel]) -> [ViewerModel] {
+        models.filter { model in
+            if model.discardOnce {
+                model.discardOnce = false
+                return false
+            }
+            return !model.dirtyPaths.isEmpty
+        }
+    }
+
     /// Runs `proceed` after the user settles unsaved edits of `controllers`. Returns false at once
     /// when nothing is dirty (the caller carries on); true when it took over: `proceed` runs later,
-    /// or never on Cancel. Don't Save drops the edits first, so the repeated close finds nothing dirty.
+    /// or never on Cancel. Don't Save keeps the edits and lets the repeated close pass once, so a
+    /// Cancel in Ghostty's own dialog afterwards loses nothing.
     @MainActor
     static func intercept(_ controllers: [TerminalController], window: NSWindow?, proceed: @escaping () -> Void) -> Bool {
-        let models = controllers.compactMap(\.viewerHost.model)
+        let models = unsettled(controllers.compactMap(\.viewerHost.model))
         let paths = dirtyPaths(in: models)
         guard !paths.isEmpty else { return false }
         ask(paths, window: window) { choice in
-            guard proceeds(choice, saved: { models.allSatisfy { $0.saveAll() } }) else { return }
-            if choice == .discard { models.forEach { $0.discardEdits() } }
+            guard proceeds(choice, saved: { saveAll(models, window: window) }) else { return }
+            if choice == .discard { models.forEach { $0.discardOnce = true } }
             proceed()
         }
         return true
@@ -62,13 +76,38 @@ enum ViewerClose {
     /// Returns false when nothing is dirty.
     @MainActor
     static func interceptQuit(proceed: @escaping (Bool) -> Void) -> Bool {
-        let models = TerminalController.all.compactMap(\.viewerHost.model)
+        let models = TerminalController.all.compactMap(\.viewerHost.model).filter { !$0.dirtyPaths.isEmpty }
         let paths = dirtyPaths(in: models)
         guard !paths.isEmpty else { return false }
-        ask(paths, window: NSApp.keyWindow ?? TerminalController.all.first?.window) { choice in
-            proceed(proceeds(choice, saved: { models.allSatisfy { $0.saveAll() } }))
+        let window = NSApp.keyWindow ?? TerminalController.all.first?.window
+        ask(paths, window: window) { choice in
+            proceed(proceeds(choice, saved: { saveAll(models, window: window) }))
         }
         return true
+    }
+
+    /// Saves every dirty file. A file that stays dirty (disk conflict, write error) stops the close
+    /// and is named in an alert: the pane may not be visible, so its own notice is not enough.
+    @MainActor
+    private static func saveAll(_ models: [ViewerModel], window: NSWindow?) -> Bool {
+        models.forEach { _ = $0.saveAll() }
+        let failed = dirtyPaths(in: models)
+        guard !failed.isEmpty else { return true }
+        let alert = NSAlert()
+        alert.messageText = failed.count == 1
+            ? "Cannot save \((failed[0] as NSString).lastPathComponent)"
+            : "Cannot save \(failed.count) files"
+        alert.informativeText = "The file changed on disk or cannot be written. Nothing was closed. "
+            + "Open the file in the viewer to take the disk version, keep yours or fix the error.\n"
+            + failed.prefix(8).map { "  \(($0 as NSString).lastPathComponent)" }.joined(separator: "\n")
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        if let window {
+            alert.beginSheetModal(for: window) { _ in alert.window.orderOut(nil) }
+        } else {
+            alert.runModal()
+        }
+        return false
     }
 
     @MainActor

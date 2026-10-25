@@ -995,6 +995,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
     /// Close all windows, asking for confirmation if necessary.
     static func closeAllWindows() {
+        if ViewerClose.intercept(all, window: NSApp.keyWindow ?? all.first?.window, proceed: { closeAllWindows() }) { return }
+
         // The window we use for confirmations. Try to find the first window that
         // needs quit confirmation. This lets us attach the confirmation to something
         // that is running.
