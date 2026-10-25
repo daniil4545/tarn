@@ -13,7 +13,8 @@ import time
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 from check_a import focus, run, screen, until
-from lib import Checks, app_page, cmd, new_pane, server, show_pane
+
+from lib import Checks, app_page, cmd, new_pane, server
 
 check = Checks()
 REPO = "/Users/you/code/tarn"
@@ -444,8 +445,6 @@ if __name__ == "__main__":
         for suite in SUITES:
             try:
                 suite(base)
-            except (
-                Exception
-            ) as error:  # a crashed suite is a red check, not a lost report
+            except Exception as error:  # noqa: BLE001 - a crashed suite is a red check, not a lost report
                 check(f"{suite.__name__} ran to the end", False, str(error)[:120])
     check.exit()
