@@ -271,7 +271,7 @@ with sync_playwright() as p:
         return pg.evaluate(f"wss.find(w => w.id === '{wid}').tabs")
 
     check(
-        "W1 all workspaces are visible as groups, pinned tab first",
+        "W1 all workspaces are visible as groups",
         count(".wsh") == 3 and len(side_tabs()) == 6 and "spec" in side_tabs()[0],
     )
     pg.click(".wsh[data-wsh='w1']")
@@ -308,8 +308,8 @@ with sync_playwright() as p:
     pg.click("#ctx [data-mmove][data-to='w1']")
     check("W8 Move to in the tab menu moves it back", "t3" in ws_tabs("w1"))
     pg.click(".tab[data-tabid='t2']", button="right")
-    pg.click("#ctx [data-mpin]")
-    check("W9 pin from the menu puts the tab on top", "review" in side_tabs()[1])
+    check("W9 the tab menu has no pin", count("#ctx [data-mpin]") == 0)
+    pg.keyboard.press("Escape")
     drag(pg, ".tab[data-tabid='t4']", ".tab[data-tabid='t3']", 0.5, 0.3)
     order = ws_tabs("w1")
     check("W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order))
@@ -357,6 +357,7 @@ with sync_playwright() as p:
     pg.evaluate("document.dispatchEvent(new Event('dragend'))")
     check("W13c the line goes away when the drag ends", count(".wsline") == 0)
     pg.click(".wsh[data-wsh='w2']")
+    order_saved = ws_tabs("w1")
     pg.reload()
     pg.wait_for_selector(".wsh")
     check(
@@ -365,9 +366,9 @@ with sync_playwright() as p:
         and pg.get_attribute(".wsh[data-wsh='w2']", "aria-expanded") == "false",
     )
     check(
-        "W15 tab order and pins survive a reload",
-        "spec" in side_tabs()[0] and "review" in side_tabs()[1],
-        str(side_tabs()),
+        "W15 tab order survives a reload",
+        ws_tabs("w1") == order_saved,
+        str(ws_tabs("w1")),
     )
     pg.click("#sbToggle")
     width = pg.locator("#sidebar").bounding_box()["width"]

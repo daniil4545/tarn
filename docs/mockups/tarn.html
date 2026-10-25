@@ -68,7 +68,6 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .tab:hover .x { opacity: 1; }
 .tab:hover .key { display: none; }
 .tab.add { color: #6c6f85; margin-top: 4px; }
-.pin { width: 11px; height: 11px; color: var(--muted); flex: none; }
 .sidebar { position: relative; }
 .wscol { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 /* Tab style "top": Ghostty's native tab bar replaces the sidebar; no agent state on tabs. */
@@ -477,7 +476,7 @@ root@prod:~# <span class="cursor"></span>`,
 };
 const SEED = {
   tabs: {
-    t1: { title: "Claude · spec", agent: true, state: "waiting", cwd: "~/Dev/self-projects/tarn", pinned: true },
+    t1: { title: "Claude · spec", agent: true, state: "waiting", cwd: "~/Dev/self-projects/tarn" },
     t2: { title: "Claude · review", agent: true, state: "working", cwd: "~/Dev/self-projects/tarn" },
     t3: { title: "git · tarn", agent: false, cwd: "~/Dev/self-projects/tarn" },
     t4: { title: "ssh prod", agent: false, cwd: "root@prod:~" },
@@ -649,7 +648,6 @@ function treeHtml(v) {
 }
 
 // ---- render ----
-const PIN = '<svg class="pin" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 3l5 5-3 1-4 4 1 5-2 2-4-4-5 5-1-1 5-5-4-4 2-2 5 1 4-4z"/></svg>';
 const dotOf = s => s ? `<span class="dot" style="background:${STATE[s].color}" title="${STATE[s].label}"></span>` : "";
 function rollup(w) {
   let best = null;
@@ -658,8 +656,7 @@ function rollup(w) {
 }
 // Pinned tabs first, then the user's order. cmd+1..9 count tabs down the whole sidebar,
 // collapsed workspaces included, so a number never changes when a group folds.
-const ordered = w => [...w.tabs.filter(id => tabs[id].pinned), ...w.tabs.filter(id => !tabs[id].pinned)];
-const flat = () => wss.flatMap(ordered);
+const flat = () => wss.flatMap(w => w.tabs);
 const SB_ICON = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
 let sbRail = false;
 try { sbRail = localStorage.getItem("tarn-mockup-rail") === "1"; } catch (err) { /* ignore */ }
@@ -671,7 +668,7 @@ function renderSidebar() {
   const all = flat();
   const row = id => {
     const t = tabs[id], i = all.indexOf(id);
-    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${t.pinned ? PIN : ""}${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
+    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.cwd)}">${t.agent ? AGENT : TERM_ICON}<span class="t">${esc(t.title)}</span>${dotOf(t.state)}<span class="key">${i < 9 ? "⌘" + (i + 1) : ""}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
   };
   document.querySelector(".win").classList.toggle("top", tabStyle === "top");
   // Native macOS tab: close on hover at the left, title centered, Ghostty's goto_tab key at the right.
@@ -683,7 +680,7 @@ function renderSidebar() {
   const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${sbRail ? "Show Sidebar" : "Hide Sidebar"}" aria-label="${sbRail ? "Show Sidebar" : "Hide Sidebar"}">${SB_ICON}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
   // Collapsed rail, as in the app: icons only, a divider between workspaces.
   if (sbRail) {
-    sb.innerHTML = top + wss.filter(w => w.tabs.length).map(w => ordered(w).map(id => {
+    sb.innerHTML = top + wss.filter(w => w.tabs.length).map(w => w.tabs.map(id => {
       const t = tabs[id];
       return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === cur}" data-tabid="${id}" title="${esc(t.title)}">${t.agent ? AGENT : TERM_ICON}${dotOf(t.state)}</div>`;
     }).join("")).join('<div class="sep"></div>');
@@ -694,7 +691,7 @@ function renderSidebar() {
     const n = w.tabs.length;
     // A folded workspace still shows how many tabs it has and its most urgent state.
     h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
-    if (!w.collapsed) h += ordered(w).map(row).join("");
+    if (!w.collapsed) h += w.tabs.map(row).join("");
   }
   h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
   sb.innerHTML = h;
@@ -972,8 +969,8 @@ function showMenu(items, x, y) {
   document.body.appendChild(m);
 }
 function tabMenu(id, x, y) {
-  const t = tabs[id], here = wss.find(w => w.tabs.includes(id));
-  showMenu([`<button data-mpin="${id}">${t.pinned ? "Unpin" : "Pin to top"}</button>`]
+  const here = wss.find(w => w.tabs.includes(id));
+  showMenu([]
     .concat(wss.filter(w => w !== here).map(w => `<button data-mmove="${id}" data-to="${w.id}">Move to ${esc(w.name)}</button>`))
     .concat([`<button data-tabclose="${id}">Close tab</button>`]), x, y);
 }
@@ -998,11 +995,10 @@ function treeEnter(v, path, kind, pin) {
 // ---- events ----
 document.addEventListener("click", async e => {
   if (!e.target.closest("#ctx")) closeMenu();
-  const sb = e.target.closest("[data-tabclose], [data-mpin], [data-mmove], [data-wsdel], [data-wsren], [data-wsnewtab], .wsh[data-wsh], #wsNew, #sbToggle, #sbNew, #emptyNew, #agentTab, #resetDemo, .tab[data-tabid]");
+  const sb = e.target.closest("[data-tabclose], [data-mmove], [data-wsdel], [data-wsren], [data-wsnewtab], .wsh[data-wsh], #wsNew, #sbToggle, #sbNew, #emptyNew, #agentTab, #resetDemo, .tab[data-tabid]");
   if (sb) {
     closeMenu();
     if (sb.dataset.tabclose) return closeSidebarTab(sb.dataset.tabclose);
-    if (sb.dataset.mpin) { tabs[sb.dataset.mpin].pinned = !tabs[sb.dataset.mpin].pinned; saveState(); return renderSidebar(); }
     if (sb.dataset.mmove) return moveTab(sb.dataset.mmove, sb.dataset.to);
     if (sb.dataset.wsdel) return deleteWorkspace(sb.dataset.wsdel);
     if (sb.dataset.wsren) return renameWorkspace(sb.dataset.wsren);

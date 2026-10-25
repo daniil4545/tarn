@@ -1,6 +1,6 @@
 # Windows and workspaces: model and user scenarios
 
-Draft for the user's review before it goes into `docs/spec.md`. Replaces R3 grouping by project and R21 custom groups; R19 pins and R20 drag apply inside a workspace. The mockup `docs/mockups/tarn.html` follows this file after approval.
+Draft for the user's review before it goes into `docs/spec.md`. Replaces R3 grouping by project and R21 custom groups; R19 pins are removed (D17); R20 drag applies inside a workspace. The mockup `docs/mockups/tarn.html` follows this file after approval.
 
 ## 1. Terms
 
@@ -81,7 +81,6 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S7 | drag a tab onto a header or between rows | the tab moves there; order is kept after a restart |
 | S8 | right click a tab, Move to | same as S7 without drag |
 | S9 | drag a workspace header | a line shows the gap; the group moves there |
-| S10 | pin a tab | it goes to the top of its own workspace |
 | S11 | cmd+1..9 | the Nth tab down the sidebar, collapsed workspaces counted |
 | S12 | agent runs `tarn new` | a tab in the workspace of the agent's own tab; focus does not move |
 | S13 | click a path in agent output | the file opens in a viewer of the same tab; tree hidden; cmd+B shows it |
@@ -103,3 +102,5 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 - D14. Tabs at the top: a flat native tab bar of the window's tabs, no workspaces and no agent state there; workspaces keep working and show again with the sidebar style. R24 changes accordingly; the settings text says "Tabs grouped in workspaces".
 - D15. A new tab starts in the focused tab's folder (Ghostty `window-inherit-working-directory`).
 - D16. The grab handle dots are brighter than Ghostty's (0.6 near, 1.0 on hover); the terminal's handle needs a new insertion point in `SurfaceGrabHandle.swift`.
+- D17. No tab pins: workspaces group tabs, order is set by drag; no close protection.
+- D18. The settings window writes Ghostty options to its own file `~/.config/tarn/ghostty.conf`, loaded after the user's config (`ghostty_config_load_file`, `Ghostty.Config.swift:69`); the user's file is never edited. A value set there is marked "set in tarn" with Reset; everything else stays in Ghostty Config.
