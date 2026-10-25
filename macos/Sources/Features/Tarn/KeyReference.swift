@@ -2,8 +2,9 @@ import SwiftUI
 
 /// The keys Help lists. Ghostty has no call that lists all bindings, so this is a fixed list of
 /// actions; Ghostty gives the trigger in effect for each one (`docs/plans/s4-settings.md` 1.3).
-/// Actions bound with `performable` (undo, clear_screen, start_search, navigate_search) are not
-/// listed: Ghostty leaves them out of the reverse lookup, so it reports no trigger for them.
+/// Actions bound with `performable` (undo, clear_screen, start_search, navigate_search) get no
+/// trigger from Ghostty, and the main menu has no key for them either (`MainMenu.xib`), so
+/// those rows carry the Ghostty default keys; a `keybind` change for them is not visible.
 enum KeyReference {
     struct Row: Identifiable {
         let label: String
@@ -11,19 +12,23 @@ enum KeyReference {
         let action: String?
         /// The key text of a tarn key, which Ghostty does not bind.
         let fixedKeys: String?
+        /// Ghostty's default keys, for an action Ghostty reports no trigger for.
+        let defaultKeys: String?
 
         var id: String { action ?? label }
         var source: String { action == nil ? "tarn" : "Ghostty" }
 
-        init(_ label: String, action: String) {
+        init(_ label: String, action: String, defaultKeys: String? = nil) {
             self.label = label
             self.action = action
+            self.defaultKeys = defaultKeys
             fixedKeys = nil
         }
 
         init(_ label: String, keys: String) {
             self.label = label
             action = nil
+            defaultKeys = nil
             fixedKeys = keys
         }
     }
@@ -44,6 +49,7 @@ enum KeyReference {
             Row("Close the pane; the last one closes the tab", action: "close_surface"),
             Row("Close the tab", action: "close_tab"),
             Row("Close the window", action: "close_window"),
+            Row("Bring back what was closed", action: "undo", defaultKeys: "⌘Z"),
             Row("Go to tab 1, down the sidebar (2 to 8 likewise)", action: "goto_tab:1"),
             Row("Go to the last tab", action: "last_tab"),
             Row("Previous tab", action: "previous_tab"),
@@ -84,8 +90,8 @@ enum KeyReference {
     @MainActor
     static func keys(for row: Row, in config: Ghostty.Config?) -> String {
         if let fixedKeys = row.fixedKeys { return fixedKeys }
-        guard let action = row.action,
-              let shortcut = config?.keyboardShortcut(for: action) else { return notBound }
-        return shortcut.keyList.joined()
+        guard let action = row.action else { return notBound }
+        if let shortcut = config?.keyboardShortcut(for: action) { return shortcut.keyList.joined() }
+        return row.defaultKeys ?? notBound
     }
 }

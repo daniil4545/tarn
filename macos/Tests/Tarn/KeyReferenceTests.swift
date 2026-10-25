@@ -15,7 +15,11 @@ struct KeyReferenceTests {
     @MainActor
     func everyActionHasADefaultTrigger(row: KeyReference.Row) throws {
         let config = try TemporaryConfig("")
-        #expect(KeyReference.keys(for: row, in: config) != KeyReference.notBound, "\(row.action ?? "")")
+        let keys = KeyReference.keys(for: row, in: config)
+        #expect(keys != KeyReference.notBound, "\(row.action ?? "")")
+        if row.defaultKeys == nil {
+            #expect(config.keyboardShortcut(for: row.action ?? "") != nil, "\(row.action ?? "")")
+        }
     }
 
     @Test @MainActor func anUnboundActionIsShownAsSuch() throws {
