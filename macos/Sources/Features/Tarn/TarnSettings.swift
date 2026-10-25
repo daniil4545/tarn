@@ -45,8 +45,8 @@ enum TabStyle: String, CaseIterable, Identifiable {
     }
 }
 
-/// The tarn settings window. Terminal settings stay in the Ghostty config file;
-/// this window holds only the settings of tarn's own features.
+/// The tarn settings window: tarn's own features, a short list of Ghostty options (written to
+/// tarn's options file) and Help. Everything else stays in the Ghostty config file.
 final class TarnSettingsController: NSWindowController, NSWindowDelegate {
     static let shared = TarnSettingsController()
 
@@ -90,24 +90,33 @@ extension AppDelegate {
 
 struct TarnSettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case tabs
+        case tabs, appearance, terminal, windows, help
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .tabs: "Tabs"
+            case .appearance: "Appearance"
+            case .terminal: "Terminal"
+            case .windows: "Windows"
+            case .help: "Help"
             }
         }
 
         var icon: String {
             switch self {
             case .tabs: "sidebar.left"
+            case .appearance: "paintpalette"
+            case .terminal: "terminal"
+            case .windows: "macwindow"
+            case .help: "keyboard"
             }
         }
     }
 
     @State private var section: Section? = .tabs
+    @StateObject private var store = GhosttyOptionStore.shared
 
     var body: some View {
         NavigationSplitView {
@@ -119,6 +128,10 @@ struct TarnSettingsView: View {
         } detail: {
             switch section ?? .tabs {
             case .tabs: TabsSettingsPane()
+            case .appearance: GhosttyOptionsPane(section: .appearance, title: "Appearance", store: store)
+            case .terminal: GhosttyOptionsPane(section: .terminal, title: "Terminal", store: store)
+            case .windows: GhosttyOptionsPane(section: .windows, title: "Windows", store: store)
+            case .help: HelpPane()
             }
         }
         .frame(minWidth: 640, minHeight: 400)
