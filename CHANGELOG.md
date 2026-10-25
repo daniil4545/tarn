@@ -29,6 +29,10 @@ First release. The build is ad-hoc signed and not notarized; see `docs/install.m
 
 - Sidebar drag and drop: a workspace or tab can be dropped below the last row, the drop line no longer blinks over the gaps between rows, the only tab of a workspace dropped on it no longer moves the workspace to the end, and a drag from another window shows no line.
 
+### Known limits
+
+- Startup is about 17 ms (7%) slower than upstream Ghostty built from the same commit, over the +5% of `docs/spec.md` section 7: the first layout of the sidebar. Idle CPU and memory are within it; the `cat` result moves by about 6% between runs. Numbers in `docs/bench.md`.
+
 ## [tarn-v0.0.1] - 2026-10-23
 
 First preview, built from source. The sidebar and Claude Code session state work; the rest of the first version (markdown panel, `tarn` CLI, notifications, app identity, benchmark) is not in yet.
