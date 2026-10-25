@@ -15,4 +15,4 @@ npm run build
 `tarn-mermaid.js` is a copy of `node_modules/mermaid/dist/mermaid.min.js` (version pinned in
 `package.json`). It stays in git on purpose. To upgrade mermaid, change the version, run the commands
 above, commit the new bundle, and update the matching rows in `THIRD_PARTY.md`.
-`build.mjs` also regenerates the license texts; add a package there when a new one ships in a bundle.
+`build.mjs` also regenerates `tarn-viewer-licenses.txt` from the bundle inputs and the mermaid dependency closure (`licenses.mjs`); it fails if a package has no license file.
