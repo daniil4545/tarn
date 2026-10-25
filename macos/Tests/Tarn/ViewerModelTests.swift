@@ -539,3 +539,62 @@ struct ViewerClickAndKeyTests {
         #expect(key("s", kVK_ANSI_S, [.command, .capsLock]) == "save")
     }
 }
+
+/// Cmd+B: opens a tree-only pane, closes a pane with no file, toggles the tree of a pane with files.
+@Suite
+@MainActor
+struct ViewerTreeKeyTests {
+    @Test func terminalKeyDependsOnThePaneState() {
+        #expect(ViewerHost.treeKeyAction(paneOpen: false, hasFiles: false) == .openTree)
+        #expect(ViewerHost.treeKeyAction(paneOpen: true, hasFiles: false) == .closePane)
+        #expect(ViewerHost.treeKeyAction(paneOpen: true, hasFiles: true) == .toggleTree)
+    }
+
+    @Test func treeOnlyPaneShowsTheTreeWithNoFile() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.showTreeOnly()
+        #expect(model.treeVisible)
+        #expect(model.snapshot.isEmpty)
+    }
+
+    @Test func theKeyInAnEmptyPaneClosesItAndKeepsNothingToReopen() {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        model.showTreeOnly()
+        var closed: [([ViewerTab], Int)] = []
+        model.onClosePane = { closed.append(($0, $1)) }
+        model.toggleTreeKey()
+        #expect(closed.count == 1 && closed[0].0.isEmpty && closed[0].1 == -1)
+        // Cmd+W and the tree's own hide button end an empty pane the same way.
+        model.closeActiveTab()
+        model.handle(["t": "hideTree"])
+        #expect(closed.count == 3)
+    }
+
+    @Test func theKeyInAPaneWithFilesOnlyTogglesTheTree() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        model.open(OpenTarget(path: dir + "/a.md"))
+        var closes = 0
+        model.onClosePane = { _, _ in closes += 1 }
+        let before = model.treeVisible
+        model.toggleTreeKey()
+        #expect(model.treeVisible != before)
+        model.toggleTreeKey()
+        #expect(model.treeVisible == before)
+        #expect(closes == 0 && model.snapshot.count == 1)
+    }
+
+    @Test func lastTabStillClosesThePane() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        model.open(OpenTarget(path: dir + "/a.md"))
+        var saved: [ViewerTab] = []
+        model.onClosePane = { tabs, _ in saved = tabs }
+        model.closeActiveTab()
+        #expect(saved.map(\.path) == [dir + "/a.md"])
+    }
+}

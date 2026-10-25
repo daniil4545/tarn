@@ -30,6 +30,7 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | socket line `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` | `ViewerRouter.handleCommand` |
 | In | page messages (`ready`, `tab`, `closeTab`, `closePane`, `toggleTree`, `hideTree`, `treeToggle`, `treeOpen`, `edit`, `save`, `task`, `take`, `keep`, `link`, `copy`, `error`) | `ViewerModel.handle` |
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
+| In | Cmd+B in the terminal: View menu item "Toggle Files" (action `toggleViewerTree:`) | `TerminalController.toggleViewerTree`, `ViewerHost.toggleFromKey` |
 | In | file events (write, delete, rename, extend) on the file and its folder | `FileWatcher` |
 | In | close of a tab, window or the app | `ViewerClose` |
 | Out | script calls `tarn.setDoc`, `tarn.setChrome`, `tarn.toast`, `tarn.cmd` | `ViewerModel.runScript` |
