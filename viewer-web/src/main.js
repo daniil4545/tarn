@@ -140,7 +140,7 @@ async function drawMermaid(box) {
   box.querySelector("pre").style.opacity = ".5";
   try {
     const mermaid = await loadMermaid();
-    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: chrome.dark ? "dark" : "default" });
+    mermaid.initialize({ startOnLoad: false, securityLevel: "strict", layout: "dagre", theme: chrome.dark ? "dark" : "default" });
     const id = "mm" + mmCount++;
     const { svg } = await mermaid.render(id, src);
     svgCache.set(key, svg);

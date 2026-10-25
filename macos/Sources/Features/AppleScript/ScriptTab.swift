@@ -141,7 +141,11 @@ final class ScriptTab: NSObject {
         }
 
         if let managedTerminalController = tabController as? TerminalController {
-            managedTerminalController.closeTabImmediately(registerRedo: false)
+            let controller = managedTerminalController
+            if ViewerClose.intercept([controller], window: controller.window, proceed: { controller.closeTabImmediately(registerRedo: false) }) {
+                return nil
+            }
+            controller.closeTabImmediately(registerRedo: false)
             return nil
         }
 

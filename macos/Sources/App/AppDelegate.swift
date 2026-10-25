@@ -413,6 +413,18 @@ class AppDelegate: NSObject,
             }
         }
 
+        // tarn: unsaved edits in a viewer pane are asked first, one sheet for all windows.
+        let askedViewer = ViewerClose.interceptQuit { [weak self] proceed in
+            guard let self, proceed else { return NSApp.reply(toApplicationShouldTerminate: false) }
+            if !self.ghostty.needsConfirmQuit { return NSApp.reply(toApplicationShouldTerminate: true) }
+            switch self.terminate() {
+            case .terminateNow: NSApp.reply(toApplicationShouldTerminate: true)
+            case .terminateCancel: NSApp.reply(toApplicationShouldTerminate: false)
+            default: break // the review flow replies itself
+            }
+        }
+        if askedViewer { return .terminateLater }
+
         // If our app says we don't need to confirm, we can exit now.
         if !ghostty.needsConfirmQuit { return .terminateNow }
 
