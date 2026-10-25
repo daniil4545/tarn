@@ -2,42 +2,90 @@ import AppKit
 import OSLog
 import SwiftUI
 
-/// The temporary home of the viewer pane: one pane to the right of the terminal area of a window
-/// tab, until the window layout is decided. Everything that depends on this placement is here,
-/// so the layout can replace this file. Reuses `SplitView` (as `InspectorView` does) and the
-/// window's undo manager.
+/// The viewers of one window tab and their layout. The layout is a `SplitTree` of leaves
+/// (`AreaTree`): the terminal block is one leaf, each viewer is another. Reuses Ghostty's
+/// `SplitTree` for the structure and its undo manager and timeout for closing a viewer; the
+/// SwiftUI side is `ViewerLayout` (`AreaView.swift`), the drops are `AreaDrop.swift`.
 @MainActor
 final class ViewerHost: ObservableObject {
-    @Published private(set) var model: ViewerModel?
-    @Published var split: CGFloat = 0.6
-    /// The pane is hidden with Cmd+B: the model, its tabs and unsaved edits live on, only the
-    /// view is out of the layout. Closing the pane (`closePane`) ends it.
+    struct Pane {
+        let leaf: AreaLeaf
+        let model: ViewerModel
+        let web: ViewerWebController
+    }
+
+    @Published private(set) var tree: AreaTree
+    /// What the user is dragging over this tab, if it is a pane.
+    @Published private(set) var drag: AreaPayload?
+    /// The viewers are hidden with Cmd+B: their models, tabs and unsaved edits live on in `panes`
+    /// (so `models` and the close check still see them), only the layout shows the terminal alone.
     @Published private(set) var hidden = false
-    private var web: ViewerWebController?
-    weak var window: NSWindow?
+    private var blockLeaf: AreaLeaf
+    private var panes: [UUID: Pane] = [:]
+    private var lastViewer: UUID?
+    private var focusObserver: NSKeyValueObservation?
+
+    weak var window: NSWindow? {
+        didSet {
+            focusObserver = window?.observe(\.firstResponder) { [weak self] _, _ in
+                MainActor.assumeIsolated { self?.noteFocus() }
+            }
+        }
+    }
+
+    init() {
+        let leaf = AreaLeaf(kind: .block)
+        blockLeaf = leaf
+        tree = .block(leaf)
+    }
 
     private var controller: TerminalController? {
         window?.windowController as? TerminalController
     }
 
-    /// Opens a file in the pane, creating the pane when needed. `focus` is true for a user's
-    /// click; an agent's `tarn open` never moves focus.
+    /// The viewers in layout order.
+    var models: [ViewerModel] {
+        tree.viewers.compactMap { panes[$0.id]?.model }
+    }
+
+    /// The viewer that holds the keyboard, else the one used last, else the first.
+    var activeModel: ViewerModel? { (focusedPane ?? lastPane)?.model }
+
+    private var focusedPane: Pane? {
+        tree.viewers.compactMap { panes[$0.id] }.first { $0.model.hasFocus() }
+    }
+
+    private var lastPane: Pane? {
+        lastViewer.flatMap { panes[$0] } ?? tree.viewers.first.flatMap { panes[$0.id] }
+    }
+
+    private func noteFocus() {
+        if let pane = focusedPane { lastViewer = pane.leaf.id }
+    }
+
+    func pane(for id: UUID) -> Pane? { panes[id] }
+
+    // MARK: Opening
+
+    /// Opens a file in the viewer in use, creating a viewer beside the terminal block when the tab
+    /// has none. `focus` is true for a user's click; an agent's `tarn open` never moves focus.
     @discardableResult
     func open(_ target: OpenTarget, root: String?, focus: Bool) -> Bool {
         // A layout change takes the first responder from the terminal; an agent's open gives it back.
         let responder = focus ? nil : window?.firstResponder
-        let typingInPane = !focus && (model?.hasFocus() ?? false)
-        let created = model == nil
-        // A click shows a hidden pane (the user acted); an agent's open leaves it hidden.
+        let existing = focusedPane ?? lastPane
+        let typingInPane = !focus && (existing?.model.hasFocus() ?? false)
+        // A click shows hidden viewers (the user acted); an agent's open leaves them hidden.
         if focus { hidden = false }
-        let model = model ?? makePane(root: root ?? NSHomeDirectory())
-        guard model.open(target, background: typingInPane) else {
-            // A pane this call created for a file that cannot open does not stay; a tree-only pane does.
-            if created, model.snapshot.isEmpty { closePane(saved: [], active: -1) }
+        let pane = existing ?? makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6)
+        guard pane.model.open(target, background: typingInPane) else {
+            // A viewer this call created for a file that cannot open does not stay; a tree-only one does.
+            if existing == nil, pane.model.snapshot.isEmpty { discard(pane.leaf.id) }
             return false
         }
+        lastViewer = pane.leaf.id
         if focus {
-            DispatchQueue.main.async { model.onFocus?() }
+            DispatchQueue.main.async { pane.model.onFocus?() }
         } else {
             keepFocus(responder)
         }
@@ -55,44 +103,45 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in the pane (the web
+    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in a pane (the web
     /// view takes the key first, so there is one path per focus). It opens and hides, it never closes:
-    /// no pane opens one with the tree and the keyboard in it; a hidden pane comes back as it was
-    /// with the keyboard in it; a shown pane (with files or not) hides whole, tabs, unsaved edits and
+    /// no viewer opens one with the tree and the keyboard in it; hidden viewers come back as they were
+    /// with the keyboard in them; shown viewers (with files or not) hide whole, tabs, unsaved edits and
     /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
-        guard let model else {
+        guard activeModel != nil else {
             if FileViewerSetting.isOn { openTreeOnly(root: root) }
             return
         }
         if hidden { return show() }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
-        model.flushPendingEdit()
+        for model in models { model.flushPendingEdit() }
         hidePane()
     }
 
     private func focusTreeSoon() {
         DispatchQueue.main.async { [weak self] in
-            self?.model?.focusTreeInPage()
+            self?.activeModel?.focusTreeInPage()
         }
     }
 
     private func openTreeOnly(root: String?) {
-        makePane(root: root ?? NSHomeDirectory()).revealTree()
+        makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.revealTree()
         focusTreeSoon()
     }
 
-    /// Hides the pane keeping its model; the keyboard goes to the terminal.
+    /// Hides the viewers keeping their models; the keyboard goes to the terminal.
     func hidePane() {
         hidden = true
         returnFocusToTerminal()
     }
 
-    /// Brings a hidden pane back with the keyboard in it. The focus request waits for the web view to
-    /// join the window, as Ghostty's `moveFocus` does after a split change (SurfaceView.swift:1075).
+    /// Brings hidden viewers back with the keyboard in the active one. The focus request waits for the
+    /// web view to join the window, as Ghostty's `moveFocus` does after a split change
+    /// (SurfaceView.swift:1075).
     private func show() {
         hidden = false
-        DispatchQueue.main.async { [weak self] in self?.model?.onFocus?() }
+        DispatchQueue.main.async { [weak self] in self?.activeModel?.onFocus?() }
     }
 
     /// Replaced in tests, which have no terminal window.
@@ -103,93 +152,243 @@ final class ViewerHost: ObservableObject {
         if let surface = controller?.focusedSurface { Ghostty.moveFocus(to: surface) }
     }
 
-    private func makePane(root: String) -> ViewerModel {
+    /// A new, empty viewer on `edge` of `anchor`; `share` is the part of the room that `anchor` keeps.
+    private func makeViewer(root: String, beside anchor: AreaLeaf, edge: AreaEdge, share: Double) -> Pane {
+        let pane = makePane(AreaLeaf(kind: .viewer), root: root)
+        tree = tree.opening(pane.leaf, beside: anchor, direction: edge.direction, share: share)
+        return pane
+    }
+
+    /// The model and page of a viewer leaf. The caller puts the leaf into the layout.
+    private func makePane(_ leaf: AreaLeaf, root: String) -> Pane {
+        let id = leaf.id
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
-        model.onClosePane = { [weak self] saved, active in self?.closePane(saved: saved, active: active, undoable: true) }
+        model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active, undoable: true) }
         model.onHidePane = { [weak self] in self?.hidePane() }
         model.onPaneKey = { [weak self] in self?.toggleFromKey(root: nil) }
-        self.model = model
-        self.web = web
+        model.onLayout = { [weak self] command in self?.layout(command, from: id) }
+        model.onFileDrag = { [weak self] file in
+            self?.drag = file.map { .file(FileDrag(path: $0.path, viewer: id, moves: $0.moves, sole: $0.sole)) }
+        }
+        let grip = web.container.grip
+        grip.viewerID = id
+        grip.title = { [weak model] in (model?.tabs.activePath).map { ($0 as NSString).lastPathComponent } ?? "Viewer" }
+        grip.onDragState = { [weak self] dragging in self?.drag = dragging ? .viewer(id) : nil }
+        grip.onEndedOutside = { [weak self] point in self?.detach(id, at: point) }
+        let pane = Pane(leaf: leaf, model: model, web: web)
+        panes[id] = pane
+        lastViewer = id
         web.start()
-        return model
+        return pane
     }
 
-    var container: NSView? { web?.container }
+    // MARK: Snapshot
 
-    /// Closes the pane. A close by the user (`undoable`) registers an undo that reopens its tabs, or the empty tree pane, with Ghostty's timeout.
-    func closePane(saved: [ViewerTab], active: Int, undoable: Bool = false) {
-        guard let model else { return }
-        model.shutdown()
-        web?.stop()
-        web = nil
-        self.model = nil
+    /// The viewers for a tombstone, or nil when the tab has none.
+    func snapshot() -> ViewerSnapshot? {
+        let viewers = tree.viewers.compactMap { leaf in
+            panes[leaf.id].map { ViewerSnapshot.Viewer(id: leaf.id, root: $0.model.tree.root, tabs: $0.model.snapshot, active: $0.model.tabs.active) }
+        }
+        guard !viewers.isEmpty, let layout = try? JSONEncoder().encode(tree) else { return nil }
+        return ViewerSnapshot(layout: layout, viewers: viewers)
+    }
+
+    /// Brings the viewers of a closed tab back into a tab that has none (undo of S16).
+    func restore(_ snapshot: ViewerSnapshot) {
+        guard panes.isEmpty, let decoded = try? JSONDecoder().decode(AreaTree.self, from: snapshot.layout),
+              let block = decoded.block
+        else { return }
+        blockLeaf = block
+        tree = decoded
+        for viewer in snapshot.viewers {
+            guard let leaf = decoded.leaf(id: viewer.id) else { continue }
+            let pane = makePane(leaf, root: viewer.root)
+            pane.model.reopen(viewer.tabs, active: viewer.active)
+        }
+        lastViewer = nil
         hidden = false
+    }
+
+    // MARK: Closing
+
+    /// Closes a viewer. A close with files registers an undo that puts the viewer back where it was,
+    /// with Ghostty's timeout.
+    private func close(_ id: UUID, saved: [ViewerTab], active: Int, undoable: Bool = false) {
+        guard let pane = panes[id] else { return }
+        let slot = tree.slot(of: pane.leaf)
+        let root = pane.model.tree.root
+        discard(id)
+        if panes.isEmpty { hidden = false }
         returnFocusToTerminal()
         guard undoable, let controller, let undoManager = controller.undoManager else { return }
-        let root = model.tree.root
         undoManager.setActionName("Close Viewer")
         undoManager.registerUndo(withTarget: self, expiresAfter: controller.undoExpiration) { host in
-            host.restore(saved, active: active, root: root)
+            host.reopen(saved, active: active, root: root, slot: slot)
         }
     }
 
-    /// The undo of a close: the tabs come back, in a pane that is shown (a pane opened and hidden
-    /// since the close takes them too).
-    func restore(_ saved: [ViewerTab], active: Int, root: String) {
+    /// The undo of a close: the viewer comes back where it was, shown (a viewer opened and hidden
+    /// since the close takes the tabs too).
+    func reopen(_ saved: [ViewerTab], active: Int, root: String, slot: AreaTree.Slot? = nil) {
         hidden = false
-        let reopened = model ?? makePane(root: root)
-        reopened.reopen(saved, active: active)
-        DispatchQueue.main.async { reopened.onFocus?() }
-    }
-}
-
-extension TerminalController {
-    /// The View menu item "Toggle File Viewer" (Cmd+B), found through the responder chain from the terminal.
-    @IBAction func toggleViewer(_ sender: Any?) {
-        viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
-    }
-}
-
-/// Puts the viewer pane to the right of a window's terminal area.
-struct ViewerLayout<Content: View>: View {
-    @ObservedObject var host: ViewerHost
-    @ObservedObject var ghostty: Ghostty.App
-    let content: Content
-
-    init(host: ViewerHost, ghostty: Ghostty.App, @ViewBuilder content: () -> Content) {
-        self.host = host
-        self.ghostty = ghostty
-        self.content = content()
+        let anchor = slot.flatMap { tree.leaf(id: $0.anchor.id) }
+        let reopened = makeViewer(
+            root: root, beside: anchor ?? blockLeaf,
+            edge: anchor == nil ? .right : AreaEdge(slot?.direction ?? .right), share: anchor == nil ? 0.6 : 0.5)
+        reopened.model.reopen(saved, active: active)
+        DispatchQueue.main.async { reopened.model.onFocus?() }
     }
 
-    var body: some View {
-        if let model = host.model, !host.hidden, let container = host.container {
-            SplitView(.horizontal, $host.split, dividerColor: ghostty.config.splitDividerColor, left: {
-                content
-            }, right: {
-                ViewerPane(container: container)
-                    .onAppear { model.dark = isDark }
-                    .onChange(of: ghostty.config.backgroundColor) { _ in model.dark = isDark }
-            }, onEqualize: {
-                host.split = 0.5
-            })
-        } else {
-            content
+    /// Takes a viewer out of the layout and stops its page. No undo: a moved viewer lives on elsewhere.
+    private func discard(_ id: UUID) {
+        guard let pane = panes.removeValue(forKey: id) else { return }
+        tree = tree.removing(pane.leaf)
+        pane.model.shutdown()
+        pane.web.stop()
+        if lastViewer == id { lastViewer = nil }
+    }
+
+    // MARK: Layout commands
+
+    private func layout(_ command: ViewerLayoutCommand, from id: UUID) {
+        guard let pane = panes[id] else { return }
+        switch command {
+        case let .split(edge):
+            // S14: the file of the viewer opens in a new viewer beside it.
+            guard let path = pane.model.tabs.activePath else { return }
+            let new = makeViewer(root: pane.model.tree.root, beside: pane.leaf, edge: edge, share: 0.5)
+            guard new.model.open(OpenTarget(path: path), pin: true) else {
+                discard(new.leaf.id)
+                return
+            }
+            DispatchQueue.main.async { new.model.onFocus?() }
+        case let .focus(direction):
+            _ = focus(from: pane.leaf, direction)
         }
     }
 
-    private var isDark: Bool {
-        !NSColor(ghostty.config.backgroundColor).isLightColor
+    /// Moves the keyboard from the terminal block to the neighbour viewer. False when there is none.
+    func focusFromBlock(_ direction: AreaTree.FocusDirection) -> Bool {
+        focus(from: blockLeaf, direction)
     }
-}
 
-private struct ViewerPane: NSViewRepresentable {
-    let container: NSView
+    private func focus(from leaf: AreaLeaf, _ direction: AreaTree.FocusDirection) -> Bool {
+        guard let target = tree.neighbor(of: leaf, direction), target !== leaf else { return false }
+        if target.kind == .block {
+            guard let surface = controller?.focusedSurface else { return false }
+            Ghostty.moveFocus(to: surface)
+        } else if let pane = panes[target.id] {
+            lastViewer = target.id
+            pane.model.onFocus?()
+        }
+        return true
+    }
 
-    func makeNSView(context: Context) -> NSView { container }
+    func resize(_ node: AreaTree.Node, to ratio: Double) {
+        guard let resized = try? tree.replacing(node: node, with: node.resizing(to: ratio)) else { return }
+        tree = resized
+    }
 
-    func updateNSView(_ nsView: NSView, context: Context) {}
+    func equalize() {
+        tree = tree.equalized()
+    }
+
+    // MARK: Drops
+
+    /// Called by the terminal pane drag, which Ghostty's grab handle publishes (`DraggingSurfaceKey`).
+    /// A drag that came from a page ends with the AppKit session; a click proves it is over.
+    func cancelFileDrag() {
+        if case .file = drag { drag = nil }
+    }
+
+    func terminalDragged(_ id: UUID?) {
+        if case .viewer = drag { return }
+        drag = id.map { .terminal($0) }
+    }
+
+    func dropTarget(at point: CGPoint, in size: CGSize, payload: AreaPayload) -> AreaDropTarget? {
+        let lone = (controller?.surfaceTree.count ?? 1) <= 1
+        return AreaDrop.target(at: point, in: size, tree: tree, payload: payload, loneTerminal: lone)
+    }
+
+    func drop(_ payload: AreaPayload, _ plan: AreaPlan) {
+        switch payload {
+        case let .viewer(id):
+            guard let pane = panes[id] else { return }
+            if case let .into(destination) = plan {
+                guard destination != id, let target = panes[destination] else { return }
+                guard target.model.canAbsorb(pane.model) else {
+                    target.model.toast("A file is open here with other edits: save one copy first")
+                    return
+                }
+                target.model.absorb(pane.model)
+                discard(id)
+                lastViewer = destination
+                DispatchQueue.main.async { target.model.onFocus?() }
+                return
+            }
+            tree = tree.placing(pane.leaf, plan)
+            lastViewer = id
+            DispatchQueue.main.async { pane.model.onFocus?() }
+        case let .file(file):
+            dropFile(file, plan)
+        case .terminal:
+            let surface = controller?.focusedSurface
+            tree = tree.placing(blockLeaf, plan)
+            DispatchQueue.main.async {
+                if let surface { Ghostty.moveFocus(to: surface) }
+            }
+        }
+    }
+
+    /// A file tab or tree row dropped on a zone: it joins the viewer under the pointer or opens in a
+    /// new viewer there. A tab leaves its viewer with its edits; an emptied viewer closes.
+    private func dropFile(_ file: FileDrag, _ plan: AreaPlan) {
+        drag = nil
+        let source = panes[file.viewer]
+        let destination: Pane
+        if case let .into(id) = plan {
+            guard id != file.viewer, let existing = panes[id] else { return }
+            if let source, file.moves, !existing.model.canTake(file.path, from: source.model) {
+                existing.model.toast("\((file.path as NSString).lastPathComponent) is open here with other edits")
+                return
+            }
+            destination = existing
+        } else {
+            destination = makePane(AreaLeaf(kind: .viewer), root: source?.model.tree.root ?? NSHomeDirectory())
+            tree = tree.placing(destination.leaf, plan)
+        }
+        // A tab moves with its edits; a tree row opens the file from disk.
+        let placed: Bool
+        if let source, file.moves {
+            placed = destination.model.take(file.path, from: source.model)
+        } else {
+            placed = destination.model.open(OpenTarget(path: file.path), pin: true)
+        }
+        guard placed else {
+            // The file did not open (gone, binary, too big): no empty viewer is left behind.
+            if destination.model.isEmpty { discard(destination.leaf.id) }
+            return
+        }
+        if let source, file.moves {
+            source.model.release(file.path)
+            if source.model.isEmpty { discard(file.viewer) }
+        }
+        lastViewer = destination.leaf.id
+        DispatchQueue.main.async { destination.model.onFocus?() }
+    }
+
+    /// S14a: a viewer dropped outside every window opens in a new window.
+    private func detach(_ id: UUID, at point: NSPoint) {
+        guard let pane = panes[id], let controller else { return }
+        let created = TerminalController.newWindow(controller.ghostty)
+        created.window?.setFrameTopLeftPoint(point)
+        let moved = created.viewerHost.makeViewer(
+            root: pane.model.tree.root, beside: created.viewerHost.blockLeaf, edge: .right, share: 0.6)
+        moved.model.absorb(pane.model)
+        discard(id)
+    }
 }
 
 /// Where a path click or `tarn open` goes.
@@ -253,12 +452,21 @@ enum ViewerRouter {
             return true
         case let .missing(raw):
             // Only a shown pane can tell the user; otherwise the default opener reports it.
-            guard let model = controller.viewerHost.model, !controller.viewerHost.hidden else { return false }
+            guard let model = controller.viewerHost.activeModel, !controller.viewerHost.hidden else { return false }
             model.toast("No such file: \(raw)")
             return true
         case .upstream:
             return false
         }
+    }
+
+    /// Ghostty's split keys when the terminal block has no target in that direction: the keyboard
+    /// goes to the viewer that lies there (D8). Called from `Ghostty.App.gotoSplit` (insertion
+    /// point 14); true if focus moved, so a performable keybind consumes the key.
+    @MainActor
+    static func focusNeighbor(from surface: Ghostty.SurfaceView, direction: Ghostty.SplitFocusDirection) -> Bool {
+        guard let controller = surface.window?.windowController as? TerminalController else { return false }
+        return controller.viewerHost.focusFromBlock(direction.toSplitTreeFocusDirection())
     }
 
     /// `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` from the control
@@ -298,5 +506,12 @@ enum ViewerRouter {
             let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
             return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "tarn: cannot open: \(path)"
         }
+    }
+}
+
+extension TerminalController {
+    /// The View menu item "Toggle File Viewer" (Cmd+B), found through the responder chain from the terminal.
+    @IBAction func toggleViewer(_ sender: Any?) {
+        viewerHost.toggleFromKey(root: focusedSurface?.workingDirectory)
     }
 }

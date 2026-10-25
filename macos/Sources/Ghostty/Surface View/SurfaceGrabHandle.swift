@@ -67,7 +67,7 @@ extension Ghostty {
                     if ellipsisVisible {
                         Image(systemName: "ellipsis")
                             .font(.system(size: 10, weight: .semibold))
-                            .foregroundColor(.primary.opacity(isHovering ? 0.8 : 0.3))
+                            .foregroundColor(.primary.opacity(isHovering ? 1.0 : 0.6)) // tarn: brighter dots (D16)
                             .offset(y: -3)
                             .allowsHitTesting(false)
                             .transition(.opacity)

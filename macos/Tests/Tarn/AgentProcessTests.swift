@@ -4,7 +4,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// Agent detection by process name, and the order of the sidebar sections.
+/// Agent detection by process name and the tab titles it gives.
 @Suite
 struct AgentProcessTests {
     @Test func matchesAgentNamesWithSuffixesButNotLookalikes() {
@@ -118,52 +118,5 @@ struct AgentProcessTests {
             #expect(AgentProcess.displayNames[agent] != nil)
             #expect(AgentProcess.icons[agent].flatMap { NSImage(named: $0) } != nil, "\(agent)")
         }
-    }
-
-    private func tab(_ index: Int) -> SidebarModel.Tab {
-        SidebarModel.Tab(
-            id: ObjectIdentifier(NSObject()),
-            index: index,
-            title: "\(index)",
-            agentProcess: nil,
-            keyEquivalent: nil,
-            color: .none,
-            isSelected: false,
-            agent: nil,
-            project: "",
-            folder: nil
-        )
-    }
-
-    @Test func agentGroupsComeFirstAndPlainTabsLast() {
-        let terminals = SidebarModel.GroupKey(section: .terminals, path: "")
-        let tarn = SidebarModel.GroupKey(section: .agents, path: "/u/dev/tarn")
-        let galera = SidebarModel.GroupKey(section: .agents, path: "/u/dev/galera")
-        let tabs = (1...5).map(tab)
-
-        let groups = SidebarModel.arrange([
-            (terminals, tabs[0]),
-            (tarn, tabs[1]),
-            (terminals, tabs[2]),
-            (galera, tabs[3]),
-            (tarn, tabs[4]),
-        ])
-
-        #expect(groups.map(\.path) == [tarn, galera, terminals].map(\.path))
-        #expect(groups.map(\.name) == ["tarn", "galera", ""])
-        #expect(groups[0].tabs.map(\.index) == [2, 5])
-        #expect(groups[1].tabs.map(\.index) == [4])
-        #expect(groups[2].tabs.map(\.index) == [1, 3])
-    }
-
-    @Test func projectsWithTheSameFolderNameStayApartAndShowTheirParent() {
-        let first = SidebarModel.GroupKey(section: .agents, path: "/u/a/app")
-        let second = SidebarModel.GroupKey(section: .agents, path: "/u/b/app")
-        let tabs = (1...2).map(tab)
-
-        let groups = SidebarModel.arrange([(first, tabs[0]), (second, tabs[1])])
-
-        #expect(groups.map(\.name) == ["a/app", "b/app"])
-        #expect(groups.map { $0.tabs.map(\.index) } == [[1], [2]])
     }
 }
