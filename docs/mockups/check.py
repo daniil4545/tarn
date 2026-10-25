@@ -128,7 +128,9 @@ with sync_playwright() as p:
     check("20 again restores the layout", count("[data-pid]") == 4)
     pg.keyboard.press("Meta+w")
     check("21 cmd+W closes a terminal", count(".tpane") == 2)
-    check("21a every terminal has a grab handle", count(".tpane .grip") == count(".tpane"))
+    check(
+        "21a every terminal has a grab handle", count(".tpane .grip") == count(".tpane")
+    )
     drag(pg, ".tpane >> nth=0 >> .grip", ".tpane >> nth=1", 0.5, 0.95)
     check(
         "21b drag a terminal grab handle to a terminal bottom edge stacks them",
@@ -527,6 +529,12 @@ with sync_playwright() as p:
     )
     drag(pg, ".vpane >> nth=0 >> .grip", ".vpane >> nth=0", 0.9, 0.5)
     check("V4 a viewer cannot drop on itself", count(".vpane") == 2)
+    drag(pg, ".tpane >> nth=0 >> .grip", ".vpane >> nth=0", 0.5, 0.95)
+    below = pg.evaluate(
+        "(() => { const b = findBlock(L().root), p = parentIn(L().root, b.id);"
+        " return p && p.dir === 'col' && p.b.id === b.id && p.a.type === 'viewer'; })()"
+    )
+    check("V5 a lone terminal dropped at a viewer's bottom edge goes below it", below)
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")

@@ -1125,7 +1125,12 @@ function dropTarget(e) {
   if (drag && (drag.tabRow || drag.wsRow)) return null;
   const vp = e.target.closest(".vpane"), tp = e.target.closest(".tpane");
   if (drag && drag.term) {
-    if (vp) return { el: vp, id: vp.dataset.pid, zone: "center", deny: "Terminals stay in the terminal block" };
+    // The block is one Ghostty split tree, so only a lone terminal can leave it: the block moves.
+    if (vp) {
+      const { zone } = edgeOf(vp, e.clientX, e.clientY);
+      const deny = terms().length > 1 ? "Split terminals stay together: drag the viewer to the block edge" : null;
+      return { el: vp, id: vp.dataset.pid, zone, deny, block: true };
+    }
     if (tp) return { el: tp, id: tp.dataset.pid, zone: edgeOf(tp, e.clientX, e.clientY).zone, deny: tp.dataset.pid === drag.term ? "Drop on another terminal" : null };
     return null;
   }
@@ -1193,6 +1198,13 @@ document.addEventListener("drop", e => {
   e.preventDefault();
   const d = drag; drag = null;
   if (tgt.deny) return;
+  if (d.term && tgt.block) {
+    const b = findBlock(L().root);
+    removeFrom(L(), b.id);
+    replaceIn(L(), tgt.id, splitNode(byId(tgt.id), b, tgt.zone));
+    L().focus = d.term;
+    return renderWorkspace();
+  }
   if (d.term) return moveTerm(d.term, tgt);
   if (d.viewer) return moveViewer(d.viewer, tgt);
   let tab;
