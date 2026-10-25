@@ -367,6 +367,29 @@ with sync_playwright() as p:
     check("W18 the rail survives a reload", count(".wsh") == 0)
     pg.click("#sbToggle")
     check("W19 show sidebar brings the workspaces back", count(".wsh") == 3)
+    grip = pg.locator("#sbGrip").bounding_box()
+    gx, gy = grip["x"] + 5, grip["y"] + 200
+    pg.mouse.move(gx, gy)
+    pg.mouse.down()
+    pg.mouse.move(gx + 80, gy, steps=4)
+    pg.mouse.up()
+    wide = pg.locator("#sidebar").bounding_box()["width"]
+    pg.mouse.move(gx + 80, gy)
+    pg.mouse.down()
+    pg.mouse.move(gx + 600, gy, steps=4)
+    pg.mouse.up()
+    widest = pg.locator("#sidebar").bounding_box()["width"]
+    check(
+        "W20 drag the sidebar edge resizes it within 120-400",
+        abs(wide - 280) <= 2 and widest == 400,
+        f"{wide} {widest}",
+    )
+    pg.reload()
+    pg.wait_for_selector("#sbGrip")
+    check(
+        "W21 the sidebar width survives a reload",
+        pg.locator("#sidebar").bounding_box()["width"] == 400,
+    )
     pg.hover(".tab[data-tabid='t1']")
     pg.wait_for_timeout(700)
     card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
