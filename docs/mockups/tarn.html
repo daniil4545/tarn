@@ -99,6 +99,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .opt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 7px 0; }
 .opt + .opt { border-top: 1px solid var(--line); }
 .opt label { font-family: var(--mono); font-size: 12px; }
+.opt small.applies { color: var(--accent); }
 .opt small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
 .opt .ctl { display: flex; align-items: center; gap: 6px; }
 .opt select, .opt input[type=text], .opt input[type=number] { background: var(--term); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; font: 12px var(--mono); padding: 2px 6px; }
@@ -1434,23 +1435,23 @@ const GHOSTTY = {
   appearance: [
     { key: "theme", type: "select", def: "", values: ["", "Dracula", "Catppuccin Mocha", "Nord"], help: "Color theme. The app lists the installed themes." },
     { key: "window-theme", type: "select", def: "auto", values: ["auto", "system", "light", "dark", "ghostty"], help: "Window chrome: follow the system or the terminal colors." },
-    { key: "font-family", type: "text", def: "", help: "Empty uses the built-in JetBrains Mono." },
-    { key: "font-size", type: "number", def: 13, min: 6, max: 32, help: "Points; cmd+= and cmd+- change it for one terminal." },
-    { key: "background-opacity", type: "range", def: 1, min: 0.3, max: 1, step: 0.05, help: "Below 1 the desktop shows through." },
-    { key: "background-blur", type: "bool", def: false, help: "Blurs what shows through a transparent background." },
+    { key: "font-family", type: "text", def: "", help: "Empty uses the built-in JetBrains Mono. The file starts the list over, so this font replaces the one in your Ghostty config." },
+    { key: "font-size", type: "number", def: 13, min: 6, max: 32, help: "Points. A terminal where you pressed cmd+= or cmd+- keeps its own size." },
+    { key: "background-opacity", type: "range", def: 1, min: 0.3, max: 1, step: 0.05, applies: "restart", help: "Below 1 the desktop shows through." },
+    { key: "background-blur", type: "bool", def: false, help: "Blurs what shows through a transparent background. A radius or glass value in the file shows as text." },
     { key: "window-padding-x", type: "number", def: 2, min: 0, max: 40, help: "Space between the window edge and the text, in points." },
     { key: "unfocused-split-opacity", type: "range", def: 0.7, min: 0.15, max: 1, step: 0.05, help: "How much an unfocused split is dimmed." },
     { key: "cursor-style", type: "select", def: "block", values: ["block", "bar", "underline"], help: "Shell integration shows a bar at the prompt." },
-    { key: "cursor-style-blink", type: "bool", def: true, help: "Off stops blinking; programs may still ask for it." },
-    { key: "macos-titlebar-style", type: "select", def: "transparent", values: ["transparent", "native", "tabs", "hidden"], help: "How the title bar looks." },
+    { key: "cursor-style-blink", type: "select", def: "", auto: true, values: ["", "true", "false"], help: "Default follows the program (DEC mode 12); true or false forces it." },
+    { key: "macos-titlebar-style", type: "select", def: "transparent", values: ["transparent", "native", "hidden"], applies: "windows", help: "How the title bar looks." },
   ],
   terminal: [
     { key: "copy-on-select", type: "select", def: "none", values: ["none", "clipboard"], help: "Copy selected text without cmd+C." },
     { key: "mouse-hide-while-typing", type: "bool", def: false, help: "Hide the pointer while typing." },
     { key: "clipboard-paste-protection", type: "bool", def: true, help: "Ask before pasting text that may run commands." },
-    { key: "macos-option-as-alt", type: "select", def: "false", values: ["false", "true", "left", "right"], help: "Option sends Alt instead of special characters." },
+    { key: "macos-option-as-alt", type: "select", def: "", auto: true, values: ["", "false", "true", "left", "right"], help: "Option sends Alt instead of special characters. Default: on for US layouts, off for others." },
     { key: "link-url", type: "bool", def: true, help: "Cmd+click opens URLs." },
-    { key: "notify-on-command-finish", type: "select", def: "never", values: ["never", "unfocused", "always"], help: "Notify when a long command finishes." },
+    { key: "notify-on-command-finish", type: "select", def: "never", values: ["never", "unfocused", "always"], help: "Rings the bell when a command that ran over 5 seconds finishes while the window is not focused." },
   ],
   windows: [
     { key: "window-save-state", type: "select", def: "default", values: ["default", "never", "always"], help: "Restore windows, tabs and splits on launch; default follows macOS." },
@@ -1468,8 +1469,8 @@ const KEYS = [
     ["⇧⌘[ ⇧⌘]", "Previous or next tab"], ["⌘↩", "Full screen"],
   ]],
   ["Splits", [
-    ["⌘D ⇧⌘D", "Split right or down"], ["⌘[ ⌘]", "Previous or next split"], ["⌥⌘ arrows", "Focus the split in that direction"],
-    ["⌃⌘ arrows", "Resize the split"], ["⌃⌘=", "Equalize splits"], ["⇧⌘↩", "Zoom the split"],
+    ["⌘D ⇧⌘D", "Split right or down"], ["⌘[ ⌘]", "Previous or next split"], ["⌥⌘←↑↓→", "Focus the split in that direction"],
+    ["⌃⌘←↑↓→", "Resize the split"], ["⌃⌘=", "Equalize splits"], ["⇧⌘↩", "Zoom the split"],
   ]],
   ["Terminal", [
     ["⌘K", "Clear the screen"], ["⌘F", "Find; ⌘G and ⇧⌘G for next and previous"], ["⌘= ⌘- ⌘0", "Font size bigger, smaller, reset"],
@@ -1488,12 +1489,19 @@ const gval = key => key in gset ? gset[key] : gopt(key).def;
 function control(o) {
   const v = gval(o.key), id = `g-${o.key}`;
   if (o.type === "bool") return `<input type="checkbox" id="${id}" data-gkey="${o.key}"${v ? " checked" : ""}>`;
-  if (o.type === "select") return `<select id="${id}" data-gkey="${o.key}">${o.values.map(x => `<option value="${x}"${String(v) === x ? " selected" : ""}>${x || "(none)"}</option>`).join("")}</select>`;
+  if (o.type === "select") return `<select id="${id}" data-gkey="${o.key}">${o.values.map(x => `<option value="${x}"${String(v) === x ? " selected" : ""}>${x || (o.auto ? "default (auto)" : "(none)")}</option>`).join("")}</select>`;
   if (o.type === "range") return `<input type="range" id="${id}" data-gkey="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${v}"><span class="val">${v}</span>`;
   return `<input type="${o.type}" id="${id}" data-gkey="${o.key}" value="${esc(String(v))}"${o.type === "number" ? ` min="${o.min}" max="${o.max}"` : ""}>`;
 }
-const optRow = o => `<div class="opt" data-opt="${o.key}"><label for="g-${o.key}">${o.key}</label><span class="ctl">${o.key in gset ? `<span class="set" title="Set here; overrides the same line in the Ghostty config">set in tarn</span><button class="reset" data-greset="${o.key}">Reset</button>` : ""}${control(o)}</span><small>${esc(o.help)}</small></div>`;
-const tarnConf = () => Object.keys(gset).length ? Object.entries(gset).map(([k, v]) => `${k} = ${v === "" ? '""' : v}`).join("\n") : "# empty: every value comes from the Ghostty config";
+const APPLIES = { restart: "Restart needed.", windows: "Applies to new windows." };
+const optRow = o => `<div class="opt" data-opt="${o.key}"><label for="g-${o.key}">${o.key}</label><span class="ctl">${o.key in gset ? `<span class="set" title="Set here; overrides the same line in the Ghostty config">set in tarn</span><button class="reset" data-greset="${o.key}">Reset</button>` : ""}${control(o)}</span><small>${esc(o.help)}</small>${APPLIES[o.applies] ? `<small class="applies">${APPLIES[o.applies]}</small>` : ""}</div>`;
+const tarnConf = () => {
+  const lines = Object.values(GHOSTTY).flat().filter(o => o.key in gset).flatMap(o => {
+    const v = gset[o.key], line = `${o.key} = ${v === "" ? '""' : v}`;
+    return o.key === "font-family" ? [`${o.key} = ""`, line] : [line];
+  });
+  return lines.length ? lines.join("\n") : "# empty: every value comes from the Ghostty config";
+};
 function renderSettings() {
   const sec = k => `<section data-pane="${k}" hidden><h3>${SEC_TITLE[k]}</h3><div class="setgroup">${GHOSTTY[k].map(optRow).join("")}</div>${k === "windows" ? `<p class="setnote">Written to <code>~/.config/tarn/ghostty.conf</code>, loaded after your Ghostty config:</p><pre id="tarnConf">${esc(tarnConf())}</pre>` : `<p class="setnote">Ghostty options. Others, keys included, are in Ghostty Config.</p>`}</section>`;
   const help = `<section data-pane="help" hidden><h3>Help</h3>${KEYS.map(([g, rows]) => `<h4>${g}</h4><div class="setgroup"><table class="keys">${rows.map(([k, d]) => `<tr><td>${k}</td><td>${d}</td><td class="src">${g === "Viewer" ? "tarn" : "Ghostty"}</td></tr>`).join("")}</table></div>`).join("")}<p class="setnote">Ghostty defaults. A <code>keybind</code> line in the Ghostty config changes them, and the app shows the keys in effect.</p></section>`;
@@ -1514,10 +1522,11 @@ function showSection(k) {
   document.querySelectorAll("#setNav [data-sec]").forEach(b => b.classList.toggle("on", b.dataset.sec === k));
   document.querySelectorAll("#setMain [data-pane]").forEach(s => { s.hidden = s.dataset.pane !== k; });
 }
-function setGhostty(key, v) {
+function setGhostty(key, v, reset) {
   const o = gopt(key);
   if (o.type === "number" || o.type === "range") v = +v;
-  if (v === o.def) delete gset[key]; else gset[key] = v;
+  // Only Reset (or the default entry of an auto option) removes the line; a value equal to the default stays written.
+  if (reset || (o.auto && v === "")) delete gset[key]; else gset[key] = v;
   try { localStorage.setItem("tarn-mockup-ghostty", JSON.stringify(gset)); } catch (err) { /* ignore */ }
   applyGhostty();
   const row = document.querySelector(`[data-opt="${key}"]`);
@@ -1542,7 +1551,7 @@ document.addEventListener("click", e => {
   const nav = e.target.closest("#setNav [data-sec]");
   if (nav) return showSection(nav.dataset.sec);
   const reset = e.target.closest("[data-greset]");
-  if (reset) return setGhostty(reset.dataset.greset, gopt(reset.dataset.greset).def);
+  if (reset) return setGhostty(reset.dataset.greset, gopt(reset.dataset.greset).def, true);
 });
 document.addEventListener("input", e => {
   const k = e.target.dataset && e.target.dataset.gkey;
