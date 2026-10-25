@@ -30,6 +30,8 @@ setup and upgrades: [docs/install.md](docs/install.md).
 Requirements: macOS, Xcode and Zig as listed in [HACKING.md](HACKING.md), [Nushell](https://www.nushell.sh)
 for the build script, Claude Code for agent state.
 
+`zig build run` is not used on macOS (it looks for `Ghostty.app`).
+
 1. Build the app: `macos/build.nu --configuration Debug --action build`
 2. Open `macos/build/Debug/Tarn.app`.
 3. Add the plugin: `claude plugin marketplace add <path to this repo>/plugin`, then
