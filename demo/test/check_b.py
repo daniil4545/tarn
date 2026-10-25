@@ -75,7 +75,8 @@ def run(base):
             settle()
             src.dispatch_event("pointerdown")
             src.dispatch_event(
-                "dragstart", {"dataTransfer": src.evaluate_handle("() => new DataTransfer()")}
+                "dragstart",
+                {"dataTransfer": src.evaluate_handle("() => new DataTransfer()")},
             )
             return pg.evaluate_handle("new DataTransfer()")
 
@@ -660,10 +661,13 @@ def run(base):
             pg.wait_for_function(
                 "[...document.querySelectorAll('.viewer-pane iframe')].every((f) => f.contentDocument.querySelector('.ftab'))"
             )
-            return sorted(t for i in range(count(VIEWER)) for t in ftabs(i).all_inner_texts())
+            return sorted(
+                t for i in range(count(VIEWER)) for t in ftabs(i).all_inner_texts()
+            )
 
         cmd(pg, "viewer.open", {"path": "docs/spec.md"})
-        cmd(pg, 
+        cmd(
+            pg,
             "pane.split",
             {
                 "id": layout("L.viewers(tab.layout)[0].viewer"),
@@ -684,7 +688,8 @@ def run(base):
             count(VIEWER) == 1 and set(files) <= set(merged),
             str(merged),
         )
-        cmd(pg, 
+        cmd(
+            pg,
             "pane.split",
             {
                 "id": layout("L.viewers(tab.layout)[0].viewer"),

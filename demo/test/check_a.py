@@ -68,13 +68,21 @@ def calls(pg, name, from_pane=False):
     """Payloads of a command sent since the page started. from_pane keeps what a terminal pane sent
     (the layout repeats viewer.open with the id of the viewer it created)."""
     found = pg.evaluate(f"window.calls.filter(c => c[0] === '{name}').map(c => c[1])")
-    return [c for c in found if str(c.get("pane", "p")).startswith("p")] if from_pane else found
+    return (
+        [c for c in found if str(c.get("pane", "p")).startswith("p")]
+        if from_pane
+        else found
+    )
 
 
 def seeded(base):
     with app_page(base) as (pg, errors, requests):
         texts = {}
-        for pane, ready in (("p4", "root@prod:~#"), ("p3", "git status"), ("p1", "Done")):
+        for pane, ready in (
+            ("p4", "root@prod:~#"),
+            ("p3", "git status"),
+            ("p1", "Done"),
+        ):
             show_pane(pg, pane)
             texts[pane] = until(pg, pane, ready)
         text1, text3, text4 = texts["p1"], texts["p3"], texts["p4"]
@@ -98,7 +106,10 @@ def seeded(base):
         time.sleep(0.2)
         check(
             "click on a path opens it in the viewer",
-            [(c["path"], c["pane"], c.get("line")) for c in calls(pg, "viewer.open", True)]
+            [
+                (c["path"], c["pane"], c.get("line"))
+                for c in calls(pg, "viewer.open", True)
+            ]
             == [(f"{REPO}/docs/spec.md", "p1", None)],
             str(calls(pg, "viewer.open")),
         )

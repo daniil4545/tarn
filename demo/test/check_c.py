@@ -16,7 +16,10 @@ check = Checks()
 ROOT = "/Users/daniil/Dev/self-projects/tarn"
 SPEC = f"{ROOT}/docs/spec.md"
 VIEWER = '.tabview:not([hidden]) .leaf[data-kind="viewer"]'
-FILLER = "\n\n".join(f"Paragraph {i} of the spec text, long enough to scroll the page." for i in range(1, 61))
+FILLER = "\n\n".join(
+    f"Paragraph {i} of the spec text, long enough to scroll the page."
+    for i in range(1, 61)
+)
 SPEC_TEXT = f"""# Spec
 
 ```mermaid
@@ -158,7 +161,11 @@ def viewer_checks(pg, base):
 
 def agent_write(pg, note):
     """The agent appends a note to the spec, as its hook-driven edit does."""
-    cmd(pg, "vfs.write", {"path": SPEC, "text": vfs_text(pg, SPEC) + note, "by": "agent"})
+    cmd(
+        pg,
+        "vfs.write",
+        {"path": SPEC, "text": vfs_text(pg, SPEC) + note, "by": "agent"},
+    )
 
 
 def task_checks(pg, v, open_file):
@@ -167,7 +174,8 @@ def task_checks(pg, v, open_file):
     v.locator(".doc input[data-line]").first.wait_for()
     v.locator(".doc input[data-line]").first.click()
     pg.wait_for_function(
-        "p => __tarn.snapshot().vfs.files[p].text.includes('- [x] first task')", arg=SPEC
+        "p => __tarn.snapshot().vfs.files[p].text.includes('- [x] first task')",
+        arg=SPEC,
     )
     check("C2 ticking a task box writes the file", True)
 

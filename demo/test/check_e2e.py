@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import DEMO, Checks, app_page, cmd, server, show_pane
+from lib import DEMO, Checks, app_page, server, show_pane
 
 check = Checks()
 TERM = '.tabview:not([hidden]) .leaf[data-kind="term"]'
@@ -83,7 +83,10 @@ def story(base):
         pg.evaluate("__tarn.clock.advance(6000)")
         time.sleep(0.3)
         reg = snap(pg)["registry"]["p6"]
-        check("4 Allow in the card lets the turn end in waiting", reg["state"] == "waiting")
+        check(
+            "4 Allow in the card lets the turn end in waiting",
+            reg["state"] == "waiting",
+        )
 
         # open a file from the output in the viewer
         pos = pg.evaluate("__tarn.linkAt('p6', 'docs/spec.md')")
@@ -104,18 +107,30 @@ def story(base):
         # split, then drag a pane to a zone
         pg.locator("[data-pane='p6'] canvas").first.click()
         pg.keyboard.press("Meta+d")
-        pg.wait_for_function("document.querySelectorAll('.tabview:not([hidden]) .leaf[data-kind=term]').length === 2")
+        pg.wait_for_function(
+            "document.querySelectorAll('.tabview:not([hidden]) .leaf[data-kind=term]').length === 2"
+        )
         check("7 Cmd+D splits the terminal", pg.locator(TERM).count() == 2)
-        before = pg.evaluate("JSON.stringify(__tarn.snapshot().workspaces.tabs.t6.layout)")
+        before = pg.evaluate(
+            "JSON.stringify(__tarn.snapshot().workspaces.tabs.t6.layout)"
+        )
         area = pg.locator("#ws").bounding_box()
         dt = pg.evaluate_handle("new DataTransfer()")
-        pos = {"dataTransfer": dt, "clientX": area["x"] + 10, "clientY": area["y"] + area["height"] / 2}
-        pg.locator('.tabview:not([hidden]) .leaf[data-kind="viewer"] .grip').dispatch_event("dragstart", {"dataTransfer": dt})
+        pos = {
+            "dataTransfer": dt,
+            "clientX": area["x"] + 10,
+            "clientY": area["y"] + area["height"] / 2,
+        }
+        pg.locator(
+            '.tabview:not([hidden]) .leaf[data-kind="viewer"] .grip'
+        ).dispatch_event("dragstart", {"dataTransfer": dt})
         pg.locator("#ws").dispatch_event("dragover", pos)
         framed = pg.locator("#ws > .drop").count() == 1
         pg.locator("#ws").dispatch_event("drop", pos)
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
-        after = pg.evaluate("JSON.stringify(__tarn.snapshot().workspaces.tabs.t6.layout)")
+        after = pg.evaluate(
+            "JSON.stringify(__tarn.snapshot().workspaces.tabs.t6.layout)"
+        )
         check(
             "8 dragging the viewer to the left edge frames the zone and moves it",
             framed and before != after and pg.locator(TERM).count() == 2,
@@ -131,8 +146,14 @@ def story(base):
         pg.fill("#g-font-size", "16")
         pg.press("#g-font-size", "Tab")
         pg.select_option("#g-theme", "dracula")
-        opts = pg.evaluate("[__tarn.term('p6').options.fontSize, __tarn.term('p6').options.theme.background]")
-        check("9 font-size and theme in Settings reach the terminal", opts == [16, "#282a36"], str(opts))
+        opts = pg.evaluate(
+            "[__tarn.term('p6').options.fontSize, __tarn.term('p6').options.theme.background]"
+        )
+        check(
+            "9 font-size and theme in Settings reach the terminal",
+            opts == [16, "#282a36"],
+            str(opts),
+        )
         pg.keyboard.press("Escape")
 
         # Cmd and Ctrl+Alt keys
@@ -148,7 +169,11 @@ def story(base):
         first = snap(pg)["workspaces"]["cur"]
         pg.keyboard.press("Control+Alt+2")
         second = snap(pg)["workspaces"]["cur"]
-        check("11 Cmd+1 and Ctrl+Alt+2 switch tabs", first == "t1" and second == "t2", f"{first} {second}")
+        check(
+            "11 Cmd+1 and Ctrl+Alt+2 switch tabs",
+            first == "t1" and second == "t2",
+            f"{first} {second}",
+        )
         total = n + 2
 
         # reload keeps state
@@ -157,7 +182,9 @@ def story(base):
         s = snap(pg)
         check(
             "12 a reload keeps tabs and settings",
-            len(s["workspaces"]["tabs"]) == total and s["config"]["font-size"] == 16 and s["config"]["theme"] == "dracula",
+            len(s["workspaces"]["tabs"]) == total
+            and s["config"]["font-size"] == 16
+            and s["config"]["theme"] == "dracula",
         )
 
         # reset the demo from the palette
@@ -169,10 +196,14 @@ def story(base):
         s = snap(pg)
         check(
             "13 Reset demo returns to the seed and the default settings",
-            len(s["workspaces"]["tabs"]) == 6 and s["config"]["font-size"] == 13 and s["config"]["theme"] == "",
+            len(s["workspaces"]["tabs"]) == 6
+            and s["config"]["font-size"] == 13
+            and s["config"]["theme"] == "",
         )
 
-        check("14 no console errors in the whole walk", not errors, "; ".join(errors[:3]))
+        check(
+            "14 no console errors in the whole walk", not errors, "; ".join(errors[:3])
+        )
         check(
             "15 no request leaves the demo origin",
             all(u.startswith((base, "data:")) for u in requests),
@@ -183,10 +214,14 @@ def story(base):
 
 def readme():
     text = (DEMO / "README.md").read_text()
-    section = text.split("Built vs planned", 1)[-1] if "Built vs planned" in text else ""
+    section = (
+        text.split("Built vs planned", 1)[-1] if "Built vs planned" in text else ""
+    )
     check(
         "17 the README lists what is built and what is planned",
-        "CLI" in section and "planned" in section.lower() and "built" in section.lower(),
+        "CLI" in section
+        and "planned" in section.lower()
+        and "built" in section.lower(),
     )
 
 
