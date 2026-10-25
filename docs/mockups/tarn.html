@@ -575,7 +575,7 @@ function renderSidebar() {
   for (const w of wss) {
     const n = w.tabs.length;
     // A folded workspace still shows how many tabs it has and its most urgent state.
-    h += `<div class="wsh" data-wsh="${w.id}" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? esc(short(w.folder)) : "no folder"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.folder ? short(w.folder) : "~")}">+</button></div>`;
+    h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? esc(short(w.folder)) : "no folder"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.folder ? short(w.folder) : "~")}">+</button></div>`;
     if (!w.collapsed) h += ordered(w).map(row).join("") + (n ? "" : `<div class="wsempty">No tabs</div>`);
   }
   h += `<button class="tab add" id="wsNew">+ New workspace</button>`;
@@ -987,7 +987,7 @@ function edgeOf(el, x, y) {
   return { edge, zone: edge === fx ? "left" : edge === 1 - fx ? "right" : edge === fy ? "top" : "bottom" };
 }
 function dropTarget(e) {
-  if (drag && drag.tabRow) return null;
+  if (drag && (drag.tabRow || drag.wsRow)) return null;
   const vp = e.target.closest(".vpane"), tp = e.target.closest(".tpane");
   if (drag && drag.term) {
     if (vp) return { el: vp, id: vp.dataset.pid, zone: "center", deny: "Terminals stay in the terminal block" };
@@ -1068,10 +1068,30 @@ document.addEventListener("dragend", e => {
   drag = null; clearDrop(); document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging")); });
 
 document.addEventListener("dragstart", e => {
-  const row = e.target.closest(".tab[data-tabid]"); if (!row) return;
-  drag = { tabRow: row.dataset.tabid };
+  const row = e.target.closest(".tab[data-tabid]"), head = e.target.closest(".wsh[data-wsh]");
+  if (row) drag = { tabRow: row.dataset.tabid };
+  else if (head) drag = { wsRow: head.dataset.wsh };
+  else return;
   e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", "tarn-tab");
 }, true);
+// A workspace header dragged onto another header goes before it.
+document.addEventListener("dragover", e => {
+  if (!drag || !drag.wsRow) return;
+  document.querySelectorAll(".dropmark").forEach(x => x.classList.remove("dropmark"));
+  const head = e.target.closest(".wsh[data-wsh]");
+  if (head) { e.preventDefault(); head.classList.add("dropmark"); }
+});
+document.addEventListener("drop", e => {
+  if (!drag || !drag.wsRow) return;
+  e.preventDefault();
+  const id = drag.wsRow, head = e.target.closest(".wsh[data-wsh]");
+  drag = null;
+  if (!head || head.dataset.wsh === id) return;
+  const w = wsById(id);
+  wss = wss.filter(x => x !== w);
+  wss.splice(wss.indexOf(wsById(head.dataset.wsh)), 0, w);
+  saveState(); renderSidebar();
+});
 document.addEventListener("dragover", e => {
   if (!drag || !drag.tabRow) return;
   document.querySelectorAll(".dropmark").forEach(x => x.classList.remove("dropmark"));

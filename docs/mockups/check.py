@@ -319,6 +319,11 @@ with sync_playwright() as p:
     )
     pg.click(".tab[data-tabid='t6'] .x")
     check("W13 an empty workspace stays with No tabs", vis(".wsempty"))
+    drag(pg, ".wsh[data-wsh='w0']", ".wsh[data-wsh='w1']", 0.5, 0.5)
+    check(
+        "W13a drag a workspace header before another reorders workspaces",
+        pg.evaluate("wss.map(w => w.id)")[0] == "w0",
+    )
     pg.click(".wsh[data-wsh='w2']")
     pg.reload()
     pg.wait_for_selector(".wsh")
