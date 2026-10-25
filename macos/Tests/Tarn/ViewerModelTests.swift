@@ -129,6 +129,25 @@ struct ViewerPathsTests {
         #expect(ViewerPaths.classify(dir + "/nope") == .missing)
     }
 
+    @Test func binaryIsDecidedByContent() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        func write(_ name: String, _ data: Data) -> String {
+            let path = dir + "/" + name
+            FileManager.default.createFile(atPath: path, contents: data)
+            return path
+        }
+        #expect(ViewerPaths.isBinary(write("nul", Data([0x61, 0x00, 0x62]))))
+        #expect(ViewerPaths.isBinary(write("bad", Data([0xFF, 0xFE, 0x41]))))
+        #expect(!ViewerPaths.isBinary(write("text", Data("plain \u{e9} text\n".utf8))))
+        #expect(!ViewerPaths.isBinary(write("empty", Data())))
+        // A two-byte character cut by the 8 KB edge stays text.
+        let cut = Data(repeating: 0x61, count: 8191) + Data("\u{e9}".utf8) + Data(repeating: 0x61, count: 100)
+        #expect(!ViewerPaths.isBinary(write("cut", cut)))
+        #expect(ViewerPaths.isBinary("/bin/ls"))
+        #expect(!ViewerPaths.isBinary(dir + "/missing"))
+    }
+
     @Test func sourceFilesAreTextAndSpecialFilesAreNeverRead() throws {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }
