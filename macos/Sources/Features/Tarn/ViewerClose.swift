@@ -17,6 +17,15 @@ enum ViewerClose {
         }
     }
 
+    /// Whether the close goes on after the user's choice. Save needs every file written.
+    static func proceeds(_ choice: Choice, saved: () -> Bool) -> Bool {
+        switch choice {
+        case .save: saved()
+        case .discard: true
+        case .cancel: false
+        }
+    }
+
     /// Dirty paths of the given panes, in order, without repeats.
     @MainActor
     static func dirtyPaths(in models: [ViewerModel]) -> [String] {
@@ -42,13 +51,9 @@ enum ViewerClose {
         let paths = dirtyPaths(in: models)
         guard !paths.isEmpty else { return false }
         ask(paths, window: window) { choice in
-            switch choice {
-            case .save: if models.allSatisfy({ $0.saveAll() }) { proceed() }
-            case .discard:
-                models.forEach { $0.discardEdits() }
-                proceed()
-            case .cancel: break
-            }
+            guard proceeds(choice, saved: { models.allSatisfy { $0.saveAll() } }) else { return }
+            if choice == .discard { models.forEach { $0.discardEdits() } }
+            proceed()
         }
         return true
     }
@@ -61,11 +66,7 @@ enum ViewerClose {
         let paths = dirtyPaths(in: models)
         guard !paths.isEmpty else { return false }
         ask(paths, window: NSApp.keyWindow ?? TerminalController.all.first?.window) { choice in
-            switch choice {
-            case .save: proceed(models.allSatisfy { $0.saveAll() })
-            case .discard: proceed(true)
-            case .cancel: proceed(false)
-            }
+            proceed(proceeds(choice, saved: { models.allSatisfy { $0.saveAll() } }))
         }
         return true
     }

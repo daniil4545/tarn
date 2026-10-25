@@ -354,6 +354,13 @@ struct ViewerCloseTests {
         #expect(ViewerClose.choice(for: .cancel) == .cancel)
     }
 
+    @Test func closeGoesOnForDiscardAndForASuccessfulSaveOnly() {
+        #expect(ViewerClose.proceeds(.discard) { false })
+        #expect(ViewerClose.proceeds(.save) { true })
+        #expect(!ViewerClose.proceeds(.save) { false })
+        #expect(!ViewerClose.proceeds(.cancel) { true })
+    }
+
     @Test func messageNamesOneFileOrCountsMany() {
         #expect(ViewerClose.message(for: ["/p/a.md"]).title == "Save changes to a.md?")
         let many = (1...10).map { "/p/f\($0).md" }

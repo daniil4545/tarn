@@ -709,6 +709,13 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             return
         }
 
+        // The process exited (or a script closed the surface) with no question: unsaved viewer
+        // edits are still asked. Cancel leaves the tab open with the ended terminal.
+        if !withConfirmation,
+           ViewerClose.intercept([self], window: window, proceed: { self.closeSurface(node, withConfirmation: false) }) {
+            return
+        }
+
         // More than 1 window means we have tabs and we're closing a tab
         if window?.tabGroup?.windows.count ?? 0 > 1 {
             if withConfirmation {
