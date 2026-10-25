@@ -10,6 +10,7 @@ extend-exclude = [
   "zig-out/*",
   # vendored code
   "vendor/*",
+  "demo/vendor/*",
   "pkg/*",
   "src/stb/*",
   # "grey" color names are valid
