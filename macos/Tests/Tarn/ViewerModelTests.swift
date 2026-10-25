@@ -350,12 +350,50 @@ struct ViewerCloseTests {
         #expect(source.isEmpty)
     }
 
-    @Test func aTabWithEditsIsNotTakenOverACopyThatWouldHideThem() throws {
-        let (source, dir) = try model(editing: ["a.md": "x"])
+    private func pair(source: String, target: String) throws -> (ViewerModel, ViewerModel, String) {
+        let (src, dir) = try model(editing: ["a.md": source])
+        let dst = ViewerModel(root: dir)
+        dst.open(OpenTarget(path: dir + "/a.md"), pin: true)
+        if !target.isEmpty { dst.handle(["t": "edit", "path": dir + "/a.md", "text": target, "rev": 1]) }
+        return (src, dst, dir)
+    }
+
+    @Test func absorbKeepsTheSourceEditsWhenOnlyTheSourceHasThem() throws {
+        let (src, dst, dir) = try pair(source: "src", target: "")
+        let path = dir + "/a.md"
         defer { try? FileManager.default.removeItem(atPath: dir) }
-        let destination = ViewerModel(root: dir)
-        destination.open(OpenTarget(path: dir + "/a.md"), pin: true)
-        #expect(!destination.canTake(dir + "/a.md", from: source))
+        #expect(dst.canAbsorb(src))
+        dst.absorb(src)
+        #expect(dst.dirtyPaths == [path])
+        #expect(dst.snapshot.count == 1)
+    }
+
+    @Test func absorbKeepsTheTargetEditsWhenOnlyTheTargetHasThem() throws {
+        let (src, dst, dir) = try pair(source: "", target: "dst")
+        let path = dir + "/a.md"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(dst.canAbsorb(src))
+        dst.absorb(src)
+        #expect(dst.dirtyPaths == [path])
+        #expect(dst.snapshot.count == 1)
+    }
+
+    @Test func absorbRefusesTwoDifferentEditsAndChangesNothing() throws {
+        let (src, dst, dir) = try pair(source: "src", target: "dst")
+        let path = dir + "/a.md"
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(!dst.canAbsorb(src))
+        #expect(!dst.canTake(path, from: src))
+        #expect(src.dirtyPaths == [path])
+        #expect(dst.dirtyPaths == [path])
+    }
+
+    @Test func absorbMergesEqualEditsIntoOne() throws {
+        let (src, dst, dir) = try pair(source: "same", target: "same")
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        #expect(dst.canAbsorb(src))
+        dst.absorb(src)
+        #expect(dst.snapshot.count == 1)
     }
 
     @Test func aTreeRowFileOpensFromDiskInTheDestination() throws {

@@ -95,10 +95,17 @@ final class ViewerModel {
         pushAll()
     }
 
-    /// Whether `take(_:from:)` loses nothing: this viewer must not hold its own copy of a file
-    /// that has unsaved edits in `other`.
+    /// Whether `take(_:from:)` loses nothing. Both viewers may hold the file: a clean copy gives way
+    /// to a copy with edits, equal edits are one, but two different edited copies cannot share a
+    /// tab (tabs and documents are keyed by path), so that drop is refused and both stay as they are.
     func canTake(_ path: String, from other: ViewerModel) -> Bool {
-        docs[path] == nil || other.docs[path]?.isDirty != true
+        guard let mine = docs[path], let theirs = other.docs[path] else { return true }
+        return !(mine.isDirty && theirs.isDirty && mine.text != theirs.text)
+    }
+
+    /// `canTake` for every file of `other`.
+    func canAbsorb(_ other: ViewerModel) -> Bool {
+        other.tabs.tabs.allSatisfy { canTake($0.path, from: other) }
     }
 
     /// Takes one file from another viewer's tab, edits included, or opens it from disk when it
@@ -126,8 +133,11 @@ final class ViewerModel {
 
     var isEmpty: Bool { tabs.tabs.isEmpty }
 
+    /// Brings the document over unless this viewer holds the same file with edits of its own
+    /// (or an equal copy). Callers check `canTake` first.
     private func adopt(_ path: String, from other: ViewerModel) {
-        guard docs[path] == nil, let doc = other.docs[path] else { return }
+        guard let doc = other.docs[path] else { return }
+        if let mine = docs[path], mine.isDirty || !doc.isDirty { return }
         docs[path] = doc
         watchers[path] = FileWatcher(path: path) { [weak self] in self?.diskChanged(path) }
     }

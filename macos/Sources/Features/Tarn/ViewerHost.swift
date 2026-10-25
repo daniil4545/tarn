@@ -238,6 +238,10 @@ final class ViewerHost: ObservableObject {
             guard let pane = panes[id] else { return }
             if case let .into(destination) = plan {
                 guard destination != id, let target = panes[destination] else { return }
+                guard target.model.canAbsorb(pane.model) else {
+                    target.model.toast("A file is open here with other edits: save one copy first")
+                    return
+                }
                 target.model.absorb(pane.model)
                 discard(id)
                 lastViewer = destination
