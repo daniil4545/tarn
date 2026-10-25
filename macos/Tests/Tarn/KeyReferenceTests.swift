@@ -47,8 +47,13 @@ struct KeyReferenceTests {
 
     @Test @MainActor func viewerKeysAreFixedAndComeFromTheTable() {
         let viewer = KeyReference.groups.first { $0.title == "Viewer" }
-        #expect(viewer?.rows.map(\.source) == Array(repeating: "tarn", count: 4))
+        #expect(viewer?.rows.map(\.source) == Array(repeating: "tarn", count: ViewerWebView.keyTable.count + 1))
         #expect(viewer?.rows.compactMap(\.fixedKeys).contains("⌘S") == true)
+        // The three keys with a menu item in the terminal show their glyphs and name that item.
+        let fixed = viewer?.rows.compactMap(\.fixedKeys) ?? []
+        #expect(fixed.contains("⌥⌘B") && fixed.contains("⇧⌘E"))
+        #expect(viewer?.rows.first { $0.fixedKeys == "⌥⌘B" }?.label.contains("Toggle Pane") == true)
+        #expect(viewer?.rows.first { $0.fixedKeys == "⇧⌘E" }?.label.contains("Focus Files") == true)
         // Cmd+B also works from the terminal (View > Toggle Files); the row says so.
         #expect(viewer?.rows.first { $0.fixedKeys == "⌘B" }?.label.contains("Toggle Files") == true)
     }

@@ -87,7 +87,7 @@ enum KeyReference {
             Row("Reload the Ghostty config", action: "reload_config"),
             Row("Settings", action: "open_config"),
         ]),
-        Group(title: "Viewer", rows: ViewerWebView.keyTable.map { Row($0.help, keys: "⌘\($0.key.uppercased())") }
+        Group(title: "Viewer", rows: ViewerWebView.keyTable.map { Row($0.help, keys: ViewerWebView.keyText($0)) }
             + [Row("Close the file tab", keys: "⌘W")]),
     ]
 
