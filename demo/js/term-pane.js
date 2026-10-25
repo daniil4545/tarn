@@ -16,7 +16,7 @@ import { ENGINE_KEYS, effectiveSize, engineOptions, optionAsAlt, copyOnSelect } 
 import { HOME } from "./vfs-seed.js";
 import { load, save } from "./storage.js";
 
-const LOCAL = { user: "daniil", host: "MacBook", home: HOME };
+const LOCAL = { user: "you", host: "mac", home: HOME };
 const LONG_COMMAND_MS = 3000;
 const HISTORY_LIMIT = 200;
 
@@ -200,7 +200,7 @@ export function createPane(id, { cwd }) {
 // Wires the module to the bus; `disk` is the vfs from startVfs().
 export function startPanes({ vfs: disk }) {
   vfs = disk;
-  history.push(...load("history", []));
+  history.push(...load("history", [], (v) => Array.isArray(v) && v.every((x) => typeof x === "string")));
   const target = (payload) => panes.get(payload.id ?? focusedId);
 
   bus.handle("term.clear", (p) => target(p)?.clear());

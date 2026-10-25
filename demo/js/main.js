@@ -11,7 +11,7 @@ import { createPane, startPanes, panesReady } from "./term-pane.js";
 import { startViewer, createViewerPane } from "./viewer.js";
 import { startWorkspaces, focusArea } from "./workspace.js";
 import { startChrome } from "./chrome.js";
-import { startSettings } from "./settings.js";
+import { startSettings, settingsOpen } from "./settings.js";
 import { startEffects } from "./settings-effects.js";
 import { TAB_KEYS } from "./keys/tabs.js";
 import { SPLIT_KEYS } from "./keys/splits.js";
@@ -27,6 +27,7 @@ bus.on("pane:focused", ({ pane }) => { focused = pane; });
 
 const ROWS = [...TAB_KEYS, ...SPLIT_KEYS, ...FIND_KEYS, ...TERMINAL_KEYS, ...viewerKeys, ...helpKeys];
 
+bus.on("toast", ({ text }) => toast(text)); // first: boot code may report a failed load
 startConfig();
 startEffects();
 startRegistry({ now: clock.now, isFocused: (pane) => pane === focused });
@@ -37,9 +38,8 @@ startWorkspaces({ createPane, createViewer: createViewerPane });
 startDemoReset();
 startChrome(document.getElementById("main"), [...ROWS, RESET_ROW]);
 startSettings(ROWS);
-installKeys(ROWS, { focus: focusArea });
+installKeys(ROWS, { focus: () => (settingsOpen() ? "modal" : focusArea()) });
 lockKeysInFullscreen();
-bus.on("toast", ({ text }) => toast(text));
 installTestContract();
 await panesReady();
 document.documentElement.dataset.ready = "true";

@@ -2,23 +2,24 @@
 // Counterpart of Sidebar.swift (SidebarLayout, Sidebar). Drag of rows and headers: sidebar-drag.js.
 import { bus } from "./bus.js";
 import { read } from "./state.js";
-import { load, save } from "./storage.js";
+import { isObject, load, save } from "./storage.js";
 import { flatTabs } from "./workspace.js";
 import { tabStatus, workspaceStatus, isAgentTab } from "./tab-status.js";
+import { esc } from "./esc.js";
 
 export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
 const TOGGLE = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
 
 const RAIL_WIDTH = 44, MIN = 120, MAX = 400, FOLD_BELOW = 80;
-const ui = { rail: false, width: 200, ...load("sidebar", {}) };
+const ui = { rail: false, width: 200 };
 let sb;
 let stale = false;
 
-const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 export const dot = (status) => (status ? `<span class="dot" style="background:${status.color}" title="${status.label}"></span>` : "");
 
 export function startSidebar() {
+  Object.assign(ui, load("sidebar", {}, isObject));
   sb = document.getElementById("sidebar");
   render();
   bus.on("state:changed", ({ part }) => { if (part === "workspaces" || part === "registry") render(); });

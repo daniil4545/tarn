@@ -2,9 +2,9 @@
 // disk and FileWatcher.swift. Single writer of the `vfs` part; every change emits `vfs:changed`.
 import { bus } from "./bus.js";
 import { register } from "./state.js";
-import { load, save } from "./storage.js";
+import { isObject, load, save } from "./storage.js";
 import { clock } from "./clock.js";
-import { HOME, REPO, GALERA, REPO_FILES, GALERA_FILES, DIRTY, EXTRA_DIRS } from "./vfs-seed.js";
+import { HOME, REPO, SITE, REPO_FILES, SITE_FILES, DIRTY, EXTRA_DIRS } from "./vfs-seed.js";
 
 const SEED_TIME = Date.UTC(2026, 9, 25, 12, 34);
 
@@ -33,7 +33,7 @@ export function seedDisk() {
     for (let dir = root; dir !== "/" && !dirs.has(dir); dir = parent(dir)) dirs.add(dir);
   };
   add(REPO, REPO_FILES, true);
-  add(GALERA, GALERA_FILES, true);
+  add(SITE, SITE_FILES, true);
   return { files, dirs: [...dirs], committed };
 }
 
@@ -155,7 +155,8 @@ export function createVfs(disk, { now = Date.now } = {}) {
 
 // Boots the disk from storage and wires the `vfs.write` command; returns the vfs.
 export function startVfs() {
-  const vfs = createVfs(load("vfs", seedDisk()), { now: clock.now });
+  const isDisk = (v) => isObject(v) && isObject(v.files) && Array.isArray(v.dirs) && isObject(v.committed);
+  const vfs = createVfs(load("vfs", seedDisk(), isDisk), { now: clock.now });
   const write = register("vfs", vfs.snapshot());
   vfs.onChange((path, by) => {
     const disk = vfs.snapshot();

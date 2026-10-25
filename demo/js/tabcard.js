@@ -5,13 +5,13 @@ import { read } from "./state.js";
 import { clock } from "./clock.js";
 import { AGENT, dot } from "./sidebar.js";
 import { tabStatus, isAgentTab } from "./tab-status.js";
+import { esc } from "./esc.js";
 
 const OPEN_AFTER = 500, CLOSE_AFTER = 200;
 let shown = null;
 let openTimer = 0;
 let closeTimer = 0;
 
-const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
 // Same text as the app card: "Tool: detail" for a tool request, the detail alone for a question.
 const requestText = (r) => (r.kind === "tool" ? `${r.tool}: ${r.detail}` : r.detail);

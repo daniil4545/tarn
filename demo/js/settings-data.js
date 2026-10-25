@@ -19,7 +19,7 @@ export const GHOSTTY = {
     option("font-size", "Points. A terminal where you pressed cmd+= or cmd+- keeps its own size."),
     option("background-opacity", "Below 1 the desktop shows through.", "restart"),
     option("background-blur", "Blurs what shows through a transparent background. A radius or glass value in the file shows as text."),
-    option("window-padding-x", "Space between the window edge and the text, in points."),
+    option("window-padding-x", "Space between the window edge and the text, in points.", "windows"),
     option("unfocused-split-opacity", "How much an unfocused split is dimmed."),
     option("cursor-style", "Shell integration shows a bar at the prompt."),
     option("cursor-style-blink", "Default follows the program (DEC mode 12); true or false forces it."),

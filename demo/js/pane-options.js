@@ -3,6 +3,9 @@ import { themeFor } from "./themes.js";
 
 const DEFAULT_FONT = "JetBrains Mono";
 
+// A font name as a CSS string: a quote or backslash in the name must not end the string early.
+const cssString = (name) => `"${name.replace(/[\\"]/g, "\\$&")}"`;
+
 // Config key -> engine option it drives.
 export const ENGINE_KEYS = {
   theme: "theme",
@@ -17,7 +20,7 @@ export const effectiveSize = (config, adjust) => Math.min(48, Math.max(6, config
 export function engineOptions(config, adjust) {
   return {
     theme: themeFor(config.theme),
-    fontFamily: `"${config["font-family"] || DEFAULT_FONT}", "${DEFAULT_FONT}", monospace`,
+    fontFamily: `${cssString(config["font-family"] || DEFAULT_FONT)}, ${cssString(DEFAULT_FONT)}, monospace`,
     fontSize: effectiveSize(config, adjust),
     cursorStyle: config["cursor-style"],
     cursorBlink: config["cursor-style-blink"] !== "false",
