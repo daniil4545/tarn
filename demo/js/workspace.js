@@ -94,7 +94,6 @@ function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` }
   const id = nextId("t"), pane = nextId("p");
   s.tabs[id] = { id, title, agent: false, cwd, layout: { pane }, focus: pane, zoom: null };
   ws.tabs.push(id);
-  ws.collapsed = false;
   ensurePane(pane, cwd);
   return id;
 }
@@ -108,7 +107,7 @@ function openWindow(s) {
 
 // Undo: a closed pane or tab stays alive until the undo window ends, then it is freed.
 function keepUndo(rec) {
-  const ms = cfg("undo-timeout") * 1000;
+  const ms = parseInt(cfg("undo-timeout"), 10) * 1000; // "5s"
   if (ms === 0) return expire(rec);
   rec.timer = clock.after(ms, () => expire(rec));
   undoStack.push(rec);
@@ -147,8 +146,8 @@ function closeLeaf(s, id) {
   keepUndo({ kind: "layout", what: id.startsWith("v") ? "viewer" : "pane", tabId: tab.id, layout: tab.layout, focus: tab.focus, leafIds: [id] });
   tab.layout = tree.remove(tab.layout, id);
   tab.zoom = null;
-  const rest = tree.viewers(tab.layout);
-  if (tab.focus === id) tab.focus = id.startsWith("v") && rest.length ? rest[0].viewer : tree.terminals(tab.layout)[0].pane;
+  // Focus goes back to the terminal block, so cmd+Z (a terminal key) can bring the pane back.
+  if (tab.focus === id) tab.focus = tree.terminals(tab.layout)[0].pane;
 }
 
 function restore(s, rec) {
@@ -175,7 +174,7 @@ const COMMANDS = {
     const target = (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || s.wss[0];
     if (!target) return openWindow(s);
     const id = addTab(s, target, { cwd, title });
-    if (select) s.cur = id;
+    if (select) { s.cur = id; target.collapsed = false; }
   }),
 
   "tab.close": ({ id }) => {
