@@ -6,8 +6,8 @@
 # Builds run under nice and with 4 jobs: the machine is shared with other work.
 # Deviation from macos/build.nu: it passes no -jobs limit, so xcodebuild is called directly.
 
-SHELL    := /bin/bash
-.SHELLFLAGS := -o pipefail -c
+# GNU make 3.81 (stock macOS) has no .SHELLFLAGS: pipefail goes into SHELL, so `| tail` cannot hide a failure.
+SHELL    := /bin/bash -o pipefail
 
 XCB      := nice -n 10 env -i HOME=$(HOME) PATH=/usr/bin:/bin:/usr/sbin:/sbin xcodebuild
 PROJECT  := macos/Ghostty.xcodeproj
@@ -33,6 +33,8 @@ release:
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration $(CONFIG) SYMROOT=$(SYMROOT) \
 		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) -jobs 4 build 2>&1 | tail -15
 	@test -d $(APP) || { echo "release: $(APP) was not built"; exit 1; }
+	@test "$$(plutil -extract CFBundleIdentifier raw $(PLIST))" = com.daniil4545.tarn || { echo "release: wrong CFBundleIdentifier"; exit 1; }
+	@! plutil -p $(PLIST) | grep -q -e mitchellh -e SUFeedURL || { echo "release: Info.plist names Ghostty or sets a feed"; exit 1; }
 	@v=$$(plutil -extract CFBundleShortVersionString raw $(PLIST)) && \
 	  zip=dist/tarn-$$v-macos.zip && mkdir -p dist && rm -f $$zip && \
 	  ditto -c -k --keepParent $(APP) $$zip && \
