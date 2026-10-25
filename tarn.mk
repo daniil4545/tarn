@@ -28,7 +28,7 @@ check:
 
 release:
 	@test -z "$$(git status --porcelain --untracked-files=no)" || { echo "release: tracked files are modified, commit first"; exit 1; }
-	@test -d macos/GhosttyKit.xcframework -a ! -L macos/GhosttyKit.xcframework || { echo "release: macos/GhosttyKit.xcframework must be built here, not linked"; exit 1; }
+	@test ! -L macos/GhosttyKit.xcframework || { echo "release: macos/GhosttyKit.xcframework must not be a link: the core is built here"; exit 1; }
 	nice -n 10 zig build -Doptimize=ReleaseFast -Demit-macos-app=false -j4
 	rm -r -f $(SYMROOT)/$(CONFIG)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration $(CONFIG) SYMROOT=$(SYMROOT) \
