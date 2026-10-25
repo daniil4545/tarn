@@ -39,6 +39,11 @@ final class ViewerModel {
 
     var snapshot: [ViewerTab] { tabs.tabs }
 
+    /// Paths with unsaved edits, in tab order.
+    var dirtyPaths: [String] {
+        tabs.tabs.map(\.path).filter { docs[$0]?.isDirty == true }
+    }
+
     // MARK: Actions
 
     @discardableResult
@@ -95,6 +100,19 @@ final class ViewerModel {
             onClosePane?(before.0, before.1)
         } else {
             pushChrome()
+        }
+    }
+
+    /// Saves every dirty document. False when one stays dirty (conflict or write error).
+    func saveAll() -> Bool {
+        for path in dirtyPaths { save(path) }
+        return dirtyPaths.isEmpty
+    }
+
+    /// Drops unsaved edits: the user chose Don't Save in a window close.
+    func discardEdits() {
+        for path in dirtyPaths {
+            update(path) { $0.edit($0.savedText) }
         }
     }
 

@@ -1346,6 +1346,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
             return
         }
 
+        if ViewerClose.intercept([self], window: window, proceed: { self.closeTab(sender) }) { return }
+
         guard surfaceTree.contains(where: { $0.needsConfirmQuit }) else {
             closeTabImmediately()
             return
@@ -1365,6 +1367,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // If we only have one window then we have no other tabs to close
         guard tabGroup.windows.count > 1 else { return }
+
+        let others = tabGroup.windows.filter { $0 != window }.compactMap { $0.windowController as? TerminalController }
+        if ViewerClose.intercept(others, window: window, proceed: { self.closeOtherTabs(sender) }) { return }
 
         // Check if we have to confirm close.
         guard tabGroup.windows.contains(where: { window in
@@ -1398,6 +1403,9 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         let tabsToClose = tabGroup.windows.enumerated().filter { $0.offset > currentIndex }
         guard !tabsToClose.isEmpty else { return }
+
+        let right = tabsToClose.compactMap { $0.element.windowController as? TerminalController }
+        if ViewerClose.intercept(right, window: window, proceed: { self.closeTabsOnTheRight(sender) }) { return }
 
         let needsConfirm = tabsToClose.contains { (_, candidate) in
             guard let controller = candidate.windowController as? TerminalController else {
@@ -1461,6 +1469,8 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // if we're closing the window. If we don't have a tabgroup for any
         // reason we check ourselves.
         let windows: [NSWindow] = window.tabGroup?.windows ?? [window]
+        let viewerControllers = windows.compactMap { $0.windowController as? TerminalController }
+        if ViewerClose.intercept(viewerControllers, window: window, proceed: { self.closeWindow(sender) }) { return }
         let confirmControllers = windows
             .compactMap({ $0.windowController as? TerminalController })
             .filter({ $0.surfaceTree.contains(where: { $0.needsConfirmQuit }) })
