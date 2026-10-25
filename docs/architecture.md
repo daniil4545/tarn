@@ -62,8 +62,8 @@ flowchart LR
 | Sessions | agent state machine, liveness, pending answers, agent naming, plugin hooks | [sessions.md](modules/sessions.md) | works |
 | Sidebar | groups tabs per window, rows, hover card, quick answers | [sidebar.md](modules/sidebar.md) | works |
 | Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | works |
-| Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works on `s3-windows` |
-| Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works on `s3-windows` |
+| Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works |
+| Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works |
 | Demo | demo mode | [demo.md](modules/demo.md) | works |
 | Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket commands `ls` and `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
 

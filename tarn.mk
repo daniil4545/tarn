@@ -1,7 +1,7 @@
 # tarn make targets. Usage: make -f tarn.mk check | release
 #
 # check    swiftlint on our folders, the app test suites, the hook contract test
-# release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode) and dist/tarn-<version>-macos.zip
+# release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip
 #
 # Builds run under nice and with 4 jobs: the machine is shared with other work.
 # Deviation from macos/build.nu: it passes no -jobs limit, so xcodebuild is called directly.
@@ -15,6 +15,7 @@ SYMROOT  := $(CURDIR)/macos/build
 CONFIG   := ReleaseLocal
 APP      := $(SYMROOT)/$(CONFIG)/Tarn.app
 PLIST    := $(APP)/Contents/Info.plist
+CLI      := $(APP)/Contents/MacOS/tarn
 TMP      := $(CURDIR)/dist/verify
 
 .PHONY: check release
@@ -33,6 +34,8 @@ release:
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration $(CONFIG) SYMROOT=$(SYMROOT) \
 		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) -jobs 4 build 2>&1 | tail -15
 	@test -d $(APP) || { echo "release: $(APP) was not built"; exit 1; }
+	@test -x $(CLI) || { echo "release: $(CLI) is missing"; exit 1; }
+	@codesign --verify --strict $(CLI) || { echo "release: $(CLI) is not signed"; exit 1; }
 	@test "$$(plutil -extract CFBundleIdentifier raw $(PLIST))" = com.daniil4545.tarn || { echo "release: wrong CFBundleIdentifier"; exit 1; }
 	@! plutil -p $(PLIST) | grep -q -e mitchellh -e SUFeedURL || { echo "release: Info.plist names Ghostty or sets a feed"; exit 1; }
 	@v=$$(plutil -extract CFBundleShortVersionString raw $(PLIST)) && \
@@ -40,6 +43,7 @@ release:
 	  ditto -c -k --keepParent $(APP) $$zip && \
 	  rm -r -f $(TMP) && mkdir -p $(TMP) && ditto -x -k $$zip $(TMP) && \
 	  codesign --verify --deep --strict $(TMP)/Tarn.app && \
+	  test -x $(TMP)/Tarn.app/Contents/MacOS/tarn && codesign --verify --strict $(TMP)/Tarn.app/Contents/MacOS/tarn && \
 	  codesign -dv $(TMP)/Tarn.app 2>&1 | grep -E "Identifier|flags|Signature" && \
 	  test -f $(TMP)/Tarn.app/Contents/Resources/terminfo/78/xterm-ghostty && \
 	  test -f $(TMP)/Tarn.app/Contents/Resources/ghostty/shell-integration/zsh/ghostty-integration && \

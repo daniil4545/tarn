@@ -29,6 +29,19 @@ The version in Tarn's About window is the tarn version. `ghostty +version` and `
 
 The tarn sidebar settings of a Debug build (domain `com.mitchellh.ghostty.debug`) do not carry over to the release app; set them once in Settings.
 
+## The `tarn` command
+
+Inside a Tarn terminal the `tarn` command works with no setup: Ghostty appends `Tarn.app/Contents/MacOS` to `PATH`. It talks to the running app, never moves focus, and prints `tarn: <text>` with exit code 1 when Tarn is not running or the request fails.
+
+```sh
+tarn open docs/spec.md       # open a text file in the viewer
+tarn ls                      # 3  tarn  main  permission  2m
+tarn ls --json               # the same sessions as JSON
+tarn notify "build done"     # mark this session and notify you
+```
+
+Details: [attention.md](modules/attention.md). Outside a Tarn terminal, call `/Applications/Tarn.app/Contents/MacOS/tarn`.
+
 ## Claude Code plugin
 
 The plugin reports agent state (working, needs you, done) to the sidebar. It does nothing outside tarn.
@@ -64,7 +77,8 @@ Run through this list once. It is the acceptance list for the release.
 5. Trigger a notification from a Tarn tab (`printf '\e]9;test\a'`): macOS asks permission for "Tarn", and the notification carries the Tarn name.
 6. Ghostty's own settings and windows are as before; the Ghostty config file is unchanged (`ls -l ~/.config/ghostty/config`).
 7. A font or theme line in the Ghostty config applies in Tarn too.
-8. Tarn menu, "Make Tarn the Default Terminal" works if you want it (optional).
+8. In a Tarn tab: `tarn ls` prints the sessions of the window (or `tarn: ...` and exit code 1 if the app is not reachable).
+9. Tarn menu, "Make Tarn the Default Terminal" works if you want it (optional).
 
 ## Upgrade
 

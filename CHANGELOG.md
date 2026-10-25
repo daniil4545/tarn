@@ -4,14 +4,26 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ## [Unreleased]
 
+## [tarn-v1.0.0] - 2026-10-25
+
+First release. The build is ad-hoc signed and not notarized; see `docs/install.md`.
+
 ### Added
 
+- File viewer: a pane beside the terminal with a files tree, file tabs, rendered markdown (with mermaid diagrams), a code view with highlighting, and a text editor with unsaved-edit questions. Cmd+B shows or hides it; it follows file changes on disk.
+- Workspaces and layout: a set of workspaces per window in the sidebar, restored after a restart, with undo for a closed workspace. Terminals and viewers sit in one area tree; drop a tab on a pane edge to split, and drag the grips to resize.
+- Settings window and Help: tab style and a short list of Ghostty options, plus a Help page with the keys in effect. Tarn options live in `~/.config/tarn/ghostty.conf`; your Ghostty config is read, never written.
+- Demo: a static site (`demo/`) that shows the tarn window in a browser, with a scripted `claude` session, workspaces, splits and the viewer.
+- Notifications: one banner per need ("Needs your permission", "Waiting for you", "Failed, see the session"), named by project. Terminal notifications from a tab with a live agent session are suppressed, so you get no duplicates.
+- Jump: Cmd+U (Window, "Jump to Waiting Session") goes to the session that waits for you. Agents never move focus.
+- `tarn` command inside tarn terminals: `tarn open <path>` opens a file in the viewer, `tarn ls [--json]` lists sessions, `tarn notify <text>` marks the session and notifies. It fails with `tarn: <text>` and exit code 1 when no tarn runs.
 - App identity: `Tarn.app`, bundle id `com.daniil4545.tarn`, version 1.0.0, own icon. It installs next to Ghostty and shares its config files.
-- `tarn.mk` with `check` and `release`; the release is an ad-hoc signed zip, see `docs/install.md`.
+- `tarn.mk` with `check` and `release`; the release is an ad-hoc signed zip with the `tarn` command inside, see `docs/install.md`.
 
 ### Changed
 
 - No updater: the menu item is gone and no feed is set. Sidebar settings saved by a Debug build under the old Ghostty bundle id are not carried over.
+
 ### Fixed
 
 - Sidebar drag and drop: a workspace or tab can be dropped below the last row, the drop line no longer blinks over the gaps between rows, the only tab of a workspace dropped on it no longer moves the workspace to the end, and a drag from another window shows no line.
