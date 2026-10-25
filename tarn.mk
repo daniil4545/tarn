@@ -79,6 +79,6 @@ bench:
 	  { echo "# Benchmark"; echo; \
 	    echo "tarn \`$$(git rev-parse --short HEAD)\` against upstream Ghostty \`$$(git rev-parse --short $$base)\`, both ReleaseLocal."; \
 	    echo "$$(date +%F), $$(sysctl -n machdep.cpu.brand_string), $$(sysctl -n hw.ncpu) cores, macOS $$(sw_vers -productVersion)."; \
-	    echo "One window, one surface; thresholds of \`docs/spec.md\` section 7. Input latency is not measured."; echo; } > docs/bench.md && \
+	    echo "One window, one surface; runs alternate between the apps; thresholds of \`docs/spec.md\` section 7. Input latency is not measured."; echo; } > docs/bench.md && \
 	  status=0 && $(BENCH)/bench $(APP) $$upapp $(BENCH)/run >> docs/bench.md || status=$$?; \
 	  $(LSREG) -u $$upapp; cat docs/bench.md; exit $$status

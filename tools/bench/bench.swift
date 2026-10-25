@@ -13,7 +13,7 @@ let apps = [("tarn", URL(fileURLWithPath: args[1])), ("upstream", URL(fileURLWit
 let work = URL(fileURLWithPath: args[3])
 let throughputScript = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("throughput.sh")
 
-let startupRuns = 10, throughputRuns = 5, idleSeconds = 60, settleSeconds = 5
+let startupRuns = 10, memoryRuns = 5, throughputRuns = 5, idleSeconds = 60, settleSeconds = 5
 
 /// A config folder for `XDG_CONFIG_HOME`: the same options for both apps, no restore, no updater, no quit question.
 func configHome(_ name: String, command: String) throws -> URL {
@@ -86,8 +86,8 @@ func startup(_ app: URL, xdg: URL) -> Double {
     return ms
 }
 
-/// Mean CPU percent over `idleSeconds` after a settle, and resident memory at the end, MB.
-func idle(_ app: URL, xdg: URL) -> (cpu: Double, rss: Double, footprint: Double) {
+/// Mean CPU percent over `idleSeconds` after a settle.
+func idle(_ app: URL, xdg: URL) -> Double {
     let running = launch(app, xdg: xdg)
     let pid = running.processIdentifier
     while !hasWindow(pid) { usleep(10000) }
@@ -102,7 +102,26 @@ func idle(_ app: URL, xdg: URL) -> (cpu: Double, rss: Double, footprint: Double)
     let ticks = Double((last.ri_user_time + last.ri_system_time) - (first.ri_user_time + first.ri_system_time))
     let cpuSeconds = ticks * Double(timebase.numer) / Double(timebase.denom) / 1e9
     quit(running)
-    return (cpuSeconds / elapsed * 100, Double(last.ri_resident_size) / 1_048_576, Double(last.ri_phys_footprint) / 1_048_576)
+    return cpuSeconds / elapsed * 100
+}
+
+/// Resident memory and footprint after a settle, MB.
+func memory(_ app: URL, xdg: URL) -> (rss: Double, footprint: Double) {
+    let running = launch(app, xdg: xdg)
+    while !hasWindow(running.processIdentifier) { usleep(10000) }
+    sleep(UInt32(settleSeconds))
+    let info = usage(running.processIdentifier)
+    quit(running)
+    return (Double(info.ri_resident_size) / 1_048_576, Double(info.ri_phys_footprint) / 1_048_576)
+}
+
+/// Runs `measure` for each app in turn, `runs` rounds, so drift of the machine falls on both apps alike.
+func alternate<T>(_ runs: Int, _ measure: (Int, String, URL) throws -> T) rethrows -> [String: [T]] {
+    var values: [String: [T]] = [:]
+    for run in 0..<runs {
+        for (name, app) in apps { values[name, default: []].append(try measure(run, name, app)) }
+    }
+    return values
 }
 
 /// Wall time of `cat` of a 100 MB file in the app's only surface, seconds.
@@ -133,15 +152,19 @@ if !FileManager.default.fileExists(atPath: data.path) {
 }
 
 struct Numbers { var startup = 0.0, cpu = 0.0, rss = 0.0, footprint = 0.0, cat = 0.0 }
-var results: [String: Numbers] = [:]
+var idleConfig: [String: URL] = [:]
 for (name, app) in apps {
     FileHandle.standardError.write("bench: \(name) \(app.path)\n".data(using: .utf8)!)
-    let xdg = try configHome("\(name)-idle", command: "direct:/bin/cat")
-    var numbers = Numbers()
-    numbers.startup = median((0..<startupRuns).map { _ in startup(app, xdg: xdg) })
-    (numbers.cpu, numbers.rss, numbers.footprint) = idle(app, xdg: xdg)
-    numbers.cat = median(try (0..<throughputRuns).map { try throughput(app, data: data, run: $0, name: name) })
-    results[name] = numbers
+    idleConfig[name] = try configHome("\(name)-idle", command: "direct:/bin/cat")
+}
+let startups = alternate(startupRuns) { _, name, app in startup(app, xdg: idleConfig[name]!) }
+let memories = alternate(memoryRuns) { _, name, app in memory(app, xdg: idleConfig[name]!) }
+let cats = try alternate(throughputRuns) { run, name, app in try throughput(app, data: data, run: run, name: name) }
+var results: [String: Numbers] = [:]
+for (name, app) in apps {
+    let mem = memories[name]!
+    results[name] = Numbers(startup: median(startups[name]!), cpu: idle(app, xdg: idleConfig[name]!),
+                            rss: median(mem.map(\.rss)), footprint: median(mem.map(\.footprint)), cat: median(cats[name]!))
 }
 
 let tarn = results["tarn"]!, upstream = results["upstream"]!
@@ -151,9 +174,9 @@ let rows: [(String, Double, Double, String, Bool)] = [
      String(format: "%+.1f%%", percent(tarn.startup, upstream.startup)), percent(tarn.startup, upstream.startup) <= 5),
     ("Idle CPU, % (mean of \(idleSeconds) s)", tarn.cpu, upstream.cpu,
      String(format: "%+.2f pp", tarn.cpu - upstream.cpu), tarn.cpu - upstream.cpu <= 0.5),
-    ("Memory RSS, MB", tarn.rss, upstream.rss,
+    ("Memory RSS, MB (median of \(memoryRuns))", tarn.rss, upstream.rss,
      String(format: "%+.1f%%", percent(tarn.rss, upstream.rss)), percent(tarn.rss, upstream.rss) <= 5),
-    ("Memory footprint, MB", tarn.footprint, upstream.footprint,
+    ("Memory footprint, MB (median of \(memoryRuns))", tarn.footprint, upstream.footprint,
      String(format: "%+.1f%%", percent(tarn.footprint, upstream.footprint)), percent(tarn.footprint, upstream.footprint) <= 5),
     ("cat 100 MB, s (median of \(throughputRuns))", tarn.cat, upstream.cat,
      String(format: "%+.1f%%", percent(tarn.cat, upstream.cat)), percent(tarn.cat, upstream.cat) <= 5),

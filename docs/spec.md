@@ -181,7 +181,7 @@ See section 13.
 ## 7. Acceptance
 
 - Command: `make -f tarn.mk check` runs `swiftlint lint --strict` on our folders, the app tests, the hook, CLI and installer tests. Until it is green, the stage is not done.
-- Benchmark: `make -f tarn.mk bench` compares the release app with upstream Ghostty built from the merge base with `upstream/main`, both ReleaseLocal, one window and one surface. Thresholds, tarn against upstream: startup (median of 10) at most +5%, idle CPU (mean over 60 s) at most +0.5 percentage points, memory (RSS and footprint) at most +5%, output throughput (`cat` of 100 MB, median of 5) at most +5%. Input latency is not measured by a tool; check it by hand before a release (at most +1 ms). It runs before a release, does not block a stage, and writes `docs/bench.md`.
+- Benchmark: `make -f tarn.mk bench` compares the release app with upstream Ghostty built from the merge base with `upstream/main`, both ReleaseLocal, one window and one surface; runs alternate between the two apps, so drift of the machine falls on both. Thresholds, tarn against upstream: startup (median of 10) at most +5%, idle CPU (mean over 60 s) at most +0.5 percentage points, memory (RSS and footprint 5 s after the window shows, median of 5) at most +5%, output throughput (`cat` of 100 MB, median of 5) at most +5%. Input latency is not measured by a tool; check it by hand before a release (at most +1 ms). It runs before a release, does not block a stage, and writes `docs/bench.md`.
 
 | Section 3 rows | Level | How |
 | --- | --- | --- |
