@@ -64,7 +64,7 @@ flowchart LR
 | Settings | settings window, tarn options file `ghostty.conf`, Ghostty options, key reference, load order | [settings.md](modules/settings.md) | works |
 | Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works on `s3-windows` |
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works on `s3-windows` |
-| Demo | demo mode | [demo.md](modules/demo.md) | with the demo PR |
+| Demo | demo mode | [demo.md](modules/demo.md) | works on `s5-demo` |
 | `tarn` CLI, notifications | spec sections 2.4, 2.2 | none (the socket accepts `{"cmd":"open"}`; no binary) | not on this branch |
 
 Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names its suites.

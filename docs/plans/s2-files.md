@@ -1,7 +1,7 @@
 # Plan: S2 files, the viewer pane
 
 Status: draft for `spec-reviewer`, ticket T-137, branch `s2-files`.
-Canon: `docs/spec.md` (1, 2, 2.5, 3, 7, 12, 13); `docs/architecture.md`; look and behavior: `docs/mockups/tarn.html` (approved for the viewer pane only).
+Canon: `docs/spec.md` (1, 2, 2.5, 3, 7, 12, 13); `docs/architecture.md`; look and behavior: `demo/` (the browser demo) (approved for the viewer pane only).
 Inputs: recon files of 2026-10-25 (markdown panel, open file, Ghostty built-ins).
 
 ## 1. Goal and scope
@@ -101,7 +101,7 @@ Insertion points in upstream files (to `docs/architecture.md` section 9): (10) `
 | run | agent rewrite re-renders; with edits a banner shows and Save is refused | page state |
 | run | Cmd+W closes the active tab, the last tab closes the pane, undo reopens it | page state |
 | not run | no request leaves the page: only the rule list compile is tested, the earlier 3-to-0 test (recon 2026-10-25) is not repeated | - |
-| user | look against the mockup, Cmd+W, undo of the close | by eye |
+| user | look against the demo, Cmd+W, undo of the close | by eye |
 
 ## 7. Steps
 

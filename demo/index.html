@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>tarn demo</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="css/fonts.css">
+<link rel="stylesheet" href="css/base.css">
+<link rel="stylesheet" href="css/chrome.css">
+<link rel="stylesheet" href="css/pane.css">
+<link rel="stylesheet" href="css/viewer.css">
+<link rel="stylesheet" href="css/settings.css">
+</head>
+<body>
+<noscript>The tarn demo needs JavaScript.</noscript>
+<div id="window">
+  <div id="main"></div>
+  <div id="toast" hidden></div>
+</div>
+<div id="notice">The tarn demo needs a desktop browser window of at least 800 px. Open it over http, for example <code>python3 -m http.server --directory demo</code>, not as a file.</div>
+<script>if (location.protocol === "file:") document.getElementById("notice").style.display = "block";</script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
