@@ -188,6 +188,17 @@ struct ViewerDocumentTests {
         #expect(doc.diskChanged(FileRead.read(path)) == .none)
     }
 
+    @Test func codeFileTakesEditsLikeMarkdown() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = dir + "/main.go"
+        try "package main\n".write(toFile: path, atomically: true, encoding: .utf8)
+        var doc = try #require(ViewerDocument(path: path))
+        doc.edit("package app\n")
+        #expect(doc.text == "package app\n")
+        #expect(doc.isDirty)
+    }
+
     @Test func editedDocumentGetsAConflictOnceAndTakeDiskResolvesIt() throws {
         var (doc, path, dir) = try document("one")
         defer { try? FileManager.default.removeItem(atPath: dir) }

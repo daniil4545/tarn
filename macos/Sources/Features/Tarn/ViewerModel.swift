@@ -268,7 +268,8 @@ final class ViewerModel {
     }
 
     func save(_ path: String) {
-        guard var doc = docs[path], case .markdown = doc.content else { return }
+        guard var doc = docs[path] else { return }
+        if case .notice = doc.content { return }
         guard doc.isDirty || doc.conflict || doc.isMissing else { return toast("No changes") }
         // The disk may have changed before the watcher fired: never write over the agent's version.
         if !doc.conflict, [.conflict, .reloaded].contains(doc.diskChanged(FileRead.read(path))) {

@@ -7,8 +7,26 @@ import { EditorView, lineNumbers, highlightActiveLine, drawSelection, keymap } f
 import { EditorState } from "@codemirror/state";
 import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
-import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
+import { syntaxHighlighting, HighlightStyle, StreamLanguage } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
+import { go } from "@codemirror/legacy-modes/mode/go";
+import { python } from "@codemirror/legacy-modes/mode/python";
+import { shell } from "@codemirror/legacy-modes/mode/shell";
+import { yaml } from "@codemirror/legacy-modes/mode/yaml";
+import { toml } from "@codemirror/legacy-modes/mode/toml";
+import { swift } from "@codemirror/legacy-modes/mode/swift";
+import { rust } from "@codemirror/legacy-modes/mode/rust";
+import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
+import { c, cpp, java, kotlin } from "@codemirror/legacy-modes/mode/clike";
+import { ruby } from "@codemirror/legacy-modes/mode/ruby";
+import { lua } from "@codemirror/legacy-modes/mode/lua";
+import { dockerFile } from "@codemirror/legacy-modes/mode/dockerfile";
+import { diff } from "@codemirror/legacy-modes/mode/diff";
+import { properties } from "@codemirror/legacy-modes/mode/properties";
+import { protobuf } from "@codemirror/legacy-modes/mode/protobuf";
+import { javascript, json, typescript } from "@codemirror/legacy-modes/mode/javascript";
+import { css } from "@codemirror/legacy-modes/mode/css";
+import { html, xml } from "@codemirror/legacy-modes/mode/xml";
 
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -193,6 +211,29 @@ const mdStyle = HighlightStyle.define([
   { tag: t.processingInstruction, color: "var(--p-muted)" },
 ]);
 
+// Editor grammars by the `lang` Swift sends (file extension, or the name when there is none).
+const modesByLang = {
+  go, py: python, sh: shell, bash: shell, zsh: shell, yaml, yml: yaml, toml, swift, rs: rust, sql: standardSQL,
+  c, h: c, cpp, cc: cpp, hpp: cpp, java, kt: kotlin, rb: ruby, lua, dockerfile: dockerFile, diff, patch: diff,
+  ini: properties, properties, proto: protobuf, js: javascript, mjs: javascript, ts: typescript, json,
+  css, html, xml, svg: xml,
+};
+
+// Code colors reuse the view-mode highlight.js classes, so both modes and both themes match.
+const codeStyle = HighlightStyle.define([
+  { tag: [t.keyword, t.typeName, t.standard(t.variableName)], class: "hljs-keyword" },
+  { tag: [t.string, t.special(t.string), t.attributeName], class: "hljs-string" },
+  { tag: t.comment, class: "hljs-comment" },
+  { tag: [t.number, t.bool, t.atom], class: "hljs-number" },
+  { tag: [t.definition(t.variableName), t.function(t.variableName), t.className], class: "hljs-title" },
+]);
+
+function editorLanguage(doc) {
+  if (doc.kind === "md") return [markdown(), syntaxHighlighting(mdStyle)];
+  const mode = modesByLang[doc.lang];
+  return mode ? [StreamLanguage.define(mode), syntaxHighlighting(codeStyle)] : [];
+}
+
 function destroyEditor() {
   if (cm) { cm.view.destroy(); cm = null; }
 }
@@ -223,8 +264,8 @@ function mountEditor(path, text, scroll) {
       doc: text,
       extensions: [
         ...(crlf ? [EditorState.lineSeparator.of("\r\n")] : []),
-        lineNumbers(), history(), drawSelection(), highlightActiveLine(), markdown(),
-        syntaxHighlighting(mdStyle),
+        lineNumbers(), history(), drawSelection(), highlightActiveLine(),
+        ...editorLanguage(docs[path]),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.updateListener.of(u => { if (u.docChanged && cm && !cm.applying) scheduleEdit(path, u.state.sliceDoc()); }),
       ],
@@ -262,7 +303,7 @@ function renderContent(force) {
   }
   const doc = docs[path];
   if (!doc) { destroyEditor(); box.innerHTML = '<div class="empty">Loading</div>'; lastKey = ""; lastPlace = ""; return; }
-  const mode = doc.kind === "md" ? modes[path] || "view" : "view";
+  const mode = doc.kind !== "notice" ? modes[path] || "view" : "view";
   const key = [path, doc.rev, mode, chrome.dark, doc.line, doc.jump].join("|");
   if (key === lastKey && !force) return;
   const place = path + "|" + mode;
@@ -325,10 +366,10 @@ function renderTabs() {
   if (on) on.scrollIntoView({ block: "nearest", inline: "nearest" });
   const path = activePath();
   const doc = path && docs[path];
-  const isMd = !!(doc && doc.kind === "md");
+  const editable = !!(doc && doc.kind !== "notice");
   const mode = path ? modes[path] || "view" : "view";
   $("vact").innerHTML =
-    `<button class="ib" type="button" data-act="mode" ${isMd ? "" : "disabled"} aria-pressed="${isMd && mode === "source"}" title="View or source (⌘E)">${isMd && mode === "source" ? "Source" : "View"}</button>` +
+    `<button class="ib" type="button" data-act="mode" ${editable ? "" : "disabled"} aria-pressed="${editable && mode === "source"}" title="View or source (⌘E)">${editable && mode === "source" ? "Source" : "View"}</button>` +
     `<button class="ib" type="button" data-act="tree" aria-pressed="${!!chrome.tree.visible}" title="Files tree (Esc hides it)">Files</button>` +
     `<button class="ib" type="button" data-act="closePane" title="Close viewer">✕</button>`;
 }
@@ -352,7 +393,7 @@ function renderTree() {
   const rows = tree.rows.map(r =>
     `<div class="tr${r.path === treeSel ? " sel" : ""}${r.path === current ? " cur" : ""}" data-path="${esc(r.path)}" data-kind="${r.kind}" style="padding-left:${6 + r.depth * 12}px" title="${esc(r.path)}"><span class="chev">${r.kind === "dir" ? (r.open ? "▾" : "▸") : ""}</span>${esc(r.name)}${r.mod ? '<span class="mod">M</span>' : ""}</div>`).join("");
   const hadFocus = el.contains(document.activeElement);
-  el.innerHTML = `<div class="tree" tabindex="0"><div class="th">${esc(tree.root || "")}<span>Enter open · Esc hide</span></div>${rows}</div>`;
+  el.innerHTML = `<div class="tree" tabindex="0"><div class="th">${esc(tree.root || "")}<span>Enter open · ← file · Esc hide</span></div>${rows}</div>`;
   const sel = el.querySelector(".tr.sel");
   if (sel) sel.scrollIntoView({ block: "nearest" });
   if (!treeWasVisible || hadFocus) { treeWasVisible = true; el.querySelector(".tree").focus(); }
@@ -381,7 +422,7 @@ window.tarn = {
   setDoc(d) {
     const old = docs[d.path];
     docs[d.path] = d;
-    if (d.kind === "md" && !modes[d.path]) modes[d.path] = "view";
+    if (d.kind !== "notice" && !modes[d.path]) modes[d.path] = "view";
     if (d.path === activePath()) {
       renderContent(d.reason === "revert" || !!(old && old.rev !== d.rev));
       if (d.reason === "external") {
@@ -411,7 +452,7 @@ window.tarn = {
 function setMode(force) {
   const path = activePath();
   const doc = path && docs[path];
-  if (!doc || doc.kind !== "md") return;
+  if (!doc || doc.kind === "notice") return;
   if (force !== "view" && (modes[path] || "view") === "view") {
     modes[path] = "source";
   } else {
@@ -421,7 +462,7 @@ function setMode(force) {
   lastKey = "";
   renderTabs();
   renderContent(true);
-  if (cm) cm.view.focus();
+  window.tarn.focusContent();
 }
 
 // ---- events ----
@@ -496,11 +537,26 @@ $("vtree").addEventListener("keydown", e => {
   else if (e.key === "ArrowUp" || e.key === "k") move(-1);
   else if (e.key === "ArrowRight" && row.kind === "dir" && !row.open) { post({ t: "treeToggle", path: row.path }); e.preventDefault(); }
   else if (e.key === "ArrowLeft" && row.kind === "dir" && row.open) { post({ t: "treeToggle", path: row.path }); e.preventDefault(); }
+  else if (e.key === "ArrowLeft" && activePath()) { e.preventDefault(); window.tarn.focusContent(); }
   else if (e.key === "Enter") {
     e.preventDefault();
     if (row.kind === "dir") post({ t: "treeToggle", path: row.path });
     else post({ t: "treeOpen", path: row.path, pin: e.shiftKey || e.metaKey, enter: true });
   } else if (e.key === "Escape") { e.preventDefault(); post({ t: "hideTree" }); }
+});
+
+// View mode: the focused content box is not the scroller, so arrows scroll it here; Right goes to the tree.
+$("vcontent").addEventListener("keydown", e => {
+  if (cm || e.metaKey || e.ctrlKey || e.altKey) return;
+  const sc = $("vcontent").querySelector(".scroll");
+  const step = { ArrowDown: 40, ArrowUp: -40, PageDown: 0.9, PageUp: -0.9 }[e.key];
+  if (step && sc) {
+    e.preventDefault();
+    sc.scrollBy(0, Math.abs(step) < 1 ? step * sc.clientHeight : step);
+  } else if (e.key === "ArrowRight") {
+    e.preventDefault();
+    if (chrome.tree.visible) window.tarn.focusTree(); else post({ t: "toggleTree" });
+  }
 });
 
 window.addEventListener("error", e => post({ t: "error", message: String(e.message), at: `${e.filename}:${e.lineno}` }));
