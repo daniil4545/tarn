@@ -16,7 +16,6 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from capture_lib import TAB, focus, open_page, run, server, show_pane, sync_playwright, until  # noqa: E402
 
 OUT = pathlib.Path(__file__).resolve().parents[2] / "docs" / "assets" / "gifs"
-SPEC = "/Users/you/code/tarn/docs/spec.md"
 FPS, WIDTH = 12, 960
 
 
@@ -79,20 +78,26 @@ def story_viewer(pg):
     time.sleep(1.0)
 
 
-def story_drag(pg):
-    """Drag a viewer to the left edge zone."""
-    pg.evaluate("p => window.bus.cmd('viewer.open', {path: p, pane: 'p1'})", SPEC)
-    pg.wait_for_selector('.leaf[data-kind="viewer"] .grip')
-    time.sleep(1.5)
-    gx, gy = center(pg, '.leaf[data-kind="viewer"] .grip')
-    glide(pg, gx, gy)
-    time.sleep(0.4)
-    pg.mouse.down()
-    area = pg.locator("#ws").bounding_box()
-    glide(pg, gx - 200, gy + 100, steps=15)
-    glide(pg, area["x"] + 10, area["y"] + area["height"] / 2, steps=25)
-    pg.wait_for_selector("#ws > .drop")
+def story_sidebar(pg):
+    """Switch tabs, fold a workspace, drag a tab into another workspace."""
+    for tab in ("t3", "t5", "t1"):
+        glide(pg, *center(pg, f"{TAB}[data-tabid='{tab}']"))
+        time.sleep(0.3)
+        pg.click(f"{TAB}[data-tabid='{tab}']")
+        time.sleep(0.7)
+    head = ".wsh[data-wsh]:has-text('Website')"
+    glide(pg, *center(pg, head))
+    pg.click(head)
     time.sleep(1.0)
+    pg.click(head)
+    time.sleep(0.8)
+    sx, sy = center(pg, f"{TAB}[data-tabid='t4']")
+    glide(pg, sx, sy)
+    time.sleep(0.3)
+    pg.mouse.down()
+    glide(pg, sx + 20, sy + 30, steps=8)
+    glide(pg, *center(pg, f"{TAB}[data-tabid='t5']"), steps=20)
+    time.sleep(0.8)
     pg.mouse.up()
     time.sleep(1.5)
 
@@ -121,7 +126,7 @@ def story_split(pg):
 STORIES = {
     "agent-permission": story_permission,
     "viewer-edit": story_viewer,
-    "viewer-drag": story_drag,
+    "sidebar": story_sidebar,
     "terminal-split": story_split,
 }
 
