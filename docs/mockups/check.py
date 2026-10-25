@@ -246,7 +246,15 @@ with sync_playwright() as p:
     while count(".tpane") > 1:
         pg.keyboard.press("Meta+w")
     pg.keyboard.press("Meta+w")
-    check("41 the last terminal is not closed", count(".tpane") == 1)
+    check(
+        "41 cmd+W on the last terminal closes the tab",
+        count(".tab[data-tabid='t1']") == 0 and pg.evaluate("cur") != "t1",
+    )
+    pg.keyboard.press("Meta+z")
+    check(
+        "41a cmd+Z brings the closed tab back",
+        count(".tab[data-tabid='t1']") == 1 and pg.evaluate("cur") == "t1",
+    )
 
     t = time.time()
     for _ in range(10):
@@ -314,7 +322,8 @@ with sync_playwright() as p:
     home = pg.evaluate("wss.find(w => w.name === 'home')")
     check(
         "W11 a new workspace with a folder pulls in its open tabs",
-        home is not None and home["tabs"] == ["t6"] and count(".wsh") == 4,
+        # Default gave away its only tab, so it hides: tarn, galera, home.
+        home is not None and home["tabs"] == ["t6"] and count(".wsh") == 3,
     )
     pg.click(f".wsh[data-wsh='{home['id']}']", button="right")
     pg.click("#ctx [data-wsdel]")
@@ -323,15 +332,18 @@ with sync_playwright() as p:
         ws_tabs("w0") == ["t6"] and count(".wsh") == 3,
     )
     pg.click(".tab[data-tabid='t6'] .x")
-    check("W13 an empty workspace stays with No tabs", vis(".wsempty"))
-    drag(pg, ".wsh[data-wsh='w0']", ".wsh[data-wsh='w1']", 0.5, 0.5)
+    check(
+        "W13 closing Default's last tab hides Default",
+        count(".wsh") == 2 and count(".wsh[data-wsh='w0']") == 0,
+    )
+    drag(pg, ".wsh[data-wsh='w2']", ".wsh[data-wsh='w1']", 0.5, 0.5)
     check(
         "W13a drag a workspace header before another reorders workspaces",
-        pg.evaluate("wss.map(w => w.id)")[0] == "w0",
+        pg.evaluate("wss.map(w => w.id)")[0] == "w2",
     )
     dt = pg.evaluate_handle("new DataTransfer()")
     box = pg.locator(".wsh[data-wsh='w2']").bounding_box()
-    pg.locator(".wsh[data-wsh='w0']").dispatch_event("dragstart", {"dataTransfer": dt})
+    pg.locator(".wsh[data-wsh='w1']").dispatch_event("dragstart", {"dataTransfer": dt})
     pg.locator(".wsh[data-wsh='w2']").dispatch_event(
         "dragover",
         {"dataTransfer": dt, "clientX": box["x"] + 20, "clientY": box["y"] + 4},
@@ -349,12 +361,13 @@ with sync_playwright() as p:
     pg.wait_for_selector(".wsh")
     check(
         "W14 workspaces and folding survive a reload",
-        count(".wsh") == 3
+        count(".wsh") == 2
         and pg.get_attribute(".wsh[data-wsh='w2']", "aria-expanded") == "false",
     )
     check(
         "W15 tab order and pins survive a reload",
         "spec" in side_tabs()[0] and "review" in side_tabs()[1],
+        str(side_tabs()),
     )
     pg.click("#sbToggle")
     width = pg.locator("#sidebar").bounding_box()["width"]
@@ -371,7 +384,7 @@ with sync_playwright() as p:
     pg.wait_for_selector("#sbToggle")
     check("W18 the rail survives a reload", count(".wsh") == 0)
     pg.click("#sbToggle")
-    check("W19 show sidebar brings the workspaces back", count(".wsh") == 3)
+    check("W19 show sidebar brings the workspaces back", count(".wsh") == 2)
     grip = pg.locator("#sbGrip").bounding_box()
     gx, gy = grip["x"] + 5, grip["y"] + 200
     pg.mouse.move(gx, gy)
@@ -413,7 +426,7 @@ with sync_playwright() as p:
     width = pg.locator("#sidebar").bounding_box()["width"]
     check(
         "W23 drag the rail edge right opens the sidebar again",
-        count(".wsh") == 3 and abs(width - 194) <= 2,
+        count(".wsh") == 2 and abs(width - 194) <= 2,
         f"width={width}",
     )
     pg.keyboard.press("Meta+Comma")
@@ -464,6 +477,15 @@ with sync_playwright() as p:
         pg.evaluate("wss.map(w => w.name)") == ["work", "Default"]
         and count(".wsh") == 2,
     )
+    pg.click(".wsh:has-text('work') [data-wsnewtab]")
+    pg.click(".tpane")
+    pg.keyboard.press("Meta+w")
+    check(
+        "O3 cmd+W on the last tab of a workspace closes the workspace",
+        pg.evaluate("wss.map(w => w.name)") == ["Default"] and count(".wsh") == 0,
+    )
+    pg.keyboard.press("Meta+z")
+    check("O4 cmd+Z brings the workspace back", count(".wsh:has-text('work')") == 1)
 
     pg.set_viewport_size({"width": 420, "height": 860})
     sw = pg.evaluate("document.documentElement.scrollWidth")

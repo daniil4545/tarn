@@ -560,6 +560,14 @@ function splitNode(target, node, zone) {
 let undo = null;
 const keepUndo = what => { undo = { tab: cur, state: JSON.stringify(L()), at: Date.now(), what }; };
 function restoreClosed() {
+  if (undo && undo.closedTab && Date.now() - undo.at <= 5000) {
+    const t = undo.closedTab, saved = undo.ws;
+    let w = wsById(saved.id);
+    if (!w) { w = { ...saved, tabs: [] }; wss.splice(Math.min(undo.wsAt, wss.length - 1), 0, w); }
+    w.tabs = saved.tabs.filter(x => x === t.id || tabs[x]);
+    tabs[t.id] = t; cur = t.id; undo = null;
+    toast(`Restored: ${t.title}`); saveState(); renderSidebar(); renderWorkspace(); return;
+  }
   if (!undo || undo.tab !== cur || Date.now() - undo.at > 5000) { toast("Nothing to undo"); return; }
   tabs[cur].layout = JSON.parse(undo.state); toast(`Restored: ${undo.what}`); undo = null; renderWorkspace();
 }
@@ -658,7 +666,7 @@ function renderSidebar() {
   const sb = $("sidebar");
   sb.classList.toggle("rail", sbRail);
   sb.style.width = sbRail ? "" : `${sbWidth}px`;
-  $("wtitle").textContent = [wss.length > 1 ? W().name : "", cur ? tabs[cur].title : ""].filter(Boolean).join(" · ");
+  $("wtitle").textContent = [visibleWss().length > 1 && cur ? W().name : "", cur ? tabs[cur].title : ""].filter(Boolean).join(" · ");
   const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${sbRail ? "Show Sidebar" : "Hide Sidebar"}" aria-label="${sbRail ? "Show Sidebar" : "Hide Sidebar"}">${SB_ICON}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
   // Collapsed rail, as in the app: icons only, a divider between workspaces.
   if (sbRail) {
@@ -669,11 +677,11 @@ function renderSidebar() {
     return;
   }
   // Default alone needs no header: the sidebar is a plain list until a second workspace exists.
-  const solo = wss.length === 1;
+  const shown = visibleWss(), solo = shown.length === 1;
   sb.classList.toggle("solo", solo);
   let h = top;
-  if (solo) h += ordered(wss[0]).map(row).join("");
-  else for (const w of wss) {
+  if (solo) h += ordered(shown[0]).map(row).join("");
+  else for (const w of shown) {
     const n = w.tabs.length;
     // A folded workspace still shows how many tabs it has and its most urgent state.
     h += `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? esc(short(w.folder)) : "no folder"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${w.collapsed ? `<span class="cnt">${n}</span>${dotOf(rollup(w))}` : ""}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.folder ? short(w.folder) : "~")}">+</button></div>`;
@@ -833,7 +841,7 @@ function splitTerm(t, zone) {
 function closeTerm(t) {
   const b = findBlock(L().root);
   if (b.root.id !== t.id) keepUndo("terminal");
-  if (!removeFrom(b, t.id)) { toast("Closing the last terminal closes the tab"); return; }
+  if (!removeFrom(b, t.id)) return closeSidebarTab(cur);
   L().focus = terms()[0].id;
   renderWorkspace();
 }
@@ -900,12 +908,20 @@ function moveTab(id, to, before = null) {
   }
   saveState(); renderSidebar(); renderWorkspace();
 }
+// Closing a workspace's last tab closes the workspace too; Default only hides while empty.
+// cmd+Z within 5 s brings back the tab and its workspace, as Ghostty's undo does for a tab.
 function closeSidebarTab(id) {
   const next = flat()[flat().indexOf(id) + 1] || flat()[flat().indexOf(id) - 1] || null;
+  const w = wss.find(x => x.tabs.includes(id));
+  undo = { closedTab: tabs[id], ws: { ...w, tabs: [...w.tabs] }, wsAt: wss.indexOf(w), at: Date.now() };
   removeFromWs(id); delete tabs[id];
+  const gone = !w.tabs.length && w.id !== "w0";
+  if (gone) wss = wss.filter(x => x !== w);
   if (cur === id) cur = next;
+  toast(gone ? `Workspace ${w.name} closed with its last tab · ⌘Z restores` : "Tab closed · ⌘Z restores");
   saveState(); renderSidebar(); renderWorkspace();
 }
+const visibleWss = () => wss.filter(w => w.id !== "w0" || w.tabs.length || wss.length === 1);
 function newWorkspace() {
   const name = prompt("Workspace name");
   if (!name || !name.trim()) return;
@@ -1045,6 +1061,8 @@ document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeMenu();
   if ((e.metaKey || e.ctrlKey) && /^[1-9]$/.test(e.key)) { e.preventDefault(); const id = flat()[+e.key - 1]; if (id) selectTab(id); return; }
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "t") { e.preventDefault(); return newTab(); }
+  if (!cur && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") { e.preventDefault(); return restoreClosed(); }
+  if (!cur && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w") { e.preventDefault(); return toast("No tabs left: ⌘W closes the window"); }
   if (!cur) return;
   const p = focused(), inText = e.target.matches && e.target.matches("textarea");
   const isV = p && p.type === "viewer";
@@ -1183,7 +1201,7 @@ function wsSlot(y) {
   const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]")];
   const tops = heads.map(h => h.getBoundingClientRect().top).concat(document.getElementById("wsNew").getBoundingClientRect().top);
   const slot = heads.filter((_, i) => (tops[i] + tops[i + 1]) / 2 < y).length;
-  return { slot, y: tops[slot] - sb.getBoundingClientRect().top + sb.scrollTop };
+  return { before: heads[slot] ? heads[slot].dataset.wsh : null, y: tops[slot] - sb.getBoundingClientRect().top + sb.scrollTop };
 }
 const clearWsLine = () => document.querySelectorAll(".wsline").forEach(x => x.remove());
 document.addEventListener("dragover", e => {
@@ -1201,11 +1219,12 @@ document.addEventListener("drop", e => {
   e.preventDefault(); clearWsLine();
   const id = drag.wsRow; drag = null;
   if (!document.getElementById("sidebar").contains(e.target)) return;
-  const w = wsById(id), from = wss.indexOf(w);
-  let { slot } = wsSlot(e.clientY);
-  if (slot === from || slot === from + 1) return;
-  if (slot > from) slot--;
-  wss.splice(from, 1); wss.splice(slot, 0, w);
+  // Hidden empty Default is not a header, so the gap is named by the workspace after it.
+  const w = wsById(id), { before } = wsSlot(e.clientY);
+  if (before === id) return;
+  wss = wss.filter(x => x !== w);
+  const at = before ? wss.indexOf(wsById(before)) : wss.length;
+  wss.splice(at, 0, w);
   saveState(); renderSidebar();
 });
 document.addEventListener("dragend", clearWsLine);
