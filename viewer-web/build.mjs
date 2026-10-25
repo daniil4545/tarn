@@ -23,7 +23,9 @@ copyFileSync(join(here, "node_modules", "mermaid", "dist", "mermaid.min.js"), jo
 
 // License texts of the packages that ship in the page, for the notice the licenses require.
 const packages = ["markdown-it", "highlight.js", "mermaid", "codemirror", "@codemirror/view", "@codemirror/state",
-  "@codemirror/commands", "@codemirror/language", "@codemirror/lang-markdown", "@lezer/highlight"];
+  "@codemirror/commands", "@codemirror/language", "@codemirror/lang-markdown", "@lezer/highlight",
+  // Packages bundled inside mermaid.min.js whose licenses are not MIT.
+  "d3", "d3-ease", "d3-sankey", "rw", "dompurify", "chevrotain"];
 const texts = packages.map(name => {
   const dir = join(here, "node_modules", name);
   const file = ["LICENSE", "LICENSE.md", "LICENSE.txt"].map(f => join(dir, f)).find(existsSync);
