@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Ghostty
@@ -123,5 +124,46 @@ struct TargetTests {
         _ = book.pass([[t[0], t[1]]])
         let outcome = book.pass([[t[0], t[1]]])
         #expect(outcome == WorkspaceBook.Outcome())
+    }
+}
+
+@MainActor
+@Suite
+struct TargetExpiryTests {
+    private let t = (0..<4).map { _ in TabKey() }
+
+    @Test func aTargetNobodyUsedStopsSteeringLaterTabs() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        let other = book.newWorkspace("Other", in: t[0])
+        book.setPendingTarget(other, for: t[0])
+        let first = book.clearPendingTarget(for: t[0])
+        let second = book.clearPendingTarget(for: t[0])
+        #expect(first)
+        #expect(!second)
+        _ = book.pass([[t[0], t[1]]], selected: [t[0]])
+        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.defaultName)
+    }
+
+    @Test func anEmptyWorkspaceMadeForATabThatNeverCameIsRemoved() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        let created = book.newWorkspace("Ghost", in: t[0])
+        book.setPendingTarget(created, for: t[0])
+        _ = book.pass([[t[0]]])
+        #expect(book.set(of: t[0])?.workspace(created) != nil)
+        _ = book.clearPendingTarget(for: t[0])
+        _ = book.pass([[t[0]]])
+        #expect(book.set(of: t[0])?.workspace(created) == nil)
+    }
+
+    @Test func keyNotificationsOfOurOwnMovesAreRecognisedUntilCleared() {
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: true)
+        var hops = KeyHops()
+        #expect(!hops.contains(window))
+        hops.mark(window)
+        #expect(hops.contains(window))
+        hops.clear()
+        #expect(!hops.contains(window))
     }
 }

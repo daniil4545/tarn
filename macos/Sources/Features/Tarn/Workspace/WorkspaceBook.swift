@@ -247,6 +247,12 @@ struct WorkspaceBook {
         pendingTarget[id] = workspace
     }
 
+    /// Forgets a target that nobody used. True when there was one.
+    mutating func clearPendingTarget(for tab: TabKey) -> Bool {
+        guard let id = setOf[tab] else { return false }
+        return pendingTarget.removeValue(forKey: id) != nil
+    }
+
     /// The selection moved to `tab`. A collapsed workspace opens when the selection enters
     /// it (Q9). Returns the set when its table changed.
     mutating func selected(_ tab: TabKey) -> UUID? {

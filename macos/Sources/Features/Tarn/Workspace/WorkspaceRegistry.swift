@@ -28,6 +28,8 @@ final class WorkspaceRegistry {
     private let closing = NSHashTable<NSWindow>.weakObjects()
     /// Our own moves are under way: ignore the notifications they cause.
     private var isBusy = false
+    /// Windows raised by `moveNatively`; their key notifications arrive after `isBusy` is over.
+    private var hops = KeyHops()
 
     /// Closed tabs whose undo is still on Ghostty's stack (S15 to S18).
     private let shelf = TombstoneShelf()
@@ -131,7 +133,7 @@ final class WorkspaceRegistry {
 
     private func windowDidBecomeKey(_ window: NSWindow) {
         claimTombstones()
-        guard !isBusy, let entry = entries[ObjectIdentifier(window)], let id = book.selected(entry.key) else { return }
+        guard !isBusy, !hops.contains(window), let entry = entries[ObjectIdentifier(window)], let id = book.selected(entry.key) else { return }
         publish([id])
     }
 
@@ -222,17 +224,23 @@ final class WorkspaceRegistry {
               let surface = controller.focusedSurface ?? controller.surfaceTree.first
         else { return }
         let previous = window.tabGroup?.selectedWindow
+        hops.mark(window)
+        if let previous { hops.mark(previous) }
         if previous !== window { window.makeKeyAndOrderFront(nil) }
         controller.performAction("move_tab:\(delta)", on: surface)
         if let previous, previous !== window { previous.makeKeyAndOrderFront(nil) }
+        // The key notifications are queued, and Ghostty returns the key one turn later on macOS 26.
+        DispatchQueue.main.async { DispatchQueue.main.async { [self] in hops.clear() } }
     }
 
     // MARK: Sidebar commands
 
     /// A new tab in `workspace` (S3), after its last tab (D2).
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
-        book.setPendingTarget(workspace, for: key(for: window))
+        let tab = key(for: window)
+        book.setPendingTarget(workspace, for: tab)
         (window.windowController as? TerminalController)?.newTab(nil)
+        expirePendingTarget(of: tab)
     }
 
     /// A new workspace with one new tab (S4). False for a blank name.
@@ -245,7 +253,16 @@ final class WorkspaceRegistry {
         book.setPendingTarget(created, for: tab)
         publish(changed.map { [$0] } ?? [])
         (window.windowController as? TerminalController)?.newTab(nil)
+        expirePendingTarget(of: tab)
         return true
+    }
+
+    /// A new tab that never came (the window was refused) must not steer a later one: the target
+    /// ends a second after the request, and an empty workspace made for it goes with it.
+    private func expirePendingTarget(of tab: TabKey) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
+            if book.clearPendingTarget(for: tab) { sync() }
+        }
     }
 
     @discardableResult
