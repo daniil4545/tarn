@@ -1617,6 +1617,8 @@ extension Ghostty {
             case GHOSTTY_TARGET_SURFACE:
                 guard let surface = target.target.surface else { return }
                 guard let surfaceView = self.surfaceView(from: surface) else { return }
+                // tarn: a live agent session notifies through tarn only (docs/spec.md section 12).
+                if MainActor.assumeIsolated({ Attention.suppresses(surfaceView) }) { return }
                 guard let title = String(cString: n.title!, encoding: .utf8) else { return }
                 guard let body = String(cString: n.body!, encoding: .utf8) else { return }
                 showDesktopNotification(surfaceView, title: title, body: body)
@@ -1626,7 +1628,8 @@ extension Ghostty {
             }
         }
 
-        private static func showDesktopNotification(
+        // tarn: internal, not private, so Attention.swift uses this route.
+        static func showDesktopNotification(
             _ surfaceView: SurfaceView,
             title: String,
             body: String,

@@ -291,6 +291,7 @@
 				A5B3052E299BEAAA0047F10C /* Frameworks */,
 				A5B3052F299BEAAA0047F10C /* Resources */,
 				819324572F24E74E00A9ED8F /* Copy DockTilePlugin */,
+				A57C1C1000000000000000A3 /* Install tarn CLI */,
 			);
 			buildRules = (
 			);
@@ -405,6 +406,26 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		A57C1C1000000000000000A3 /* Install tarn CLI */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+				"$(SRCROOT)/../cli/tarn",
+			);
+			name = "Install tarn CLI";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+				"$(TARGET_BUILD_DIR)/$(EXECUTABLE_FOLDER_PATH)/tarn",
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\ndest=\"$TARGET_BUILD_DIR/$EXECUTABLE_FOLDER_PATH/tarn\"\ninstall -m 755 \"$SRCROOT/../cli/tarn\" \"$dest\"\n# Nested code must be signed before the app: a script in Contents/MacOS counts as code.\nflags=\"\"\nif [ \"$ENABLE_HARDENED_RUNTIME\" = YES ]; then flags=\"--options runtime --timestamp\"; fi\n# shellcheck disable=SC2086\n/usr/bin/codesign --force --sign \"${EXPANDED_CODE_SIGN_IDENTITY:--}\" $flags \"$dest\"\n";
+		};
 		FC501E0B2F46B410007AE49D /* Run SwiftLint */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
