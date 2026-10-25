@@ -4,7 +4,7 @@ import Foundation
 /// goes, what happens when sets meet or part. `WorkspaceRegistry` feeds it the tab groups
 /// AppKit reports and acts on what it returns, so every rule is a unit test.
 ///
-/// Rules: `docs/plans/s3-windows-contracts.md` sections 3, 4, 6, 8.
+/// Rules: `docs/modules/workspaces.md`.
 struct WorkspaceBook {
     /// The tabs of one native tab group in tab order.
     struct Group {
@@ -22,7 +22,7 @@ struct WorkspaceBook {
         var notes: [String] = []
     }
 
-    /// A tab that is closing: enough to put it back (S15 to S18).
+    /// A tab that is closing: enough to put it back.
     struct ClosedTab: Equatable {
         let tab: TabKey
         /// The set as it was just before the tab left.
@@ -33,7 +33,7 @@ struct WorkspaceBook {
     private(set) var sets: [UUID: WorkspaceSet] = [:]
     private var setOf: [TabKey: UUID] = [:]
     /// Tabs seen in a group that held every live tab of their set. A settled tab that shows
-    /// up in a group without its set has left it (S21). Restored tabs start unsettled: AppKit
+    /// up in a group without its set has left it. Restored tabs start unsettled: AppKit
     /// may put their windows into one group only later.
     private var settled = Set<TabKey>()
     private var live = Set<TabKey>()
@@ -101,7 +101,7 @@ struct WorkspaceBook {
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
                 // Merge All Windows: the loser's workspaces come whole, with their names. A window
                 // that holds only its stock `Default` has nothing to keep: it is the same as a tab
-                // dragged in (S21) and joins the target.
+                // dragged in and joins the target.
                 won.absorb(loser)
                 sets[winner] = won
                 sets[old] = nil
@@ -241,7 +241,7 @@ struct WorkspaceBook {
 
     // MARK: Sidebar commands
 
-    /// The next new tab of the window's set goes to `workspace` (S3, S4).
+    /// The next new tab of the window's set goes to `workspace`.
     mutating func setPendingTarget(_ workspace: Workspace.ID, for tab: TabKey) {
         guard let id = setOf[tab] else { return }
         pendingTarget[id] = workspace
@@ -254,7 +254,7 @@ struct WorkspaceBook {
     }
 
     /// The selection moved to `tab`. A collapsed workspace opens when the selection enters
-    /// it (Q9). Returns the set when its table changed.
+    /// it. Returns the set when its table changed.
     mutating func selected(_ tab: TabKey) -> UUID? {
         guard let id = setOf[tab], var set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
         lastSelected[id] = workspace.id

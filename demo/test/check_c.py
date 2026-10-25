@@ -74,7 +74,7 @@ def viewer_checks(pg):
         "C1 a path makes a viewer pane, the tree is hidden",
         viewers(pg) == 1 and count(tree) == 0,
     )
-    # spec: docs/spec.md 2.5.4 - raw HTML inside markdown is escaped.
+    # spec: docs/specs/viewer-pane.md 4 - raw HTML inside markdown is escaped.
     check(
         "C1a raw HTML in markdown is shown as text",
         count("#vcontent b") == 0

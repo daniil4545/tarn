@@ -1,7 +1,7 @@
 import Testing
 @testable import Ghostty
 
-/// Q4, Q10, D14: the workspace name is the window subtitle, only with the sidebar style.
+/// The workspace name is the window subtitle, only with the sidebar style.
 @Suite
 struct WorkspaceTitleTests {
     @Test func theSubtitleIsTheWorkspaceNameWithTheSidebar() {

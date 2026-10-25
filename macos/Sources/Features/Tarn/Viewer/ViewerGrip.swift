@@ -1,7 +1,7 @@
 import AppKit
 
 extension NSPasteboard.PasteboardType {
-    /// Private drag payload of a whole viewer: its id (`docs/plans/s3-windows-contracts.md` section 10).
+    /// Private drag payload of a whole viewer: its id (`docs/modules/layout.md`).
     static let tarnViewer = NSPasteboard.PasteboardType("com.daniil4545.tarn.viewer")
 }
 
@@ -58,7 +58,7 @@ final class ViewerPaneView: NSView {
     }
 }
 
-/// The three dots of the viewer, as in the mockup: 0.6 opaque when near, 1.0 on hover (D16). The drag
+/// The three dots of the viewer, as in the mockup: 0.6 opaque when near, 1.0 on hover. The drag
 /// session follows `Ghostty.SurfaceDragSourceView` (`Ghostty/Surface View/SurfaceDragSource.swift:82`).
 final class ViewerGripView: NSView, NSDraggingSource {
     static let size = NSSize(width: 80, height: 12)
@@ -81,7 +81,7 @@ final class ViewerGripView: NSView, NSDraggingSource {
         if let escapeMonitor { NSEvent.removeMonitor(escapeMonitor) }
     }
 
-    /// Opacity of the dots: Ghostty's handle uses 0.3 and 0.8; here 0.6 and 1.0 (D16).
+    /// Opacity of the dots: Ghostty's handle uses 0.3 and 0.8; here 0.6 and 1.0.
     static func opacity(near: Bool, hovering: Bool) -> CGFloat {
         hovering ? 1.0 : (near ? 0.6 : 0)
     }

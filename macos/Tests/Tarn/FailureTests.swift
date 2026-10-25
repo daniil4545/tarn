@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// C8: what is not covered ends in a tab inside a workspace, never in a crash or a lost tab.
+/// What is not covered ends in a tab inside a workspace, never in a crash or a lost tab.
 @Suite
 struct FailureTests {
     private let t = (0..<4).map { _ in TabKey() }

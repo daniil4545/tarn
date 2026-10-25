@@ -194,7 +194,7 @@ final class ViewerHost: ObservableObject {
         return ViewerSnapshot(layout: layout, viewers: viewers)
     }
 
-    /// Brings the viewers of a closed tab back into a tab that has none (undo of S16).
+    /// Brings the viewers of a closed tab back into a tab that has none (undo of a tab close).
     func restore(_ snapshot: ViewerSnapshot) {
         guard panes.isEmpty, let decoded = try? JSONDecoder().decode(AreaTree.self, from: snapshot.layout),
               let block = decoded.block
@@ -255,7 +255,7 @@ final class ViewerHost: ObservableObject {
         guard let pane = panes[id] else { return }
         switch command {
         case let .split(edge):
-            // S14: the file of the viewer opens in a new viewer beside it.
+            // The file of the viewer opens in a new viewer beside it.
             guard let path = pane.model.tabs.activePath else { return }
             let new = makeViewer(root: pane.model.tree.root, beside: pane.leaf, edge: edge, share: 0.5)
             guard new.model.open(OpenTarget(path: path), pin: true) else {
@@ -379,7 +379,7 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
-    /// S14a: a viewer dropped outside every window opens in a new window.
+    /// A viewer dropped outside every window opens in a new window.
     private func detach(_ id: UUID, at point: NSPoint) {
         guard let pane = panes[id], let controller else { return }
         let created = TerminalController.newWindow(controller.ghostty)
@@ -454,8 +454,8 @@ enum ViewerRouter {
     }
 
     /// Ghostty's split keys when the terminal block has no target in that direction: the keyboard
-    /// goes to the viewer that lies there (D8). Called from `Ghostty.App.gotoSplit` (insertion
-    /// point 14); true if focus moved, so a performable keybind consumes the key.
+    /// goes to the viewer that lies there. Called from `Ghostty.App.gotoSplit` (insertion
+    /// point 17); true if focus moved, so a performable keybind consumes the key.
     @MainActor
     static func focusNeighbor(from surface: Ghostty.SurfaceView, direction: Ghostty.SplitFocusDirection) -> Bool {
         guard let controller = surface.window?.windowController as? TerminalController else { return false }

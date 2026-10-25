@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 
 /// The header of a workspace in the sidebar: fold arrow, name, and for a folded workspace
-/// the tab count and the state of its most urgent agent (Q2: a dot, nothing more). A click
-/// folds; the + button opens a tab in it; the header drags the whole workspace (S9).
+/// the tab count and the state of its most urgent agent (a dot, nothing more). A click
+/// folds; the + button opens a tab in it; the header drags the whole workspace.
 struct WorkspaceHeader: View {
     @ObservedObject var model: SidebarModel
     let group: SidebarModel.Group
@@ -117,7 +117,7 @@ enum WorkspacePrompt {
         }
     }
 
-    /// Names the count of tabs that move (S6).
+    /// Names the count of tabs that move.
     static func confirmDelete(
         _ name: String,
         tabCount: Int,

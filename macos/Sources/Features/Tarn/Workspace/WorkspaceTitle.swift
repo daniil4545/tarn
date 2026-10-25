@@ -1,9 +1,9 @@
 import AppKit
 
-/// The workspace name in the window's subtitle (Q4, Q10). The title stays Ghostty's.
+/// The workspace name in the window's subtitle. The title stays Ghostty's.
 enum WorkspaceTitle {
     /// The subtitle for a tab in `workspace`. Empty with the top tab bar: there the workspaces
-    /// are not shown (D14, S22).
+    /// are not shown.
     static func subtitle(workspace: String?, style: TabStyle) -> String {
         style == .sidebar ? workspace ?? "" : ""
     }

@@ -1,5 +1,5 @@
 // The page of the tarn viewer pane. Swift owns tabs, text and files and pushes state through
-// `window.tarn`; this page draws it and reports user actions with `post`. See docs/plans/s2-files.md.
+// `window.tarn`; this page draws it and reports user actions with `post`. See docs/modules/viewer.md.
 // Markdown setup follows MarkEdit-preview src/render.ts @5bdd252 (MIT); see THIRD_PARTY.md.
 import MarkdownIt from "markdown-it";
 import hljs from "highlight.js/lib/common";

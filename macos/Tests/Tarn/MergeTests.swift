@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// C6: sets across merge, restore and undo.
+/// Sets across merge, restore and undo.
 @Suite
 struct MergeTests {
     private let t = (0..<6).map { _ in TabKey() }

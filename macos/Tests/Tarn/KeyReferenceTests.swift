@@ -1,7 +1,7 @@
 import Testing
 @testable import Ghostty
 
-/// Help against Ghostty itself (`docs/plans/s4-settings.md` sections 1.3 and 3, slice D).
+/// Help against Ghostty itself (`docs/modules/settings.md`).
 @Suite
 struct KeyReferenceTests {
     private static let ghosttyRows = KeyReference.groups.flatMap(\.rows).filter { $0.action != nil }

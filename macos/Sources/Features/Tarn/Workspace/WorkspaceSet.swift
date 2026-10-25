@@ -15,7 +15,7 @@ struct Workspace: Equatable, Identifiable, Codable {
 ///
 /// Ghostty alone writes the order of tabs; this value stores only membership. A workspace is
 /// a contiguous run of the native tab order, so workspace order is derived from the order of
-/// tabs and never stored (`docs/plans/s3-windows-contracts.md` section 1).
+/// tabs and never stored (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
     static let defaultName = "Default"
 
@@ -36,7 +36,7 @@ struct WorkspaceSet: Equatable {
     enum Removal: Equatable {
         case notMember
         case stayed
-        /// It was the last tab, so the workspace is gone (D12).
+        /// It was the last tab, so the workspace is gone.
         case workspaceClosed(Workspace)
     }
 
@@ -58,7 +58,7 @@ struct WorkspaceSet: Equatable {
         self.revision = revision
     }
 
-    /// A set with `Default` holding `tabs` (D1, D10).
+    /// A set with `Default` holding `tabs`.
     static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
         let workspace = Workspace(name: defaultName)
         return WorkspaceSet(
@@ -112,8 +112,8 @@ struct WorkspaceSet: Equatable {
 
     // MARK: Edits
 
-    /// Adds an empty workspace and returns it, or nil for a blank name (D3). The workspace
-    /// gets its tab right after (S4); until then it is in no run.
+    /// Adds an empty workspace and returns it, or nil for a blank name. The workspace
+    /// gets its tab right after; until then it is in no run.
     mutating func create(name: String) -> Workspace.ID? {
         guard let name = Self.cleaned(name) else { return nil }
         let workspace = Workspace(name: name)
@@ -154,7 +154,7 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Removes the tab; the workspace closes with its last tab (D12). A workspace that never
+    /// Removes the tab; the workspace closes with its last tab. A workspace that never
     /// had a tab is not touched.
     @discardableResult
     mutating func remove(_ tab: TabKey) -> Removal {
@@ -165,8 +165,8 @@ struct WorkspaceSet: Equatable {
         return .workspaceClosed(workspaces.remove(at: index))
     }
 
-    /// Deletes a workspace; its tabs go to the one above, or below when it is first (D13).
-    /// The last workspace is never deleted (D4). Returns false when nothing changed.
+    /// Deletes a workspace; its tabs go to the one above, or below when it is first.
+    /// The last workspace is never deleted. Returns false when nothing changed.
     @discardableResult
     mutating func delete(_ id: Workspace.ID, order: [TabKey]) -> Bool {
         guard workspaces.count > 1, workspace(id) != nil else { return false }
@@ -187,7 +187,7 @@ struct WorkspaceSet: Equatable {
         return true
     }
 
-    /// Appends every workspace and tab of `other` unchanged, for Merge All Windows (C6).
+    /// Appends every workspace and tab of `other` unchanged, for Merge All Windows.
     mutating func absorb(_ other: WorkspaceSet) {
         workspaces.append(contentsOf: other.workspaces)
         members.merge(other.members) { current, _ in current }
@@ -205,7 +205,7 @@ struct WorkspaceSet: Equatable {
     // MARK: Following Ghostty
 
     /// Brings membership in line with a native order that changed behind our back
-    /// (`docs/plans/s3-windows-contracts.md` section 3).
+    /// (`docs/modules/workspaces.md`).
     ///
     /// - Parameters:
     ///   - previous: the relative order of the tabs at the last look.

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// One settings section of Ghostty options: a row per catalog option (mockup S7-S10).
+/// One settings section of Ghostty options: a row per catalog option.
 struct GhosttyOptionsPane: View {
     let section: GhosttyOption.Section
     let title: String

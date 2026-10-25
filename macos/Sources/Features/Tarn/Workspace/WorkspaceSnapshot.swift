@@ -1,7 +1,7 @@
 import Foundation
 
 /// A window's copy of its workspace set, as stored in the restorable state under
-/// `tarn.workspaces` (`docs/plans/s3-windows-contracts.md` section 9). Every tab window of a
+/// `tarn.workspaces` (`docs/modules/workspaces.md`). Every tab window of a
 /// set carries the whole table plus its own key.
 struct WorkspaceSnapshot: Codable, Equatable {
     static let version = 1
@@ -27,7 +27,7 @@ struct WorkspaceSnapshot: Codable, Equatable {
     var workspaces: [Entry]
 
     /// The set this snapshot describes. A tab listed twice stays in the first workspace;
-    /// a workspace without a tab is dropped (D12).
+    /// a workspace without a tab is dropped.
     func makeSet() -> WorkspaceSet {
         var members: [TabKey: Workspace.ID] = [:]
         var kept: [Workspace] = []

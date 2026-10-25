@@ -1,4 +1,4 @@
-// Shape of a key row and the checks every row set must pass (docs/plans/s5-demo.md section 6).
+// Shape of a key row and the checks every row set must pass (demo/js/CONTRACT.md, "Keys").
 // Row: { id, chords: ["Cmd+D"], alt: ["Ctrl+Alt+D"], when: "terminal" | "viewer" | "any",
 //        group, text, cmd, payload }. One chord per array entry: "Cmd+1 ... 8" is eight rows.
 const MODS = ["Ctrl", "Alt", "Shift", "Cmd"];

@@ -3,7 +3,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// C4 and S1 to S4, S21: where a new tab goes.
+/// Where a new tab goes.
 @Suite
 struct TargetTests {
     private let t = (0..<6).map { _ in TabKey() }

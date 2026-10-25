@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The settings store against a temp file (`docs/plans/s4-settings.md` section 4).
+/// The settings store against a temp file (`docs/modules/settings.md`).
 @MainActor
 @Suite
 struct GhosttyOptionStoreTests {

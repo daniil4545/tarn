@@ -290,7 +290,7 @@ final class SidebarModel: ObservableObject {
 
     private var registry: WorkspaceRegistry { .shared }
 
-    /// A tab in the current workspace (D2).
+    /// A tab in the current workspace.
     func newTab() {
         guard let window else { return }
         if let workspace = registry.workspace(of: window) {
@@ -369,7 +369,7 @@ final class SidebarModel: ObservableObject {
         )
     }
 
-    /// The tabs of `tab`'s workspace (Q8: the close commands stay inside it).
+    /// The tabs of `tab`'s workspace (the close commands stay inside it).
     private func siblings(of tab: Tab) -> [Tab] {
         groups.first { $0.tabs.contains { $0.id == tab.id } }?.tabs ?? []
     }
@@ -499,7 +499,7 @@ final class SidebarModel: ObservableObject {
     }
 
     /// A tab drag ended. Nobody took it and it is outside every window: the tab leaves for a
-    /// window of its own (S21).
+    /// window of its own.
     func dragEnded(_ tab: Tab, at screenPoint: NSPoint, accepted: Bool) {
         dragExit()
         guard !accepted, tabWindows.count > 1,
@@ -706,7 +706,7 @@ struct Sidebar: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 
-    /// A folded workspace shows no tabs (D6); selecting one of them unfolds it (Q9).
+    /// A folded workspace shows no tabs; selecting one of them unfolds it.
     private func visibleTabs(of group: SidebarModel.Group) -> [SidebarModel.Tab] {
         group.workspace.collapsed ? [] : group.tabs
     }

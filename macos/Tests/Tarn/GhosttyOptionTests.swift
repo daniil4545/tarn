@@ -8,7 +8,7 @@ extension GhosttyOption {
     }
 }
 
-/// The option catalog against Ghostty itself (`docs/plans/s4-settings.md` sections 3 and 4).
+/// The option catalog against Ghostty itself (`docs/modules/settings.md`).
 @Suite
 struct GhosttyOptionTests {
     @Test func keysAreUniqueAndEachSectionHasOptions() {

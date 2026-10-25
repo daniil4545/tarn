@@ -3,7 +3,7 @@ import AppKit
 /// A leaf of the layout of one tab: the terminal block or one viewer. It is a placeholder view for
 /// `SplitTree`, which wants `NSView & Codable & Identifiable` leaves (`Features/Splits/SplitTree.swift:5`);
 /// it is never put into a window. The block is one leaf: its terminals stay in Ghostty's own
-/// `SplitTree<Ghostty.SurfaceView>` (`docs/plans/s3-windows.md` section 1).
+/// `SplitTree<Ghostty.SurfaceView>` (`docs/modules/layout.md`).
 final class AreaLeaf: NSView, Codable, Identifiable {
     enum Kind: String, Codable {
         case block, viewer
