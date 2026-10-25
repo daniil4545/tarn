@@ -47,20 +47,22 @@ struct WorkspaceHeader: View {
         .onHover { isHovering = $0 }
         .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.workspace.id)) }
         .overlay(alignment: .bottom) { dropLine(endsHere) }
+        .padding(.vertical, Sidebar.rowGap / 2)
+        .padding(.horizontal, Sidebar.listInset)
         .overlay(
             SidebarInteraction(
                 payload: { (.workspace, group.workspace.id.uuidString) },
                 onClick: { model.toggleFold(group) },
                 menu: { model.contextMenu(for: group) },
-                dragOver: { kind, lowerHalf in
-                    model.dragOver(kind, over: .header(group.workspace.id), lowerHalf: lowerHalf)
+                dragOver: { kind, value, lowerHalf in
+                    model.dragOver(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
                 },
                 dragExit: { model.dragExit() },
                 drop: { kind, value, lowerHalf in
                     model.drop(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
                 },
                 dragEnded: { _, _ in model.dragExit() },
-                excludedTrailing: isHovering ? 24 : 0
+                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0
             )
         )
         .accessibilityAddTraits(.isButton)
@@ -70,7 +72,9 @@ struct WorkspaceHeader: View {
 
     /// The drop line goes under a header only when nothing else of the workspace is shown.
     private var endsHere: Bool {
-        group.workspace.collapsed && model.dropSlot == .endOfWorkspace(group.workspace.id)
+        guard group.workspace.collapsed else { return false }
+        return model.dropSlot == .endOfWorkspace(group.workspace.id)
+            || (model.dropSlot == .end && model.groups.last?.id == group.id)
     }
 }
 

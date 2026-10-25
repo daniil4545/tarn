@@ -293,18 +293,31 @@ final class WorkspaceRegistry {
         guard let index = order.firstIndex(of: tab) else { return }
         isBusy = true
         let changed = book.edit(tab) { $0.join(tab, to: workspace) }
-        let others = order.filter { $0 != tab }
-        let destination: Int
-        if let neighbour, let at = others.firstIndex(of: key(for: neighbour)) {
-            destination = at
-        } else {
-            let last = others.lastIndex { book.workspace(of: $0)?.id == workspace }
-            destination = last.map { $0 + 1 } ?? others.count
-        }
+        let destination = Self.destination(
+            of: tab,
+            in: order,
+            before: neighbour.map(key(for:)),
+            isMember: { book.workspace(of: $0)?.id == workspace }
+        )
         moveNatively(window, by: destination - index)
         isBusy = false
         sync()
         publish(changed.map { [$0] } ?? [])
+    }
+
+    /// The place of `tab` among the other tabs of `order` after a move: before `neighbour`, or
+    /// after the last other member of the workspace. A tab that is the only member of the
+    /// workspace stays where it is.
+    nonisolated static func destination(
+        of tab: TabKey,
+        in order: [TabKey],
+        before neighbour: TabKey?,
+        isMember: (TabKey) -> Bool
+    ) -> Int {
+        let others = order.filter { $0 != tab }
+        if let neighbour, let at = others.firstIndex(of: neighbour) { return at }
+        if let last = others.lastIndex(where: isMember) { return last + 1 }
+        return order.firstIndex(of: tab) ?? others.count
     }
 
     /// Moves a whole workspace before `other`, or to the end (S9): one native move per tab.

@@ -110,6 +110,14 @@ struct SidebarGroupingTests {
         #expect(slot == (beforeB ? .beforeWorkspace(groups[1].id) : .beforeWorkspace(groups[2].id)))
     }
 
+    // spec: S9. The empty sidebar below the last row takes drops after everything.
+    @Test func belowTheLastRowAWorkspaceGoesToTheEndAndATabToTheLastWorkspace() {
+        let (groups, _) = layout()
+        #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: groups) == .end)
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .endOfWorkspace(groups[2].id))
+        #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: []) == nil)
+    }
+
     @Test func unknownTargetsGiveNoSlot() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(TabKey()), lowerHalf: false, in: groups) == nil)

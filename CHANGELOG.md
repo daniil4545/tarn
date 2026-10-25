@@ -4,6 +4,10 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ## [Unreleased]
 
+### Fixed
+
+- Sidebar drag and drop: a workspace or tab can be dropped below the last row, the drop line no longer blinks over the gaps between rows, the only tab of a workspace dropped on it no longer moves the workspace to the end, and a drag from another window shows no line.
+
 ## [tarn-v0.0.1] - 2026-10-23
 
 First preview, built from source. The sidebar and Claude Code session state work; the rest of the first version (markdown panel, `tarn` CLI, notifications, app identity, benchmark) is not in yet.
