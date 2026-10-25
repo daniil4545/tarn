@@ -26,13 +26,11 @@ final class ViewerWebView: WKWebView {
             default: return nil
             }
         }
-        // The modifiers are exact: Cmd+B, Cmd+Alt+B and Cmd+Shift+E are three different keys.
+        // The modifiers are exact: Cmd+Alt+B and Cmd+Shift+B are not Cmd+B.
         switch (modifiers, letter) {
         case (.command, "s"): return "save"
         case (.command, "e"): return "mode"
         case (.command, "b"): return "tree"
-        case ([.command, .option], "b"): return "pane"
-        case ([.command, .shift], "e"): return "focusTree"
         default: return nil
         }
     }
