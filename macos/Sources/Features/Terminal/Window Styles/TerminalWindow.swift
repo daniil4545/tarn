@@ -262,10 +262,12 @@ class TerminalWindow: NSWindow {
         if isTabBar(childViewController) {
             childViewController.identifier = Self.tabBarIdentifier
 
-            // tarn: the sidebar replaces the native tab bar. Hiding the controller
-            // gives the bar no room in the titlebar and hiding its view stops it drawing.
-            childViewController.isHidden = true
-            childViewController.view.isHidden = true
+            // tarn: the sidebar replaces the native tab bar unless the user chose tabs
+            // at the top. Hiding the controller gives the bar no room in the titlebar
+            // and hiding its view stops it drawing.
+            let hidden = TabStyle.current == .sidebar
+            childViewController.isHidden = hidden
+            childViewController.view.isHidden = hidden
 
             tabBarDidAppear()
         }

@@ -1120,6 +1120,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         // Initialize our content view to the SwiftUI root, with the tarn
         // sidebar beside the terminal.
         sidebarModel.window = window
+        NativeTabMark.install(in: window, model: sidebarModel)
         let container = TerminalViewContainer {
             SidebarLayout(model: sidebarModel, ghostty: ghostty) {
                 TerminalView(ghostty: ghostty, viewModel: self, delegate: self)
