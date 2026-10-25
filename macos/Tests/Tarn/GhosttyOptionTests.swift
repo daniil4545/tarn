@@ -2,6 +2,12 @@ import Foundation
 import Testing
 @testable import Ghostty
 
+extension GhosttyOption {
+    static func option(_ key: String) -> GhosttyOption? {
+        all.first { $0.key == key }
+    }
+}
+
 /// The option catalog against Ghostty itself (`docs/plans/s4-settings.md` sections 3 and 4).
 @Suite
 struct GhosttyOptionTests {
@@ -60,5 +66,14 @@ struct GhosttyOptionTests {
         #expect(GhosttyOption.option("background-opacity")?.applies == .restart)
         #expect(GhosttyOption.option("macos-titlebar-style")?.applies == .newWindows)
         #expect(GhosttyOption.option("font-size")?.applies == .live)
+        #expect(GhosttyOption.option("window-padding-x")?.applies == .newWindows)
+    }
+
+    /// Ghostty parses `window-padding-x` as an integer, so the catalog marks it whole.
+    @Test func aWholeNumberOptionIsOneGhosttyRejectsWithAFraction() throws {
+        let option = try #require(GhosttyOption.option("window-padding-x"))
+        #expect(option.wholeNumber)
+        #expect(try !TemporaryConfig("window-padding-x = 5.5").errors.isEmpty)
+        #expect(try TemporaryConfig("window-padding-x = 6").errors.isEmpty)
     }
 }

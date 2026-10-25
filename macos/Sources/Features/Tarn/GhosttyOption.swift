@@ -41,17 +41,16 @@ struct GhosttyOption: Identifiable, Equatable {
     var applies: Applies = .live
     /// A repeatable option: the file clears the list first, else the tarn value is only a fallback.
     var repeatable = false
+    /// A number option Ghostty parses as an integer (`window-padding-x` is `u32`): no fraction.
+    var wholeNumber = false
     let help: String
 
     var id: String { key }
 
-    /// The file lines for a value: `font-family` becomes an empty clear line plus the value.
+    /// The file lines for a value: `font-family` becomes an empty clear line plus the value;
+    /// an empty value is the clear line alone.
     func fileValues(for value: String) -> [String] {
-        repeatable ? ["", value] : [value]
-    }
-
-    static func option(_ key: String) -> GhosttyOption? {
-        all.first { $0.key == key }
+        repeatable && !value.isEmpty ? ["", value] : [value]
     }
 
     static func options(in section: Section) -> [GhosttyOption] {
@@ -77,6 +76,7 @@ struct GhosttyOption: Identifiable, Equatable {
                       help: "Blurs what shows through a transparent background. A radius or glass value in the file shows as text."),
         GhosttyOption(key: "window-padding-x", section: .appearance, control: .number(0...40), defaultValue: "2",
                       reading: .unreadable,
+                      applies: .newWindows, wholeNumber: true,
                       help: "Space between the window edge and the text, in points."),
         GhosttyOption(key: "unfocused-split-opacity", section: .appearance, control: .slider(0.15...1, step: 0.05),
                       defaultValue: "0.7", reading: .float64,

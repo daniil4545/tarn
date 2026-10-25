@@ -147,20 +147,7 @@ private struct CommittedField: View {
 
     private func commit() {
         let value = draft.trimmingCharacters(in: .whitespaces)
-        if value == (text ?? "") { return }
-        if let range {
-            guard let number = Double(value), range.contains(number) else {
-                store.report("Enter a number from \(format(range.lowerBound)) to \(format(range.upperBound)).", for: option)
-                return
-            }
-            store.set(option, to: format(number))
-        } else {
-            store.set(option, to: value)
-        }
-    }
-
-    private func format(_ number: Double) -> String {
-        String(format: "%g", number)
+        if value != (text ?? "") { store.set(option, to: value) }
     }
 }
 

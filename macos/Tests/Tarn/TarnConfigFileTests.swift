@@ -228,3 +228,10 @@ struct TarnConfigFileTests {
         #expect(try String(contentsOf: real, encoding: .utf8) == "font-size = 18\n")
     }
 }
+
+extension TarnConfigFile {
+    /// One value for a key, as most tests need.
+    mutating func set(_ key: String, to value: String) throws {
+        try set(key, to: [value])
+    }
+}

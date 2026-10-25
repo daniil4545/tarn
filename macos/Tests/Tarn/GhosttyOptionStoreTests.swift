@@ -49,10 +49,44 @@ struct GhosttyOptionStoreTests {
         #expect(!store.isSet(option("drag-handle")))
     }
 
-    @Test func theDefaultEntryOfAnAutoOptionIsAReset() throws {
-        let (store, url) = try makeStore("cursor-style-blink = true\n")
+    /// The user's own config says `false`; picking "default (auto)" must not bring it back.
+    @Test func theDefaultEntryOfAnOptionalOptionWritesAnEmptyValue() throws {
+        let user = try TemporaryConfig("cursor-style-blink = false")
+        let (store, url) = try makeStore(config: user)
         store.set(option("cursor-style-blink"), to: "")
+        #expect(try lines(url) == ["cursor-style-blink = \"\""])
+        #expect(store.isSet(option("cursor-style-blink")))
+        #expect(store.display(option("cursor-style-blink")) == .value(""))
+        // Ghostty reads the empty value as the default, over the user's line.
+        let effective = try TemporaryConfig("cursor-style-blink = false\n\(String(contentsOf: url, encoding: .utf8))")
+        #expect(GhosttyOptionReader.value(of: option("cursor-style-blink"), in: effective) == nil)
+        store.reset(option("cursor-style-blink"))
         #expect(try lines(url).isEmpty)
+    }
+
+    @Test func aNumberTheTypeDoesNotTakeIsReportedAndNotWritten() throws {
+        let (store, url) = try makeStore()
+        store.set(option("window-padding-x"), to: "5.5")
+        #expect(store.errors["window-padding-x"]?.contains("whole number") == true)
+        store.set(option("font-size"), to: "99")
+        store.set(option("font-size"), to: "abc")
+        #expect(store.errors["font-size"] != nil)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        store.set(option("font-size"), to: "13.5")
+        #expect(try lines(url) == ["font-size = 13.5"])
+        store.set(option("window-padding-x"), to: "6")
+        #expect(store.errors["window-padding-x"] == nil)
+    }
+
+    @Test func aFractionInTheFileForAWholeNumberShowsRaw() throws {
+        let (store, _) = try makeStore("window-padding-x = 5.5\n")
+        #expect(store.display(option("window-padding-x")) == .raw("5.5"))
+    }
+
+    @Test func clearingFontFamilyWritesOneClearLine() throws {
+        let (store, url) = try makeStore()
+        store.set(option("font-family"), to: "")
+        #expect(try lines(url) == ["font-family = \"\""])
     }
 
     @Test func linesFollowCatalogOrder() throws {
@@ -105,7 +139,8 @@ struct GhosttyOptionStoreTests {
 
     @Test func aSuccessClearsTheOldError() throws {
         let (store, _) = try makeStore()
-        store.report("Enter a number", for: option("font-size"))
+        store.set(option("font-size"), to: "abc")
+        #expect(store.errors["font-size"] != nil)
         store.set(option("font-size"), to: "16")
         #expect(store.errors["font-size"] == nil)
     }

@@ -62,7 +62,7 @@ final class GhosttyOptionStore: ObservableObject {
 
     func display(_ option: GhosttyOption) -> Display {
         if let value = file.value(for: option.key) {
-            return canShow(value, in: option.control) ? .value(value) : .raw(value)
+            return canShow(value, for: option) ? .value(value) : .raw(value)
         }
         if let config, let value = GhosttyOptionReader.value(of: option, in: config) {
             return .value(value)
@@ -70,23 +70,45 @@ final class GhosttyOptionStore: ObservableObject {
         return option.reading == .unreadable ? .fromGhosttyConfig : .value(option.defaultValue)
     }
 
-    private func canShow(_ value: String, in control: GhosttyOption.Control) -> Bool {
-        switch control {
+    private func canShow(_ value: String, for option: GhosttyOption) -> Bool {
+        switch option.control {
         case .toggle: ["true", "false"].contains(value)
         case let .choice(values): values.contains(value)
         case .theme, .text: true
-        case let .number(range), let .slider(range, _): Double(value).map(range.contains) ?? false
+        case let .number(range), let .slider(range, _): Double(value).flatMap { Self.numberText($0, option: option, range: range) } != nil
         }
     }
 
     // MARK: - Writing
 
-    /// Writes the line. The default entry of an unset-by-default option (`""`) is a Reset.
+    /// Writes the line. The default entry of an optional option is the empty value `key = ""`,
+    /// which Ghostty reads as "back to the default" (`src/cli/args.zig:325`): it hides the value
+    /// of the user's own config, which only Reset gives back. A number the type does not take is
+    /// reported in the row and not written.
     func set(_ option: GhosttyOption, to value: String) {
-        if value.isEmpty, option.defaultValue.isEmpty, option.control != .text {
-            return reset(option)
+        var value = value
+        switch option.control {
+        case let .number(range), let .slider(range, _):
+            guard let number = Double(value), let text = Self.numberText(number, option: option, range: range) else {
+                errors[option.key] = Self.numberProblem(option: option, range: range)
+                return
+            }
+            value = text
+        default:
+            break
         }
         write(option) { try $0.set(option.key, to: option.fileValues(for: value)) }
+    }
+
+    /// The text of a number the option takes, or nil: out of range, or a fraction for a whole number.
+    static func numberText(_ number: Double, option: GhosttyOption, range: ClosedRange<Double>) -> String? {
+        guard range.contains(number), !option.wholeNumber || number == number.rounded() else { return nil }
+        return String(format: "%g", number)
+    }
+
+    private static func numberProblem(option: GhosttyOption, range: ClosedRange<Double>) -> String {
+        let kind = option.wholeNumber ? "whole number" : "number"
+        return "Enter a \(kind) from \(String(format: "%g", range.lowerBound)) to \(String(format: "%g", range.upperBound))."
     }
 
     func reset(_ option: GhosttyOption) {
@@ -124,11 +146,6 @@ final class GhosttyOptionStore: ObservableObject {
         }
         for (key, _) in present { file.remove(key) }
         for (key, values) in present { try file.set(key, to: values) }
-    }
-
-    /// Records a failure that happens before a write, such as text that is not a number.
-    func report(_ message: String, for option: GhosttyOption) {
-        errors[option.key] = message
     }
 
     // MARK: - Notification

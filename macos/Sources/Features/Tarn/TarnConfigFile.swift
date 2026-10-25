@@ -85,10 +85,6 @@ struct TarnConfigFile: Equatable {
         }
     }
 
-    mutating func set(_ key: String, to value: String) throws {
-        try set(key, to: [value])
-    }
-
     /// Removes every line of `key`; other lines, comments included, stay.
     mutating func remove(_ key: String) {
         lines.removeAll { $0.key == key }
