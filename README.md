@@ -8,11 +8,6 @@
 <p align="center"><b>An agent-first terminal for macOS, built on <a href="https://ghostty.org">Ghostty</a>.</b><br>
 Every tab in a sidebar, grouped by project, with the state of each Claude Code session at a glance.</p>
 
-<p align="center">
-  <img src="docs/assets/gifs/agent-permission.gif" alt="A Claude Code session goes to needs-permission; the sidebar card answers it with one click" width="800">
-</p>
-<p align="center"><sub>The browser demo (simulated session): the dot turns orange, the card answers the request.</sub></p>
-
 tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty project; see
 [NOTICE.md](NOTICE.md).
 
@@ -20,35 +15,28 @@ tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty pro
 
 Ghostty keeps rendering, input, splits and config. tarn adds:
 
-- **Sidebar with agent states.** A vertical tab list in place of the tab bar. A tab running `claude`,
-  `codex` or `opencode` joins the group of its project. Claude Code state shows as a colored dot:
-  working, needs permission, asks a question, done, error.
-- **Permission card.** Hover a row: the card shows the request and answers it with one click (Allow,
-  Deny, or a numbered option).
+- **Sidebar.** A vertical tab list in place of the tab bar, with tabs grouped in workspaces. A tab
+  running `claude`, `codex` or `opencode` joins the group of its project.
 - **File viewer.** A click on a path in the terminal opens the file in a pane beside it: markdown
   rendered, mermaid diagrams, highlighted code, an editor with save, live reload when an agent
   rewrites the file.
-- **Workspaces and pane layout.** Tabs grouped in workspaces; drag a pane or a viewer to a zone
-  at the window edge.
-- **Settings window** (Cmd+,). Tab style and Ghostty options in one place.
-- **Planned:** the `tarn` CLI (`tarn open`, `tarn ls`, `tarn new`). The app has only the socket
-  command that opens a file; a click on a path does the same.
+- **Window layout.** Drag a terminal or a viewer to a zone: under another pane, beside it, or at
+  the window edge.
+- **Agent status and card.** Claude Code state shows as a colored dot: working, needs permission,
+  asks a question, done, error. Hover a row: the card shows the request and answers it with one
+  click (Allow, Deny, or a numbered option).
 
 Local only: no account, cloud, telemetry or built-in AI model.
 
-## Screenshots
+## Features in motion
 
 Taken from the [browser demo](#try-the-demo) of the tarn window (dark theme).
 
-| | |
+| Sidebar | File viewer |
 |---|---|
-| ![Sidebar with workspaces and agent states](docs/assets/screens/sidebar.png) **Sidebar** | ![Permission card](docs/assets/screens/permission-card.png) **Permission card** |
-| ![Viewer with markdown and a mermaid diagram beside the terminal](docs/assets/screens/viewer.png) **Viewer** | ![A viewer dragged to a zone at the window edge](docs/assets/screens/drop-zone.png) **Drop zone** |
-| ![Settings window](docs/assets/screens/settings.png) **Settings** | ![Help with the key reference](docs/assets/screens/help.png) **Help** |
-
-| Click a path, edit, save | Drag a viewer to a zone | Font and theme in Settings |
-|---|---|---|
-| ![](docs/assets/gifs/viewer-edit.gif) | ![](docs/assets/gifs/viewer-drag.gif) | ![](docs/assets/gifs/settings.gif) |
+| ![Switch tabs, fold a workspace, drag a tab into another workspace](docs/assets/gifs/sidebar.gif) | ![A click on a path opens the viewer; edit and save](docs/assets/gifs/viewer-edit.gif) |
+| **Window layout** | **Agent status and card** |
+| ![A terminal dragged under another: the split turns horizontal](docs/assets/gifs/terminal-split.gif) | ![The dot turns orange; the card answers the permission request](docs/assets/gifs/agent-permission.gif) |
 
 ## Try the demo
 
