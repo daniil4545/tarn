@@ -85,12 +85,34 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .win.top .sidebar, .win.top .sbgrip { display: none; }
 .win.top .toptabs { display: flex; }
 .setwrap { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; background: rgba(0,0,0,.35); padding: 16px; }
-.setwin { width: min(640px, 100%); height: 400px; display: flex; background: #2b2d3a; border: 1px solid #000; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); font-size: 13px; }
+.setwin { width: min(720px, 100%); height: min(480px, 100%); display: flex; background: #2b2d3a; border: 1px solid #000; border-radius: 12px; overflow: hidden; box-shadow: 0 24px 70px rgba(0,0,0,.6); font-size: 13px; }
 .setside { width: 170px; flex: none; display: flex; flex-direction: column; gap: 2px; padding: 12px 8px; background: var(--chrome); border-right: 1px solid #000; }
 .setside .lights { margin: 0 0 14px 4px; }
 .setside .lights i:first-child { cursor: pointer; }
-.setitem { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; }
+#setNav { display: flex; flex-direction: column; gap: 2px; }
+.setitem { display: flex; align-items: center; gap: 8px; padding: 4px 8px; border-radius: 6px; background: none; border: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .setitem.on { background: var(--blue); color: #fff; }
+.setgroup + .setgroup, .setgroup + h4 { margin-top: 14px; }
+.setmain h4 { margin: 0 0 6px; font-size: 11.5px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.setnote { margin: 10px 2px 0; color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+.setnote code { font-family: var(--mono); font-size: 11px; }
+.opt { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; padding: 7px 0; }
+.opt + .opt { border-top: 1px solid var(--line); }
+.opt label { font-family: var(--mono); font-size: 12px; }
+.opt small { grid-column: 1 / -1; color: var(--muted); font-size: 11.5px; line-height: 1.35; }
+.opt .ctl { display: flex; align-items: center; gap: 6px; }
+.opt select, .opt input[type=text], .opt input[type=number] { background: var(--term); color: var(--fg); border: 1px solid var(--line); border-radius: 5px; font: 12px var(--mono); padding: 2px 6px; }
+.opt input[type=number] { width: 64px; } .opt input[type=text] { width: 150px; } .opt input[type=range] { width: 110px; accent-color: var(--blue); }
+.opt input[type=checkbox] { accent-color: var(--blue); }
+.opt .val { font: 11px var(--mono); color: var(--muted); min-width: 28px; }
+.opt .set { font-size: 10.5px; color: var(--accent); border: 1px solid currentColor; border-radius: 4px; padding: 0 4px; }
+.opt .reset { background: none; border: 0; color: var(--accent); font: inherit; font-size: 11.5px; cursor: pointer; padding: 0; }
+.keys { width: 100%; border-collapse: collapse; }
+.keys td { padding: 4px 0; border-top: 1px solid var(--line); vertical-align: top; }
+.keys tr:first-child td { border-top: 0; }
+.keys td:first-child { width: 120px; font-family: var(--mono); font-size: 12px; color: var(--accent); white-space: nowrap; }
+.keys .src { color: var(--muted); font-size: 11px; text-align: right; }
+#tarnConf { margin: 6px 0 0; padding: 8px 10px; background: var(--term); border: 1px solid var(--line); border-radius: 6px; font: 11.5px/1.5 var(--mono); white-space: pre-wrap; color: var(--fg); }
 .setcfg { margin-top: auto; background: none; border: 0; text-align: left; padding: 4px 8px; color: var(--accent); }
 .setmain { flex: 1; min-width: 0; padding: 14px 20px; overflow: auto; }
 .setmain h3 { margin: 0 0 14px; font-size: 14px; font-weight: 600; text-align: center; }
@@ -159,8 +181,8 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 .grip:hover svg { opacity: 1; }
 .ws.h-never .grip { display: none; }
 /* Ghostty dims an unfocused split (unfocused-split-opacity 0.7). */
-.tpane:not(.focus) .term { opacity: .7; }
-.term { flex: 1; min-width: 0; padding: 10px 12px; font: 13px/1.55 var(--mono); overflow: auto; white-space: pre-wrap; word-break: break-word; }
+.tpane:not(.focus) .term { opacity: var(--g-unfocused, .7); }
+.term { flex: 1; min-width: 0; padding: 10px 12px; font: var(--g-font-size, 13px)/1.55 var(--mono); overflow: auto; white-space: pre-wrap; word-break: break-word; }
 .term .p { color: var(--green); } .term .dim { color: var(--muted); } .term .tool { color: var(--purple); }
 .path { color: var(--accent); text-decoration: underline; text-decoration-color: rgba(139,233,253,.35); text-underline-offset: 2px; cursor: pointer; }
 .path:hover { text-decoration-color: var(--accent); background: rgba(139,233,253,.08); }
@@ -256,7 +278,7 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
 </style>
 
 <div class="mock" role="group" aria-label="Mockup controls">
-  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, settings window with the tab style, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo.</span>
+  <span><b>tarn mockup.</b> <span class="built">Built:</span> sessions sidebar with hide to a rail, state dot, agent logo, tab card on hover, settings window with the tab style, terminal splits (Ghostty). <span class="planned">Planned:</span> workspaces (saved; reload keeps them), viewer panes, terminal pane header, viewers in the split keys and undo, settings sections for Ghostty options and Help.</span>
   <span>Viewer theme: <span class="seg" data-seg="theme"><button data-v="dark" aria-pressed="true">terminal</button><button data-v="light" aria-pressed="false">light</button></span></span>
   <span>Terminal grab handle (<code>drag-handle</code>): <span class="seg" data-seg="header"><button data-v="always" aria-pressed="false">always</button><button data-v="auto" aria-pressed="true">on hover</button><button data-v="never" aria-pressed="false">never</button></span></span>
   <button class="act" id="agentTab" title="Mock of tarn new from the agent in Claude · bot">Agent in Claude · bot opens a tab</button>
@@ -283,10 +305,17 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
   <div class="setwin" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="setside">
       <div class="lights"><i style="background:#ff5f57" id="settingsClose" title="Close"></i><i style="background:#56586a"></i><i style="background:#56586a"></i></div>
-      <div class="setitem on"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>Tabs</div>
-      <button class="setcfg" id="ghosttyConfig" title="Terminal settings: fonts, colors, keys. Opens the Ghostty config file.">Ghostty Config…</button>
+      <nav id="setNav" aria-label="Settings sections">
+        <button class="setitem on" data-sec="tabs">Tabs</button>
+        <button class="setitem" data-sec="appearance">Appearance</button>
+        <button class="setitem" data-sec="terminal">Terminal</button>
+        <button class="setitem" data-sec="windows">Windows</button>
+        <button class="setitem" data-sec="help">Help</button>
+      </nav>
+      <button class="setcfg" id="ghosttyConfig" title="All Ghostty options, keys included. Opens the Ghostty config file.">Ghostty Config…</button>
     </div>
-    <div class="setmain">
+    <div class="setmain" id="setMain">
+      <section data-pane="tabs">
       <h3>Tabs</h3>
       <div class="setgroup">
         <div class="setrow"><span>Tab style</span>
@@ -296,6 +325,9 @@ kbd { font: 11px var(--mono); border: 1px solid var(--line); border-radius: 4px;
           </div>
         </div>
       </div>
+      <p class="setnote">Applies to every open window at once.</p>
+      </section>
+      <div id="setGen"></div>
     </div>
   </div>
 </div>
@@ -1008,7 +1040,7 @@ document.addEventListener("click", async e => {
     if (sb.id === "sbToggle") { sbRail = !sbRail; try { localStorage.setItem("tarn-mockup-rail", sbRail ? "1" : "0"); } catch (err) { /* ignore */ } return renderSidebar(); }
     if (sb.id === "emptyNew" || sb.id === "sbNew") return newTab();
     if (sb.id === "agentTab") return agentOpensTab();
-    if (sb.id === "resetDemo") { try { localStorage.removeItem(STORE); } catch (err) { /* ignore */ } return location.reload(); }
+    if (sb.id === "resetDemo") { try { localStorage.removeItem(STORE); localStorage.removeItem("tarn-mockup-ghostty"); } catch (err) { /* ignore */ } return location.reload(); }
     return selectTab(sb.dataset.tabid);
   }
   if (!cur) return;
@@ -1396,10 +1428,108 @@ document.addEventListener("drop", e => {
 });
 
 // Resize splits on both levels.
+// Ghostty options the window edits; names, values and defaults from src/config/Config.zig.
+// Changed values go to tarn's own file, loaded after the user's Ghostty config.
+const GHOSTTY = {
+  appearance: [
+    { key: "theme", type: "select", def: "", values: ["", "Dracula", "Catppuccin Mocha", "Nord"], help: "Color theme. The app lists the installed themes." },
+    { key: "window-theme", type: "select", def: "auto", values: ["auto", "system", "light", "dark", "ghostty"], help: "Window chrome: follow the system or the terminal colors." },
+    { key: "font-family", type: "text", def: "", help: "Empty uses the built-in JetBrains Mono." },
+    { key: "font-size", type: "number", def: 13, min: 6, max: 32, help: "Points; cmd+= and cmd+- change it for one terminal." },
+    { key: "background-opacity", type: "range", def: 1, min: 0.3, max: 1, step: 0.05, help: "Below 1 the desktop shows through." },
+    { key: "background-blur", type: "bool", def: false, help: "Blurs what shows through a transparent background." },
+    { key: "window-padding-x", type: "number", def: 2, min: 0, max: 40, help: "Space between the window edge and the text, in points." },
+    { key: "unfocused-split-opacity", type: "range", def: 0.7, min: 0.15, max: 1, step: 0.05, help: "How much an unfocused split is dimmed." },
+    { key: "cursor-style", type: "select", def: "block", values: ["block", "bar", "underline"], help: "Shell integration shows a bar at the prompt." },
+    { key: "cursor-style-blink", type: "bool", def: true, help: "Off stops blinking; programs may still ask for it." },
+    { key: "macos-titlebar-style", type: "select", def: "transparent", values: ["transparent", "native", "tabs", "hidden"], help: "How the title bar looks." },
+  ],
+  terminal: [
+    { key: "copy-on-select", type: "select", def: "none", values: ["none", "clipboard"], help: "Copy selected text without cmd+C." },
+    { key: "mouse-hide-while-typing", type: "bool", def: false, help: "Hide the pointer while typing." },
+    { key: "clipboard-paste-protection", type: "bool", def: true, help: "Ask before pasting text that may run commands." },
+    { key: "macos-option-as-alt", type: "select", def: "false", values: ["false", "true", "left", "right"], help: "Option sends Alt instead of special characters." },
+    { key: "link-url", type: "bool", def: true, help: "Cmd+click opens URLs." },
+    { key: "notify-on-command-finish", type: "select", def: "never", values: ["never", "unfocused", "always"], help: "Notify when a long command finishes." },
+  ],
+  windows: [
+    { key: "window-save-state", type: "select", def: "default", values: ["default", "never", "always"], help: "Restore windows, tabs and splits on launch; default follows macOS." },
+    { key: "confirm-close-surface", type: "select", def: "true", values: ["true", "false", "always"], help: "Ask before closing a terminal with a running program." },
+    { key: "window-inherit-working-directory", type: "bool", def: true, help: "A new tab or split starts in the focused tab's folder." },
+    { key: "undo-timeout", type: "select", def: "5s", values: ["0s", "5s", "10s", "30s"], help: "How long cmd+Z can bring back a closed pane or tab." },
+    { key: "drag-handle", type: "select", def: "auto", values: ["auto", "always", "never"], help: "The three dots that drag a pane: on hover, always or never." },
+  ],
+};
+const KEYS = [
+  ["Tabs and windows", [
+    ["⌘T", "New tab in the current workspace"], ["⌘N", "New window with Default"],
+    ["⌘W", "Close the pane; the last one closes the tab"], ["⌥⌘W", "Close the tab"], ["⇧⌘W", "Close the window"],
+    ["⌘Z", "Bring back what was closed (5 s)"], ["⌘1 … ⌘8", "Go to tab N down the sidebar"], ["⌘9", "Go to the last tab"],
+    ["⇧⌘[ ⇧⌘]", "Previous or next tab"], ["⌘↩", "Full screen"],
+  ]],
+  ["Splits", [
+    ["⌘D ⇧⌘D", "Split right or down"], ["⌘[ ⌘]", "Previous or next split"], ["⌥⌘ arrows", "Focus the split in that direction"],
+    ["⌃⌘ arrows", "Resize the split"], ["⌃⌘=", "Equalize splits"], ["⇧⌘↩", "Zoom the split"],
+  ]],
+  ["Terminal", [
+    ["⌘K", "Clear the screen"], ["⌘F", "Find; ⌘G and ⇧⌘G for next and previous"], ["⌘= ⌘- ⌘0", "Font size bigger, smaller, reset"],
+    ["⌘↑ ⌘↓", "Jump to the previous or next prompt"], ["⇧⌘P", "Command palette"], ["⇧⌘,", "Reload the Ghostty config"], ["⌘,", "Settings"],
+  ]],
+  ["Viewer", [
+    ["⌘B", "Show or hide the file tree"], ["⌘E", "View or source"], ["⌘S", "Save the file"],
+    ["⌘D ⇧⌘D", "The file in a new viewer, right or below"], ["⌘W", "Close the file tab"],
+  ]],
+];
+const SEC_TITLE = { appearance: "Appearance", terminal: "Terminal", windows: "Windows", help: "Help" };
+let gset = {};
+try { gset = JSON.parse(localStorage.getItem("tarn-mockup-ghostty") || "{}"); } catch (err) { /* ignore */ }
+const gopt = key => Object.values(GHOSTTY).flat().find(o => o.key === key);
+const gval = key => key in gset ? gset[key] : gopt(key).def;
+function control(o) {
+  const v = gval(o.key), id = `g-${o.key}`;
+  if (o.type === "bool") return `<input type="checkbox" id="${id}" data-gkey="${o.key}"${v ? " checked" : ""}>`;
+  if (o.type === "select") return `<select id="${id}" data-gkey="${o.key}">${o.values.map(x => `<option value="${x}"${String(v) === x ? " selected" : ""}>${x || "(none)"}</option>`).join("")}</select>`;
+  if (o.type === "range") return `<input type="range" id="${id}" data-gkey="${o.key}" min="${o.min}" max="${o.max}" step="${o.step}" value="${v}"><span class="val">${v}</span>`;
+  return `<input type="${o.type}" id="${id}" data-gkey="${o.key}" value="${esc(String(v))}"${o.type === "number" ? ` min="${o.min}" max="${o.max}"` : ""}>`;
+}
+const optRow = o => `<div class="opt" data-opt="${o.key}"><label for="g-${o.key}">${o.key}</label><span class="ctl">${o.key in gset ? `<span class="set" title="Set here; overrides the same line in the Ghostty config">set in tarn</span><button class="reset" data-greset="${o.key}">Reset</button>` : ""}${control(o)}</span><small>${esc(o.help)}</small></div>`;
+const tarnConf = () => Object.keys(gset).length ? Object.entries(gset).map(([k, v]) => `${k} = ${v === "" ? '""' : v}`).join("\n") : "# empty: every value comes from the Ghostty config";
+function renderSettings() {
+  const sec = k => `<section data-pane="${k}" hidden><h3>${SEC_TITLE[k]}</h3><div class="setgroup">${GHOSTTY[k].map(optRow).join("")}</div>${k === "windows" ? `<p class="setnote">Written to <code>~/.config/tarn/ghostty.conf</code>, loaded after your Ghostty config:</p><pre id="tarnConf">${esc(tarnConf())}</pre>` : `<p class="setnote">Ghostty options. Others, keys included, are in Ghostty Config.</p>`}</section>`;
+  const help = `<section data-pane="help" hidden><h3>Help</h3>${KEYS.map(([g, rows]) => `<h4>${g}</h4><div class="setgroup"><table class="keys">${rows.map(([k, d]) => `<tr><td>${k}</td><td>${d}</td><td class="src">${g === "Viewer" ? "tarn" : "Ghostty"}</td></tr>`).join("")}</table></div>`).join("")}<p class="setnote">Ghostty defaults. A <code>keybind</code> line in the Ghostty config changes them, and the app shows the keys in effect.</p></section>`;
+  $("setGen").innerHTML = ["appearance", "terminal", "windows"].map(sec).join("") + help;
+}
+// The mockup shows a few options on its own terminals.
+function applyGhostty() {
+  const root = document.documentElement.style;
+  root.setProperty("--g-font-size", `${gval("font-size")}px`);
+  root.setProperty("--g-unfocused", gval("unfocused-split-opacity"));
+  const ws = $("ws"), h = gval("drag-handle");
+  ws.classList.toggle("h-always", h === "always"); ws.classList.toggle("h-never", h === "never");
+}
+applyGhostty();
+let setSec = "tabs";
+function showSection(k) {
+  setSec = k;
+  document.querySelectorAll("#setNav [data-sec]").forEach(b => b.classList.toggle("on", b.dataset.sec === k));
+  document.querySelectorAll("#setMain [data-pane]").forEach(s => { s.hidden = s.dataset.pane !== k; });
+}
+function setGhostty(key, v) {
+  const o = gopt(key);
+  if (o.type === "number" || o.type === "range") v = +v;
+  if (v === o.def) delete gset[key]; else gset[key] = v;
+  try { localStorage.setItem("tarn-mockup-ghostty", JSON.stringify(gset)); } catch (err) { /* ignore */ }
+  applyGhostty();
+  const row = document.querySelector(`[data-opt="${key}"]`);
+  row.outerHTML = optRow(o);
+  if ($("tarnConf")) $("tarnConf").textContent = tarnConf();
+}
 function openSettings() {
   document.querySelectorAll("input[name=tabstyle]").forEach(r => { r.checked = r.value === tabStyle; });
+  renderSettings(); showSection(setSec);
   $("settings").hidden = false;
-  document.querySelector(`input[name=tabstyle][value=${tabStyle}]`).focus();
+  const first = document.querySelector(`#setMain [data-pane="${setSec}"] input, #setMain [data-pane="${setSec}"] select`);
+  (setSec === "tabs" ? document.querySelector(`input[name=tabstyle][value=${tabStyle}]`) : first || $("setNav")).focus();
 }
 const closeSettings = () => { $("settings").hidden = true; };
 document.addEventListener("click", e => {
@@ -1409,9 +1539,21 @@ document.addEventListener("click", e => {
   if (e.target.closest("#openSettings")) return openSettings();
   if (e.target.closest("#settingsClose") || e.target.id === "settings") return closeSettings();
   if (e.target.closest("#ghosttyConfig")) return toast("Opens the Ghostty config file");
+  const nav = e.target.closest("#setNav [data-sec]");
+  if (nav) return showSection(nav.dataset.sec);
+  const reset = e.target.closest("[data-greset]");
+  if (reset) return setGhostty(reset.dataset.greset, gopt(reset.dataset.greset).def);
+});
+document.addEventListener("input", e => {
+  const k = e.target.dataset && e.target.dataset.gkey;
+  if (!k || e.target.type !== "range") return;
+  e.target.nextElementSibling.textContent = e.target.value;
+  if (k === "unfocused-split-opacity") document.documentElement.style.setProperty("--g-unfocused", e.target.value);
 });
 // Applies to every open window at once, as TabStyle.applyToOpenWindows().
 document.addEventListener("change", e => {
+  const k = e.target.dataset && e.target.dataset.gkey;
+  if (k) return setGhostty(k, e.target.type === "checkbox" ? e.target.checked : e.target.value);
   if (e.target.name !== "tabstyle") return;
   tabStyle = e.target.value;
   try { localStorage.setItem("tarn-mockup-tabstyle", tabStyle); } catch (err) { /* ignore */ }

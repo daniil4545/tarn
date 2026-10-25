@@ -466,6 +466,47 @@ with sync_playwright() as p:
         "S6 sidebar style brings the sidebar back",
         vis("#sidebar") and not vis("#settings"),
     )
+    pg.keyboard.press("Meta+Comma")
+    pg.click("#setNav [data-sec='appearance']")
+    check(
+        "S7 a section shows its Ghostty options only",
+        vis("[data-opt='font-size']") and not vis("[data-opt='drag-handle']"),
+    )
+    pg.fill("#g-font-size", "16")
+    pg.press("#g-font-size", "Tab")
+    size = pg.evaluate("getComputedStyle(document.querySelector('.term')).fontSize")
+    check(
+        "S8 a changed option is marked as set in tarn and applies",
+        vis("[data-opt='font-size'] .set") and size == "16px",
+        size,
+    )
+    pg.click("#setNav [data-sec='windows']")
+    pg.select_option("#g-drag-handle", "never")
+    conf = pg.inner_text("#tarnConf")
+    check(
+        "S9 the tarn file lists only changed options",
+        conf.splitlines() == ["font-size = 16", "drag-handle = never"],
+        repr(conf),
+    )
+    check("S9a drag-handle never hides the dots", not vis(".tpane .grip"))
+    pg.click("[data-greset='drag-handle']")
+    check(
+        "S10 Reset removes the line and the mark",
+        "drag-handle" not in pg.inner_text("#tarnConf")
+        and count("[data-opt='drag-handle'] .set") == 0,
+    )
+    pg.click("#setNav [data-sec='help']")
+    help_text = pg.inner_text("[data-pane='help']")
+    check(
+        "S11 Help lists Ghostty and tarn keys",
+        "⌥⌘W" in help_text and "⌘B" in help_text and "keybind" in help_text,
+    )
+    pg.keyboard.press("Escape")
+    pg.reload()
+    pg.wait_for_selector(".wsh")
+    size = pg.evaluate("getComputedStyle(document.querySelector('.term')).fontSize")
+    check("S12 set options survive a reload", size == "16px", size)
+    pg.evaluate("localStorage.removeItem('tarn-mockup-ghostty'); applyGhostty()")
     pg.hover(".tab[data-tabid='t1']")
     pg.wait_for_timeout(700)
     card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
