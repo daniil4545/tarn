@@ -62,8 +62,8 @@ def story(base):
         check("2 typing in the shell runs a command", until(pg, "p6", r"\nhello\s*\n"))
         run(pg, "tarn --help")
         check(
-            "E2a tarn says it is planned, not in the app yet",
-            until(pg, "p6", r"planned: not in the app yet\s*\nusage: tarn"),
+            "E2a tarn --help marks only new as planned",
+            until(pg, "p6", r"usage: tarn .*new \(planned\)"),
         )
 
         # claude through permission and waiting

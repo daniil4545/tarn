@@ -1,8 +1,8 @@
 // The tarn CLI as agents and people use it: open, ls, new (docs/spec.md section 11).
-// None of these moves focus or presses Enter. The app has no `tarn` CLI yet (only the socket command
-// that opens a file), so the demo says so: --help and the first run of each subcommand print PLANNED.
+// None of these moves focus or presses Enter. `open` and `ls` are in the app; `new` is second wave
+// (R15), so its first run prints PLANNED.
 const PLANNED = "planned: not in the app yet";
-const USAGE = "usage: tarn <open path[:line] | ls [--json] | new>";
+const USAGE = "usage: tarn <open path[:line] | ls [--json] | new (planned)>";
 
 function open(ctx) {
   const arg = ctx.args[1];
@@ -33,13 +33,10 @@ function list(ctx) {
   ].join("  ")).join("\n"));
 }
 
-const HELP = new Set([undefined, "--help", "-h", "help"]);
-
 export function tarn(ctx) {
   const sub = ctx.args[0];
-  const key = HELP.has(sub) ? "--help" : sub;
-  if (key === "--help" || !ctx.planned.has(key)) {
-    ctx.planned.add(key);
+  if (sub === "new" && !ctx.planned.has(sub)) {
+    ctx.planned.add(sub);
     ctx.out(PLANNED);
   }
   switch (sub) {
