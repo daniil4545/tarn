@@ -178,8 +178,11 @@ struct PendingAnswer<Reply: AnyObject> {
         case "PostToolUse", "PostToolUseFailure":
             let tool = event["tool_name"] as? String
             let input = event["tool_input"] as? [String: Any] ?? [:]
-            guard let done = waiting.firstIndex(where: {
-                $0.request.tool == tool && NSDictionary(dictionary: $0.input).isEqual(to: input)
+            // A question answered in the agent's dialog finishes with `answers` added to its input.
+            guard let done = waiting.firstIndex(where: { item in
+                item.request.tool == tool && item.input.allSatisfy { key, value in
+                    input[key].map { NSDictionary(dictionary: [key: $0]).isEqual(to: [key: value]) } ?? false
+                }
             }) else { return waiting }
             var rest = waiting
             rest.remove(at: done)

@@ -123,6 +123,18 @@ struct AgentSessionTests {
         #expect(rest.map(\.request.detail) == left)
     }
 
+    // A question answered in the agent's own dialog finishes with its answers added to the input.
+    @Test func questionAnsweredInTheDialogEndsItsWait() {
+        let question: [String: Any] = ["questions": [["question": "Which?", "options": [["label": "A"], ["label": "B"]]]]]
+        let card = PendingAnswer(request: AgentRequest(kind: .question, tool: "AskUserQuestion", detail: "Which?", options: ["A", "B"]),
+                                 input: question, reply: Hook())
+        var answered = question
+        answered["answers"] = ["Which?": "A"]
+        answered["annotations"] = [String: Any]()
+        let event: [String: Any] = ["tool_name": "AskUserQuestion", "tool_input": answered]
+        #expect(PendingAnswer.remaining([card], after: "PostToolUse", event).isEmpty)
+    }
+
     @Test func waitingHookHoldsThePermissionCard() {
         let first = AgentRequest(kind: .tool, tool: "Bash", detail: "make test", options: [])
         var shown = session(after: [prompt, toolDone])
