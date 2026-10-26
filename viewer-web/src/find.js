@@ -20,12 +20,16 @@ export const findField = StateField.define({
 const all = Decoration.mark({ class: "cm-find" });
 const now = Decoration.mark({ class: "cm-find-now" });
 
-// Start and end offsets of each case-insensitive match of `needle` in `text`.
+// More matches are not marked: a highlight of tens of thousands of ranges stalls the page.
+const LIMIT = 1000;
+
+// Start and end offsets of each case-insensitive match of `needle` in `text`, at most LIMIT. A regular
+// expression keeps the offsets of `text`, where lowercasing may change the length ("İ").
 export function matchesIn(text, needle) {
   const out = [];
   if (!needle) return out;
-  const hay = text.toLowerCase(), n = needle.toLowerCase();
-  for (let i = hay.indexOf(n); i >= 0; i = hay.indexOf(n, i + n.length)) out.push([i, i + n.length]);
+  const re = new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "giu");
+  for (let m = re.exec(text); m && out.length < LIMIT; m = re.exec(text)) out.push([m.index, m.index + m[0].length]);
   return out;
 }
 
@@ -43,25 +47,36 @@ export function createFind(env) {
 
   const textNodes = root => {
     const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
-      // Line numbers and diagram drawings are not text of the file.
-      acceptNode: n => (n.parentElement.closest(".ln, svg, .mm-src[hidden]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
+      // Line numbers, buttons (Copy, Source) and diagram drawings are not text of the file.
+      acceptNode: n => (n.parentElement.closest(".ln, button, svg, .mm-src[hidden]") ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT),
     });
     const nodes = [];
     for (let n = walk.nextNode(); n; n = walk.nextNode()) nodes.push(n);
     return nodes;
   };
+  const BLOCK = ".row, p, li, td, th, h1, h2, h3, h4, h5, h6, pre, blockquote, dt, dd";
 
-  // DOM ranges of the matches in view mode; a match may cross the spans of highlighted code.
+  // DOM ranges of the matches in view mode; a match may cross the spans of highlighted code, not
+  // the border of two blocks (paragraphs, cells, code lines): a line break stands between them.
   function domHits(needle) {
     const scroll = env.box().querySelector(".scroll");
     if (!scroll) return [];
     const nodes = textNodes(scroll), starts = [];
-    let text = "";
-    for (const n of nodes) { starts.push(text.length); text += n.data; }
+    let text = "", block = null;
+    for (const n of nodes) {
+      const own = n.parentElement.closest(BLOCK);
+      if (own !== block) { text += "\n"; block = own; }
+      starts.push(text.length);
+      text += n.data;
+    }
+    // The node that holds `offset`: the last one starting at or before it.
     const at = offset => {
-      let i = starts.length - 1;
-      while (i > 0 && starts[i] > offset) i--;
-      return [nodes[i], offset - starts[i]];
+      let lo = 0, hi = starts.length - 1;
+      while (lo < hi) {
+        const mid = (lo + hi + 1) >> 1;
+        if (starts[mid] <= offset) lo = mid; else hi = mid - 1;
+      }
+      return [nodes[lo], offset - starts[lo]];
     };
     return matchesIn(text, needle).map(([from, to]) => {
       const range = document.createRange();
@@ -99,18 +114,24 @@ export function createFind(env) {
 
   function search(keep) {
     const view = env.editor(), needle = input.value;
-    hits = view ? matchesIn(view.state.sliceDoc(), needle) : domHits(needle);
+    // `doc.toString()` joins lines with "\n", one position per break, as the editor counts them;
+    // `sliceDoc()` would give a CRLF file's "\r\n".
+    hits = view ? matchesIn(view.state.doc.toString(), needle) : domHits(needle);
     at = hits.length ? Math.min(keep ? Math.max(at, 0) : 0, hits.length - 1) : -1;
-    count.textContent = !needle ? "" : hits.length ? `${at + 1}/${hits.length}` : "0/0";
+    count.textContent = !needle ? "" : hits.length ? label() : "0/0";
     paint();
     if (!keep) show();
   }
 
+  const label = () => `${at + 1}/${hits.length}${hits.length >= LIMIT ? "+" : ""}`;
+
   function step(delta) {
     if (!input.value) return open();
+    // The user may have typed in the editor since: its matches moved.
+    if (env.editor()) search(true);
     if (!hits.length) return undefined;
     at = (at + delta + hits.length) % hits.length;
-    count.textContent = `${at + 1}/${hits.length}`;
+    count.textContent = label();
     paint();
     show();
     return undefined;

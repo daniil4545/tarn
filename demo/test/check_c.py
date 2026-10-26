@@ -190,6 +190,12 @@ def find_checks(pg, v) -> None:
     check("F3 Shift+Enter steps back", shown() == "2/11", shown())
     pg.keyboard.press("Meta+g")
     check("F4 cmd+G is Find Next", shown() == "3/11", shown())
+    pg.keyboard.press("Meta+a")
+    pg.keyboard.type("source")
+    # The diagram's Source button is page chrome, not text of the file.
+    check("F4a button labels are not matches", shown() == "0/0", shown())
+    pg.keyboard.press("Meta+a")
+    pg.keyboard.type("Paragraph 4")
     pg.keyboard.press("Escape")
     check("F5 Esc with text gives the keyboard back, the bar stays", v.locator(bar).count() == 1)
     pg.keyboard.press("Meta+e")
@@ -206,6 +212,24 @@ def find_checks(pg, v) -> None:
     )
     pg.keyboard.press("Meta+e")
     v.locator(".mm svg").wait_for()
+
+    # A CRLF file: the editor counts a line break as one position, the raw text as two.
+    crlf = f"{ROOT}/notes-crlf.md"
+    cmd(pg, "vfs.write", {"path": crlf, "text": "one\r\ntwo\r\nthree\r\nneedle here\r\n", "by": "agent"})
+    cmd(pg, "viewer.open", {"path": crlf})
+    v.locator(".ftab.on", has_text="notes-crlf.md").wait_for()
+    focus_viewer(pg)
+    pg.keyboard.press("Meta+e")
+    v.locator(".cm-content").wait_for()
+    pg.keyboard.press("Meta+f")
+    pg.keyboard.type("needle")
+    v.locator(".cm-find-now").first.wait_for()
+    marked = v.locator(".cm-find-now").first.inner_text()
+    check("F8 in a CRLF file the mark sits on the match", marked == "needle", marked)
+    pg.keyboard.press("Meta+a")
+    pg.keyboard.press("Backspace")
+    pg.keyboard.press("Escape")
+    pg.keyboard.press("Meta+e")
 
 
 def agent_write(pg, note):
