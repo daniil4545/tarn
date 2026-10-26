@@ -17,6 +17,10 @@ No backend, no build step, no network: ES modules and vendored files only.
 | File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
 | Workspaces, splits, layout | built |
 | Settings | built |
+| Drop feedback: a 3 px system accent line where the dragged window will stand (at the cut), a gray chip with the reason on a refusal; the sidebar marks a workspace with an accent frame and a workspace move with an accent line | planned: drawn here, not in the app yet |
+| Easy-to-catch grab zones: 14 px grab zones centred on split dividers and on the sidebar edge, resize cursor; the pane handle stays Ghostty's (80x12, dots in the top 20% of the pane) | planned: drawn here, not in the app yet |
+| Sidebar width stops at its limits when dragged; only the toggle button folds it to the rail | planned: drawn here, the app still folds on a drag to the right edge |
+| Theme picker: base themes on top (three light and dark pairs and Dracula), all 771 themes below with a filter, one theme chosen; sidebar, title bar, menus and viewer take their colors from the terminal theme; the demo starts dark | planned: drawn here, not in the app yet (the app sidebar already follows the theme background; the picker and the palette accent are new) |
 | `tarn` CLI | built in the app: `tarn open`, `tarn ls`, `tarn notify`. The demo has `open` and `ls`; `tarn new` (R15, second wave) is planned and prints "planned: not in the app yet" on its first run |
 
 ## Run

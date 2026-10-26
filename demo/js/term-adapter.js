@@ -48,6 +48,24 @@ function skipIdleFrames(term) {
   };
 }
 
+const PALETTE_NAMES = ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white", "brightBlack", "brightRed", "brightGreen", "brightYellow", "brightBlue", "brightMagenta", "brightCyan", "brightWhite"];
+
+// The engine fixes the default and palette colors inside the terminal when it opens, so a theme set
+// later maps those exact colors while drawing. The foreground and background go last so they win a shared color.
+// simplified: truecolor text keeps its own color, as in any terminal.
+function colorMap(opened, theme) {
+  const rgb = (hex) => parseInt(hex.slice(1), 16);
+  const map = new Map();
+  for (const name of [...PALETTE_NAMES, "background", "foreground"]) map.set(rgb(opened[name]), theme[name]);
+  return map;
+}
+
+function followTheme(renderer) {
+  const css = renderer.rgbToCSS.bind(renderer);
+  renderer.colorMap = new Map();
+  renderer.rgbToCSS = (r, g, b) => renderer.colorMap.get((r << 16) | (g << 8) | b) ?? css(r, g, b);
+}
+
 const THEME_KEYS = new Set(["theme", "fontSize", "fontFamily", "cursorStyle", "cursorBlink"]);
 
 class Term {
@@ -59,9 +77,11 @@ class Term {
   #copyOnSelect = true;
   #lastSelection = "";
   #unwatch = () => {};
+  #opened;
 
   constructor(t, parent) {
     this.#t = t;
+    this.#opened = { ...t.options.theme };
     // The engine focuses itself on open (and again on a timer); a pane opened by the boot must not
     // take the focus, so its focus() is silent while it opens.
     t.focus = () => {};
@@ -69,6 +89,7 @@ class Term {
     delete t.focus;
     alignMetricsToDevicePixels(t.renderer);
     skipIdleFrames(t);
+    followTheme(t.renderer);
     t.loadAddon(this.#fit);
     this.#fit.observeResize();
     t.onData((d) => this.#emit(d));
@@ -132,6 +153,13 @@ class Term {
     if (!THEME_KEYS.has(key)) throw new Error(`term option not supported: ${key}`);
     if (key === "fontFamily") await loadFont(value, this.#t.options.fontSize);
     this.#t.options[key] = value;
+    // The engine ignores a theme set after open(): give the renderer the colors and draw every cell again.
+    if (key === "theme" && this.#t.renderer && this.#t.wasmTerm) {
+      this.#t.renderer.colorMap = colorMap(this.#opened, value);
+      this.#t.renderer.setTheme(value);
+      this.#t.renderer.clear();
+      this.#t.renderer.render(this.#t.wasmTerm, true, this.#t.viewportY, this.#t);
+    }
     if (key === "fontSize" || key === "fontFamily") this.fit();
   }
 

@@ -12,6 +12,8 @@ extend-exclude = [
   "vendor/*",
   "demo/vendor/*",
   "demo/viewer/*",
+  # theme colors as packed hex
+  "demo/js/themes-data.js",
   "pkg/*",
   "src/stb/*",
   # "grey" color names are valid

@@ -11,7 +11,7 @@ export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor"
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
 const TOGGLE = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
 
-const RAIL_WIDTH = 44, MIN = 120, MAX = 400, FOLD_BELOW = 80;
+const MIN = 120, MAX = 400;
 const ui = { rail: false, width: 200 };
 let sb;
 let stale = false;
@@ -131,19 +131,17 @@ function showMenu(items, { clientX, clientY }) {
   menu.style.top = `${Math.min(clientY, innerHeight - 34 * items.length)}px`;
 }
 
-// The edge strip resizes (120-400), folds to the rail when dragged below 80 and opens it again.
+// The edge strip resizes between MIN and MAX and stops there: only the toggle button folds the
+// sidebar to the rail. In the rail the strip does nothing.
 function dragEdge(e) {
-  const grip = e.currentTarget, x0 = e.clientX, w0 = ui.rail ? RAIL_WIDTH : ui.width;
+  if (ui.rail) return;
+  const grip = e.currentTarget, x0 = e.clientX, w0 = ui.width;
   e.preventDefault();
   grip.classList.add("drag");
   grip.setPointerCapture(e.pointerId);
   const move = (ev) => {
-    const raw = w0 + ev.clientX - x0;
-    if (raw < FOLD_BELOW) return ui.rail || setUi({ rail: true });
-    if (ui.rail && raw < MIN) return;
-    const width = Math.round(Math.min(MAX, Math.max(MIN, raw)));
-    if (ui.rail) setUi({ rail: false, width });
-    else { ui.width = width; sb.style.width = `${width}px`; }
+    ui.width = Math.round(Math.min(MAX, Math.max(MIN, w0 + ev.clientX - x0)));
+    sb.style.width = `${ui.width}px`;
   };
   const up = () => {
     grip.classList.remove("drag");

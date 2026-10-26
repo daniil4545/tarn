@@ -7,6 +7,8 @@ import { OPTIONS, DEFAULTS, isWritten } from "./config.js";
 import { SECTIONS, GHOSTTY, APPLIES, TAB_STYLES } from "./settings-data.js";
 import { helpGroups, symbols } from "./settings-help.js";
 import { esc } from "./esc.js";
+import { BASE_THEMES, BASE_SINGLES, THEME_NAMES, themeFor } from "./themes.js";
+import { isLight } from "./color.js";
 
 const ALL = Object.values(GHOSTTY).flat();
 
@@ -17,10 +19,30 @@ let opener = null;
 let replacing = false;
 const problems = new Map(); // option key -> the line shown under a rejected input
 
+const BASE_NAMES = new Set([...BASE_THEMES.flat(), ...BASE_SINGLES]);
+
+// A theme as a button: sample text on its background, four palette dots, its name.
+function themeButton(name, value) {
+  const t = themeFor(name);
+  const dots = [t.red, t.green, t.yellow, t.blue].map((c) => `<i style="background:${c}"></i>`).join("");
+  const kind = name === "" ? "" : `<small>${isLight(t.background) ? "light" : "dark"}</small>`;
+  return `<button type="button" class="tbtn" role="option" aria-selected="${name === value}" data-theme-pick="${esc(name)}" data-name="${esc(name.toLowerCase())}"><span class="tsw" style="background:${t.background};color:${t.foreground}">Aa<span class="tdots">${dots}</span></span><span class="tnm">${esc(name || "default")}</span>${kind}</button>`;
+}
+
+// Base themes on top (light and dark pairs), then every installed theme with a filter.
+function themePicker(value) {
+  const pairs = BASE_THEMES.map(([light, dark]) => `<div class="tpair">${themeButton(light, value)}${themeButton(dark, value)}</div>`);
+  const singles = BASE_SINGLES.map((name) => `<div class="tpair">${themeButton(name, value)}</div>`);
+  const base = [...pairs, ...singles].join("");
+  const rest = THEME_NAMES.filter((n) => !BASE_NAMES.has(n));
+  return `<div class="themes" id="g-theme" role="listbox" aria-label="Theme"><h5>Base themes</h5><div class="tbase">${themeButton("", value)}${base}</div><h5>All themes <span class="tcount">${rest.length}</span></h5><input type="search" id="themeFilter" class="tfilter" placeholder="Filter themes" aria-label="Filter themes"><div class="tall">${rest.map((n) => themeButton(n, value)).join("")}</div></div>`;
+}
+
 function control(key) {
   const o = OPTIONS[key];
   const value = read("config")[key];
   const id = `g-${key}`;
+  if (key === "theme") return `<span class="val tcur">${esc(value || "default")}</span>`;
   if (o.type === "bool") return `<input type="checkbox" id="${id}" data-gkey="${key}"${value ? " checked" : ""}>`;
   if (o.type === "enum") {
     const options = o.values.map((v) => `<option value="${v}"${value === v ? " selected" : ""}>${v || "default (auto)"}</option>`);
@@ -39,7 +61,8 @@ function optionRow({ key, help, applies }) {
     : "";
   const note = APPLIES[applies] ? `<small class="applies">${APPLIES[applies]}</small>` : "";
   const problem = problems.has(key) ? `<small class="err">${esc(problems.get(key))}</small>` : "";
-  return `<div class="opt" data-opt="${key}"><label for="g-${key}">${key}</label><span class="ctl">${mark}${control(key)}</span><small>${esc(help)}</small>${note}${problem}</div>`;
+  const picker = key === "theme" ? themePicker(read("config").theme) : "";
+  return `<div class="opt${picker ? " opt-theme" : ""}" data-opt="${key}"><label for="g-${key}">${key}</label><span class="ctl">${mark}${control(key)}</span><small>${esc(help)}</small>${note}${problem}${picker}</div>`;
 }
 
 // The lines tarn writes: a repeatable option such as font-family first clears the list.
@@ -113,13 +136,34 @@ function refreshRow(key) {
   const option = ALL.find((o) => o.key === key);
   if (row && option) {
     const next = document.createElement("template");
+    const kept = keepThemeList(row);
     next.innerHTML = optionRow(option);
     replacing = true; // removing a focused field fires its change event once more
     row.replaceWith(next.content);
     replacing = false;
+    kept?.();
   }
   const conf = root.querySelector("#tarnConf");
   if (conf) conf.textContent = configLines();
+}
+
+// The theme list keeps its scroll position and filter when its row is drawn again.
+function keepThemeList(row) {
+  const list = row.querySelector(".tall"), filter = row.querySelector("#themeFilter");
+  if (!list) return null;
+  const [top, text, scrollTop] = [list.scrollTop, filter.value, root.querySelector("#setMain").scrollTop];
+  return () => {
+    const next = root.querySelector("#themeFilter");
+    next.value = text;
+    filterThemes(text);
+    root.querySelector(".tall").scrollTop = top;
+    root.querySelector("#setMain").scrollTop = scrollTop;
+  };
+}
+
+function filterThemes(text) {
+  const q = text.trim().toLowerCase();
+  root.querySelectorAll(".tall .tbtn").forEach((b) => { b.hidden = q !== "" && !b.dataset.name.includes(q); });
 }
 
 function onChange(e) {
@@ -146,6 +190,8 @@ function onClick(e) {
   if (e.target === root || e.target.closest("#settingsClose")) return close();
   if (e.target.closest("#resetDemo")) return bus.cmd("demo.reset");
   if (e.target.closest("#ghosttyConfig")) return bus.emit("toast", { text: "Opens the Ghostty config file" });
+  const pick = e.target.closest("[data-theme-pick]");
+  if (pick) return bus.cmd("config.set", { key: "theme", value: pick.dataset.themePick });
   const nav = e.target.closest("#setNav [data-sec]");
   if (nav) return show(nav.dataset.sec);
   const reset = e.target.closest("[data-greset]");
@@ -175,6 +221,7 @@ export function startSettings(keyRows) {
   root.addEventListener("click", onClick);
   root.addEventListener("change", onChange);
   root.addEventListener("input", (e) => {
+    if (e.target.id === "themeFilter") filterThemes(e.target.value);
     if (e.target.type === "range") e.target.nextElementSibling.textContent = e.target.value;
   });
   document.addEventListener("keydown", (e) => {

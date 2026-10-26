@@ -9,6 +9,8 @@ import { bus } from "./bus.js";
 import { hooks } from "./test-contract.js";
 import { read } from "./state.js";
 import { toast } from "./toast.js";
+import { paint, VIEWER_VARS } from "./chrome-theme.js";
+import { windowColors } from "./settings-effects.js";
 import { createViewerModel } from "./viewer-model.js";
 import { resolve } from "./viewer-paths.js";
 import { watchDragSource } from "./dnd.js";
@@ -20,6 +22,12 @@ let home = "";
 let root = "";
 let focused = null;
 const isDark = () => document.documentElement.dataset.theme !== "light";
+
+// The viewer page takes the terminal theme colors like the sidebar does; null keeps its own palette.
+const paintViewer = (frame, colors = windowColors()) => {
+  const root = frame.contentDocument?.documentElement;
+  if (root) paint(root, VIEWER_VARS, colors);
+};
 
 // The viewer named by `id`, else the one last focused, else any on screen (a terminal's `pane` id names no viewer).
 function visibleTarget(id) {
@@ -91,6 +99,7 @@ export function startViewer({ fs: files, home: homePath, root: projectRoot }) {
   bus.on("vfs:changed", ({ path, by }) => {
     for (const [id, { model }] of panes) if (by !== `viewer:${id}`) model.diskChanged(path);
   });
+  bus.on("chrome:changed", ({ colors }) => panes.forEach(({ frame }) => paintViewer(frame, colors)));
   new MutationObserver(() => panes.forEach(({ model }) => model.setDark(isDark())))
     .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   hooks.viewer = () => ({ focused, panes: Object.fromEntries([...panes].map(([id, p]) => [id, p.model.state()])) });
@@ -151,6 +160,7 @@ export function createViewerPane(id) {
   model.setDark(isDark());
   frame.__host = model.handle;
   frame.addEventListener("load", () => {
+    paintViewer(frame);
     forwardKeys(frame);
     makeTabsDraggable(frame, id, model);
     // A late focus event of a frame the user already left must not take the focus back.

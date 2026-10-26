@@ -3,10 +3,13 @@
 :root {
   --chrome: #21222c; --line: #3a3c4e; --div: #000; --muted: #9a9cb3; --accent: #8be9fd; --deny: #ff5555;
   --blue: #4f8cff; --green: #50fa7b; --orange: #ffb86c; --menu: #2b2d3a; --key: #6c6f85;
+  /* macOS system accent (default blue): Ghostty's drop zone fill and the system list drop line */
+  --sys-accent: #0a84ff;
 }
 :root[data-theme="light"] {
   --chrome: #e6e9ef; --line: #ccd0da; --div: #9ca0b0; --muted: #6c6f85; --accent: #1e66f5; --deny: #d20f39;
   --blue: #1e66f5; --green: #40a02b; --orange: #fe640b; --menu: #eff1f5; --key: #8c8fa1;
+  --sys-accent: #007aff;
 }
 [hidden] { display: none !important; }
 button { font: inherit; color: inherit; cursor: pointer; }
@@ -25,8 +28,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* sidebar */
 .sidebar { position: relative; width: 200px; flex: none; overflow: auto; background: var(--chrome); border-right: 1px solid var(--div); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
-.sbgrip { flex: none; width: 10px; margin-left: -10px; cursor: col-resize; position: relative; z-index: 4; }
-.sbgrip.drag, .sbgrip:hover { box-shadow: inset -2px 0 0 var(--accent); }
+/* 14 px grab zone over the sidebar edge: 11 px inside the sidebar, 3 px into the terminal so the
+   first text column stays selectable; the line shows on hover */
+.sbgrip { flex: none; width: 14px; margin: 0 -3px 0 -11px; cursor: col-resize; position: relative; z-index: 4; }
+.sbgrip.drag, .sbgrip:hover { background: linear-gradient(var(--accent), var(--accent)) center / 2px 100% no-repeat; }
+.sidebar.rail + .sbgrip { cursor: default; pointer-events: none; }
 .sbtop { display: flex; justify-content: space-between; align-items: center; padding: 0 2px 4px; }
 .ib { background: none; border: 0; padding: 2px 6px; border-radius: 5px; color: var(--muted); font-size: 12px; }
 .ib:hover { background: rgba(127, 127, 127, .15); color: var(--fg); }
@@ -56,8 +62,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar.rail .tab[data-tabid] { margin: 0; width: 34px; height: 30px; justify-content: center; position: relative; padding: 0; }
 .sidebar.rail .tab .dot { position: absolute; top: 5px; right: 5px; }
 .sidebar.rail .sep { width: 24px; margin: 6px auto; }
-.wsline { position: absolute; left: 8px; right: 8px; height: 2px; border-radius: 1px; background: var(--accent); pointer-events: none; }
-.dropmark { box-shadow: inset 0 2px 0 var(--accent); background: rgba(139, 233, 253, .08); }
+/* sidebar drop line and the workspace or row frame: the system accent, as in a macOS list */
+.wsline { position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 1px; background: var(--sys-accent); pointer-events: none; }
+.dropmark { box-shadow: inset 0 0 0 2px var(--sys-accent); background: color-mix(in srgb, var(--sys-accent) 10%, transparent); }
 .ctx { position: fixed; z-index: 20; min-width: 200px; background: var(--menu); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
 .ctx button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 5px 10px; border-radius: 5px; font-size: 13px; }
 .ctx button:hover { background: var(--line); }
@@ -89,7 +96,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sdiv { flex: none; background: var(--div); position: relative; z-index: 2; }
 .sdiv.row { width: 2px; cursor: col-resize; }
 .sdiv.col { height: 2px; cursor: row-resize; }
-.sdiv::after { content: ""; position: absolute; inset: -3px; }
+/* hit zone 14 px across, centred on the line (Ghostty SplitView: 1 + 6 px) */
+.sdiv::after { content: ""; position: absolute; }
+.sdiv.row::after { inset: 0 -6px; }
+.sdiv.col::after { inset: -6px 0; }
 .sdiv:hover, .sdiv.drag { background: var(--accent); }
 .leaf { flex: 1; min-width: 0; min-height: 0; display: flex; position: relative; }
 .leaf-body { flex: 1; min-width: 0; min-height: 0; display: flex; }
@@ -98,17 +108,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .empty { margin: auto; color: var(--muted); font-size: 13px; text-align: center; padding: 20px; }
 .act { background: var(--menu); border: 1px solid var(--line); border-radius: 7px; padding: 3px 10px; margin-top: 8px; }
 
-/* grab handle (Ghostty SurfaceGrabHandle): an 80x12 area at the top centre */
+/* grab handle (Ghostty SurfaceGrabHandle): an 80x12 area at the top centre; the dots show while the
+   pointer is in the top 20% of the pane (hoverHeightFactor 0.2) */
 .grip { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 80px; height: 12px; z-index: 3; display: grid; place-items: center; cursor: grab; color: var(--fg); }
 .grip svg { opacity: 0; transition: opacity .12s; }
 .leaf.near .grip svg, .ws.h-always .grip svg { opacity: .6; }
 .grip:hover svg { opacity: 1; }
 .ws.h-never .grip { display: none; }
 
-/* drop frame: neutral, red only when refused */
-.drop { position: absolute; z-index: 5; background: color-mix(in srgb, currentColor 12%, transparent); border: 2px solid color-mix(in srgb, currentColor 45%, transparent); border-radius: 8px; pointer-events: none; transition: left .14s ease, top .14s ease, width .14s ease, height .14s ease; }
-.drop.deny { background: color-mix(in srgb, var(--deny) 18%, transparent); border-color: var(--deny); }
-.drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: var(--chrome); padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
+/* drop: a LINE (3 px, system accent) where the dragged window will stand, at the cut between it and
+   the rest. A refused drop has no line: a gray chip with the reason in the middle of the target. */
+.drop { position: absolute; z-index: 5; background: var(--sys-accent); pointer-events: none; }
+.drop.deny { background: none; }
+.drop span { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-size: 12px; background: #6e7078; color: #fff; padding: 2px 8px; border-radius: 5px; white-space: nowrap; }
 
 /* tab card */
 .card { position: fixed; z-index: 15; width: 280px; padding: 12px; background: var(--menu); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 10px 30px rgba(0, 0, 0, .45); font-size: 12px; display: flex; flex-direction: column; gap: 2px; }
