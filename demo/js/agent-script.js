@@ -1,6 +1,7 @@
 // Scripted Claude Code session behind the `claude` command. It sends the same hook events the
 // real plugin does (docs/spec.md section 8) and never sets a state itself: the registry does.
-// One turn: spinner, Read, Edit that waits for permission, Read, summary, Stop.
+// One turn: spinner, Read, Edit that waits for permission, Read, summary, Stop. A request with
+// a question mark gets AskUserQuestion with two questions instead of the Edit.
 import { createEditor } from "./shell/line-editor.js";
 import { crlf, dim, green } from "./shell/ansi.js";
 import { REPO } from "./vfs-seed.js";
@@ -10,6 +11,12 @@ const SPINNER_MS = 250;
 const EDIT_FILE = "docs/spec.md";
 const READ_FILE = "README.md";
 
+// The questions of the AskUserQuestion turn, as Claude Code sends them in tool_input.
+const QUESTIONS = [
+  { question: "Which tab style should the guide show?", header: "Tabs", multiSelect: false, options: [{ label: "Sidebar" }, { label: "Tabs at the top" }] },
+  { question: "How wide should sidebar rows be?", header: "Rows", multiSelect: false, options: [{ label: "Wide" }, { label: "Narrow" }] },
+];
+
 const yes = /^(y|yes|1)$/i;
 const no = /^(n|no|2)$/i;
 
@@ -17,7 +24,8 @@ export function startAgentSession(ctx, { banner }) {
   const { write } = ctx;
   const history = [];
   const mine = new Set();
-  let phase = "idle"; // idle: waiting for a request, running, asking: permission pending
+  let phase = "idle"; // idle: waiting for a request, running, asking: permission pending, choosing: questions pending
+  let chosen = []; // answers typed in the terminal so far, one per question
   let spinning = false;
   let frame = 0;
   let turns = 0;
@@ -83,6 +91,23 @@ export function startAgentSession(ctx, { banner }) {
     },
   });
 
+  const chooser = createEditor({
+    write,
+    cols: ctx.cols,
+    on: {
+      line(text) {
+        const q = QUESTIONS[chosen.length], pick = q.options[Number(text.trim()) - 1];
+        if (!pick) return chooser.begin(`  Choose 1 or 2: `);
+        chosen.push(pick.label);
+        if (chosen.length < QUESTIONS.length) return chooser.begin(`  Question ${chosen.length + 1} (1/2): `);
+        resolveQuestions(Object.fromEntries(QUESTIONS.map((x, i) => [x.question, chosen[i]])), "terminal");
+      },
+      interrupt: () => interrupt(),
+      eof: () => {},
+      clear: () => {},
+    },
+  });
+
   const asker = createEditor({
     write,
     cols: ctx.cols,
@@ -105,7 +130,30 @@ export function startAgentSession(ctx, { banner }) {
     startSpinner();
     later(1200, () => tool("Read", `${root}/${READ_FILE}`));
     later(1800, () => hook("PostToolUse"));
-    later(2800, () => ask(text));
+    later(2800, () => (text.includes("?") ? askQuestions(text) : ask(text)));
+  }
+
+  function askQuestions(text) {
+    phase = "choosing";
+    chosen = [];
+    pending = text;
+    stopSpinner();
+    write(crlf(`● AskUserQuestion\n${QUESTIONS.map((q, i) => `  ${i + 1}. ${q.question}  ${q.options.map((o, j) => `${j + 1}) ${o.label}`).join("   ")}`).join("\n")}\n`));
+    hook("PermissionRequest", {
+      request: { kind: "question", tool: "AskUserQuestion", detail: QUESTIONS[0].question, options: [], questions: QUESTIONS },
+      answerable: true,
+    });
+    chooser.begin(`  Question 1 (1/2): `);
+  }
+
+  // Answers: question text to the chosen label, as the hook's updatedInput.answers carries them.
+  function resolveQuestions(answers, source) {
+    if (phase !== "choosing") return;
+    phase = "running";
+    if (source === "card") write(`\r\x1b[K  ${dim("answered in the card")}\r\n`);
+    startSpinner();
+    if (source === "card") hook("PostToolUse");
+    later(1000, () => finish(`Got it. ${QUESTIONS.map((q) => `${q.header}: ${answers[q.question]}`).join(", ")}.\nRequest: ${pending}`));
   }
 
   function ask(text) {
@@ -168,13 +216,14 @@ export function startAgentSession(ctx, { banner }) {
     input(data) {
       if (phase === "idle") return editor.input(data);
       if (phase === "asking") return asker.input(data);
+      if (phase === "choosing") return chooser.input(data);
       if (data.includes("\x03")) {
         write("^C\r\n");
         interrupt();
       }
       return undefined;
     },
-    answer: (allow) => resolve(allow, "card"),
+    answer: (value) => (typeof value === "object" ? resolveQuestions(value, "card") : resolve(value, "card")),
     cancel: cancelTimers,
   });
 
