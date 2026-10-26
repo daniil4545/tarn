@@ -1,0 +1,18 @@
+# Weekly early warning: tarn CI on main with upstream/main merged in. Red means a conflict or a
+# break to handle at the next upstream merge, which stays a manual merge commit (docs/architecture.md).
+# Nothing is pushed: the job token may not write the upstream workflow files a merge brings.
+name: tarn-upstream
+
+on:
+  schedule:
+    - cron: "17 5 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: ./.github/workflows/tarn-ci.yml
+    with:
+      upstream: true
