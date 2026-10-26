@@ -53,7 +53,10 @@ private struct AreaSubtree<Block: View>: View {
     }
 
     private var isDark: Bool {
-        !NSColor(ghostty.config.backgroundColor).isLightColor
+        guard let palette = ThemePalette(config: ghostty.config) else {
+            return !NSColor(ghostty.config.backgroundColor).isLightColor
+        }
+        return !palette.background.isLight
     }
 }
 

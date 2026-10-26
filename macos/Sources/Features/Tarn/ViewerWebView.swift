@@ -2,8 +2,23 @@
 
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import OSLog
 import WebKit
+
+/// The script that paints the viewer page with the theme colors.
+enum ViewerColors {
+    /// Sets the `--p-*` properties on the page root; without a theme it removes them, and the
+    /// page's own dark or light palette shows again.
+    static func script(for chrome: ThemeChrome?) -> String {
+        let values: [String: Any] = chrome?.viewerVariables
+            ?? Dictionary(uniqueKeysWithValues: ThemeChrome.viewerVariableNames.map { ($0, NSNull()) })
+        let json = (try? JSONSerialization.data(withJSONObject: values, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        return "(function(v){var s=document.documentElement.style;"
+            + "for(var k in v){if(v[k]===null)s.removeProperty(k);else s.setProperty(k,v[k]);}})(\(json))"
+    }
+}
 
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
 /// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`. The
@@ -94,10 +109,23 @@ final class ViewerWebController: NSObject {
     private var webView: ViewerWebView?
     private var started = false
     private var wantsFocus = false
+    /// The page finished loading, so a script reaches it.
+    private var pageLoaded = false
+    private var themeObserver: AnyCancellable?
 
     init(model: ViewerModel) {
         self.model = model
         super.init()
+        // A theme change in Settings reloads the config; the page takes the new colors at once.
+        themeObserver = NotificationCenter.default.publisher(for: .ghosttyConfigDidChange)
+            .sink { [weak self] note in
+                MainActor.assumeIsolated {
+                    guard note.object == nil,
+                          let config = note.userInfo?[Notification.Name.GhosttyConfigChangeKey] as? Ghostty.Config
+                    else { return }
+                    self?.applyColors(from: config)
+                }
+            }
         model.script = { [weak self] call in self?.webView?.evaluateJavaScript(call) { _, error in
             if let error { Self.logger.error("script failed: \(error.localizedDescription, privacy: .public)") }
         } }
@@ -164,7 +192,23 @@ final class ViewerWebController: NSObject {
         window.makeFirstResponder(webView)
     }
 
+    /// Paints the page with the colors of the terminal theme, or gives it back its own palettes
+    /// (`window-theme` system, light or dark). The page's CSS reads the `--p-*` properties.
+    fileprivate func applyColors(from config: Ghostty.Config) {
+        guard pageLoaded, let webView else { return }
+        let chrome = ThemeChrome.current(for: config)
+        webView.evaluateJavaScript(ViewerColors.script(for: chrome)) { _, error in
+            if let error { Self.logger.error("colors failed: \(error.localizedDescription, privacy: .public)") }
+        }
+        if let chrome {
+            webView.underPageBackgroundColor = NSColor(
+                srgbRed: Double(chrome.background.r) / 255, green: Double(chrome.background.g) / 255,
+                blue: Double(chrome.background.b) / 255, alpha: 1)
+        }
+    }
+
     func stop() {
+        themeObserver = nil
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "tarn")
         webView?.removeFromSuperview()
         webView = nil
@@ -205,8 +249,14 @@ extension ViewerWebController: WKNavigationDelegate {
     /// The web content process died (memory pressure): load the page again; the model refills it.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         Self.logger.error("web content process terminated")
+        pageLoaded = false
         model?.pageLost()
         webView.load(URLRequest(url: Self.pageURL))
+    }
+
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        pageLoaded = true
+        if let config = (NSApp.delegate as? AppDelegate)?.ghostty.config { applyColors(from: config) }
     }
 
     /// Only the first load of the page: links are handled by the page and the model.
