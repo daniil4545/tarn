@@ -78,6 +78,8 @@ def spike_basics(base):
         )
 
         pg.evaluate("window.sel = []; void t.onSelection(s => sel.push(s))")
+        # The cyrillic face loads on first use and can move the cells after the write.
+        pg.evaluate("document.fonts.ready.then(() => true)")
         a, b = pg.evaluate("[t.cellCentre(0, 1), t.cellCentre(7, 1)]")
         pg.mouse.move(a["x"] - 3, a["y"])
         pg.mouse.down()

@@ -21,7 +21,7 @@ from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 # The contract is 100 ms on the user's Mac. CI sets TARN_HOOK_LIMIT_MS: the 3-core runner spends
-# 30-40 ms per process start, and a hung app costs hook.sh 166-212 ms there.
+# 30-40 ms per process start, and a hung app costs hook.sh 166-404 ms there.
 LIMIT = float(os.environ.get("TARN_HOOK_LIMIT_MS", "100")) / 1000
 STOP = b'{"hook_event_name":"Stop"}'
 ASK = b'{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"make"}}'
