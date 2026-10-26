@@ -100,6 +100,12 @@ struct ViewerPathsTests {
         #expect(target == OpenTarget(path: "/work/app/a:12", line: nil))
     }
 
+    @Test func trailingPeriodOrCommaIsDroppedOnlyForAnExistingShorterName() {
+        #expect(resolve("docs/a.md.") == OpenTarget(path: "/work/app/docs/a.md.", line: nil))
+        #expect(resolve("docs/a.md.,", existing: ["/work/app/docs/a.md"]) == OpenTarget(path: "/work/app/docs/a.md", line: nil))
+        #expect(resolve("file:///tmp/x.md.", existing: ["/tmp/x.md"]) == OpenTarget(path: "/tmp/x.md", line: nil))
+    }
+
     @Test func relativePathWithoutCwdIsNotResolved() {
         #expect(resolve("a.md", cwd: nil) == nil)
     }
@@ -655,6 +661,21 @@ struct ViewerClickAndKeyTests {
         #expect(ViewerRouter.decide("./pic.png", cwd: dir) == .upstream(reason: "a media, document or archive type"))
         #expect(ViewerRouter.decide(dir, cwd: dir) == .upstream(reason: "a directory"))
         #expect(ViewerRouter.decide("./nope.md", cwd: dir) == .missing(raw: "./nope.md"))
+    }
+
+    /// A path that ends a sentence arrives with its period: Ghostty's link regex drops a trailing
+    /// `.` or `,` from URLs only.
+    @Test func sentencePunctuationAfterAPathIsDroppedOnlyWhenTheFullNameIsMissing() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/end.", atomically: true, encoding: .utf8)
+        let plain = ViewerRouter.Decision.open(OpenTarget(path: dir + "/a.md", line: nil))
+        #expect(ViewerRouter.decide(dir + "/a.md.", cwd: nil) == plain)
+        #expect(ViewerRouter.decide("./a.md,", cwd: dir) == plain)
+        #expect(ViewerRouter.decide("a.md..", cwd: dir) == plain)
+        #expect(ViewerRouter.decide("./a.md:3.", cwd: dir) == .open(OpenTarget(path: dir + "/a.md", line: 3)))
+        #expect(ViewerRouter.decide("./end.", cwd: dir) == .open(OpenTarget(path: dir + "/end.", line: nil)))
+        #expect(ViewerRouter.decide("./nope.md.", cwd: dir) == .missing(raw: "./nope.md."))
     }
 
     @Test func workingDirectoryOfAProcessIsReadFromTheKernel() {
