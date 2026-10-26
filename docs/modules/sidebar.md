@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The sidebar replaces the native tab bar with a vertical list of the window's tabs, grouped into workspaces. Each row shows the agent state; each workspace header shows the most urgent state of its tabs; a hover card shows the request and answers it.
+The sidebar replaces the native tab bar with a vertical list of the window's tabs, grouped into workspaces. Each row shows the agent state; in a split tab the row shows the most urgent pane's state, and its title, folder and agent name come from that same pane (`SidebarModel.textPane`); each workspace header shows the most urgent state of its tabs; a hover card shows the request and answers it.
 
 Groups are workspaces, see [workspaces.md](workspaces.md).
 
@@ -109,7 +109,7 @@ Known limits: detection latency up to 2 s on a visible window; hidden windows re
 
 | Suite | Pins |
 |---|---|
-| `SidebarGroupingTests` (`macos/Tests/Tarn/SidebarGroupingTests.swift`) | header shows the most urgent state, unseen done beats seen done, no state without agents, drop slots for tabs and workspaces on rows and headers, unknown targets |
+| `SidebarGroupingTests` (`macos/Tests/Tarn/SidebarGroupingTests.swift`) | header shows the most urgent state, unseen done beats seen done, no state without agents, drop slots for tabs and workspaces on rows and headers, unknown targets, a split tab's text follows the pane of its dot |
 | `AgentProcessTests` | `displayTitle` cases, every agent has name and icon |
 | `WorkspaceTitleTests` | subtitle text |
 | `SidebarMenuTests` | every item of the tab and workspace menus sends a message its target handles (the selector once resolved to `performSelector:`); Rename Workspace opens its sheet |

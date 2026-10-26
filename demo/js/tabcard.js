@@ -103,6 +103,7 @@ export function startTabCard() {
     hide();
   });
   document.addEventListener("dragstart", hide, true);
+  bus.on("drag:start", hide);
   bus.on("config:changed", hide);
   bus.on("state:changed", ({ part }) => { if (shown && part === "registry") show(shown); });
 }
