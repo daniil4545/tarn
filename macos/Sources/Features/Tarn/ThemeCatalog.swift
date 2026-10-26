@@ -52,6 +52,12 @@ struct ThemeCatalog {
         return names.filter { !base.contains($0) }
     }
 
+    /// The names that contain the query, ignoring case and edge spaces; all of them for an empty query.
+    static func matching(_ names: [String], query: String) -> [String] {
+        let query = query.trimmingCharacters(in: .whitespaces)
+        return query.isEmpty ? names : names.filter { $0.localizedCaseInsensitiveContains(query) }
+    }
+
     /// The colors of a theme, read from its file; `nil` when no folder holds it or it names no color.
     func palette(of name: String) -> ThemePalette? {
         guard !name.isEmpty, !name.contains("/") else { return nil }

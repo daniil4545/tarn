@@ -4,6 +4,23 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ## [Unreleased]
 
+### Fixed
+
+- Cmd+W no longer crashes tarn: closing a tab made the sidebar and the workspaces refresh each other until the stack ran out, which looked like the whole window closing.
+- Workspace and tab menus work again: every item had an action its target did not handle, so Rename, Delete and the rest did nothing.
+- The sidebar edge and the line between the terminal and a viewer are easy to grab: a 14 pt hit strip centered on the line, above both sides, with the resize cursor.
+- Dragging the sidebar edge to its widest stays at 400 pt; only the button collapses the sidebar.
+- A viewer dragged out of the window opens where it was dropped, on any screen, not on the first one.
+- Cmd+W closes the Settings window.
+- A tab title change reads each agent process once, not twice per tab for every tab.
+
+### Changed
+
+- Drop feedback: a 3 pt accent line where the pane goes, and a gray plate with the reason when the drop is refused. A terminal dropped on a terminal keeps Ghostty's own highlight.
+- Settings, Theme: seven base themes on top (Catppuccin Latte and Mocha, Atom One Light and Dark, Gruvbox Light and Dark, Dracula), the full list with a filter below. While `window-theme` is `auto` or `ghostty`, the sidebar and the viewer take their colors from the terminal theme; with `system`, `light` or `dark` they keep the built-in colors.
+- Resizing the sidebar resizes the terminal once, when the mouse is released. Hover and workspace folding animate with one duration and curve.
+- Help lists which paths in terminal output open on Cmd+click: those with a slash.
+
 ## [tarn-v1.0.0] - 2026-10-25
 
 First release. The build is ad-hoc signed and not notarized; see `docs/install.md`.

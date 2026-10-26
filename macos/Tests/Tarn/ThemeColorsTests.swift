@@ -241,6 +241,15 @@ struct ThemeCatalogTests {
         #expect(Set(ThemeCatalog.baseNames).count == 7)
     }
 
+    @Test func theFilterIgnoresCaseAndEdgeSpacesAndSearchesTheBaseList() {
+        let base = ThemeCatalog.baseNames
+        #expect(ThemeCatalog.matching(base, query: "dracula") == ["Dracula"])
+        #expect(ThemeCatalog.matching(base, query: "  GRUVBOX ") == ["Gruvbox Light", "Gruvbox Dark"])
+        #expect(ThemeCatalog.matching(base, query: "").count == 7)
+        #expect(ThemeCatalog.matching(base, query: "   ").count == 7)
+        #expect(ThemeCatalog.matching(base, query: "nord").isEmpty)
+    }
+
     @Test func everyBaseThemeIsAnInstalledTheme() throws {
         let catalog = ThemeCatalog(folders: Self.installedFolders())
         let names = catalog.names
