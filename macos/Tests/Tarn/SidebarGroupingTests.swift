@@ -129,6 +129,24 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.gapSlot(nil, lifted: tabs[2].key, in: groups) == nil)
     }
 
+    // A gap above a header with rows below it stays put: moved to the end of that workspace it
+    // would pull the header up and put a row under the pointer.
+    @Test func aHeaderBelowTheGapKeepsTheGapOnlyWhileRowsStandUnderIt() {
+        let (groups, tabs) = layout()
+        let b = groups[1].id, c = groups[2].id
+        #expect(SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[1].key), lifted: tabs[0].key, in: groups))
+        #expect(SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(groups[0].id), lifted: tabs[0].key, in: groups))
+        // From below the header stays under the pointer.
+        #expect(!SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[3].key), lifted: tabs[0].key, in: groups))
+        // Only the lifted tab below the header: the new gap itself comes under the pointer.
+        #expect(!SidebarModel.gapPullsUp(c, gap: .endOfWorkspace(b), lifted: tabs[5].key, in: groups))
+        var folded = groups
+        var workspace = groups[1].workspace
+        workspace.collapsed = true
+        folded[1] = SidebarModel.Group(workspace: workspace, tabs: groups[1].tabs)
+        #expect(!SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(groups[0].id), lifted: tabs[0].key, in: folded))
+    }
+
     @Test func unknownTargetsGiveNoSlot() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(TabKey()), lowerHalf: false, in: groups) == nil)

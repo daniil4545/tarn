@@ -216,6 +216,8 @@ final class SidebarModel: ObservableObject {
         guard newGroups != groups else { return }
         groups = newGroups
         if cardTab != nil { updateCard() }
+        // A tab closed while dragged may never end its drag session.
+        if let liftedTab, tab(withKey: liftedTab) == nil { endLift() }
     }
 
     private func makeTab(_ tabWindow: NSWindow, key: TabKey, index: Int, workspace: String, shortcut: String?) -> Tab {
@@ -480,6 +482,9 @@ final class SidebarModel: ObservableObject {
             ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
             : nil
         if let liftedTab {
+            if case .header(let id) = target, Self.gapPullsUp(id, gap: dropSlot, lifted: liftedTab, in: groups) {
+                return true
+            }
             slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
             // The rows slide apart; a pointer that leaves the rows keeps the gap where it is.
             if let slot, slot != dropSlot { withAnimation(Motion.fold) { dropSlot = slot } }
@@ -513,7 +518,9 @@ final class SidebarModel: ObservableObject {
     /// Carries out a drop; `value` is the payload of the drag. A payload from another window
     /// is refused: moving tabs between windows is Ghostty's.
     func drop(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
-        drop(kind, value: value, at: Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups))
+        // A tab lands where its gap is shown, not where the pointer happens to be at release.
+        let slot = liftedTab == nil ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups) : dropSlot
+        return drop(kind, value: value, at: slot)
     }
 
     /// Carries out a drop into `slot`; a tab drag ends with its gap closed and its row back.

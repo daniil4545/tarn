@@ -97,6 +97,28 @@ extension SidebarModel {
         guard slot == .beforeTab(lifted) else { return slot }
         return dropSlot(dragging: .tab, over: .tab(lifted), lowerHalf: true, in: groups)
     }
+
+    /// Moving the gap from above the header of workspace `id` to its end would pull the header
+    /// up a row and leave its first shown row under the pointer, which then takes the gap. So the
+    /// gap stays; the header takes it only when nothing of its workspace stands below it.
+    nonisolated static func gapPullsUp(
+        _ id: Workspace.ID,
+        gap: SidebarDropSlot?,
+        lifted: TabKey,
+        in groups: [Group]
+    ) -> Bool {
+        guard let header = groups.firstIndex(where: { $0.workspace.id == id }),
+              !groups[header].workspace.collapsed,
+              groups[header].tabs.contains(where: { $0.key != lifted })
+        else { return false }
+        let owner: Workspace.ID?
+        switch gap {
+        case .beforeTab(let key): owner = groups.first { $0.tabs.contains { $0.key == key } }?.workspace.id
+        case .endOfWorkspace(let workspace): owner = workspace
+        default: owner = nil
+        }
+        return groups.firstIndex { $0.workspace.id == owner }.map { $0 < header } ?? false
+    }
 }
 
 /// The AppKit layer over a sidebar row or header: it owns left clicks, drags out of the row,
