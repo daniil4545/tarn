@@ -46,6 +46,7 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 State: `ViewerTabs` (tab list, active index, preview flag, jump token), `ViewerDocument` per open path (text on screen, text on disk, stamp, revision, conflict, missing), `FileTree` (root, unfolded folders), one `FileWatcher` per open file. `ViewerHost` holds the model and the web controller of a window tab, or nothing when no pane is open.
 
 Open flow:
+- Which text is a link is Ghostty's matcher (`src/config/url.zig`), not ours: a path with a slash (`docs/a.md`, `./a.md`, `../a.md`, `~/a.md`, `/abs/a.md`, each with an optional `:line`). A bare name from `ls` has no slash and is not a link (user decision 2026-10-25); a relative path with no dot in its name and no `./` is not either. `$VAR/...` is matched but not expanded. Help states the rule (`KeyReference.pathClickRule`). Ghostty's core resolves a relative path against OSC 7 `pwd` when the file exists, else passes the text on.
 1. A click reaches `Ghostty.App.openURL`; for kind unknown on a surface it calls `ViewerRouter.handle`, which returns false for URLs, directories, system-type files and a missing file without a pane (upstream opens them).
 2. `ViewerPaths.resolve` expands `~/`, absolute and relative paths against the surface's `pwd`, and splits `:line[:column]`. A real file whose name holds a colon wins over the split.
 3. `ViewerPaths.classify` returns text, system (allowlist of media, document, archive extensions), directory, special or missing.
@@ -66,6 +67,8 @@ Close: `ViewerClose` is called from the close paths of Ghostty (see insertion po
 
 Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off), code with highlight.js (limit 512 KB), the editor with CodeMirror 6, diagrams with mermaid (layout dagre) loaded on demand. Mermaid runs with `securityLevel: "strict"`. Output is bundled by esbuild into `Viewer/` and committed; the app build needs no node.
 
+Colors (T-151): the page takes the terminal theme. The page CSS already reads `--p-bg`, `--p-bar`, `--p-fg`, `--p-muted`, `--p-line`, `--p-code`, `--p-accent` (`viewer-web/src/viewer.css`), with a dark and a light default palette keyed by `data-theme`. `ViewerWebController` sets these seven properties on the page root with a script (`ViewerColors.script`) from `ThemeChrome` (rule in [settings.md](settings.md); `--p-muted` is the text color faded toward the background, less than 38% where that drops below contrast 4.5:1, as in the demo). The script is a `WKUserScript` at document start, so the first paint and a page reloaded after the web process died already have the colors; on every `ghosttyConfigDidChange` of the app config `ViewerColors.install` replaces the user script and the live page runs it too. The color behind the page (`underPageBackgroundColor`) follows the theme background. With `window-theme` system, light or dark the script removes the properties, the color behind the page returns to the built-in one, and the default palettes show again. `data-theme` (syntax colors, mermaid theme) still follows `ViewerModel.dark`, the background class from `AreaView`. No change in `viewer-web/`, so the bundle is not rebuilt.
+
 ## Files
 
 | Path | Role |
@@ -76,7 +79,7 @@ Web side: `viewer-web/src/main.js` renders markdown with markdown-it (html off),
 | `macos/Sources/Features/Tarn/ViewerDocument.swift` | text, disk text, conflict, 5 MB cap, `FileStamp`, `FileRead`, `TaskList` |
 | `macos/Sources/Features/Tarn/ViewerPaths.swift` | path resolution, file classification, binary test, language hint |
 | `macos/Sources/Features/Tarn/ViewerRules.swift` | content rule list, `tarn-md://` asset mapping |
-| `macos/Sources/Features/Tarn/ViewerWebView.swift` | `ViewerWebView` (key equivalents), `ViewerWebController` (load, scheme handler, navigation policy) |
+| `macos/Sources/Features/Tarn/ViewerWebView.swift` | `ViewerWebView` (key equivalents), `ViewerWebController` (load, scheme handler, navigation policy, theme colors), `ViewerColors` |
 | `macos/Sources/Features/Tarn/ViewerClose.swift` | unsaved-edit question on tab, window and quit |
 | `macos/Sources/Features/Tarn/FileTree.swift` | tree rows, 5000-row cap, hides `.git`, `.DS_Store`, `node_modules` |
 | `macos/Sources/Features/Tarn/FileWatcher.swift` | vnode sources on file and folder, 0.3 s throttle |
@@ -120,6 +123,7 @@ Failures: a file that cannot be read gives the toast "Cannot open <name>"; a ref
 |---|---|
 | `ViewerTabsTests` | preview replacement, pin, activation of an open path, jump token, close order, background open |
 | `ViewerPathsTests` | path resolution, line split, colon in file names, URL test, classification, binary by content |
+| `ViewerClickAndKeyTests` | every slash form (`docs/a.md`, `./`, `../`, `:line[:col]`) opens; refusals name their reason |
 | `ViewerDocumentTests` | reload, conflict once, take and keep, own write is not a change, deleted file, notices, task toggle |
 | `ViewerRulesTests` | rule list content, compile in WebKit, asset mapping and refusals |
 | `FileTreeTests` | folders first, hidden names, unfold on demand |

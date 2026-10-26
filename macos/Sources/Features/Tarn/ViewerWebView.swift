@@ -2,8 +2,42 @@
 
 import AppKit
 import Carbon.HIToolbox
+import Combine
 import OSLog
 import WebKit
+
+/// The script that paints the viewer page with the theme colors.
+enum ViewerColors {
+    /// Sets the `--p-*` properties on the page root; without a theme it removes them, and the
+    /// page's own dark or light palette shows again.
+    static func script(for chrome: ThemeChrome?) -> String {
+        let values: [String: Any] = chrome?.viewerVariables
+            ?? Dictionary(uniqueKeysWithValues: ThemeChrome.viewerVariableNames.map { ($0, NSNull()) })
+        let json = (try? JSONSerialization.data(withJSONObject: values, options: [.sortedKeys]))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+        return "(function(v){var s=document.documentElement.style;"
+            + "for(var k in v){if(v[k]===null)s.removeProperty(k);else s.setProperty(k,v[k]);}})(\(json))"
+    }
+
+    /// Makes the colors part of every page load, run at document start: the first paint and a
+    /// page reloaded after the web process died already have them. Replaces the earlier script.
+    static func install(_ chrome: ThemeChrome?, in content: WKUserContentController) {
+        content.removeAllUserScripts()
+        content.addUserScript(WKUserScript(
+            source: script(for: chrome), injectionTime: .atDocumentStart, forMainFrameOnly: true))
+    }
+
+    /// The color behind the page (rubber-band scrolling, resize): the theme background, else the
+    /// page's own palette: Dracula-dark or white.
+    static func underPageColor(for chrome: ThemeChrome?, dark: Bool) -> NSColor {
+        if let chrome {
+            return NSColor(
+                srgbRed: Double(chrome.background.r) / 255, green: Double(chrome.background.g) / 255,
+                blue: Double(chrome.background.b) / 255, alpha: 1)
+        }
+        return dark ? NSColor(srgbRed: 0.157, green: 0.165, blue: 0.212, alpha: 1) : .white
+    }
+}
 
 /// The web view of a viewer pane. It takes the keys the page cannot see: the menu would give
 /// Cmd+S, Cmd+E and Cmd+B to other items, and Cmd+W reaches it as the menu action `close:`. The
@@ -94,10 +128,21 @@ final class ViewerWebController: NSObject {
     private var webView: ViewerWebView?
     private var started = false
     private var wantsFocus = false
+    private var themeObserver: AnyCancellable?
 
     init(model: ViewerModel) {
         self.model = model
         super.init()
+        // A theme change in Settings reloads the config; the page takes the new colors at once.
+        themeObserver = NotificationCenter.default.publisher(for: .ghosttyConfigDidChange)
+            .sink { [weak self] note in
+                MainActor.assumeIsolated {
+                    guard note.object == nil,
+                          let config = note.userInfo?[Notification.Name.GhosttyConfigChangeKey] as? Ghostty.Config
+                    else { return }
+                    self?.applyColors(ThemeChrome.current(for: config))
+                }
+            }
         model.script = { [weak self] call in self?.webView?.evaluateJavaScript(call) { _, error in
             if let error { Self.logger.error("script failed: \(error.localizedDescription, privacy: .public)") }
         } }
@@ -134,12 +179,14 @@ final class ViewerWebController: NSObject {
         config.userContentController.add(MessageProxy(self), name: "tarn")
         config.websiteDataStore = .nonPersistent()
         config.preferences.javaScriptCanOpenWindowsAutomatically = false
+        let chrome = (NSApp.delegate as? AppDelegate).flatMap { ThemeChrome.current(for: $0.ghostty.config) }
+        ViewerColors.install(chrome, in: config.userContentController)
 
         let view = ViewerWebView(frame: container.bounds, configuration: config)
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
-        view.underPageBackgroundColor = model.dark ? NSColor(srgbRed: 0.157, green: 0.165, blue: 0.212, alpha: 1) : .white
+        view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif
@@ -164,7 +211,20 @@ final class ViewerWebController: NSObject {
         window.makeFirstResponder(webView)
     }
 
+    /// Paints the page with the colors of the terminal theme, or gives it back its own palettes
+    /// (`window-theme` system, light or dark). The page's CSS reads the `--p-*` properties.
+    /// The loaded page gets the script now; the user script covers the next load.
+    fileprivate func applyColors(_ chrome: ThemeChrome?) {
+        guard let webView else { return }
+        ViewerColors.install(chrome, in: webView.configuration.userContentController)
+        webView.evaluateJavaScript(ViewerColors.script(for: chrome)) { _, error in
+            if let error { Self.logger.error("colors failed: \(error.localizedDescription, privacy: .public)") }
+        }
+        webView.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model?.dark ?? true)
+    }
+
     func stop() {
+        themeObserver = nil
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "tarn")
         webView?.removeFromSuperview()
         webView = nil
