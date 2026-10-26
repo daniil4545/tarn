@@ -1,12 +1,13 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
+# dev gets the demo checks only, nothing waits on them; main (release PRs from dev) gets both jobs.
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, dev]
   push:
-    branches: [main]
+    branches: [main, dev]
   workflow_call:
     inputs:
       upstream:
@@ -46,6 +47,7 @@ jobs:
           done
 
   app:
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
     env:

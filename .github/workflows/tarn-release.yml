@@ -6,6 +6,12 @@ name: tarn-release
 on:
   push:
     tags: ["tarn-v*"]
+  # A rerun for an existing tag, so a failed build does not need the tag moved.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag, e.g. tarn-v1.2.0
+        required: true
 
 permissions:
   contents: write
@@ -14,24 +20,25 @@ jobs:
   release:
     runs-on: xcode-27
     timeout-minutes: 60
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
           persist-credentials: false
       # The version comes from minimum_zig_version in build.zig.zon.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - name: make -f tarn.mk release
         run: make -f tarn.mk release
       - name: The tag names the app version
-        if: startsWith(github.ref, 'refs/tags/')
         run: |
           v=$(plutil -extract CFBundleShortVersionString raw macos/build/ReleaseLocal/Tarn.app/Contents/Info.plist)
-          test "tarn-v$v" = "$GITHUB_REF_NAME" || { echo "tag $GITHUB_REF_NAME, app version $v"; exit 1; }
+          test "tarn-v$v" = "$TAG" || { echo "tag $TAG, app version $v"; exit 1; }
       - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
-            gh release create "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --draft --verify-tag --notes ""
-          gh release upload "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" --clobber dist/tarn-*-macos.zip dist/tarn-*-macos.zip.sha256
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --draft --verify-tag --notes ""
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber dist/tarn-*-macos.zip dist/tarn-*-macos.zip.sha256
