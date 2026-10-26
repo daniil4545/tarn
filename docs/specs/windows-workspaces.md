@@ -31,7 +31,7 @@ Every tab sits in exactly one workspace; a tab never exists outside one.
 - D4. There is always at least one workspace; without one no terminal tab opens.
 - D5. The header is shown always, even with one workspace (the "hide the only workspace" rule is cancelled).
 - D6. Workspaces are collapsible groups, several open at once, reordered by drag; collapsed shows the tab count and the most urgent agent state.
-- D7. Cmd+W closes the focused pane; the last terminal closes the tab; cmd+Z within 5 s brings it back (Ghostty `undo-timeout`).
+- D7. Cmd+W closes the focused pane; on the last pane of a tab it closes the tab; on the last tab it closes the window, as in Ghostty (D12). Cmd+Z within 5 s brings it back (Ghostty `undo-timeout`).
 - D8. Panes: terminals form one Ghostty split tree; viewers sit beside it; Ghostty's split keys move across both. The terminal grab handle is Ghostty's three dots on hover.
 - D9. Ghostty first: windows, tabs, splits, undo, restore and menus come from Ghostty; tarn adds the workspace layer and the viewer.
 - D10. Each window has its own workspaces; cmd+N opens a window with `Default`. Matches Ghostty, where tabs and restore are per window. The same name may appear in two windows.
@@ -88,9 +88,9 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S14a | drag a viewer by its three dots (same handle as a terminal) | to the middle of another viewer: that viewer takes all its files; to an edge of a viewer or of the terminal block: the viewer moves there with its files and tree; onto itself: refused; outside every window: a new window |
 | S14b | drag a terminal by its three dots to a viewer edge | a lone terminal: the terminal block moves to that edge (for example below the viewer); split terminals: refused with a hint to drag the viewer to the block edge, since they are one Ghostty split tree |
 | S15 | cmd+W on a pane | the pane closes; cmd+Z within 5 s brings it back |
-| S16 | cmd+W on the last terminal of a tab | the tab closes with its viewers; cmd+Z within 5 s brings it back |
+| S16 | cmd+W on the last pane of a tab | the tab closes with its viewers; cmd+Z within 5 s brings it back |
 | S17 | close the last tab of a workspace | the workspace closes; cmd+Z within 5 s brings both back (D12) |
-| S18 | close the last tab of the last workspace | the window closes as in Ghostty; the next window starts with `Default` (D12) |
+| S18 | close the last tab of the last workspace (cmd+W on its last pane included) | the window closes as in Ghostty; the next window starts with `Default` (D12) |
 | S19 | quit and launch again | windows, tabs, splits and cwd come back (Ghostty `window-save-state`); workspaces, their order, folding and tab membership come back with them; scrollback does not |
 | S20 | cmd+N, a second window | a window with its own `Default` and one tab (D10) |
 | S21 | drag a tab out to another window | Ghostty moves it; it joins that window's current workspace; dropped outside every window it opens a new window with `Default` (D10) |

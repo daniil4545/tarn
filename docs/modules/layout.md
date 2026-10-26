@@ -57,9 +57,9 @@ A drop shows a line, not a filled frame: 3 pt (`AreaDrop.lineWidth`) in the syst
 Focus: `focusFromBlock` and viewer-to-neighbour moves use `SplitTree.focusTarget`; moving to the block calls `Ghostty.moveFocus` on the focused surface.
 
 Grip: each viewer pane has a three-dot handle on top (`ViewerGripView`) that drags the whole viewer. It follows Ghostty's `drag-handle` setting (auto shows in the top fifth of the pane, always, never). Dots are 0.6 and 1.0 opaque.
-Dividers: every split of the area is Ghostty's `SplitView`, unchanged, wrapped in `AreaSplit` (`Viewer/AreaSplit.swift`). `AreaSplit` lays a transparent strip, `AreaDivider.hitWidth` (14 pt) wide, over the divider line (Ghostty's own strip is 7 pt). The strip lies above both panes, because their AppKit views (web view, terminal) would take the clicks; it shows the resize cursor (`backport.pointerStyle`, `NSCursor` before macOS 15), drags the same ratio through `ViewerHost.resize` with the least pane size of `SplitView`, and equalizes on a double click. Terminal splits keep Ghostty's 7 pt. The terminal drag handle stays Ghostty's 80x12.
+Dividers: every split of the area is Ghostty's `SplitView`, unchanged, wrapped in `AreaSplit` (`Viewer/AreaSplit.swift`). `AreaSplit` lays an AppKit strip (`AreaDividerStrip`) over the divider line, `AreaDivider.hitWidth` (14 pt) wide, 3.5 pt before the line and 10.5 pt after it (Ghostty's own strip is 7 pt, centered). The strip lies above both panes, because their AppKit views (web view, terminal) would take the clicks. It covers no more of the first pane than Ghostty's does, since that edge holds the pane's scroll bar. It answers hit tests only for the left button and pointer movement (`StripView.claims`), so the scroll wheel and a right click reach the pane under it. It shows the resize cursor (cursor rect), drags the same ratio through `ViewerHost.resize` with the least pane size of `SplitView`, and equalizes on a double click. Terminal splits keep Ghostty's 7 pt. The terminal drag handle stays Ghostty's 80x12.
 
-A viewer dropped outside every window: `WindowPlacement.place` puts the new window's top left corner at the drop point, on the screen that holds the point (nearest screen in a gap), clamped to that screen's visible area. It sets the frame two main-queue turns late, because `TerminalController.newWindow` shows and cascades the window in the next two turns and the cascade would move it back beside the other windows (the first screen). Drag coordinates elsewhere are window-local and need no screen math.
+A viewer dropped outside every window opens in a new window at the drop point: `ViewerHost.detach` uses Ghostty's `TerminalController.newWindow(_:tree:position:)` (`TerminalController.swift:353`), the path of a terminal pane dragged out. It sets `setFrameTopLeftPoint(position)` and `constrainToScreen()` when the window is presented, so it lands on the screen that holds the point and nothing cascades it back. (The plain `newWindow(_:)` presents first and cascades one turn later, which moved a frame set at once back beside the other windows, on the first screen: the cause of bug 5 in 1.0.0.) Drag coordinates elsewhere are window-local and need no screen math.
 
 ## Files
 
@@ -73,7 +73,6 @@ A viewer dropped outside every window: `WindowPlacement.place` puts the new wind
 | `macos/Sources/Features/Tarn/Viewer/ViewerGrip.swift` | `ViewerPaneView`, `ViewerGripView` |
 | `macos/Sources/Features/Tarn/Viewer/ViewerSnapshot.swift` | layout and files for a tombstone |
 | `macos/Sources/Features/Tarn/Viewer/AreaSplit.swift` | `AreaSplit`: `SplitView` plus the wide grab strip; `AreaDivider` math |
-| `macos/Sources/Features/Tarn/Viewer/WindowPlacement.swift` | screen math and placement of a window dropped outside |
 
 ## Ghostty mechanisms used
 
@@ -115,8 +114,7 @@ Rejected: an own tree type and viewers inside the terminal tree (its leaves must
 |---|---|
 | `AreaTreeTests` (`macos/Tests/Tarn/AreaTreeTests.swift`) | one block leaf, open beside with shares, remove, snapshot round trip, neighbour by direction, slot of a closed viewer |
 | `AreaDropTests` (`AreaDropTests.swift`) | one case per zone row, corner and strip sizes, refusals, lone terminal and split terminals, file drops, `placing` results, brighter dots |
-| `AreaSplitTests` | line position as `SplitView` draws it, drag ratio limits, the strip takes the click above the pane views (horizontal and stacked splits) |
-| `WindowPlacementTests` | a window dropped on a second screen (left, above, below, negative coordinates) stays on it and inside its visible area |
+| `AreaSplitTests` | line position as `SplitView` draws it, drag ratio limits, strip geometry, events the strip takes; hit tests in an `NSHostingView`: the strip takes the left click above the pane views, leaves the pane's scroll bar and the wheel alone (horizontal and stacked splits) |
 | `ViewerHostTests` (`ViewerModelTests.swift`) | a page file drag ends with a click or the drag end |
 | `ViewerCloseTests` | close questions across several viewers |
 
