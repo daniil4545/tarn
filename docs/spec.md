@@ -161,7 +161,7 @@ Purpose: read and edit a file next to a session without another app. Input: a pa
 | File rewritten | an agent rewrites a file open in the viewer | it re-renders and keeps scroll; with unsaved edits a banner offers the agent version or yours |
 | Agent asks for attention | an agent runs `tarn notify "<text>"` | its own session (by `TARN_SURFACE`) gets the note and one notification; the same text again raises nothing; focus does not move; focusing the session clears the note |
 | No duplicates | Claude Code also sends its terminal notification for the same need | the terminal notification of a live agent session is suppressed; the user sees one notification |
-| Path click | the user clicks `docs/spec.md:12` in agent output | the path resolves against the surface cwd; a text file opens in the viewer; media, document and archive files open in their default macOS app; a missing file shows a one-line notice |
+| Path click | the user clicks `docs/spec.md:12` in agent output | the path resolves against the surface cwd; a trailing `.` or `,` is dropped when the full name does not exist; a text file opens in the viewer; media, document and archive files open in their default macOS app; a missing file shows a one-line notice |
 | Subagent event | a subagent finishes a tool while the main agent waits for permission | events carrying `agent_id` do not change the session state in the first version |
 | Workspaces and layout | the user creates, folds, drags and closes workspaces, tabs and viewers | scenarios S1-S23 of `docs/specs/windows-workspaces.md` |
 
