@@ -888,6 +888,7 @@ private struct SidebarRow: View {
     let isCompact: Bool
 
     @State private var isHovering = false
+    @AppStorage(TabRows.key) private var rows: TabRows = .wide
     @Environment(\.chromeInk) private var ink
 
     var body: some View {
@@ -1020,9 +1021,14 @@ private struct SidebarRow: View {
                 icon(size: 12)
             }
 
-            Text(tab.title)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            if rows == .wide {
+                VStack(alignment: .leading, spacing: 1) {
+                    title
+                    detail
+                }
+            } else {
+                title
+            }
 
             Spacer(minLength: 4)
 
@@ -1038,7 +1044,33 @@ private struct SidebarRow: View {
         }
         .padding(.leading, 4)
         .padding(.trailing, 8)
-        .frame(height: 26)
+        .frame(height: rows == .wide ? 40 : 26)
+    }
+
+    private var title: some View {
+        Text(tab.title)
+            .lineLimit(1)
+            .truncationMode(.tail)
+    }
+
+    /// The second line of a wide row: the folder, and for an agent the time in its state. The
+    /// icon names the agent. Minutes only, so the row redraws once a minute, not every second.
+    @ViewBuilder
+    private var detail: some View {
+        let folder = tab.folder ?? ""
+        Group {
+            if let agent = tab.agent {
+                TimelineView(.everyMinute) { context in
+                    Text(TabRows.secondLine(folder: folder, since: agent.since, now: context.date))
+                }
+            } else {
+                Text(folder)
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(ink.faint)
+        .lineLimit(1)
+        .truncationMode(.middle)
     }
 }
 
