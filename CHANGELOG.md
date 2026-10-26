@@ -2,10 +2,11 @@
 
 Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.Z` tags in this repository belong to upstream Ghostty.
 
-## [Unreleased]
+## [tarn-v1.1.0] - 2026-10-26
 
 ### Fixed
 
+- Cmd+click on a path that ends a sentence (`/tmp/a/plan.md.`) opens the file without the period, unless a file with the period in its name exists.
 - Cmd+W no longer crashes tarn: closing a tab made the sidebar and the workspaces refresh each other until the stack ran out, which looked like the whole window closing.
 - Workspace and tab menus work again: every item had an action its target did not handle, so Rename, Delete and the rest did nothing.
 - The sidebar edge and the line between the terminal and a viewer are easy to grab: a 14 pt hit strip centered on the line, above both sides, with the resize cursor.
