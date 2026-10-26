@@ -462,7 +462,24 @@ def run(base):
             len(ws_tabs("w2")) == 3
             and pg.get_attribute(".wsh[data-wsh='w2']", "aria-expanded") == "true",
         )
-        drag(n(f"{TAB}[data-tabid='t3']"), n(".wsh[data-wsh='w2']"), 0.5, 0.5)
+        # Tab rows drag with the real mouse: synthetic HTML5 events once passed while the drag was broken.
+        def press_row(src):
+            box = src.bounding_box()
+            pg.mouse.move(box["x"] + 30, box["y"] + box["height"] / 2)
+            pg.mouse.down()
+            pg.mouse.move(box["x"] + 30, box["y"] + box["height"] / 2 + 6, steps=2)
+
+        def point(dst, fy, fx=0.3):
+            pg.wait_for_timeout(250)  # the rows end their 150 ms slide before the target is measured
+            box = dst.bounding_box()
+            pg.mouse.move(box["x"] + box["width"] * fx, box["y"] + box["height"] * fy, steps=5)
+
+        def mouse_drag(src, dst, fy):
+            press_row(src)
+            point(dst, fy)
+            pg.mouse.up()
+
+        mouse_drag(n(f"{TAB}[data-tabid='t3']"), n(".wsh[data-wsh='w2']"), 0.5)
         check(
             "W7 drag a tab onto a workspace header moves it there",
             "t3" in ws_tabs("w2"),
@@ -473,30 +490,88 @@ def run(base):
         n(f"{TAB}[data-tabid='t2']").click(button="right")
         check("W9 the tab menu has no pin", count("#ctx [data-mpin]") == 0)
         pg.keyboard.press("Escape")
-        drag(n(f"{TAB}[data-tabid='t4']"), n(f"{TAB}[data-tabid='t3']"), 0.5, 0.3)
+        mouse_drag(n(f"{TAB}[data-tabid='t4']"), n(f"{TAB}[data-tabid='t3']"), 0.3)
         order = ws_tabs("w1")
         check(
             "W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order)
         )
-        dt = start_drag(n(f"{TAB}[data-tabid='t4']").first)
-        row = n(f"{TAB}[data-tabid='t1']").bounding_box()
-        for frac, edge, name in ((0.25, row["y"], "top"), (0.75, row["y"] + row["height"], "bottom")):
-            n(f"{TAB}[data-tabid='t1']").dispatch_event("dragover", {"dataTransfer": dt, "clientX": row["x"] + 20, "clientY": row["y"] + row["height"] * frac})
-            line = n(".wsline").bounding_box() if count(".wsline") == 1 else None
+        # The open gap: the element it stands above, the shown element over it, and its height.
+        gap_at = (
+            "() => { const shown = (e, step) => { while (e && e.classList.contains('lifted')) e = e[step]; return e; };"
+            " const b = [...document.querySelectorAll('.sidebar > *')].filter((e) => e.style.marginTop);"
+            " if (b.length !== 1) return null; const p = shown(b[0].previousElementSibling, 'previousElementSibling');"
+            " return {below: b[0].dataset.tabid || b[0].dataset.wsh || b[0].id, above: p.dataset.tabid || p.dataset.wsh,"
+            " h: b[0].getBoundingClientRect().top - p.getBoundingClientRect().bottom}; }"
+        )
+        # The slot of a row: from the row above to the row below, the space between rows included.
+        slot_h = pg.evaluate(
+            "() => { const r = document.querySelector(\".sidebar .tab[data-tabid='t4']\");"
+            " return [r.nextElementSibling.dataset.tabid, r.nextElementSibling.getBoundingClientRect().top - r.previousElementSibling.getBoundingClientRect().bottom]; }"
+        )
+        press_row(n(f"{TAB}[data-tabid='t4']"))
+        at = pg.evaluate(gap_at)
+        check(
+            "W10d a dragged tab leaves the list and a gap of its height stays in its place",
+            at is not None and at["below"] == slot_h[0] and abs(at["h"] - slot_h[1]) < 1 and count(f"{TAB}[data-tabid='t4']:visible") == 0,
+            str((at, slot_h)),
+        )
+        moved = []
+        for x, y in ((60, 200), (110, 290)):
+            pg.mouse.move(x, y)
+            moved.append(n(".dragghost").bounding_box() if count(".dragghost") == 1 else None)
+        check(
+            "W10g a solid copy of the row follows the pointer",
+            None not in moved and (round(moved[1]["x"] - moved[0]["x"]), round(moved[1]["y"] - moved[0]["y"])) == (50, 90),
+            str(moved),
+        )
+        for frac, side, name in ((0.25, "below", "top"), (0.75, "above", "bottom")):
+            point(n(f"{TAB}[data-tabid='t1']"), frac)
+            at = pg.evaluate(gap_at)
             check(
-                f"W10a a tab dragged over the {name} half of a row draws one line at its {name} edge, no frame",
-                line is not None and abs(line["y"] + 1.5 - edge) <= 3 and count(".dropmark") == 0,
-                str(line),
+                f"W10a a tab dragged over the {name} half of a row opens the gap at its {name} edge, no line",
+                at is not None and at[side] == "t1" and count(".wsline") == 0,
+                str(at),
             )
-        n(f"{TAB}[data-tabid='t1']").dispatch_event("drop", {"dataTransfer": dt, "clientX": row["x"] + 20, "clientY": row["y"] + row["height"] * 0.75})
-        pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+        pg.wait_for_timeout(300)
+        at = pg.evaluate(gap_at)
+        check("W10e the rows slide apart: the gap grows to the slot of a row", at is not None and abs(at["h"] - slot_h[1]) < 1, str(at))
+        pg.mouse.up()
         order = ws_tabs("w1")
         check("W10b a drop in the lower half puts the tab after the row", order.index("t4") == order.index("t1") + 1, str(order))
-        dt = start_drag(n(f"{TAB}[data-tabid='t4']").first)
-        head = n(".wsh[data-wsh='w1']").bounding_box()
-        n(".wsh[data-wsh='w1']").dispatch_event("dragover", {"dataTransfer": dt, "clientX": head["x"] + 20, "clientY": head["y"] + head["height"] / 2})
-        check("W10c a tab over a workspace header frames the header, no line", count(".wsh.dropmark") == 1 and count(".wsline") == 0)
-        pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+        moving = ws_tabs("w2")[0]
+        press_row(n(f"{TAB}[data-tabid='{moving}']"))
+        point(n(".wsh[data-wsh='w1']"), 0.5)
+        at = pg.evaluate(gap_at)
+        check(
+            "W10c a tab over a workspace header opens the gap at the end of that workspace, no frame, no line",
+            at is not None and at["above"] == ws_tabs("w1")[-1] and count(".dropmark") == 0 and count(".wsline") == 0,
+            str(at),
+        )
+        pg.keyboard.press("Escape")
+        pg.mouse.up()
+        check(
+            "W10f Esc ends the drag: the gap and the copy go away, the row comes back, nothing moves",
+            pg.evaluate(gap_at) is None and count(f"{TAB}.lifted") == 0 and count(".dragghost") == 0 and moving in ws_tabs("w2"),
+        )
+        press_row(n(f"{TAB}[data-tabid='{moving}']"))
+        point(n("#ws"), 0.5, 0.5)
+        pg.mouse.up()
+        check("W10h a tab let go outside the sidebar stays where it was", moving in ws_tabs("w2") and count(".dragghost") == 0)
+        n(f"{TAB}[data-tabid='t1']").click()
+        check("W10i a plain click still selects a tab", cur() == "t1")
+        # A release after a drag lands on the gap, not the row it left, except after Esc: W10k.
+        order = ws_tabs("w1")
+        start = n(f"{TAB}[data-tabid='t2']").bounding_box()
+        press_row(n(f"{TAB}[data-tabid='t2']"))
+        pg.keyboard.press("Escape")
+        pg.mouse.move(start["x"] + 30, start["y"] + start["height"] / 2)
+        pg.mouse.up()
+        check("W10k Esc and a release over the row it left select nothing and move nothing", cur() == "t1" and ws_tabs("w1") == order, cur())
+        last_ws = snap()["wss"][-1]["id"]
+        mouse_drag(n(f"{TAB}[data-tabid='t2']"), n("#wsNew"), 2.5)
+        check("W10l a tab let go below the rows goes to the end of the last workspace", ws_tabs(last_ws)[-1] == "t2", str(ws_tabs(last_ws)))
+        after_t2 = order[order.index("t2") + 1 :]
+        cmd(pg, "tab.move", {"id": "t2", "ws": "w1", "before": after_t2[0] if after_t2 else None})
         reply["answers"] = iter(["home"])
         pg.click("#wsNew")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
