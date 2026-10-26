@@ -119,6 +119,16 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: []) == nil)
     }
 
+    // The lifted row takes no space: the slot before it is the slot after it, so the gap opens
+    // where the row was and nothing moves.
+    @Test func theGapBeforeTheLiftedRowIsTheGapAfterIt() {
+        let (groups, tabs) = layout()
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[2].key), lifted: tabs[2].key, in: groups) == .beforeTab(tabs[3].key))
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[4].key), lifted: tabs[4].key, in: groups) == .endOfWorkspace(groups[1].id))
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[0].key), lifted: tabs[2].key, in: groups) == .beforeTab(tabs[0].key))
+        #expect(SidebarModel.gapSlot(nil, lifted: tabs[2].key, in: groups) == nil)
+    }
+
     @Test func unknownTargetsGiveNoSlot() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(TabKey()), lowerHalf: false, in: groups) == nil)

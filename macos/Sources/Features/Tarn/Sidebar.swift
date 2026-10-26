@@ -49,8 +49,18 @@ final class SidebarModel: ObservableObject {
 
     @Published private(set) var groups: [Group] = []
 
-    /// Where a drop in progress would land; the rows draw a line there.
+    /// Where a drop in progress would land: a workspace drag draws a line there, a tab drag
+    /// opens a gap.
     @Published var dropSlot: SidebarDropSlot?
+
+    /// The tab of this window being dragged: its row takes no space while the gap stands in.
+    @Published private(set) var liftedTab: TabKey?
+
+    /// The height of the lifted row, which the gap takes.
+    private(set) var liftedHeight: CGFloat = 0
+
+    /// The slot the gap stands in, only while a tab of this window is dragged.
+    var gapSlot: SidebarDropSlot? { liftedTab == nil ? nil : dropSlot }
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -466,11 +476,24 @@ final class SidebarModel: ObservableObject {
     /// A drag is over a row or header. True when the drop would do something: a payload from
     /// another window shows no line, as its drop is refused.
     func dragOver(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
-        let slot = isOwn(kind, value: value)
+        var slot = isOwn(kind, value: value)
             ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
             : nil
-        if dropSlot != slot { dropSlot = slot }
+        if let liftedTab {
+            slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
+            // The rows slide apart; a pointer that leaves the rows keeps the gap where it is.
+            if let slot, slot != dropSlot { withAnimation(Motion.fold) { dropSlot = slot } }
+        } else if dropSlot != slot {
+            dropSlot = slot
+        }
         return slot != nil
+    }
+
+    /// A tab row of this window left the list: the gap opens where the row was, so nothing moves.
+    func dragBegan(_ tab: Tab, height: CGFloat) {
+        liftedHeight = height
+        liftedTab = tab.key
+        dropSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
     }
 
     /// The dragged tab or workspace belongs to this window.
@@ -482,16 +505,21 @@ final class SidebarModel: ObservableObject {
         }
     }
 
+    /// The pointer left a row or header. The gap of a tab drag stays until the drag ends.
     func dragExit() {
-        if dropSlot != nil { dropSlot = nil }
+        if liftedTab == nil && dropSlot != nil { dropSlot = nil }
     }
 
     /// Carries out a drop; `value` is the payload of the drag. A payload from another window
     /// is refused: moving tabs between windows is Ghostty's.
     func drop(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
-        guard let window, let id = UUID(uuidString: value),
-              let slot = Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
-        else { return false }
+        drop(kind, value: value, at: Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups))
+    }
+
+    /// Carries out a drop into `slot`; a tab drag ends with its gap closed and its row back.
+    func drop(_ kind: SidebarDragKind, value: String, at slot: SidebarDropSlot?) -> Bool {
+        defer { endLift() }
+        guard let window, let id = UUID(uuidString: value), let slot else { return false }
 
         switch (kind, slot) {
         case (.tab, .beforeTab(let key)):
@@ -525,11 +553,16 @@ final class SidebarModel: ObservableObject {
     /// A tab drag ended. Nobody took it and it is outside every window: the tab leaves for a
     /// window of its own.
     func dragEnded(_ tab: Tab, at screenPoint: NSPoint, accepted: Bool) {
-        dragExit()
+        endLift()
         guard !accepted, tabWindows.count > 1,
               !NSApp.windows.contains(where: { $0.isVisible && $0.frame.contains(screenPoint) })
         else { return }
         tabWindow(for: tab)?.moveTabToNewWindow(nil)
+    }
+
+    private func endLift() {
+        if liftedTab != nil { liftedTab = nil }
+        if dropSlot != nil { dropSlot = nil }
     }
 
     private func tab(withKey key: TabKey) -> Tab? {
@@ -786,8 +819,10 @@ struct Sidebar: View {
                         // The rail has no headers, so it lists every tab, folded or not.
                         ForEach(model.groups) { group in
                             ForEach(group.tabs) { tab in
+                                TabGap(model: model, slot: .beforeTab(tab.key))
                                 SidebarRow(model: model, tab: tab, isCompact: true)
                             }
+                            TabGap(model: model, slot: .endOfWorkspace(group.id))
                         }
                     }
                 }
@@ -809,9 +844,11 @@ struct Sidebar: View {
                                 ForEach(model.groups) { group in
                                     WorkspaceHeader(model: model, group: group)
                                     ForEach(visibleTabs(of: group)) { tab in
+                                        TabGap(model: model, slot: .beforeTab(tab.key))
                                         SidebarRow(model: model, tab: tab, isCompact: false)
                                             .transition(.opacity)
                                     }
+                                    TabGap(model: model, slot: .endOfWorkspace(group.id))
                                 }
                             }
                             // Only a fold or unfold animates: a title change or a reorder keeps
@@ -870,6 +907,28 @@ struct Sidebar: View {
     private var newTabButton: some View {
         SidebarButton(systemName: "plus", label: "New Tab") {
             model.newTab()
+        }
+    }
+}
+
+/// The space a dragged tab lands in, one row high, as in Warp. It takes the drop itself, so a
+/// pointer over it keeps the slot instead of closing the gap.
+private struct TabGap: View {
+    @ObservedObject var model: SidebarModel
+    let slot: SidebarDropSlot
+
+    var body: some View {
+        if model.gapSlot == slot {
+            Color.clear
+                .frame(height: model.liftedHeight)
+                .overlay(
+                    SidebarInteraction(
+                        onClick: {},
+                        dragOver: { kind, _, _ in kind == .tab },
+                        dragExit: {},
+                        drop: { kind, value, _ in model.drop(kind, value: value, at: slot) }
+                    )
+                )
         }
     }
 }
@@ -933,27 +992,25 @@ private struct SidebarRow: View {
                 scheduleCard()
             }
             .help(isCompact ? tab.title : "")
-            .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeTab(tab.key)) }
             .overlay(alignment: .bottom) { dropLine(endsHere) }
             .padding(.vertical, Sidebar.rowGap / 2)
             .padding(.horizontal, isCompact ? 0 : Sidebar.listInset)
             .overlay(interaction)
+            // The lifted row takes no space but stays: its view owns the drag until it ends.
+            .frame(height: isLifted ? 0 : nil, alignment: .top)
+            .clipped()
+            .opacity(isLifted ? 0 : 1)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(rows == .wide && !folder.isEmpty ? "\(tab.title), \(folder)" : tab.title)
             .accessibilityAddTraits(tab.isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { model.select(tab) }
     }
 
-    /// The drop line goes under the last tab of a workspace dropped at its end, and under the
-    /// last tab of the last workspace for a drop after every workspace.
+    private var isLifted: Bool { model.liftedTab == tab.key }
+
+    /// A workspace dropped after every workspace draws its line under the last tab.
     private var endsHere: Bool {
-        let group: SidebarModel.Group?
-        switch model.dropSlot {
-        case .endOfWorkspace(let id): group = model.groups.first { $0.id == id }
-        case .end: group = model.groups.last
-        default: group = nil
-        }
-        return group?.tabs.last?.key == tab.key
+        model.dropSlot == .end && model.groups.last?.tabs.last?.key == tab.key
     }
 
     private var interaction: some View {
@@ -974,6 +1031,7 @@ private struct SidebarRow: View {
             drop: { kind, value, lowerHalf in
                 model.drop(kind, value: value, over: .tab(tab.key), lowerHalf: lowerHalf)
             },
+            dragBegan: { height in model.dragBegan(tab, height: height) },
             dragEnded: { point, accepted in model.dragEnded(tab, at: point, accepted: accepted) },
             // The close button of an expanded row sits in its first 22 points after the inset.
             excludedLeading: isCompact ? 0 : Sidebar.listInset + 22

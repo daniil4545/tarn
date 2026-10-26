@@ -90,6 +90,13 @@ extension SidebarModel {
     private nonisolated static func slot(after index: Int, in groups: [Group]) -> SidebarDropSlot {
         groups[safe: index + 1].map { .beforeWorkspace($0.workspace.id) } ?? .end
     }
+
+    /// The slot the gap shows while `lifted` is dragged. The lifted row takes no space, so
+    /// the slot before it is the slot after it: one gap, not two that look the same.
+    nonisolated static func gapSlot(_ slot: SidebarDropSlot?, lifted: TabKey, in groups: [Group]) -> SidebarDropSlot? {
+        guard slot == .beforeTab(lifted) else { return slot }
+        return dropSlot(dragging: .tab, over: .tab(lifted), lowerHalf: true, in: groups)
+    }
 }
 
 /// The AppKit layer over a sidebar row or header: it owns left clicks, drags out of the row,
@@ -103,6 +110,8 @@ struct SidebarInteraction: NSViewRepresentable {
     var dragOver: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
     var dragExit: () -> Void
     var drop: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
+    /// A drag out of this view began; the height is the view's own.
+    var dragBegan: (_ height: CGFloat) -> Void = { _ in }
     /// The drag ended at a screen point; true when somebody took it.
     var dragEnded: (_ screenPoint: NSPoint, _ accepted: Bool) -> Void = { _, _ in }
     /// Strips at the sides that stay clickable for SwiftUI buttons below.
@@ -126,6 +135,7 @@ struct SidebarInteraction: NSViewRepresentable {
         view.dragOver = dragOver
         view.dragExit = dragExit
         view.drop = drop
+        view.dragBegan = dragBegan
         view.dragEnded = dragEnded
         view.excludedLeading = excludedLeading
         view.excludedTrailing = excludedTrailing
@@ -138,6 +148,7 @@ struct SidebarInteraction: NSViewRepresentable {
         var dragOver: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
         var dragExit: () -> Void = {}
         var drop: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
+        var dragBegan: (CGFloat) -> Void = { _ in }
         var dragEnded: (NSPoint, Bool) -> Void = { _, _ in }
         var excludedLeading: CGFloat = 0
         var excludedTrailing: CGFloat = 0
@@ -222,6 +233,10 @@ struct SidebarInteraction: NSViewRepresentable {
 
         func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
             .move
+        }
+
+        func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+            dragBegan(bounds.height)
         }
 
         func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {

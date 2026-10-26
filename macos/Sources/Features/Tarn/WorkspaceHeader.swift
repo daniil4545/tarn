@@ -74,11 +74,9 @@ struct WorkspaceHeader: View {
         .accessibilityAction { model.toggleFold(group) }
     }
 
-    /// The drop line goes under a header only when nothing else of the workspace is shown.
+    /// A workspace dropped after every workspace draws its line under a folded last header.
     private var endsHere: Bool {
-        guard group.workspace.collapsed else { return false }
-        return model.dropSlot == .endOfWorkspace(group.workspace.id)
-            || (model.dropSlot == .end && model.groups.last?.id == group.id)
+        group.workspace.collapsed && model.dropSlot == .end && model.groups.last?.id == group.id
     }
 }
 
