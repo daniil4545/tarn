@@ -100,6 +100,12 @@ struct ViewerPathsTests {
         #expect(target == OpenTarget(path: "/work/app/a:12", line: nil))
     }
 
+    @Test func trailingPeriodOrCommaIsDroppedOnlyForAnExistingShorterName() {
+        #expect(resolve("docs/a.md.") == OpenTarget(path: "/work/app/docs/a.md.", line: nil))
+        #expect(resolve("docs/a.md.,", existing: ["/work/app/docs/a.md"]) == OpenTarget(path: "/work/app/docs/a.md", line: nil))
+        #expect(resolve("file:///tmp/x.md.", existing: ["/tmp/x.md"]) == OpenTarget(path: "/tmp/x.md", line: nil))
+    }
+
     @Test func relativePathWithoutCwdIsNotResolved() {
         #expect(resolve("a.md", cwd: nil) == nil)
     }
