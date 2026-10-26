@@ -48,7 +48,7 @@ Labels follow the canon: `waiting` and not `seen` is shown as "done, not seen"; 
 
 ## Drop marks
 
-`dnd.js` draws one `.drop` element in `#ws`: a 3 px bar in the system accent (`--sys-accent`) at the cut between the dragged window and what stays (the middle of the target for a half, the top edge of the content for a drop into a viewer's tabs). A refused drop has no bar: the element holds a gray chip with the reason. In the sidebar a tab over a workspace header frames that header (`dropmark`): the tab goes to the end of the workspace. A tab over a row, and a workspace move, draw `wsline`, a 3 px line in the system accent where it lands: a tab before a row in its upper half, after it in its lower half. Both in the system accent.
+`dnd.js` draws one `.drop` element in `#ws`: a 3 px bar in the system accent (`--sys-accent`) at the cut between the dragged window and what stays (the middle of the target for a half, the top edge of the content for a drop into a viewer's tabs). A refused drop has no bar: the element holds a gray chip with the reason. In the sidebar a dragged tab row gets `lifted` (hidden) and a solid copy (`dragghost`) follows the pointer; a `dropgap` of the row's height stands where it lands and grows open in 150 ms while the old one closes: before a row in its upper half, after it in its lower half, at the end of a workspace over its header. A workspace move draws `wsline`, a 3 px line in the system accent where it lands.
 
 ## Config
 

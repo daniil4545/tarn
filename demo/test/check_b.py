@@ -478,25 +478,69 @@ def run(base):
         check(
             "W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order)
         )
+        n(f"{TAB}[data-tabid='t4']").wait_for()
+        lifted_height = n(f"{TAB}[data-tabid='t4']").bounding_box()["height"]
         dt = start_drag(n(f"{TAB}[data-tabid='t4']").first)
-        row = n(f"{TAB}[data-tabid='t1']").bounding_box()
-        for frac, edge, name in ((0.25, row["y"], "top"), (0.75, row["y"] + row["height"], "bottom")):
+        pg.wait_for_selector(f"{TAB}.lifted", state="attached")
+        place = pg.evaluate(
+            "() => { const r = document.querySelector('.tab.lifted'), g = r.nextElementSibling;"
+            " return {lifted: r.dataset.tabid, gap: g.className, h: g.getBoundingClientRect().height,"
+            " shown: r.getBoundingClientRect().height}; }"
+        )
+        check(
+            "W10d a dragged tab leaves the list and a gap of its height stays in its place",
+            place["lifted"] == "t4" and place["gap"] == "dropgap" and abs(place["h"] - lifted_height) < 1 and place["shown"] == 0,
+            str(place),
+        )
+        # The open gap, by where it stands: the tab id after it, or the header or button that ends the workspace.
+        gap_at = (
+            "() => { const g = document.querySelectorAll('.dropgap:not(.closing)'); if (g.length !== 1) return null;"
+            " let n = g[0].nextElementSibling; while (n && n.matches('.lifted, .dropgap')) n = n.nextElementSibling;"
+            " let p = g[0].previousElementSibling; while (p && p.matches('.lifted, .dropgap')) p = p.previousElementSibling;"
+            " return {next: n.dataset.tabid || n.dataset.wsh || n.id, prev: p.dataset.tabid || p.dataset.wsh}; }"
+        )
+        moved = []
+        for x, y in ((40, 60), (90, 150)):
+            pg.dispatch_event(".sbtop", "dragover", {"dataTransfer": dt, "clientX": x, "clientY": y})
+            moved.append(n(".dragghost").bounding_box() if count(".dragghost") == 1 else None)
+        check(
+            "W10g a solid copy of the row follows the pointer",
+            None not in moved and (moved[1]["x"] - moved[0]["x"], moved[1]["y"] - moved[0]["y"]) == (50, 90),
+            str(moved),
+        )
+        for frac, side, name in ((0.25, "next", "top"), (0.75, "prev", "bottom")):
+            row = n(f"{TAB}[data-tabid='t1']").bounding_box()
             n(f"{TAB}[data-tabid='t1']").dispatch_event("dragover", {"dataTransfer": dt, "clientX": row["x"] + 20, "clientY": row["y"] + row["height"] * frac})
-            line = n(".wsline").bounding_box() if count(".wsline") == 1 else None
+            at = pg.evaluate(gap_at)
             check(
-                f"W10a a tab dragged over the {name} half of a row draws one line at its {name} edge, no frame",
-                line is not None and abs(line["y"] + 1.5 - edge) <= 3 and count(".dropmark") == 0,
-                str(line),
+                f"W10a a tab dragged over the {name} half of a row opens the gap at its {name} edge, no line",
+                at is not None and at[side] == "t1" and count(".wsline") == 0,
+                str(at),
             )
+        pg.wait_for_timeout(300)
+        grown = pg.evaluate("document.querySelector('.dropgap:not(.closing)').getBoundingClientRect().height")
+        check("W10e the rows slide apart: the new gap grows to the row height", abs(grown - lifted_height) < 1, str(grown))
+        row = n(f"{TAB}[data-tabid='t1']").bounding_box()
         n(f"{TAB}[data-tabid='t1']").dispatch_event("drop", {"dataTransfer": dt, "clientX": row["x"] + 20, "clientY": row["y"] + row["height"] * 0.75})
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
         order = ws_tabs("w1")
         check("W10b a drop in the lower half puts the tab after the row", order.index("t4") == order.index("t1") + 1, str(order))
-        dt = start_drag(n(f"{TAB}[data-tabid='t4']").first)
+        dt = start_drag(n(f"{TAB}[data-tabid='{ws_tabs('w2')[0]}']").first)
+        pg.wait_for_selector(f"{TAB}.lifted", state="attached")
         head = n(".wsh[data-wsh='w1']").bounding_box()
         n(".wsh[data-wsh='w1']").dispatch_event("dragover", {"dataTransfer": dt, "clientX": head["x"] + 20, "clientY": head["y"] + head["height"] / 2})
-        check("W10c a tab over a workspace header frames the header, no line", count(".wsh.dropmark") == 1 and count(".wsline") == 0)
+        at = pg.evaluate(gap_at)
+        last = ws_tabs("w1")[-1]
+        check(
+            "W10c a tab over a workspace header opens the gap at the end of that workspace, no frame, no line",
+            at is not None and at["prev"] == last and count(".dropmark") == 0 and count(".wsline") == 0,
+            str(at),
+        )
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+        check(
+            "W10f the gap and the lifted row go away and the row comes back when the drag ends",
+            count(".dropgap") == 0 and count(f"{TAB}.lifted") == 0 and count(".dragghost") == 0,
+        )
         reply["answers"] = iter(["home"])
         pg.click("#wsNew")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
