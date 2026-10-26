@@ -218,9 +218,9 @@ final class WorkspaceRegistry {
 
     /// Windows of the changed sets save their state again, and observers redraw.
     ///
-    /// The sidebar redraws by calling `sync`, and `sync` publishes: a post that is delivered on the
-    /// spot would re-enter `publish` through every redraw until the stack ends (a window close in a
-    /// window with several workspaces did it). A publish made while observers run only asks for one
+    /// The sidebar used to redraw by calling `sync`, and `sync` publishes: a post delivered on the
+    /// spot re-entered `publish` through every redraw until the stack ended (a window close in a
+    /// window with several workspaces did it). The sidebar only reads now; this stays as a net. A publish made while observers run only asks for one
     /// more round, and the rounds are capped.
     func publish(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }

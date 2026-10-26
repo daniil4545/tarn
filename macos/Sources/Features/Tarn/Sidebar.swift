@@ -75,6 +75,9 @@ final class SidebarModel: ObservableObject {
     weak var window: NSWindow? {
         didSet {
             observeWindowClose()
+            // A new window is an event the registry may not have heard of yet; this is the one
+            // place the sidebar asks it to look, and a redraw never reaches it.
+            WorkspaceRegistry.shared.sync()
             refresh()
         }
     }
@@ -170,9 +173,9 @@ final class SidebarModel: ObservableObject {
     }
 
     func refresh() {
-        // The registry follows Ghostty's tab order first, so the runs below are current.
+        // Read only: the registry follows Ghostty by its own observers. A redraw that asked it to
+        // look again made `sync` -> `publish` -> redraw -> `sync` a loop.
         let registry = WorkspaceRegistry.shared
-        registry.sync()
         guard let window else {
             if !groups.isEmpty { groups = [] }
             return
