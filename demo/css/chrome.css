@@ -62,9 +62,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar.rail .tab[data-tabid] { margin: 0; width: 34px; height: 30px; justify-content: center; position: relative; padding: 0; }
 .sidebar.rail .tab .dot { position: absolute; top: 5px; right: 5px; }
 .sidebar.rail .sep { width: 24px; margin: 6px auto; }
-/* sidebar drop line and the workspace or row frame: the system accent, as in a macOS list */
+/* sidebar drop line where a row or workspace lands: the system accent, as in a macOS list */
 .wsline { position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 1px; background: var(--sys-accent); pointer-events: none; }
-.dropmark { box-shadow: inset 0 0 0 2px var(--sys-accent); background: color-mix(in srgb, var(--sys-accent) 10%, transparent); }
 .ctx { position: fixed; z-index: 20; min-width: 200px; background: var(--menu); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
 .ctx button { display: block; width: 100%; text-align: left; background: none; border: 0; padding: 5px 10px; border-radius: 5px; font-size: 13px; }
 .ctx button:hover { background: var(--line); }
