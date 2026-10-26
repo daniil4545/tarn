@@ -54,4 +54,16 @@ struct KeyReferenceTests {
         #expect(fixed.contains("⌘B") && !fixed.contains("⌥⌘B") && !fixed.contains("⇧⌘E"))
         #expect(viewer?.rows.first { $0.fixedKeys == "⌘B" }?.label.contains("Toggle File Viewer") == true)
     }
+
+    @Test func helpStatesTheRuleOfAPathClick() {
+        let rule = KeyReference.pathClickRule
+        #expect(rule.contains("slash") && rule.contains("Cmd+click"))
+        #expect(rule.contains("bare file name") && rule.contains("not a link"))
+        #expect(rule.contains("docs/spec.md:12"))
+    }
+
+    @Test func closeRowNamesWhatTheLastPaneAndTheLastTabClose() {
+        let row = Self.ghosttyRows.first { $0.action == "close_surface" }
+        #expect(row?.label == "Close the pane; the last pane closes the tab, the last tab the window")
+    }
 }

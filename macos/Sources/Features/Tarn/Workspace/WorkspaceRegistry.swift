@@ -26,6 +26,10 @@ final class WorkspaceRegistry {
     private var entries: [ObjectIdentifier: Entry] = [:]
     /// Windows that posted `willClose`; AppKit may still list them in their tab group.
     private let closing = NSHashTable<NSWindow>.weakObjects()
+    /// `publish` is delivering its notification; a nested publish only asks for another round.
+    private var isPosting = false
+    private var repost = false
+    private static let maxRounds = 3
     /// Our own moves are under way: ignore the notifications they cause.
     private var isBusy = false
     /// Windows raised by `moveNatively`; their key notifications arrive after `isBusy` is over.
@@ -40,8 +44,13 @@ final class WorkspaceRegistry {
 
     private init() {
         let center = NotificationCenter.default
-        center.addObserver(forName: .terminalTabsDidChange, object: nil, queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.sync() }
+        center.addObserver(forName: .terminalTabsDidChange, object: nil, queue: .main) { [weak self] note in
+            // Delivered synchronously on the main thread. Our own `publish` posts with `self` as the
+            // object: following it would re-enter `sync` once per level until the stack ends.
+            MainActor.assumeIsolated {
+                guard let self, note.object as AnyObject? !== self else { return }
+                self.sync()
+            }
         }
         center.addObserver(forName: NSWindow.didBecomeKeyNotification, object: nil, queue: .main) { [weak self] note in
             MainActor.assumeIsolated {
@@ -105,7 +114,8 @@ final class WorkspaceRegistry {
             guard seen.insert(ObjectIdentifier(window)).inserted else { continue }
             let windows = group(of: window)
             seen.formUnion(windows.map(ObjectIdentifier.init))
-            let selected = window.tabGroup?.selectedWindow ?? window
+            // `tabGroup` makes AppKit build a tab bar for a lone window (startup cost); a lone tab is selected.
+            let selected = windows.count > 1 ? (window.tabGroup?.selectedWindow ?? window) : window
             groups.append(.init(tabs: windows.map(key(for:)), selected: key(for: selected)))
         }
         return groups
@@ -207,12 +217,32 @@ final class WorkspaceRegistry {
     }
 
     /// Windows of the changed sets save their state again, and observers redraw.
-    private func publish(_ ids: Set<UUID>) {
+    ///
+    /// The sidebar used to redraw by calling `sync`, and `sync` publishes: a post delivered on the
+    /// spot re-entered `publish` through every redraw until the stack ended (a window close in a
+    /// window with several workspaces did it). The sidebar only reads now; this stays as a net. A publish made while observers run only asks for one
+    /// more round, and the rounds are capped.
+    func publish(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
         for entry in entries.values where ids.contains(book.set(of: entry.key)?.id ?? UUID()) {
             entry.window?.invalidateRestorableState()
         }
-        NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
+        guard !isPosting else {
+            repost = true
+            return
+        }
+        isPosting = true
+        defer { isPosting = false }
+        var rounds = 0
+        repeat {
+            repost = false
+            rounds += 1
+            NotificationCenter.default.post(name: .terminalTabsDidChange, object: self)
+        } while repost && rounds < Self.maxRounds
+        if repost {
+            Self.logger.error("workspace: sets still changing after \(Self.maxRounds, privacy: .public) redraws")
+        }
+        repost = false
     }
 
     // MARK: Native moves

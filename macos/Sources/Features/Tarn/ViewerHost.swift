@@ -379,11 +379,18 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
-    /// A viewer dropped outside every window opens in a new window.
+    /// A viewer dropped outside every window opens in a new window at the drop point. The window
+    /// comes from Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out: it
+    /// sets the position when the window is presented, after which nothing cascades it back to the
+    /// first screen, and keeps it on the screen that holds the point (`constrainToScreen`).
     private func detach(_ id: UUID, at point: NSPoint) {
-        guard let pane = panes[id], let controller else { return }
-        let created = TerminalController.newWindow(controller.ghostty)
-        created.window?.setFrameTopLeftPoint(point)
+        guard let pane = panes[id], let controller, let app = controller.ghostty.app else { return }
+        let created = TerminalController.newWindow(
+            controller.ghostty,
+            tree: SplitTree<Ghostty.SurfaceView>(view: Ghostty.SurfaceView(app, baseConfig: nil)),
+            position: point,
+            confirmUndo: false,
+            inheritBackgroundOpacity: controller.isBackgroundOpaque)
         let moved = created.viewerHost.makeViewer(
             root: pane.model.tree.root, beside: created.viewerHost.blockLeaf, edge: .right, share: 0.6)
         moved.model.absorb(pane.model)

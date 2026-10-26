@@ -1,0 +1,89 @@
+import AppKit
+import Testing
+@testable import Ghostty
+
+/// Cmd+W with several tabs in several workspaces closes the pane's tab only (D7, S15, S16), and
+/// closing windows does not loop through the workspace registry.
+@Suite(.serialized)
+@MainActor
+struct CloseTabTests {
+
+    /// The visible tabs of the test's own window: other suites run in parallel with their own windows.
+    private func live(_ first: NSWindow) -> [NSWindow] {
+        (first.tabGroup?.windows ?? [first]).filter(\.isVisible)
+    }
+
+    private func wait(_ condition: () -> Bool) async throws {
+        let deadline = ContinuousClock.now + .seconds(5)
+        while !condition(), ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+    }
+
+    /// A redraw that publishes again (the sidebar calls `sync`, `sync` publishes) must not stack
+    /// one post on another: the posts run one after the other, a few at most.
+    @Test func aRedrawThatPublishesAgainDoesNotNestPosts() {
+        let registry = WorkspaceRegistry.shared
+        var depth = 0
+        var deepest = 0
+        var posts = 0
+        let token = NotificationCenter.default.addObserver(forName: .terminalTabsDidChange, object: registry, queue: nil) { _ in
+            MainActor.assumeIsolated {
+                depth += 1
+                posts += 1
+                deepest = max(deepest, depth)
+                registry.publish([UUID()])
+                depth -= 1
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(token) }
+        registry.publish([UUID()])
+        #expect(deepest == 1, "posts nested \(deepest) deep")
+        #expect(posts == 3, "a publish that never settles stops after 3 rounds, got \(posts)")
+    }
+
+    /// The first-day report: four tabs, Cmd+W on the 4th and then on the 3rd took the app down; the test goes on to the last tab.
+    @Test func cmdWOnTheFourthAndThirdTabClosesOnlyThem() async throws {
+        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
+        let registry = WorkspaceRegistry.shared
+        let first = TerminalController.newWindow(app)
+        let firstWindow = try #require(first.window)
+        try await wait { firstWindow.isVisible }
+        registry.sync()
+
+        // Tabs in tab order: Default, Default, B, B. Each new tab lands after its own workspace, so
+        // Ghostty's native `move_tab` never runs (it asserts inside AppKit in a hidden test host).
+        let defaultID = try #require(registry.workspace(of: firstWindow)?.id)
+        registry.newTab(in: defaultID, from: firstWindow)
+        try await wait { live(firstWindow).count == 2 }
+        let second = try #require(firstWindow.tabGroup?.windows.last)
+        #expect(registry.createWorkspace(named: "B", from: second))
+        try await wait { live(firstWindow).count == 3 }
+        let third = try #require(firstWindow.tabGroup?.windows.last)
+        let bID = try #require(registry.workspace(of: third)?.id)
+        registry.newTab(in: bID, from: third)
+        try await wait { live(firstWindow).count == 4 }
+        #expect(live(firstWindow).count == 4)
+        #expect(Set(live(firstWindow).compactMap { $0.tabGroup?.windows.count }) == [4])
+
+        // Cmd+W: the menu item "Close" sends `close:` to the window controller of the selected tab.
+        for expected in [3, 2] {
+            let tabs = live(firstWindow)
+            let target = try #require(tabs.last { registry.workspace(of: $0)?.name == "B" } ?? tabs.last)
+            target.makeKeyAndOrderFront(nil)
+            let controller = try #require(target.windowController as? TerminalController)
+            controller.close(self)
+            // A shell that has not settled yet asks "Close Tab?"; the user answers Close.
+            try await wait {
+                if let sheet = target.attachedSheet { target.endSheet(sheet, returnCode: .alertFirstButtonReturn) }
+                return live(firstWindow).count == expected
+            }
+            #expect(live(firstWindow).count == expected)
+            #expect(Set(live(firstWindow).compactMap { $0.tabGroup?.windows.count }) == [expected])
+        }
+        for window in live(firstWindow) {
+            (window.windowController as? TerminalController)?.closeWindowImmediately()
+        }
+        try await wait { live(firstWindow).isEmpty }
+    }
+}

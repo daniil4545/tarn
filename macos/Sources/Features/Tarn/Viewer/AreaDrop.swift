@@ -83,6 +83,8 @@ enum AreaDrop {
     static let strip: CGFloat = 24
     static let tabBar: CGFloat = 32
     static let middle: CGFloat = 0.15
+    /// Thickness of the line that shows where the new pane's border will be.
+    static let lineWidth: CGFloat = 3
     static let selfRefusal = "Drop on another pane"
     static let splitRefusal = "Split terminals stay together: drag the viewer to the block edge"
 
@@ -134,6 +136,24 @@ enum AreaDrop {
         }
         return AreaDropTarget(
             plan: refusal == nil ? .beside(leaf.id, edge) : nil, frame: half(edge, of: rect), refusal: refusal)
+    }
+
+    /// The line a drop shows, centered on the border of the new pane: the inner edge of the space it
+    /// will take (`frame` of the target). A drop into a viewer has no new border: the line lies under
+    /// the viewer's tab bar, where the files are added.
+    static func line(for plan: AreaPlan, frame: CGRect) -> CGRect? {
+        let width = lineWidth
+        switch plan {
+        case let .half(edge), let .quarter(_, edge), let .beside(_, edge):
+            switch edge {
+            case .left: return CGRect(x: frame.maxX - width / 2, y: frame.minY, width: width, height: frame.height)
+            case .right: return CGRect(x: frame.minX - width / 2, y: frame.minY, width: width, height: frame.height)
+            case .top: return CGRect(x: frame.minX, y: frame.maxY - width / 2, width: frame.width, height: width)
+            case .bottom: return CGRect(x: frame.minX, y: frame.minY - width / 2, width: frame.width, height: width)
+            }
+        case .into:
+            return CGRect(x: frame.minX, y: frame.minY + tabBar - width / 2, width: frame.width, height: width)
+        }
     }
 
     /// The tab bar of a viewer and a box in its middle mean "into this viewer".

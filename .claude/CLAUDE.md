@@ -77,7 +77,11 @@ Project profile for `~/.claude/docs/pipeline.md`:
 
 ## Critical invariants
 
-- `src/` is not modified; Swift changes outside `macos/Sources/Features/Tarn/` only at insertion points listed in `docs/architecture.md`.
+- Boundary with Ghostty (user decision 2026-10-25):
+  1. The Zig core (`src/`, `include/`, `build.zig`) is never modified.
+  2. Ghostty's Swift files change only for identity (names, plist, icons, updater off) and for insertion points: a call into our code with no logic of its own, each listed in `docs/architecture.md`.
+  3. Ghostty's behavior is changed by our layer on top (overlay, subclass, delegate, config), never by editing the logic of its file.
+  4. When a layer on top cannot do it, the user decides case by case, with the reason the layer fails.
 - No network calls, telemetry or accounts in our code.
 - Ported code keeps its license header and an entry in `THIRD_PARTY.md`; no GPL, AGPL, BSL or unlicensed code.
 - `hook.sh` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing. The one exception is `permission.sh` (the `PermissionRequest` hook), which waits for the card while the app holds its connection (`docs/spec.md` 2.3).

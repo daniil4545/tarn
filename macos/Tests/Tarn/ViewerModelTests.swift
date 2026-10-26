@@ -629,6 +629,24 @@ struct ViewerClickAndKeyTests {
         #expect(ViewerRouter.decide(dir + "/a.md", cwd: nil) == expected)
     }
 
+    /// The forms Ghostty's link matcher gives a click (`src/config/url.zig`): a path with a slash,
+    /// with an optional `:line[:column]`. `$VAR/` forms are matched by Ghostty but not expanded here.
+    @Test func everyFormWithASlashOpensTheFile() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try FileManager.default.createDirectory(atPath: dir + "/docs/sub", withIntermediateDirectories: true)
+        try "x".write(toFile: dir + "/docs/spec.md", atomically: true, encoding: .utf8)
+        try "x".write(toFile: dir + "/docs/sub/b.go", atomically: true, encoding: .utf8)
+        let spec = dir + "/docs/spec.md"
+        #expect(ViewerRouter.decide("docs/spec.md", cwd: dir) == .open(OpenTarget(path: spec, line: nil)))
+        #expect(ViewerRouter.decide("./docs/spec.md", cwd: dir) == .open(OpenTarget(path: spec, line: nil)))
+        #expect(ViewerRouter.decide("docs/spec.md:12", cwd: dir) == .open(OpenTarget(path: spec, line: 12)))
+        #expect(ViewerRouter.decide("./docs/spec.md:12:5", cwd: dir) == .open(OpenTarget(path: spec, line: 12)))
+        #expect(ViewerRouter.decide(spec + ":3", cwd: nil) == .open(OpenTarget(path: spec, line: 3)))
+        #expect(ViewerRouter.decide("../spec.md", cwd: dir + "/docs/sub") == .open(OpenTarget(path: spec, line: nil)))
+        #expect(ViewerRouter.decide("sub/b.go:7", cwd: dir + "/docs") == .open(OpenTarget(path: dir + "/docs/sub/b.go", line: 7)))
+    }
+
     @Test func refusalsNameTheirReason() throws {
         let dir = try folder()
         defer { try? FileManager.default.removeItem(atPath: dir) }
