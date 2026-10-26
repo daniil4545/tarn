@@ -105,11 +105,24 @@ final class ViewerWebView: WKWebView {
             return true
         }
         guard event.type == .keyDown,
-              let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
-              let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags)
+              let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self)
         else { return super.performKeyEquivalent(with: event) }
-        onCommand?(command)
-        return true
+        if let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags) {
+            onCommand?(command)
+            return true
+        }
+        if forwardToTerminal(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// Runs a tab or window keybind (Cmd+1 by default) on the focused terminal of this window,
+    /// as if that terminal held the keyboard (`ViewerForwardKeys`).
+    private func forwardToTerminal(_ event: NSEvent) -> Bool {
+        guard let config = (NSApp.delegate as? AppDelegate)?.ghostty.config,
+              let action = ViewerForwardKeys.action(for: event, config: config),
+              let surface = (window?.windowController as? BaseTerminalController)?.focusedSurface?.surfaceModel
+        else { return false }
+        return surface.perform(action: action)
     }
 
     /// The menu item "Close" (Cmd+W) closes the active file tab, not the terminal behind the pane.
