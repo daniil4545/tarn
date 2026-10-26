@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Ghostty
@@ -68,5 +69,44 @@ struct AgentProcessCacheTests {
         await MainActor.run {}
         try? await Task.sleep(nanoseconds: 50_000_000)
         #expect(AgentProcessCache.agent(pid: 5) == "codex")
+    }
+
+    /// The fix of T-106 is the call in `SidebarModel.makeTab`: five refreshes of a model that
+    /// lists a real controller read its shell once. With `AgentProcess.agent` in `makeTab` the
+    /// cache sees no read at all and the test fails.
+    @Test func refreshesInOneTurnReadTheShellOnce() async throws {
+        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
+        // Not shown: the window tests that count visible windows are not disturbed.
+        let controller = TerminalController(app)
+        let window = try #require(controller.window)
+        let model = SidebarModel()
+        model.window = window
+
+        var reads: [pid_t] = []
+        let saved = AgentProcessCache.reader
+        AgentProcessCache.reader = { pid in
+            reads.append(pid)
+            return nil
+        }
+        defer {
+            AgentProcessCache.reader = saved
+            AgentProcessCache.reset()
+            model.window = nil
+            window.close()
+        }
+
+        // The shell takes a moment to become the pty's foreground process.
+        let deadline = ContinuousClock.now + .seconds(5)
+        while reads.isEmpty, ContinuousClock.now < deadline {
+            model.refresh()
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        try #require(!reads.isEmpty, "makeTab never asked for the foreground process")
+
+        reads.removeAll()
+        AgentProcessCache.reset()
+        for _ in 0..<5 { model.refresh() }
+        #expect(!reads.isEmpty)
+        #expect(reads.count == Set(reads).count, "a pid was read twice in one turn: \(reads)")
     }
 }

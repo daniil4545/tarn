@@ -632,7 +632,8 @@ struct SidebarLayout<Content: View>: View {
                     divider
                         .zIndex(1)
 
-                    // The sidebar is narrower than its held space: the rest shows the terminal's color.
+                    // The sidebar is narrower than its held space: the rest takes the sidebar's fill, so the
+                    // edge moves with the pointer and the terminal stays where it is.
                     if shownWidth < layoutWidth {
                         sidebarFill.frame(width: layoutWidth - shownWidth).allowsHitTesting(false)
                     }
@@ -676,6 +677,8 @@ struct SidebarLayout<Content: View>: View {
                         }
                     }
                     .onHover { dividerHovered = $0 }
+                    // Most of the zone lies over the sidebar: the terminal keeps its first columns.
+                    .offset(x: -Sidebar.edgeGrabOffset)
             }
             Rectangle()
                 // The theme's accent marks the grab zone while the pointer is on it or it is dragged.
@@ -707,8 +710,13 @@ struct Sidebar: View {
     static let defaultWidth: Double = 200
     static let widthRange: ClosedRange<Double> = 120...400
     /// The width of the transparent zone over the sidebar's edge that takes the resize drag.
-    /// It straddles the edge: about half lies over the sidebar and half over the terminal.
+    /// Mostly over the sidebar: `edgeGrabOverTerminal` points of it reach the terminal.
     static let edgeGrabWidth: CGFloat = 14
+    /// How much of the zone lies over the terminal: its first column and the click or selection
+    /// that starts at the edge of a line must reach the terminal (3 pt, as Ghostty's divider takes).
+    static let edgeGrabOverTerminal: CGFloat = 3
+    /// How far the zone moves left of its centered place on the line.
+    static var edgeGrabOffset: CGFloat { (edgeGrabWidth - CGFloat(dividerWidth)) / 2 - edgeGrabOverTerminal }
     static let collapsedWidth: Double = 40
     static let dividerWidth: Double = 1
     /// The space at the sides of the list and between rows. Rows and headers pad themselves

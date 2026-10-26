@@ -119,7 +119,7 @@ enum AgentProcess {
 /// Answers of `AgentProcess.agent(pid:)` kept for the current run loop turn. Every tab window
 /// has its own sidebar model, and one tab event (a title change) makes all N of them rebuild
 /// their tabs; without this each model re-read every process, 2*N^2 reads per event
-/// (T-106). A pid read once in a turn is shared, so an event costs one read per pid. The
+/// (T-106). A pid read once in a turn is shared, so a pass costs one read per pid; an event has two passes (2*N reads, not 2*N^2). The
 /// next turn starts empty: the second refresh after a tab event and the 2 s timer see a
 /// process that was replaced by `exec`.
 @MainActor

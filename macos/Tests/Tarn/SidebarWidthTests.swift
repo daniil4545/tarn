@@ -52,7 +52,7 @@ struct SidebarWidthTests {
         let ghostty = Ghostty.App()
 
         var frames: [CGRect] = []
-        var wideHit = "none"
+        var wideHit = ""
         let drags: [Double?] = [nil, 320, 130]
         for drag in drags {
             var probe: NSView?
@@ -67,7 +67,7 @@ struct SidebarWidthTests {
             frames.append(view.convert(view.bounds, to: host))
 
             if drag == 320 {
-                wideHit = await hits(at: [250], host: host, window: window)[250] ?? "none"
+                wideHit = try #require(await hits(at: [250], host: host, window: window)[250], "the mouse event never arrived")
             }
             window.close()
         }
@@ -99,8 +99,8 @@ struct SidebarWidthTests {
         return result
     }
 
-    /// The grab zone straddles the edge and lies above both the rows under it and the
-    /// terminal view beside it.
+    /// The grab zone lies mostly over the sidebar, above the rows under it, and reaches 3 pt into
+    /// the terminal beside it; the terminal's first column keeps its clicks.
     @Test func edgeGrabZoneBeatsTheRowsAndTheTerminalNextToIt() async throws {
         let defaults = UserDefaults.standard
         defaults.removeObject(forKey: Sidebar.collapsedKey)
@@ -111,16 +111,20 @@ struct SidebarWidthTests {
         window.orderFront(nil)
         try await Task.sleep(for: .milliseconds(200))
 
-        let edge = Sidebar.defaultWidth + Sidebar.dividerWidth / 2
-        let half = Double(Sidebar.edgeGrabWidth) / 2
-        let inside = edge - half + 2
-        let outside = edge + half - 2
-        let result = await hits(at: [edge - half - 6, inside, outside, edge + half + 6], host: host, window: window)
+        // The line is x = 200..<201. The zone spans 10 pt left of it and 3 pt right of it.
+        let line = CGFloat(Sidebar.defaultWidth)
+        let divider = CGFloat(Sidebar.dividerWidth)
+        let overSidebar = line - (Sidebar.edgeGrabWidth - divider - Sidebar.edgeGrabOverTerminal)
+        let rowsX = overSidebar - 6
+        let zoneLeftX = overSidebar + 2
+        let zoneRightX = line + divider + Sidebar.edgeGrabOverTerminal - 1
+        let terminalX = line + divider + Sidebar.edgeGrabOverTerminal + 1
+        let result = await hits(at: [rowsX, zoneLeftX, zoneRightX, terminalX], host: host, window: window)
         window.close()
 
-        #expect(result[edge - half - 6] == "InteractionView", "left of the zone the rows take the click")
-        #expect(result[inside].map { !$0.contains("InteractionView") } == true, "over the sidebar: \(String(describing: result[inside]))")
-        #expect(result[outside].map { $0.contains("NSHostingView") } == true, "over the terminal: \(String(describing: result[outside]))")
-        #expect(result[edge + half + 6] == "NSView", "right of the zone the terminal takes the click")
+        #expect(result[rowsX] == "InteractionView", "left of the zone the rows take the click")
+        #expect(result[zoneLeftX].map { !$0.contains("InteractionView") } == true, "over the sidebar: \(String(describing: result[zoneLeftX]))")
+        #expect(result[zoneRightX].map { $0.contains("NSHostingView") } == true, "last point of the zone: \(String(describing: result[zoneRightX]))")
+        #expect(result[terminalX] == "NSView", "4 pt right of the line the terminal takes the click: \(String(describing: result[terminalX]))")
     }
 }
