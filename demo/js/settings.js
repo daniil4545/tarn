@@ -35,7 +35,7 @@ function themePicker(value) {
   const singles = BASE_SINGLES.map((name) => `<div class="tpair">${themeButton(name, value)}</div>`);
   const base = [...pairs, ...singles].join("");
   const rest = THEME_NAMES.filter((n) => !BASE_NAMES.has(n));
-  return `<div class="themes" id="g-theme" role="listbox" aria-label="Theme"><h5>Base themes</h5><div class="tbase">${themeButton("", value)}${base}</div><h5>All themes <span class="tcount">${rest.length}</span></h5><input type="search" id="themeFilter" class="tfilter" placeholder="Filter themes" aria-label="Filter themes"><div class="tall">${rest.map((n) => themeButton(n, value)).join("")}</div></div>`;
+  return `<div class="themes" id="g-theme" role="listbox" aria-label="Theme"><h5>Base themes</h5><div class="tbase">${themeButton("", value)}${base}</div><h5>All themes <span class="tcount">${rest.length}</span></h5><input type="search" id="themeFilter" class="tfilter" placeholder="Filter themes" aria-label="Filter themes"><div class="tall">${rest.map((n) => themeButton(n, value)).join("")}</div><p class="tnone setnote" hidden>No themes match</p></div>`;
 }
 
 function control(key) {
@@ -147,7 +147,7 @@ function refreshRow(key) {
   if (conf) conf.textContent = configLines();
 }
 
-// The theme list keeps its scroll position and filter when its row is drawn again.
+// The theme list keeps its scroll position and filter when its row is drawn again; the filter covers base themes too, as in the app.
 function keepThemeList(row) {
   const list = row.querySelector(".tall"), filter = row.querySelector("#themeFilter");
   if (!list) return null;
@@ -163,7 +163,12 @@ function keepThemeList(row) {
 
 function filterThemes(text) {
   const q = text.trim().toLowerCase();
-  root.querySelectorAll(".tall .tbtn").forEach((b) => { b.hidden = q !== "" && !b.dataset.name.includes(q); });
+  let shown = 0;
+  root.querySelectorAll(".themes .tbtn").forEach((b) => {
+    b.hidden = q !== "" && !b.dataset.name.includes(q);
+    if (!b.hidden) shown += 1;
+  });
+  root.querySelector(".tnone").hidden = shown > 0;
 }
 
 function onChange(e) {
