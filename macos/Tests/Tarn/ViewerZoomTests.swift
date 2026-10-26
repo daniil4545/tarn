@@ -25,7 +25,8 @@ struct ViewerZoomTests {
         #expect(ViewerWebView.isZoomIn(characters: characters, flags: NSEvent.ModifierFlags(rawValue: flags)) == expected)
     }
 
-    @Test func changeSavesAndResetGoesBackToOne() throws {
+    /// On the main actor: `change` posts the notification that open panes take there.
+    @Test @MainActor func changeSavesAndResetGoesBackToOne() throws {
         let suite = "tarn.tests.\(UUID().uuidString)"
         let defaults = try #require(UserDefaults(suiteName: suite))
         defer { defaults.removePersistentDomain(forName: suite) }
