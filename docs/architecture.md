@@ -182,4 +182,4 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 - Attention: the notification banner and its click were not run in a live app (the check would replace the user's control socket file); the gate, jump order, socket replies and CLI are tested. The CLI has no hook command: the plugin keeps `hook.sh`. A `tarn` earlier in `PATH` hides ours (the core appends the app folder). After `/clear` the session id is kept, so a shell notification in that surface stays suppressed.
 - Both dock-tile plugins carry the class name `DockTilePlugin`; with both apps in the Dock macOS may log "implemented in both" (not changed, not observed).
 - Not built: `docs/api/` cards.
-- CI (`.github/workflows/tarn-*.yml`) runs the hook test with the hung-app cases at 800 ms: the 3-core runner starts a process in 30-40 ms. Their 100 ms limit holds on the Mac only.
+- CI (`.github/workflows/tarn-*.yml`) runs the hook test with the hung-app cases at 800 ms: the 3-core runner starts a process in 30-40 ms. The 100 ms limit of those cases is checked on the Mac only.
