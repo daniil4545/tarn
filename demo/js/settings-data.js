@@ -45,6 +45,11 @@ export const GHOSTTY = {
 
 export const APPLIES = { restart: "Restart needed.", windows: "Applies to new windows." };
 
+export const TAB_ROWS = [
+  ["wide", "Wide", "Two lines: the task on top, then the agent, the folder and the time in its state."],
+  ["narrow", "Narrow", "One line per tab: icon, title, state dot and key."],
+];
+
 export const TAB_STYLES = [
   ["sidebar", "Sidebar", "Tabs grouped in workspaces with agent state, on the left of the window."],
   ["top", "Tabs at the top", "The native tab bar, as in Ghostty. Workspaces and agent state are not shown."],

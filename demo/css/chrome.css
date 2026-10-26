@@ -54,6 +54,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tab:hover .key { display: none; }
 .tab.add { color: var(--key); margin-top: 4px; }
 .key { font-size: 11px; color: var(--key); }
+.sbtop .grow { flex: 1; }
+.tab.wide { align-items: flex-start; padding: 5px 8px; }
+.tab.wide > .agent { margin-top: 2px; }
+.tab.wide .lines { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.tab.wide .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.tab.wide .l2 { font-size: 11px; color: var(--key); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
 .agent { width: 13px; height: 13px; flex: none; }
 .sep { height: 1px; background: var(--line); margin: 8px 4px; }

@@ -4,11 +4,14 @@ import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { isObject, load, save } from "./storage.js";
 import { flatTabs } from "./workspace.js";
+import { terminals } from "./layout.js";
 import { tabStatus, workspaceStatus, isAgentTab } from "./tab-status.js";
 import { esc } from "./esc.js";
 
 export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
+const VIEWER = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg>';
+const NEWWS = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1.5 4.5v8h13v-7H8L6.5 3.5h-5z"/><path d="M8 7.5v4M6 9.5h4"/></svg>';
 const TOGGLE = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
 
 const MIN = 120, MAX = 400;
@@ -23,6 +26,8 @@ export function startSidebar() {
   sb = document.getElementById("sidebar");
   render();
   bus.on("state:changed", ({ part }) => { if (part === "workspaces" || part === "registry") render(); });
+  bus.on("config:changed", render);
+  bus.handle("ws.prompt", newWorkspace);
   sb.addEventListener("click", onClick);
   sb.addEventListener("contextmenu", onContextMenu);
   document.addEventListener("click", (e) => { if (!e.target.closest("#ctx")) closeMenu(); });
@@ -40,7 +45,11 @@ function render() {
   sb.classList.toggle("rail", ui.rail);
   sb.style.width = ui.rail ? "" : `${ui.width}px`;
   const label = ui.rail ? "Show Sidebar" : "Hide Sidebar";
-  const top = `<div class="sbtop"><button class="ib" id="sbToggle" title="${label}" aria-label="${label}">${TOGGLE}</button><button class="ib" id="sbNew" title="New tab" aria-label="New tab">+</button></div>`;
+  const button = (id, title, glyph) => `<button class="ib" id="${id}" title="${title}" aria-label="${title}">${glyph}</button>`;
+  const viewer = button("sbViewer", "Toggle File Viewer (Cmd+B)", VIEWER);
+  const top = ui.rail
+    ? `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${viewer}${button("sbNew", "New tab", "+")}</div>`
+    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}<span class="grow"></span>${viewer}${button("wsNewTop", "New workspace (Cmd+Shift+T)", NEWWS)}${button("sbNew", "New tab", "+")}</div>`;
   const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
     sb.innerHTML = top + s.wss.map((w) => w.tabs.map((id) => {
@@ -50,9 +59,13 @@ function render() {
     return;
   }
   const key = (id) => { const i = order.indexOf(id); return i < 8 ? `⌘${i + 1}` : i === order.length - 1 ? "⌘9" : ""; };
+  const wide = read("config")["tab-rows"] === "wide";
   const row = (id) => {
-    const t = s.tabs[id];
-    return `<div class="tab" role="tab" draggable="true" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}">${icon(t)}<span class="t">${esc(t.title)}</span>${dot(tabStatus(t, reg))}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button></div>`;
+    const t = s.tabs[id], status = tabStatus(t, reg);
+    const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
+    const attrs = `role="tab" draggable="true" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
+    if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
+    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div><div class="l2">${esc(detail(t, reg))}</div></div></div>`;
   };
   sb.innerHTML = top + s.wss.map((w) => {
     const n = w.tabs.length;
@@ -62,6 +75,15 @@ function render() {
   }).join("") + '<button class="tab add" id="wsNew">+ New workspace</button>';
 }
 
+// The second line of a wide row: the agent, the folder and how long the agent is in its state.
+function detail(tab, registry) {
+  const session = terminals(tab.layout).map((t) => registry[t.pane]).find((x) => x && x.state !== "idle");
+  const folder = tab.cwd.replace(/^\/Users\/[^/]+/, "~");
+  if (!session) return folder;
+  const minutes = Math.floor((Date.now() - session.since) / 60000);
+  return `claude · ${folder} · ${minutes < 1 ? "now" : `${minutes}m`}`;
+}
+
 function setUi(patch) {
   Object.assign(ui, patch);
   save("sidebar", ui);
@@ -69,13 +91,14 @@ function setUi(patch) {
 }
 
 function onClick(e) {
-  const hit = e.target.closest("[data-tabclose], [data-wsnewtab], .wsh[data-wsh], #wsNew, #sbToggle, #sbNew, .tab[data-tabid]");
+  const hit = e.target.closest("[data-tabclose], [data-wsnewtab], .wsh[data-wsh], #wsNew, #wsNewTop, #sbViewer, #sbToggle, #sbNew, .tab[data-tabid]");
   if (!hit) return;
   const { dataset } = hit;
   if (dataset.tabclose) return bus.cmd("tab.close", { id: dataset.tabclose });
   if (dataset.wsnewtab) return bus.cmd("tab.new", { ws: dataset.wsnewtab });
   if (dataset.wsh) return bus.cmd("ws.fold", { id: dataset.wsh });
-  if (hit.id === "wsNew") return newWorkspace();
+  if (hit.id === "wsNew" || hit.id === "wsNewTop") return newWorkspace();
+  if (hit.id === "sbViewer") return bus.cmd("viewer.cmd", { name: "tree" });
   if (hit.id === "sbToggle") return setUi({ rail: !ui.rail });
   if (hit.id === "sbNew") return bus.cmd("tab.new");
   bus.cmd("tab.go", { id: dataset.tabid });

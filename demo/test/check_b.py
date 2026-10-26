@@ -892,6 +892,27 @@ def run(base):
             count(VIEWER) == 0 and count(TERM) >= 1,
         )
 
+        rows = count(TAB)
+        check(
+            "R1 rows are wide by default: a second line with the folder",
+            rows > 0 and count(f"{TAB}.wide") == rows and "~" in n(f"{TAB} .l2").first.inner_text(),
+        )
+        cmd(pg, "config.set", {"key": "tab-rows", "value": "narrow"})
+        check("R2 Row size Narrow gives one-line rows", count(f"{TAB}.wide") == 0 and count(TAB) == rows)
+        cmd(pg, "config.set", {"key": "tab-rows", "value": "wide"})
+        before = count(VIEWER)
+        pg.click("#sbViewer")
+        check("R3 the header viewer button opens the pane, as Cmd+B", count(VIEWER) == before + 1)
+        pg.click("#sbViewer")
+        check("R4 a second press hides it", not vis(VIEWER))
+        pg.evaluate("window.prompt = () => 'top'")  # an earlier check replaced window.prompt
+        pg.click("#wsNewTop")
+        check(
+            "R5 the header workspace button asks a name and opens the workspace",
+            any(w["name"] == "top" for w in snap()["wss"]),
+            str([w["name"] for w in snap()["wss"]]),
+        )
+
         pg.set_viewport_size({"width": 420, "height": 860})
         width = pg.evaluate("document.documentElement.scrollWidth")
         check(

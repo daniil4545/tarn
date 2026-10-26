@@ -4,7 +4,7 @@
 import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { OPTIONS, DEFAULTS, isWritten } from "./config.js";
-import { SECTIONS, GHOSTTY, APPLIES, TAB_STYLES } from "./settings-data.js";
+import { SECTIONS, GHOSTTY, APPLIES, TAB_STYLES, TAB_ROWS } from "./settings-data.js";
 import { helpGroups, symbols } from "./settings-help.js";
 import { esc } from "./esc.js";
 import { BASE_THEMES, BASE_SINGLES, THEME_NAMES, themeFor } from "./themes.js";
@@ -87,7 +87,10 @@ function tabsSection() {
   const style = read("config")["tab-style"];
   const radios = TAB_STYLES.map(([value, name, text]) =>
     `<label><input type="radio" name="tabstyle" value="${value}"${style === value ? " checked" : ""}><span><b>${name}</b><small>${text}</small></span></label>`);
-  return `<section data-pane="tabs"><h3>Tabs</h3><div class="setgroup"><div class="setrow"><span>Tab style</span><div class="radios">${radios.join("")}</div></div></div><p class="setnote">Applies to every open window at once.</p></section>`;
+  const rows = read("config")["tab-rows"];
+  const sizes = TAB_ROWS.map(([value, name, text]) =>
+    `<label><input type="radio" name="tabrows" value="${value}"${rows === value ? " checked" : ""}><span><b>${name}</b><small>${text}</small></span></label>`);
+  return `<section data-pane="tabs"><h3>Tabs</h3><div class="setgroup"><div class="setrow"><span>Tab style</span><div class="radios">${radios.join("")}</div></div><div class="setrow"><span>Row size</span><div class="radios">${sizes.join("")}</div></div></div><p class="setnote">Applies to every open window at once.</p></section>`;
 }
 
 function viewerSection() {
@@ -189,6 +192,7 @@ function onChange(e) {
     return bus.cmd("config.set", { key, value });
   }
   if (e.target.name === "tabstyle") bus.cmd("config.set", { key: "tab-style", value: e.target.value });
+  if (e.target.name === "tabrows") bus.cmd("config.set", { key: "tab-rows", value: e.target.value });
 }
 
 function onClick(e) {
