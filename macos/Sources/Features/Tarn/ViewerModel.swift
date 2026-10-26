@@ -7,6 +7,11 @@ enum ViewerLayoutCommand {
     /// Opens the active file in a new viewer on that side.
     case split(AreaEdge)
     case focus(AreaTree.FocusDirection)
+    /// Moves the nearest divider of the viewer on that axis, as Ghostty's `resize_split` does.
+    /// `pane` is the viewer's own size; the whole area's follows from it.
+    case resize(AreaTree.Spatial.Direction, pane: CGSize)
+    /// Equal shares for the viewers and the block, and for the terminals inside the block.
+    case equalize
 }
 
 /// A file the page starts to drag: a tab (it moves) or a tree row (it only opens).

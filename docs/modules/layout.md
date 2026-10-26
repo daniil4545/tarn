@@ -31,6 +31,7 @@ Reading: `ViewerHost` owns one `AreaTree` per window tab and one pane (model and
 | In | Ghostty split keys with no terminal target | `ViewerRouter.focusNeighbor` to `ViewerHost.focusFromBlock` |
 | In | drags: a viewer by its grip, a file tab or tree row from the page, a terminal by Ghostty's grab handle; private pasteboard types `com.daniil4545.tarn.tab`, `.workspace`, `.viewer` (no `Ghostty-Info.plist` entry); terminal drags keep `.ghosttySurfaceId` | `ViewerGripView`, `PageFileDrag`, `DraggingSurfaceKey` |
 | In | divider moves and equalize | `ViewerHost.resize`, `equalize` |
+| In | Ghostty's menu items Move Divider (Cmd+Ctrl+arrows) and Equalize Splits while a viewer holds the keyboard: the viewer's nearest divider moves 10 points with `SplitTree.resizing`; equalize evens the area and the terminals of the block. Split zoom does nothing from a viewer (user decision 2026-10-26) | `ViewerWebView` actions, `ViewerLayoutCommand.resize`, `.equalize` |
 | Out | the layout view | `ViewerLayout` |
 | Out | `ViewerSnapshot` (layout JSON, open files of each viewer) for a tombstone; `restore` brings it back | `ViewerHost.snapshot`, `restore` |
 

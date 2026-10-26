@@ -265,6 +265,18 @@ final class ViewerHost: ObservableObject {
             DispatchQueue.main.async { new.model.onFocus?() }
         case let .focus(direction):
             _ = focus(from: pane.leaf, direction)
+        case let .resize(direction, size):
+            // Ghostty's own tree math (`SplitTree.resizing`), by Ghostty's step of the menu items.
+            guard let root = tree.root, let node = root.node(view: pane.leaf),
+                  let (_, share) = AreaDrop.frames(of: root, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+                      .first(where: { $0.0 === pane.leaf }),
+                  share.width > 0, share.height > 0
+            else { return }
+            let area = CGRect(x: 0, y: 0, width: size.width / share.width, height: size.height / share.height)
+            if let resized = try? tree.resizing(node: node, by: 10, in: direction, with: area) { tree = resized }
+        case .equalize:
+            equalize()
+            if let surface = controller?.focusedSurface?.surface { controller?.ghostty.splitEqualize(surface: surface) }
         }
     }
 

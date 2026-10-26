@@ -145,6 +145,14 @@ final class ViewerWebView: WKWebView {
     @IBAction func splitMoveFocusBelow(_ sender: Any?) { onLayout?(.focus(.spatial(.down))) }
     @IBAction func splitMoveFocusLeft(_ sender: Any?) { onLayout?(.focus(.spatial(.left))) }
     @IBAction func splitMoveFocusRight(_ sender: Any?) { onLayout?(.focus(.spatial(.right))) }
+    @IBAction func moveSplitDividerUp(_ sender: Any?) { onLayout?(.resize(.up, pane: bounds.size)) }
+    @IBAction func moveSplitDividerDown(_ sender: Any?) { onLayout?(.resize(.down, pane: bounds.size)) }
+    @IBAction func moveSplitDividerLeft(_ sender: Any?) { onLayout?(.resize(.left, pane: bounds.size)) }
+    @IBAction func moveSplitDividerRight(_ sender: Any?) { onLayout?(.resize(.right, pane: bounds.size)) }
+    @IBAction func equalizeSplits(_ sender: Any?) { onLayout?(.equalize) }
+    /// Zoom is a terminal's (user decision 2026-10-26): from a viewer it does nothing, rather than
+    /// zoom the terminal the keyboard is not in.
+    @IBAction func splitZoom(_ sender: Any?) {}
 }
 
 /// Owns the web view of one viewer pane: loads the page, serves its assets, forwards messages.
