@@ -53,14 +53,17 @@ final class SidebarModel: ObservableObject {
     /// opens a gap.
     @Published var dropSlot: SidebarDropSlot?
 
-    /// The tab of this window being dragged: its row takes no space while the gap stands in.
+    /// The tab of this window being dragged: its row stays in place, translucent.
     @Published private(set) var liftedTab: TabKey?
 
     /// The height of the lifted row, which the gap takes.
     private(set) var liftedHeight: CGFloat = 0
 
-    /// The slot the gap stands in, only while a tab of this window is dragged.
-    var gapSlot: SidebarDropSlot? { liftedTab == nil ? nil : dropSlot }
+    /// The slot of the lifted row itself: a drop there changes nothing, so it opens no gap.
+    private var liftedSlot: SidebarDropSlot?
+
+    /// The slot the gap stands in, only while a tab of this window is dragged away from its row.
+    var gapSlot: SidebarDropSlot? { liftedTab == nil || dropSlot == liftedSlot ? nil : dropSlot }
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -482,7 +485,7 @@ final class SidebarModel: ObservableObject {
             ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
             : nil
         if let liftedTab {
-            if case .header(let id) = target, Self.gapPullsUp(id, gap: dropSlot, lifted: liftedTab, in: groups) {
+            if case .header(let id) = target, Self.gapPullsUp(id, gap: gapSlot, in: groups) {
                 return true
             }
             slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
@@ -494,11 +497,13 @@ final class SidebarModel: ObservableObject {
         return slot != nil
     }
 
-    /// A tab row of this window left the list: the gap opens where the row was, so nothing moves.
+    /// A drag of a tab row of this window began: the row dims and no gap opens until the pointer
+    /// leaves the row's own slot.
     func dragBegan(_ tab: Tab, height: CGFloat) {
         liftedHeight = height
         liftedTab = tab.key
-        dropSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
+        liftedSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
+        dropSlot = liftedSlot
     }
 
     /// The dragged tab or workspace belongs to this window.
@@ -569,6 +574,7 @@ final class SidebarModel: ObservableObject {
 
     private func endLift() {
         if liftedTab != nil { liftedTab = nil }
+        liftedSlot = nil
         if dropSlot != nil { dropSlot = nil }
     }
 
@@ -1003,10 +1009,7 @@ private struct SidebarRow: View {
             .padding(.vertical, Sidebar.rowGap / 2)
             .padding(.horizontal, isCompact ? 0 : Sidebar.listInset)
             .overlay(interaction)
-            // The lifted row takes no space but stays: its view owns the drag until it ends.
-            .frame(height: isLifted ? 0 : nil, alignment: .top)
-            .clipped()
-            .opacity(isLifted ? 0 : 1)
+            .opacity(isLifted ? 0.4 : 1)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(rows == .wide && !folder.isEmpty ? "\(tab.title), \(folder)" : tab.title)
             .accessibilityAddTraits(tab.isSelected ? [.isButton, .isSelected] : .isButton)

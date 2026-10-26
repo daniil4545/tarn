@@ -91,25 +91,19 @@ extension SidebarModel {
         groups[safe: index + 1].map { .beforeWorkspace($0.workspace.id) } ?? .end
     }
 
-    /// The slot the gap shows while `lifted` is dragged. The lifted row takes no space, so
-    /// the slot before it is the slot after it: one gap, not two that look the same.
+    /// The slot while `lifted` is dragged. The slot before the lifted row and the slot after it
+    /// both leave the tab where it is: they are one slot, the row's own, which opens no gap.
     nonisolated static func gapSlot(_ slot: SidebarDropSlot?, lifted: TabKey, in groups: [Group]) -> SidebarDropSlot? {
         guard slot == .beforeTab(lifted) else { return slot }
         return dropSlot(dragging: .tab, over: .tab(lifted), lowerHalf: true, in: groups)
     }
 
     /// Moving the gap from above the header of workspace `id` to its end would pull the header
-    /// up a row and leave its first shown row under the pointer, which then takes the gap. So the
-    /// gap stays; the header takes it only when nothing of its workspace stands below it.
-    nonisolated static func gapPullsUp(
-        _ id: Workspace.ID,
-        gap: SidebarDropSlot?,
-        lifted: TabKey,
-        in groups: [Group]
-    ) -> Bool {
+    /// up a row and leave its first row under the pointer, which then takes the gap. So the gap
+    /// stays; the header takes it only when its workspace is folded or empty.
+    nonisolated static func gapPullsUp(_ id: Workspace.ID, gap: SidebarDropSlot?, in groups: [Group]) -> Bool {
         guard let header = groups.firstIndex(where: { $0.workspace.id == id }),
-              !groups[header].workspace.collapsed,
-              groups[header].tabs.contains(where: { $0.key != lifted })
+              !groups[header].workspace.collapsed, !groups[header].tabs.isEmpty
         else { return false }
         let owner: Workspace.ID?
         switch gap {
