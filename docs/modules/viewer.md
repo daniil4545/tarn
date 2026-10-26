@@ -30,6 +30,7 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | socket line `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` | `ViewerRouter.handleCommand` |
 | In | page messages (`ready`, `tab`, `closeTab`, `closePane`, `toggleTree`, `hideTree`, `treeToggle`, `treeOpen`, `edit`, `save`, `task`, `take`, `keep`, `link`, `copy`, `error`, `dragFile`, `dragEnd`) | `ViewerModel.handle` |
 | In | Cmd+S, Cmd+E, Cmd+B and the menu action Cmd+W while the pane has focus | `ViewerWebView` |
+| In | Ghostty tab and window keybinds with no menu item (`ViewerForwardKeys.actions`, matched by the user's config as Ghostty's menu matches keys), run with `perform(action:)` on the window's `focusedSurface`; terminal input bindings stay with the page | `ViewerWebView.forwardToTerminal`, `ViewerForwardKeys` |
 | In | menu split and focus actions while the pane has focus | `ViewerWebView` to `ViewerModel.onLayout`, handled by [layout.md](layout.md) |
 | In | files taken from or dropped into another viewer | `ViewerModel.absorb`, `take`, `release`, `canTake` |
 | In | View menu item "Toggle File Viewer", Cmd+B (action `toggleViewer:`, `ViewerHost.toggleFromKey`); in the pane `ViewerWebView.command` takes Cmd+B, Cmd+S, Cmd+E with exact modifiers, and Cmd+E beats Ghostty's selection-for-find. A Ghostty keybind on Cmd+B wins over the menu item, which keeps showing Cmd+B because Ghostty has no action to sync it with | `TerminalController` extension, `ViewerWebView`, `MainMenu.xib` |

@@ -155,6 +155,7 @@ def viewer_checks(pg):
     v.locator(".doc", has_text="Second agent note").wait_for()
     top = v.locator(".scroll").evaluate("e => e.scrollTop")
     check("33 clean agent edit re-renders, scroll kept", top > 300, f"scrollTop={top}")
+    find_checks(pg, v)
 
     open_file("macos/Sources/Features/Tarn/Sidebar.swift", 12)
     v.locator(".codeview").wait_for()
@@ -168,6 +169,67 @@ def viewer_checks(pg):
     task_checks(pg, v, open_file)
     key_checks(pg, v)
     close_checks(pg, v)
+
+
+def find_checks(pg, v) -> None:
+    """Find in the viewer page, view mode and source mode; spec: docs/specs/viewer-pane.md 3."""
+    bar = "#findbar:not([hidden])"
+    shown = lambda: v.locator("#findbar .count").inner_text()
+    focus_viewer(pg)
+    pg.keyboard.press("Meta+f")
+    v.locator(bar).wait_for()
+    pg.keyboard.type("Paragraph 4")
+    # Paragraph 4 and 40 to 49.
+    check("F1 cmd+F in the viewer opens its find bar and counts", shown() == "1/11", shown())
+    top = v.locator(".scroll").evaluate("e => e.scrollTop")
+    pg.keyboard.press("Enter")
+    pg.keyboard.press("Enter")
+    after = v.locator(".scroll").evaluate("e => e.scrollTop")
+    check("F2 Enter steps to the next match and scrolls to it", shown() == "3/11" and after > top, f"{shown()} {top} {after}")
+    pg.keyboard.press("Shift+Enter")
+    check("F3 Shift+Enter steps back", shown() == "2/11", shown())
+    pg.keyboard.press("Meta+g")
+    check("F4 cmd+G is Find Next", shown() == "3/11", shown())
+    pg.keyboard.press("ControlOrMeta+a")
+    pg.keyboard.type("source")
+    # The diagram's Source button is page chrome, not text of the file.
+    check("F4a button labels are not matches", shown() == "0/0", shown())
+    pg.keyboard.press("ControlOrMeta+a")
+    pg.keyboard.type("Paragraph 4")
+    pg.keyboard.press("Escape")
+    check("F5 Esc with text gives the keyboard back, the bar stays", v.locator(bar).count() == 1)
+    pg.keyboard.press("Meta+e")
+    v.locator(".cm-content").wait_for()
+    pg.keyboard.press("Meta+f")
+    v.locator(".cm-find-now").first.wait_for()
+    check("F6 in source mode the whole file is searched", shown() == "1/11", shown())
+    pg.keyboard.press("ControlOrMeta+a")
+    pg.keyboard.press("Backspace")
+    pg.keyboard.press("Escape")
+    check(
+        "F7 Esc in an empty bar closes it and clears the marks",
+        v.locator(bar).count() == 0 and v.locator(".cm-find, .cm-find-now").count() == 0,
+    )
+    pg.keyboard.press("Meta+e")
+    v.locator(".mm svg").wait_for()
+
+    # A CRLF file: the editor counts a line break as one position, the raw text as two.
+    crlf = f"{ROOT}/notes-crlf.md"
+    cmd(pg, "vfs.write", {"path": crlf, "text": "one\r\ntwo\r\nthree\r\nneedle here\r\n", "by": "agent"})
+    cmd(pg, "viewer.open", {"path": crlf})
+    v.locator(".ftab.on", has_text="notes-crlf.md").wait_for()
+    focus_viewer(pg)
+    pg.keyboard.press("Meta+e")
+    v.locator(".cm-content").wait_for()
+    pg.keyboard.press("Meta+f")
+    pg.keyboard.type("needle")
+    v.locator(".cm-find-now").first.wait_for()
+    marked = v.locator(".cm-find-now").first.inner_text()
+    check("F8 in a CRLF file the mark sits on the match", marked == "needle", marked)
+    pg.keyboard.press("ControlOrMeta+a")
+    pg.keyboard.press("Backspace")
+    pg.keyboard.press("Escape")
+    pg.keyboard.press("Meta+e")
 
 
 def agent_write(pg, note):

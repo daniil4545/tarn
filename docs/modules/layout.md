@@ -31,6 +31,7 @@ Reading: `ViewerHost` owns one `AreaTree` per window tab and one pane (model and
 | In | Ghostty split keys with no terminal target | `ViewerRouter.focusNeighbor` to `ViewerHost.focusFromBlock` |
 | In | drags: a viewer by its grip, a file tab or tree row from the page, a terminal by Ghostty's grab handle; private pasteboard types `com.daniil4545.tarn.tab`, `.workspace`, `.viewer` (no `Ghostty-Info.plist` entry); terminal drags keep `.ghosttySurfaceId` | `ViewerGripView`, `PageFileDrag`, `DraggingSurfaceKey` |
 | In | divider moves and equalize | `ViewerHost.resize`, `equalize` |
+| In | Ghostty's menu items Move Divider (Cmd+Ctrl+arrows) and Equalize Splits while a viewer holds the keyboard: the viewer's nearest divider moves 10 points with `SplitTree.resizing`; equalize evens the area and the terminals of the block. Split zoom does nothing from a viewer (user decision 2026-10-26) | `ViewerWebView` actions, `ViewerLayoutCommand.resize`, `.equalize` |
 | Out | the layout view | `ViewerLayout` |
 | Out | `ViewerSnapshot` (layout JSON, open files of each viewer) for a tombstone; `restore` brings it back | `ViewerHost.snapshot`, `restore` |
 
@@ -49,7 +50,7 @@ Drops (`AreaDrop.target`, checked first to last): corner (48 pt), strip (24 pt),
 2. Tab bar or middle of a viewer: the dragged viewer or file goes into that viewer.
 3. Elsewhere in a pane: the pane takes the half on the nearest edge, by Ghostty's `TerminalSplitDropZone.calculate`.
 4. Over the dragged pane itself: refused, red frame, text "Drop on another pane".
-5. A lone terminal dropped at a viewer edge moves the block; split terminals are refused with the hint "Split terminals stay together: drag the viewer to the block edge".
+5. A lone terminal dropped at a viewer edge moves the block; split terminals are refused with the hint "Split terminals stay together: drag the viewer to the block edge". Inside the block, its strips and corners included, the overlay answers nothing, so split terminals move among themselves with Ghostty's zones.
 6. A pointer in the block with no matching zone gives nil: Ghostty's own drop zones work.
 
 A drop shows a line, not a filled frame: 3 pt (`AreaDrop.lineWidth`) in the system accent (`NSColor.controlAccentColor`), centered on the border the new pane will have (`AreaDrop.line`: the inner edge of the space it takes; a drop into a viewer: under its tab bar). A refusal shows a gray plate with the reason and no line. The line and the plate move in one `NSAnimationContext` of `Motion.base`. Terminal onto terminal inside the block stays Ghostty's own zone (`TerminalSplitDropZone`, accent fill 30%): its overlay is drawn inside Ghostty's split view and a layer on top cannot replace it. A file tab moves with its edits (refused if both viewers hold different edited copies); a tree row only opens the file. An emptied source viewer closes. A viewer dropped outside every window opens in a new window (S14a).

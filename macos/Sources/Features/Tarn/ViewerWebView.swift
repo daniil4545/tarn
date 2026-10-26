@@ -105,11 +105,24 @@ final class ViewerWebView: WKWebView {
             return true
         }
         guard event.type == .keyDown,
-              let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
-              let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags)
+              let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self)
         else { return super.performKeyEquivalent(with: event) }
-        onCommand?(command)
-        return true
+        if let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags) {
+            onCommand?(command)
+            return true
+        }
+        if forwardToTerminal(event) { return true }
+        return super.performKeyEquivalent(with: event)
+    }
+
+    /// Runs a tab or window keybind (Cmd+1 by default) on the focused terminal of this window,
+    /// as if that terminal held the keyboard (`ViewerForwardKeys`).
+    private func forwardToTerminal(_ event: NSEvent) -> Bool {
+        guard let config = (NSApp.delegate as? AppDelegate)?.ghostty.config,
+              let action = ViewerForwardKeys.action(for: event, config: config),
+              let surface = (window?.windowController as? BaseTerminalController)?.focusedSurface?.surfaceModel
+        else { return false }
+        return surface.perform(action: action)
     }
 
     /// The menu item "Close" (Cmd+W) closes the active file tab, not the terminal behind the pane.
@@ -132,6 +145,20 @@ final class ViewerWebView: WKWebView {
     @IBAction func splitMoveFocusBelow(_ sender: Any?) { onLayout?(.focus(.spatial(.down))) }
     @IBAction func splitMoveFocusLeft(_ sender: Any?) { onLayout?(.focus(.spatial(.left))) }
     @IBAction func splitMoveFocusRight(_ sender: Any?) { onLayout?(.focus(.spatial(.right))) }
+    @IBAction func moveSplitDividerUp(_ sender: Any?) { onLayout?(.resize(.up, pane: bounds.size)) }
+    @IBAction func moveSplitDividerDown(_ sender: Any?) { onLayout?(.resize(.down, pane: bounds.size)) }
+    @IBAction func moveSplitDividerLeft(_ sender: Any?) { onLayout?(.resize(.left, pane: bounds.size)) }
+    @IBAction func moveSplitDividerRight(_ sender: Any?) { onLayout?(.resize(.right, pane: bounds.size)) }
+    @IBAction func equalizeSplits(_ sender: Any?) { onLayout?(.equalize) }
+    /// Zoom is a terminal's (user decision 2026-10-26): from a viewer it does nothing, rather than
+    /// zoom the terminal the keyboard is not in.
+    @IBAction func splitZoom(_ sender: Any?) {}
+
+    /// The Find items of Ghostty's menu search the page (`viewer-web/src/find.js`), not the terminal.
+    @IBAction func find(_ sender: Any?) { onCommand?("find:open") }
+    @IBAction func findNext(_ sender: Any?) { onCommand?("find:next") }
+    @IBAction func findPrevious(_ sender: Any?) { onCommand?("find:prev") }
+    @IBAction func findHide(_ sender: Any?) { onCommand?("find:hide") }
 }
 
 /// Owns the web view of one viewer pane: loads the page, serves its assets, forwards messages.

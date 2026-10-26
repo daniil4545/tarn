@@ -106,6 +106,14 @@ struct AreaDropTests {
         #expect(strip?.refusal == AreaDrop.splitRefusal)
     }
 
+    /// A strip or a corner of the area that lies over the block is the edge of a terminal: moving one
+    /// split terminal under another there is Ghostty's drop, not a refused area zone.
+    @Test(arguments: [(10.0, 300.0), (300.0, 590.0), (300.0, 10.0), (10.0, 590.0)])
+    func splitTerminalsUseGhosttysZonesAtTheBlockEdge(x: Double, y: Double) {
+        #expect(frame(of: block, in: oneViewer).contains(CGPoint(x: x, y: y)))
+        #expect(target(x, y, tree: oneViewer, .terminal(UUID()), lone: false) == nil)
+    }
+
     @Test func aTerminalInsideTheBlockAndWithoutViewersIsGhosttys() {
         #expect(target(300, 300, tree: oneViewer, .terminal(UUID())) == nil)
         #expect(target(10, 300, tree: AreaTree.block(block), .terminal(UUID())) == nil)

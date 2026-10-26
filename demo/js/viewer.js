@@ -2,7 +2,7 @@
 // driven by viewer-model.js. Counterpart of ViewerHost.swift and ViewerWebView.swift.
 //
 // Commands (single handler here): viewer.open {path?, line?, pane?, tree?, cwd?, background?},
-// viewer.cmd {name: save|mode|tree|closeTab, pane?}, viewer.split {dir, pane?}.
+// viewer.cmd {name: save|mode|tree|closeTab|find, arg?: open|next|prev, pane?}, viewer.split {dir, pane?}.
 // With no visible viewer to take a request, viewer.open emits `viewer:needed` with the same payload:
 // the layout creates a viewer pane and sends viewer.open again with `pane`.
 import { bus } from "./bus.js";
@@ -50,11 +50,12 @@ function open(payload) {
   if (payload.tree && !entry.model.state().treeVisible) entry.model.toggleTree();
 }
 
-function command({ name, pane }) {
+function command({ name, pane, arg }) {
   if (KEY_COMMANDS.has(name)) return viewerKey(name, { target: () => visibleTarget(pane), idOf });
   const entry = visibleTarget(pane);
   if (!entry) return undefined;
   if (name === "save" || name === "mode") entry.frame.contentWindow.tarn.cmd(name);
+  else if (name === "find") entry.frame.contentWindow.tarn.find(arg);
   else if (name === "closeTab") entry.model.closeActiveTab();
   return undefined;
 }
