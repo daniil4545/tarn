@@ -178,12 +178,17 @@ struct PendingAnswer<Reply: AnyObject> {
         case "PostToolUse", "PostToolUseFailure":
             let tool = event["tool_name"] as? String
             let input = event["tool_input"] as? [String: Any] ?? [:]
-            // A question answered in the agent's dialog finishes with `answers` added to its input.
-            guard let done = waiting.firstIndex(where: { item in
-                item.request.tool == tool && item.input.allSatisfy { key, value in
+            // A question answered in the agent's dialog finishes with `answers` added to its input,
+            // so a call that holds every field of a waiting one ends it too, after exact matches.
+            let mine = waiting.filter { $0.request.tool == tool }
+            let exact = mine.first { NSDictionary(dictionary: $0.input).isEqual(to: input) }
+            let extended = mine.first { item in
+                !item.input.isEmpty && item.input.allSatisfy { key, value in
                     input[key].map { NSDictionary(dictionary: [key: $0]).isEqual(to: [key: value]) } ?? false
                 }
-            }) else { return waiting }
+            }
+            guard let found = exact ?? extended,
+                  let done = waiting.firstIndex(where: { $0.reply === found.reply }) else { return waiting }
             var rest = waiting
             rest.remove(at: done)
             return rest
