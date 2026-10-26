@@ -316,6 +316,11 @@ final class SidebarModel: ObservableObject {
         registry.newTab(in: group.workspace.id, from: window)
     }
 
+    /// Opens, shows or hides the viewer pane of the window, as Cmd+B does.
+    func toggleViewer() {
+        (window?.windowController as? TerminalController)?.toggleViewer(nil)
+    }
+
     func newWorkspace() {
         guard let window else { return }
         WorkspacePrompt.newWorkspace(in: window)
@@ -760,6 +765,7 @@ struct Sidebar: View {
             if isCollapsed {
                 VStack(spacing: 4) {
                     collapseButton
+                    viewerButton
                     newTabButton
                 }
                 .padding(.vertical, 6)
@@ -778,6 +784,7 @@ struct Sidebar: View {
                 HStack {
                     collapseButton
                     Spacer()
+                    viewerButton
                     newWorkspaceButton
                     newTabButton
                 }
@@ -837,6 +844,12 @@ struct Sidebar: View {
         }
     }
 
+    private var viewerButton: some View {
+        SidebarButton(systemName: "sidebar.right", label: "Toggle File Viewer") {
+            model.toggleViewer()
+        }
+    }
+
     private var newWorkspaceButton: some View {
         SidebarButton(systemName: "folder.badge.plus", label: "New Workspace") {
             model.newWorkspace()
@@ -888,6 +901,7 @@ private struct SidebarRow: View {
     let isCompact: Bool
 
     @State private var isHovering = false
+    @AppStorage(TabRows.key) private var rows: TabRows = .wide
     @Environment(\.chromeInk) private var ink
 
     var body: some View {
@@ -914,7 +928,7 @@ private struct SidebarRow: View {
             .padding(.horizontal, isCompact ? 0 : Sidebar.listInset)
             .overlay(interaction)
             .accessibilityElement(children: .combine)
-            .accessibilityLabel(tab.title)
+            .accessibilityLabel(rows == .wide && !folder.isEmpty ? "\(tab.title), \(folder)" : tab.title)
             .accessibilityAddTraits(tab.isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { model.select(tab) }
     }
@@ -999,7 +1013,21 @@ private struct SidebarRow: View {
         TabIcon(agentProcess: tab.agentProcess, size: size)
     }
 
+    /// A wide row puts the second line under the title; badge and key stay on the first line.
     private var row: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            firstLine
+            if rows == .wide {
+                detail
+                    .padding(.leading, tab.agentProcess != nil ? 38 : 22)
+            }
+        }
+        .padding(.leading, 4)
+        .padding(.trailing, 8)
+        .frame(height: rows == .wide ? 40 : 26)
+    }
+
+    private var firstLine: some View {
         HStack(spacing: 4) {
             // The close button only shows on hover. Its slot is always reserved so the
             // title doesn't shift.
@@ -1020,9 +1048,7 @@ private struct SidebarRow: View {
                 icon(size: 12)
             }
 
-            Text(tab.title)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            title
 
             Spacer(minLength: 4)
 
@@ -1036,9 +1062,37 @@ private struct SidebarRow: View {
                     .foregroundStyle(ink.faint)
             }
         }
-        .padding(.leading, 4)
-        .padding(.trailing, 8)
-        .frame(height: 26)
+    }
+
+    private var title: some View {
+        Text(tab.title)
+            .lineLimit(1)
+            .truncationMode(.tail)
+    }
+
+    /// The second line of a wide row: the folder, and for an agent the time in its state. The
+    /// icon names the agent. Minutes only, so the row redraws once a minute, not every second.
+    /// A plain shell often has its folder as the title, which the line then leaves out.
+    private var folder: String {
+        guard let folder = tab.folder, tab.agent != nil || folder != tab.title else { return "" }
+        return folder
+    }
+
+    @ViewBuilder
+    private var detail: some View {
+        Group {
+            if let agent = tab.agent {
+                TimelineView(.everyMinute) { context in
+                    Text(TabRows.secondLine(folder: folder, since: agent.since, now: context.date))
+                }
+            } else {
+                Text(folder)
+            }
+        }
+        .font(.system(size: 11))
+        .foregroundStyle(ink.faint)
+        .lineLimit(1)
+        .truncationMode(.middle)
     }
 }
 

@@ -478,6 +478,25 @@ def run(base):
         check(
             "W10 drag reorders tabs", order.index("t4") < order.index("t3"), str(order)
         )
+        dt = start_drag(n(f"{TAB}[data-tabid='t4']").first)
+        row = n(f"{TAB}[data-tabid='t1']").bounding_box()
+        for frac, edge, name in ((0.25, row["y"], "top"), (0.75, row["y"] + row["height"], "bottom")):
+            n(f"{TAB}[data-tabid='t1']").dispatch_event("dragover", {"dataTransfer": dt, "clientX": row["x"] + 20, "clientY": row["y"] + row["height"] * frac})
+            line = n(".wsline").bounding_box() if count(".wsline") == 1 else None
+            check(
+                f"W10a a tab dragged over the {name} half of a row draws one line at its {name} edge, no frame",
+                line is not None and abs(line["y"] + 1.5 - edge) <= 3 and count(".dropmark") == 0,
+                str(line),
+            )
+        n(f"{TAB}[data-tabid='t1']").dispatch_event("drop", {"dataTransfer": dt, "clientX": row["x"] + 20, "clientY": row["y"] + row["height"] * 0.75})
+        pg.evaluate("document.dispatchEvent(new Event('dragend'))")
+        order = ws_tabs("w1")
+        check("W10b a drop in the lower half puts the tab after the row", order.index("t4") == order.index("t1") + 1, str(order))
+        dt = start_drag(n(f"{TAB}[data-tabid='t4']").first)
+        head = n(".wsh[data-wsh='w1']").bounding_box()
+        n(".wsh[data-wsh='w1']").dispatch_event("dragover", {"dataTransfer": dt, "clientX": head["x"] + 20, "clientY": head["y"] + head["height"] / 2})
+        check("W10c a tab over a workspace header frames the header, no line", count(".wsh.dropmark") == 1 and count(".wsline") == 0)
+        pg.evaluate("document.dispatchEvent(new Event('dragend'))")
         reply["answers"] = iter(["home"])
         pg.click("#wsNew")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
@@ -908,6 +927,43 @@ def run(base):
         check(
             "36 closing viewers leaves terminals",
             count(VIEWER) == 0 and count(TERM) >= 1,
+        )
+
+        rows = count(TAB)
+        check(
+            "R1 rows are wide by default: a second line with the folder",
+            rows > 0 and count(f"{TAB}.wide") == rows and "~" in n(f"{TAB} .l2").first.inner_text(),
+        )
+        pg.evaluate("document.activeElement.blur()")
+        pg.keyboard.press("Meta+Comma")
+        pg.click("#settings input[name='tabrows'][value='narrow']")
+        pg.click("#settingsClose")
+        check("R2 Settings, Row size, Narrow gives one-line rows", count(f"{TAB}.wide") == 0 and count(TAB) == rows)
+        pg.reload()
+        pg.wait_for_selector(TAB)
+        check("R2a Row size survives a reload", count(f"{TAB}.wide") == 0)
+        cmd(pg, "config.set", {"key": "tab-rows", "value": "wide"})
+        before = count(VIEWER)
+        pg.click("#sbViewer")
+        check("R3 the header viewer button opens the pane, as Cmd+B", count(VIEWER) == before + 1)
+        pg.click("#sbViewer")
+        check("R4 a second press hides it", not vis(VIEWER))
+        pg.click("#sbToggle")
+        pg.click("#sbViewer")
+        check("R4a the rail has the viewer button too", vis(VIEWER))
+        pg.click("#sbViewer")
+        pg.click("#sbToggle")
+        pg.evaluate("window.prompt = () => 'keyed'")
+        pg.evaluate("document.activeElement.blur()")
+        pg.keyboard.press("Control+Alt+Shift+T")
+        check("R4b Shift+Cmd+T (fallback Ctrl+Alt+Shift+T) asks a name and opens the workspace",
+              any(w["name"] == "keyed" for w in snap()["wss"]))
+        pg.evaluate("window.prompt = () => 'top'")  # an earlier check replaced window.prompt
+        pg.click("#wsNewTop")
+        check(
+            "R5 the header workspace button asks a name and opens the workspace",
+            any(w["name"] == "top" for w in snap()["wss"]),
+            str([w["name"] for w in snap()["wss"]]),
         )
 
         pg.set_viewport_size({"width": 420, "height": 860})

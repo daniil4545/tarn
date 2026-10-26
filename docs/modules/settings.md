@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The settings window (Cmd+,) holds tarn's own settings (tab style, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
+The settings window (Cmd+,) holds tarn's own settings (tab style, row size, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
 
 ## Place in the system
 
@@ -31,7 +31,7 @@ Reading: the store writes the file, asks Ghostty to reload, and reads the new ef
 | Out | the options file, written atomically | `TarnConfigFile.save` |
 | Out | `ghostty.reloadConfig()` after a successful write | store `reload` closure |
 | Out | file lines into every config built by the app | `TarnConfigFile.load(into:from:)` |
-| Out | tab style in `UserDefaults` `TarnTabStyle` | `TabStyle`, `TarnSettingsView` |
+| Out | tab style in `UserDefaults` `TarnTabStyle`, row size in `TarnTabRows` | `TabStyle`, `TabRows`, `TarnSettingsView` |
 
 ## How it works
 

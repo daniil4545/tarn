@@ -34,6 +34,7 @@ export const OPTIONS = Object.freeze({
   "undo-timeout": pick("5s", ["0s", "5s", "10s", "30s"]),
   "drag-handle": pick("auto", ["always", "auto", "never"]),
   "tab-style": pick("sidebar", ["sidebar", "top"]),
+  "tab-rows": pick("wide", ["wide", "narrow"]),
   "file-viewer": bool(true),
 });
 
