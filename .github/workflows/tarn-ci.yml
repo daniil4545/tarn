@@ -1,18 +1,24 @@
-# tarn CI: the same checks as `make -f tarn.mk check` plus the browser demo checks.
-# Upstream workflows stay in this folder for clean upstream merges; they never run here.
+# tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
+# Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
 on:
-  push:
-    branches: [ci-probe]
   pull_request:
     branches: [main]
+  push:
+    branches: [main, ci-probe]
+  workflow_call:
+    inputs:
+      upstream:
+        description: Merge upstream/main into the checkout first (tarn-upstream).
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: tarn-ci-${{ github.ref }}
+  group: tarn-ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -22,33 +28,42 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: ${{ inputs.upstream && 0 || 1 }}
           persist-credentials: false
+      - name: Merge upstream/main
+        if: inputs.upstream
+        run: |
+          git -c user.name=ci -c user.email=ci@localhost fetch --quiet https://github.com/ghostty-org/ghostty.git main
+          git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Demo unit tests
         # File arguments: the runner's Node 22 does not take a folder.
         run: node --test demo/test/unit/*.test.mjs
       - name: Demo checks
         run: |
-          google-chrome --version
           for c in 0 a b c e2e review; do
             uv run -q --with playwright python -I demo/test/check_$c.py
           done
 
   app:
     runs-on: xcode-27
-    timeout-minutes: 90
+    timeout-minutes: 60
+    env:
+      # The 3-core runner starts a process in 30-40 ms; the 100 ms hook contract is checked on the Mac.
+      TARN_HOOK_LIMIT_MS: "300"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          fetch-depth: ${{ inputs.upstream && 0 || 1 }}
           persist-credentials: false
+      - name: Merge upstream/main
+        if: inputs.upstream
+        run: |
+          git -c user.name=ci -c user.email=ci@localhost fetch --quiet https://github.com/ghostty-org/ghostty.git main
+          git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
         with:
           version: 0.17.0
-      - name: Toolchain
-        run: |
-          sw_vers
-          xcodebuild -version
-          command -v swiftlint shellcheck || true
       - name: Linters
         run: brew install swiftlint shellcheck
       - name: Build GhosttyKit

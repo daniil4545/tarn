@@ -9,6 +9,7 @@ Run: python3 -I plugin/test/hook_test.py
 
 import contextlib
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -19,7 +20,9 @@ import time
 from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
-LIMIT = 0.1
+# The contract is 100 ms on the user's Mac. CI sets TARN_HOOK_LIMIT_MS: the 3-core runner spends
+# 30-40 ms per process start, and a hung app costs hook.sh 166-212 ms there.
+LIMIT = float(os.environ.get("TARN_HOOK_LIMIT_MS", "100")) / 1000
 STOP = b'{"hook_event_name":"Stop"}'
 ASK = b'{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"make"}}'
 ANSWER = b'{"hookSpecificOutput":{"hookEventName":"PermissionRequest","decision":{"behavior":"allow"}}}\n'
