@@ -1,5 +1,7 @@
-// Drag inside the sidebar: a tab row onto a header (end of that workspace) or onto a row (before
-// it), a workspace header into the gap nearest the pointer, marked by a line.
+// Drag inside the sidebar: a tab row onto a header (end of that workspace, the header gets a
+// frame) or onto a row (before it in the upper half, after it in the lower, a line where it
+// lands), a workspace header into the gap nearest the pointer (a line). Slots follow
+// SidebarModel.dropSlot in the app.
 import { bus } from "./bus.js";
 
 let drag = null; // {tab: id} | {ws: id}
@@ -17,7 +19,7 @@ export function startSidebarDrag() {
   sb.addEventListener("dragover", (e) => {
     if (!drag) return;
     clearMarks();
-    if (drag.tab) markRow(e); else drawLine(e);
+    if (drag.tab) markTab(e); else drawLine(e);
   });
   sb.addEventListener("drop", (e) => {
     if (!drag) return;
@@ -36,20 +38,37 @@ function clearMarks() {
   document.querySelectorAll(".dropmark").forEach((x) => x.classList.remove("dropmark"));
 }
 
-function markRow(e) {
-  const target = e.target.closest(".wsh[data-wsh], .tab[data-tabid]");
-  if (!target) return;
+// Where a dragged tab lands: {ws, before (a tab id or null for the end), head (over a header),
+// edge (the row whose top or bottom the line takes), bottom}. Null off the rows.
+function tabSlot(e) {
+  const head = e.target.closest(".wsh[data-wsh]"), row = e.target.closest(".tab[data-tabid]");
+  if (head) {
+    return { ws: head.dataset.wsh, before: null, head };
+  }
+  if (!row) return null;
+  let owner = row;
+  while (!owner.dataset.wsh) owner = owner.previousElementSibling;
+  const r = row.getBoundingClientRect();
+  if (e.clientY < r.top + r.height / 2) return { ws: owner.dataset.wsh, before: row.dataset.tabid, edge: row, bottom: false };
+  const next = row.nextElementSibling?.matches(".tab[data-tabid]") ? row.nextElementSibling : null;
+  return { ws: owner.dataset.wsh, before: next?.dataset.tabid ?? null, edge: row, bottom: true };
+}
+
+function markTab(e) {
+  const at = tabSlot(e);
+  if (!at) return;
   e.preventDefault();
-  target.classList.add("dropmark");
+  if (at.head) return at.head.classList.add("dropmark");
+  const sb = document.getElementById("sidebar"), r = at.edge.getBoundingClientRect();
+  const line = Object.assign(document.createElement("div"), { className: "wsline" });
+  line.style.top = `${(at.bottom ? r.bottom : r.top) - sb.getBoundingClientRect().top + sb.scrollTop - 1}px`;
+  sb.append(line);
 }
 
 function dropTab(e) {
-  const id = drag.tab, head = e.target.closest(".wsh[data-wsh]"), row = e.target.closest(".tab[data-tabid]");
-  if (head) return bus.cmd("tab.move", { id, ws: head.dataset.wsh });
-  if (!row || row.dataset.tabid === id) return;
-  let owner = row;
-  while (!owner.dataset.wsh) owner = owner.previousElementSibling;
-  bus.cmd("tab.move", { id, ws: owner.dataset.wsh, before: row.dataset.tabid });
+  const at = tabSlot(e);
+  if (!at || at.before === drag.tab) return;
+  bus.cmd("tab.move", { id: drag.tab, ws: at.ws, before: at.before });
 }
 
 // Slot i is the gap before group i; a group spans from its header to the next header.
