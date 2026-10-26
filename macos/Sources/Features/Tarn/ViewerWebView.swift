@@ -91,7 +91,19 @@ final class ViewerWebView: WKWebView {
         return keyTable.first { $0.key == letter }?.command
     }
 
+    /// Cmd+= zooms in. Ghostty binds both Cmd+= and Cmd++ to a bigger font, but the menu item
+    /// carries only the last one, Cmd++ (`Config.zig` "this order matters"); the terminal gets
+    /// Cmd+= through its own keybind, the viewer has only the menu.
+    static func isZoomIn(characters: String?, flags: NSEvent.ModifierFlags) -> Bool {
+        characters == "=" && flags.intersection([.shift, .control, .option, .command]) == .command
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown, Self.isZoomIn(characters: event.charactersIgnoringModifiers, flags: event.modifierFlags),
+           let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self) {
+            ViewerZoom.change(by: 1)
+            return true
+        }
         guard event.type == .keyDown,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
               let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags)
@@ -104,6 +116,11 @@ final class ViewerWebView: WKWebView {
     @objc func close(_ sender: Any?) {
         onCommand?("closeTab")
     }
+
+    /// The font size items of the View menu (Cmd+=, Cmd+-, Cmd+0) zoom the viewer, not the terminal.
+    @IBAction func increaseFontSize(_ sender: Any?) { ViewerZoom.change(by: 1) }
+    @IBAction func decreaseFontSize(_ sender: Any?) { ViewerZoom.change(by: -1) }
+    @IBAction func resetFontSize(_ sender: Any?) { ViewerZoom.change(by: 0) }
 
     @IBAction func splitRight(_ sender: Any?) { onLayout?(.split(.right)) }
     @IBAction func splitLeft(_ sender: Any?) { onLayout?(.split(.left)) }
@@ -129,10 +146,15 @@ final class ViewerWebController: NSObject {
     private var started = false
     private var wantsFocus = false
     private var themeObserver: AnyCancellable?
+    private var zoomObserver: AnyCancellable?
 
     init(model: ViewerModel) {
         self.model = model
         super.init()
+        zoomObserver = NotificationCenter.default.publisher(for: .tarnViewerZoomDidChange)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.webView?.pageZoom = ViewerZoom.current() }
+            }
         // A theme change in Settings reloads the config; the page takes the new colors at once.
         themeObserver = NotificationCenter.default.publisher(for: .ghosttyConfigDidChange)
             .sink { [weak self] note in
@@ -187,6 +209,7 @@ final class ViewerWebController: NSObject {
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
+        view.pageZoom = ViewerZoom.current()
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif
@@ -225,6 +248,7 @@ final class ViewerWebController: NSObject {
 
     func stop() {
         themeObserver = nil
+        zoomObserver = nil
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "tarn")
         webView?.removeFromSuperview()
         webView = nil
