@@ -63,6 +63,16 @@ enum ViewerPaths {
             if exists(absolute) { return target }
             fallback = target
         }
+
+        // Ghostty's link regex drops a trailing `.` or `,` from URLs but not from paths, so a path
+        // that ends a sentence arrives with it. A real name that ends with one is found above.
+        var bare = Substring(text)
+        while bare.last == "." || bare.last == "," { bare.removeLast() }
+        if bare.count < text.count,
+           let shorter = resolve(String(bare), cwd: cwd, home: home, exists: exists),
+           exists(shorter.path) {
+            return shorter
+        }
         return fallback
     }
 
