@@ -91,7 +91,19 @@ final class ViewerWebView: WKWebView {
         return keyTable.first { $0.key == letter }?.command
     }
 
+    /// Cmd+= zooms in. Ghostty binds both Cmd+= and Cmd++ to a bigger font, but the menu item
+    /// carries only the last one, Cmd++ (`Config.zig` "this order matters"); the terminal gets
+    /// Cmd+= through its own keybind, the viewer has only the menu.
+    static func isZoomIn(characters: String?, flags: NSEvent.ModifierFlags) -> Bool {
+        characters == "=" && flags.intersection([.shift, .control, .option, .command]) == .command
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if event.type == .keyDown, Self.isZoomIn(characters: event.charactersIgnoringModifiers, flags: event.modifierFlags),
+           let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self) {
+            ViewerZoom.change(by: 1)
+            return true
+        }
         guard event.type == .keyDown,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self),
               let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags)
@@ -236,6 +248,7 @@ final class ViewerWebController: NSObject {
 
     func stop() {
         themeObserver = nil
+        zoomObserver = nil
         webView?.configuration.userContentController.removeScriptMessageHandler(forName: "tarn")
         webView?.removeFromSuperview()
         webView = nil

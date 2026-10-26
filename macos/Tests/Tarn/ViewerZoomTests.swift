@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import Ghostty
 
@@ -12,6 +12,17 @@ struct ViewerZoomTests {
     ])
     func stepsGoToTheNextStop(zoom: Double, direction: Int, expected: Double) {
         #expect(ViewerZoom.step(zoom, by: direction) == expected)
+    }
+
+    private static let cmd = NSEvent.ModifierFlags.command.rawValue
+    private static let shift = NSEvent.ModifierFlags.shift.rawValue
+    private static let option = NSEvent.ModifierFlags.option.rawValue
+
+    @Test(arguments: [
+        ("=", cmd, true), ("=", cmd | shift, false), ("=", cmd | option, false), ("-", cmd, false), ("=", 0, false),
+    ])
+    func cmdEqualsZoomsIn(characters: String, flags: UInt, expected: Bool) {
+        #expect(ViewerWebView.isZoomIn(characters: characters, flags: NSEvent.ModifierFlags(rawValue: flags)) == expected)
     }
 
     @Test func changeSavesAndResetGoesBackToOne() throws {

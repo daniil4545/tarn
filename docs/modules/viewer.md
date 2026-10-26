@@ -79,7 +79,8 @@ Colors (T-151): the page takes the terminal theme. The page CSS already reads `-
 | `macos/Sources/Features/Tarn/ViewerDocument.swift` | text, disk text, conflict, 5 MB cap, `FileStamp`, `FileRead`, `TaskList` |
 | `macos/Sources/Features/Tarn/ViewerPaths.swift` | path resolution, file classification, binary test, language hint |
 | `macos/Sources/Features/Tarn/ViewerRules.swift` | content rule list, `tarn-md://` asset mapping |
-| `macos/Sources/Features/Tarn/ViewerWebView.swift` | `ViewerWebView` (key equivalents), `ViewerWebController` (load, scheme handler, navigation policy, theme colors), `ViewerColors` |
+| `macos/Sources/Features/Tarn/ViewerZoom.swift` | `ViewerZoom`: one page zoom for every pane, Safari steps, kept in user defaults |
+| `macos/Sources/Features/Tarn/ViewerWebView.swift` | `ViewerWebView` (key equivalents, font size menu actions as zoom), `ViewerWebController` (load, scheme handler, navigation policy, theme colors), `ViewerColors` |
 | `macos/Sources/Features/Tarn/ViewerClose.swift` | unsaved-edit question on tab, window and quit |
 | `macos/Sources/Features/Tarn/FileTree.swift` | tree rows, 5000-row cap, hides `.git`, `.DS_Store`, `node_modules` |
 | `macos/Sources/Features/Tarn/FileWatcher.swift` | vnode sources on file and folder, 0.3 s throttle |
