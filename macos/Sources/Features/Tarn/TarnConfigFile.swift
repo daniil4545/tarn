@@ -149,6 +149,9 @@ struct TarnConfigFile: Equatable {
         try Data(text.utf8).write(to: target, options: .atomic)
     }
 
+    /// tarn's defaults in the app bundle. They load before the user's config, so a user line wins.
+    static let defaultsURL = Bundle.main.url(forResource: "tarn-defaults", withExtension: "conf")
+
     /// Loads the file into a Ghostty config. Needs an absolute path, and Ghostty logs an error for
     /// a missing file, so check first.
     static func load(into config: ghostty_config_t, from url: URL?) {

@@ -51,6 +51,7 @@ enum KeyReference {
     static let groups: [Group] = [
         Group(title: "Tabs and windows", rows: [
             Row("New tab in the current workspace", action: "new_tab"),
+            Row("New workspace with one new tab", keys: "⇧⌘T"),
             Row("New window with Default", action: "new_window"),
             Row("Close the pane; the last pane closes the tab, the last tab the window", action: "close_surface"),
             Row("Close the tab", action: "close_tab"),

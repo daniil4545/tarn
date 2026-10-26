@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Ghostty
 import GhosttyKit
@@ -226,6 +227,20 @@ struct TarnConfigFileTests {
         try file.save(to: box.tarn)
         #expect(try FileManager.default.destinationOfSymbolicLink(atPath: box.tarn.path) == real.path)
         #expect(try String(contentsOf: real, encoding: .utf8) == "font-size = 18\n")
+    }
+
+    // MARK: - tarn defaults
+
+    @Test func theDefaultsFreeShiftCmdTForNewWorkspace() throws {
+        let url = try #require(TarnConfigFile.defaultsURL)
+        let file = try TarnConfigFile.read(from: url)
+        #expect(file.entries.contains { $0.key == "keybind" && $0.value == "super+shift+t=unbind" })
+    }
+
+    /// The defaults load first: were they loaded last, their unbind would drop this line.
+    @Test @MainActor func aUserKeybindWinsOverTheDefaults() throws {
+        let config = try TemporaryConfig("keybind = super+shift+t=text:tarn")
+        #expect(config.keyboardShortcut(for: "text:tarn") == .init("t", modifiers: [.command, .shift]))
     }
 }
 

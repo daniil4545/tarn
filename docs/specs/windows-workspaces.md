@@ -75,7 +75,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S1 | first launch | one window; sidebar shows `Default` with one tab; focus in its terminal |
 | S2 | cmd+T or + at the sidebar top | a tab in the current workspace, after its last tab, focused |
 | S3 | + on a workspace header | a tab in that workspace; the workspace unfolds |
-| S4 | New workspace, type a name | a workspace at the end of the list with one new tab in it, focused, so no workspace is ever empty |
+| S4 | New workspace (sidebar button or Shift+Cmd+T), type a name | a workspace at the end of the list with one new tab in it, focused, so no workspace is ever empty |
 | S5 | rename from the header menu | name changes in the sidebar and the window title |
 | S6 | delete a workspace with tabs | confirmation names the count; tabs move to the workspace above, or below if it is first (D13) |
 | S7 | drag a tab onto a header or between rows | the tab moves there; order is kept after a restart |
