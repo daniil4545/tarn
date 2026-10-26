@@ -46,7 +46,7 @@ export const GHOSTTY = {
 export const APPLIES = { restart: "Restart needed.", windows: "Applies to new windows." };
 
 export const TAB_ROWS = [
-  ["wide", "Wide", "Two lines: the task on top, then the agent, the folder and the time in its state."],
+  ["wide", "Wide", "Two lines: the task on top, then the folder and the time in its state."],
   ["narrow", "Narrow", "One line per tab: icon, title, state dot and key."],
 ];
 

@@ -76,13 +76,14 @@ function render() {
   }).join("") + '<button class="tab add" id="wsNew">+ New workspace</button>';
 }
 
-// The second line of a wide row: the agent, the folder and how long the agent is in its state.
+// The second line of a wide row: the folder and how long the agent is in its state. The icon
+// already names the agent, and its title often does too.
 function detail(tab, registry) {
   const session = terminals(tab.layout).map((t) => registry[t.pane]).find((x) => x && x.state !== "idle");
   const folder = tab.cwd.replace(/^\/Users\/[^/]+/, "~");
   if (!session) return folder;
   const minutes = Math.floor((clock.now() - session.since) / 60000);
-  return `claude · ${folder} · ${minutes < 1 ? "now" : `${minutes}m`}`;
+  return `${folder} · ${minutes < 1 ? "now" : `${minutes}m`}`;
 }
 
 function setUi(patch) {
