@@ -28,7 +28,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: ${{ inputs.upstream && 0 || 1 }}
+          fetch-depth: ${{ inputs.upstream && '0' || '1' }}
           persist-credentials: false
       - name: Merge upstream/main
         if: inputs.upstream
@@ -55,16 +55,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: ${{ inputs.upstream && 0 || 1 }}
+          fetch-depth: ${{ inputs.upstream && '0' || '1' }}
           persist-credentials: false
       - name: Merge upstream/main
         if: inputs.upstream
         run: |
           git -c user.name=ci -c user.email=ci@localhost fetch --quiet https://github.com/ghostty-org/ghostty.git main
           git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD
+      # The version comes from minimum_zig_version in build.zig.zon.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
-        with:
-          version: 0.17.0
       - name: Linters
         run: brew install swiftlint shellcheck
       - name: Build GhosttyKit
