@@ -46,6 +46,39 @@ enum TabStyle: String, CaseIterable, Identifiable {
     }
 }
 
+/// How tall a tab row of the sidebar is.
+enum TabRows: String, CaseIterable, Identifiable {
+    /// Two lines: the title (the task, as the agent sets it), then the folder and the time in state.
+    case wide
+    /// One line: icon, title, state badge and key.
+    case narrow
+
+    static let key = "TarnTabRows"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wide: "Wide"
+        case .narrow: "Narrow"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .wide: "Two lines: the task on top, then the folder and the time in its state."
+        case .narrow: "One line per tab: icon, title, state dot and key."
+        }
+    }
+
+    /// The second line of a wide row for an agent tab: the folder and the time in its state, in
+    /// minutes ("now" under one).
+    static func secondLine(folder: String, since: Date, now: Date) -> String {
+        let time = now.timeIntervalSince(since) < 60 ? "now" : TabCard.elapsed(from: since, to: now)
+        return folder.isEmpty ? time : "\(folder) · \(time)"
+    }
+}
+
 /// Whether the file viewer opens new panes. Off: Cmd+B opens nothing, path clicks go to
 /// Ghostty's opener, agents get an error; a pane already open stays until it is closed.
 enum FileViewerSetting {
@@ -177,6 +210,7 @@ struct TarnSettingsView: View {
 
 private struct TabsSettingsPane: View {
     @AppStorage(TabStyle.key) private var style: TabStyle = .sidebar
+    @AppStorage(TabRows.key) private var rows: TabRows = .wide
 
     var body: some View {
         Form {
@@ -189,6 +223,19 @@ private struct TabsSettingsPane: View {
                             .foregroundStyle(.secondary)
                     }
                     .tag(style)
+                }
+            }
+            .pickerStyle(.radioGroup)
+
+            Picker("Row size", selection: $rows) {
+                ForEach(TabRows.allCases) { rows in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(rows.title)
+                        Text(rows.detail)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .tag(rows)
                 }
             }
             .pickerStyle(.radioGroup)

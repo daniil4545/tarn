@@ -29,7 +29,7 @@ Reading: one `SidebarModel` per window controller derives `groups` from the regi
 | In | 2 s timer, only while the window is visible | `SidebarModel.init` |
 | In | `WorkspaceRegistry.runs(for:)` | `SidebarModel.refresh` |
 | In | `SessionRegistry.sessions` | `SidebarModel.agent(in:)` |
-| In | tab style `TarnTabStyle`, sidebar width and collapsed in `UserDefaults` | `SidebarLayout`, `Sidebar` |
+| In | tab style `TarnTabStyle`, row size `TarnTabRows` (wide by default: title, then folder and minutes in state; narrow: one line), sidebar width and collapsed in `UserDefaults` | `SidebarLayout`, `Sidebar` |
 | In | drags of a tab row or a workspace header (private pasteboard types `com.daniil4545.tarn.tab`, `.workspace`) | `TabDragSource.swift`, `SidebarModel.drop` |
 | Out | tab select, close, new tab, context menu | `SidebarModel` |
 | Out | workspace commands: new tab in, new workspace, rename, delete, fold, move tab, move workspace | `WorkspaceRegistry` |
@@ -113,6 +113,7 @@ Known limits: detection latency up to 2 s on a visible window; hidden windows re
 | `AgentProcessTests` | `displayTitle` cases, every agent has name and icon |
 | `WorkspaceTitleTests` | subtitle text |
 | `SidebarMenuTests` | every item of the tab and workspace menus sends a message its target handles (the selector once resolved to `performSelector:`); Rename Workspace opens its sheet |
+| `TabRowsTests` | the second line of a wide row: folder and minutes in state, "now" under a minute, hours, no folder |
 | `SidebarWidthTests` | width clamp (NaN, infinity, out of range); a click in the grab zone does not reach the rows, and a click 4 pt right of the line reaches the terminal (real hit test); during a drag the terminal keeps its frame and a wider sidebar lies over it |
 | `AgentProcessCacheTests` | the cache counts reads per pid, a non-agent answer is cached, the next turn reads again; five `SidebarModel.refresh` calls of a real controller read its shell once (fails if `makeTab` bypasses the cache) |
 
