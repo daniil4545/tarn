@@ -559,6 +559,19 @@ def run(base):
         check("W10h a tab let go outside the sidebar stays where it was", moving in ws_tabs("w2") and count(".dragghost") == 0)
         n(f"{TAB}[data-tabid='t1']").click()
         check("W10i a plain click still selects a tab", cur() == "t1")
+        # A release after a drag lands on the gap, not the row it left, except after Esc: W10k.
+        order = ws_tabs("w1")
+        start = n(f"{TAB}[data-tabid='t2']").bounding_box()
+        press_row(n(f"{TAB}[data-tabid='t2']"))
+        pg.keyboard.press("Escape")
+        pg.mouse.move(start["x"] + 30, start["y"] + start["height"] / 2)
+        pg.mouse.up()
+        check("W10k Esc and a release over the row it left select nothing and move nothing", cur() == "t1" and ws_tabs("w1") == order, cur())
+        last_ws = snap()["wss"][-1]["id"]
+        mouse_drag(n(f"{TAB}[data-tabid='t2']"), n("#wsNew"), 2.5)
+        check("W10l a tab let go below the rows goes to the end of the last workspace", ws_tabs(last_ws)[-1] == "t2", str(ws_tabs(last_ws)))
+        after_t2 = order[order.index("t2") + 1 :]
+        cmd(pg, "tab.move", {"id": "t2", "ws": "w1", "before": after_t2[0] if after_t2 else None})
         reply["answers"] = iter(["home"])
         pg.click("#wsNew")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
