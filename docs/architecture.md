@@ -75,7 +75,7 @@ Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names
 | Invariant | Where enforced | Checked by |
 |---|---|---|
 | `src/` (Zig core) is not modified | no file under `src/` in the branch diff | review of `git diff --stat` |
-| Swift changes outside `Features/Tarn/` only at insertion points of section 9 | section 9 lists all of them | review of `git diff upstream/main...HEAD` |
+| Swift changes outside `Features/Tarn/` only for identity and at insertion points of section 9: a call into our code with no logic; Ghostty's behavior changes by our layer on top, never inside its file (boundary in `.claude/CLAUDE.md`) | section 9 lists all of them | review of `git diff upstream/main...HEAD` |
 | The registry is the only writer of session state | `SessionRegistry.sessions` is `private(set)`; sidebar only reads | review (not verified by a test) |
 | `hook.sh` never blocks or fails the agent: exit 0, no output; `permission.sh` waits only while the app holds the connection | `exit 0` on every path; the agent's pipes are released first; `nc` runs in the background, the hook waits for it about 40 ms and then stops it | `python3 -I plugin/test/hook_test.py`: no surface, no app, an app that accepts and never reads, garbage input, a 200 KB event |
 | Nothing edits `~/.claude/settings.json` | hooks ship as a plugin | review |

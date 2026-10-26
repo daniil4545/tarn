@@ -42,11 +42,17 @@ enum KeyReference {
     /// Shown instead of keys for an action without a binding.
     static let notBound = "not bound"
 
+    /// The rule of a path click, shown under the keys. It follows Ghostty's link matcher
+    /// (`src/config/url.zig`): a bare name such as `README.md` has no slash and is not a link.
+    static let pathClickRule = "Cmd+click on a path with a slash opens the file in the viewer: "
+        + "docs/spec.md, ./notes.md, ../x/a.go, ~/todo.md or /tmp/a.log, with :line at the end "
+        + "(docs/spec.md:12). A bare file name, as ls prints it, is not a link."
+
     static let groups: [Group] = [
         Group(title: "Tabs and windows", rows: [
             Row("New tab in the current workspace", action: "new_tab"),
             Row("New window with Default", action: "new_window"),
-            Row("Close the pane; the last one closes the tab", action: "close_surface"),
+            Row("Close the pane; the last pane closes the tab, the last tab the window", action: "close_surface"),
             Row("Close the tab", action: "close_tab"),
             Row("Close the window", action: "close_window"),
             Row("Bring back what was closed", action: "undo", defaultKeys: "⌘Z"),

@@ -22,7 +22,10 @@ struct AreaDropOverlay: NSViewRepresentable {
 
 final class AreaDropView: NSView {
     weak var host: ViewerHost?
-    private let frameLayer = CALayer()
+    /// The line where the border of the new pane will be.
+    private let lineLayer = CALayer()
+    /// The gray plate with the reason of a refusal.
+    private let plate = NSView()
     private let label = NSTextField(labelWithString: "")
 
     override var isFlipped: Bool { true }
@@ -30,14 +33,16 @@ final class AreaDropView: NSView {
     override init(frame: NSRect) {
         super.init(frame: frame)
         wantsLayer = true
-        frameLayer.cornerRadius = 8
-        frameLayer.borderWidth = 2
-        frameLayer.isHidden = true
-        layer?.addSublayer(frameLayer)
+        lineLayer.cornerRadius = AreaDrop.lineWidth / 2
+        lineLayer.isHidden = true
+        layer?.addSublayer(lineLayer)
+        plate.wantsLayer = true
+        plate.layer?.cornerRadius = 6
+        plate.isHidden = true
         label.font = .systemFont(ofSize: 12)
-        label.wantsLayer = true
-        label.isHidden = true
-        addSubview(label)
+        label.textColor = .white
+        plate.addSubview(label)
+        addSubview(plate)
         // Text: the page of a viewer drags a file as a plain-text marker; `host.drag` tells it apart.
         registerForDraggedTypes([.tarnViewer, .ghosttySurfaceId, .string])
     }
@@ -119,32 +124,43 @@ final class AreaDropView: NSView {
         return nil
     }
 
-    // MARK: The frame
+    // MARK: The line
 
-    /// The frame only shows the place, like Rectangle's footprint: neutral, in the text color, and red
-    /// only for a refusal. It slides between zones.
+    /// A drop shows a line in the system accent where the border of the new pane will be, as a
+    /// split in macOS apps does; no fill and no frame of our own (T-151 bug 4). A refusal shows a
+    /// gray plate with the reason and no line. Line and plate move in one animation.
     private func showFrame(_ target: AreaDropTarget) {
         let refused = target.refusal != nil || target.plan == nil
+        let line = target.plan.flatMap { refused ? nil : AreaDrop.line(for: $0, frame: target.frame) }
+        let animated = !lineLayer.isHidden || !plate.isHidden
         effectiveAppearance.performAsCurrentDrawingAppearance {
-            let color = refused ? NSColor.systemRed : NSColor.labelColor
-            frameLayer.backgroundColor = color.withAlphaComponent(refused ? 0.18 : 0.12).cgColor
-            frameLayer.borderColor = color.withAlphaComponent(refused ? 1 : 0.45).cgColor
+            lineLayer.backgroundColor = NSColor.controlAccentColor.cgColor
+            plate.layer?.backgroundColor = NSColor.systemGray.withAlphaComponent(0.92).cgColor
         }
-        CATransaction.begin()
-        CATransaction.setAnimationDuration(frameLayer.isHidden ? 0 : 0.14)
-        frameLayer.frame = target.frame.insetBy(dx: 4, dy: 4)
-        frameLayer.isHidden = false
-        CATransaction.commit()
-        label.isHidden = target.refusal == nil
         if let hint = target.refusal {
             label.stringValue = hint
             label.sizeToFit()
-            label.setFrameOrigin(NSPoint(x: target.frame.midX - label.frame.width / 2, y: target.frame.midY - label.frame.height / 2))
+            plate.setFrameSize(NSSize(width: label.frame.width + 16, height: label.frame.height + 6))
+            label.setFrameOrigin(NSPoint(x: 8, y: 3))
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = animated ? Motion.base : 0
+            context.allowsImplicitAnimation = true
+            if let line {
+                lineLayer.frame = line
+            }
+            lineLayer.isHidden = line == nil
+            plate.isHidden = !refused
+            if refused {
+                let size = plate.frame.size
+                let origin = NSPoint(x: target.frame.midX - size.width / 2, y: target.frame.midY - size.height / 2)
+                plate.animator().frame = NSRect(origin: origin, size: size)
+            }
         }
     }
 
     private func hideFrame() {
-        frameLayer.isHidden = true
-        label.isHidden = true
+        lineLayer.isHidden = true
+        plate.isHidden = true
     }
 }

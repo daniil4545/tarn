@@ -28,6 +28,10 @@ struct HelpPane: View {
                     }
                 }
             }
+            Section("Files in terminal output") {
+                Text(KeyReference.pathClickRule)
+                    .font(.callout)
+            }
             Section {
                 Text("Ghostty defaults. A keybind line in the Ghostty config changes them, and Help shows the keys in effect.")
                     .font(.caption)

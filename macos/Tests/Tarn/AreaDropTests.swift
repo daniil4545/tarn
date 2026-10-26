@@ -225,4 +225,51 @@ struct AreaDropTests {
             if case .quarter? = outside?.plan { Issue.record("still a corner at \(point)") }
         }
     }
+
+    // MARK: The line
+
+    /// The line lies on the border of the new pane: the inner edge of the frame it will take.
+    @Test func theLineIsCenteredOnTheInnerEdgeOfTheFrame() throws {
+        let width = AreaDrop.lineWidth
+        // A strip, a corner, the half of a viewer and of the block.
+        let cases: [(CGPoint, AreaPayload)] = [
+            (CGPoint(x: 10, y: 300), .viewer(second.id)),
+            (CGPoint(x: 990, y: 300), .viewer(first.id)),
+            (CGPoint(x: 300, y: 10), .viewer(first.id)),
+            (CGPoint(x: 300, y: 590), .viewer(first.id)),
+            (CGPoint(x: 47, y: 47), .viewer(second.id)),
+            (CGPoint(x: 300, y: 300), .viewer(first.id)),
+            (CGPoint(x: 900, y: 150), file(from: first)),
+        ]
+        for (point, payload) in cases {
+            let result = try #require(target(point.x, point.y, tree: twoViewers, payload), "\(point)")
+            let plan = try #require(result.plan, "\(point)")
+            let line = try #require(AreaDrop.line(for: plan, frame: result.frame), "\(point)")
+            switch plan {
+            case .half(let edge), .quarter(_, let edge), .beside(_, let edge):
+                switch edge {
+                case .left: #expect(line.midX == result.frame.maxX && line.width == width && line.height == result.frame.height)
+                case .right: #expect(line.midX == result.frame.minX && line.width == width && line.height == result.frame.height)
+                case .top: #expect(line.midY == result.frame.maxY && line.height == width && line.width == result.frame.width)
+                case .bottom: #expect(line.midY == result.frame.minY && line.height == width && line.width == result.frame.width)
+                }
+            case .into:
+                Issue.record("unexpected into at \(point)")
+            }
+        }
+    }
+
+    @Test func theLineOfALeftStripSitsAtTheMiddleOfTheArea() throws {
+        let result = try #require(target(10, 300, tree: twoViewers, .viewer(second.id)))
+        let line = AreaDrop.line(for: try #require(result.plan), frame: result.frame)
+        #expect(line == CGRect(x: 498.5, y: 0, width: 3, height: 600))
+    }
+
+    @Test func aDropIntoAViewerShowsTheLineUnderItsTabBar() throws {
+        let rect = frame(of: second, in: twoViewers)
+        let result = try #require(target(rect.midX, rect.minY + 28, tree: twoViewers, .viewer(first.id)))
+        #expect(result.plan == .into(second.id))
+        let line = try #require(AreaDrop.line(for: .into(second.id), frame: result.frame))
+        #expect(line == CGRect(x: rect.minX, y: rect.minY + AreaDrop.tabBar - 1.5, width: rect.width, height: 3))
+    }
 }

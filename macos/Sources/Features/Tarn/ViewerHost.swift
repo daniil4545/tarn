@@ -383,7 +383,7 @@ final class ViewerHost: ObservableObject {
     private func detach(_ id: UUID, at point: NSPoint) {
         guard let pane = panes[id], let controller else { return }
         let created = TerminalController.newWindow(controller.ghostty)
-        created.window?.setFrameTopLeftPoint(point)
+        created.window.map { WindowPlacement.place($0, topLeft: point) }
         let moved = created.viewerHost.makeViewer(
             root: pane.model.tree.root, beside: created.viewerHost.blockLeaf, edge: .right, share: 0.6)
         moved.model.absorb(pane.model)

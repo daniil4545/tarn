@@ -41,13 +41,14 @@ private struct AreaSubtree<Block: View>: View {
                 ViewerPaneRepresentable(pane: pane, dark: isDark, dragHandle: ghostty.config.dragHandle)
             }
         case let .split(split):
-            SplitView(
-                split.direction == .horizontal ? .horizontal : .vertical,
-                .init(get: { CGFloat(split.ratio) }, set: { host.resize(node, to: Double($0)) }),
+            AreaSplit(
+                direction: split.direction == .horizontal ? .horizontal : .vertical,
+                ratio: CGFloat(split.ratio),
                 dividerColor: ghostty.config.splitDividerColor,
+                onResize: { host.resize(node, to: Double($0)) },
+                onEqualize: { host.equalize() },
                 left: { AreaSubtree(host: host, ghostty: ghostty, node: split.left, block: block) },
-                right: { AreaSubtree(host: host, ghostty: ghostty, node: split.right, block: block) },
-                onEqualize: { host.equalize() })
+                right: { AreaSubtree(host: host, ghostty: ghostty, node: split.right, block: block) })
         }
     }
 

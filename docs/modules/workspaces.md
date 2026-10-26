@@ -34,7 +34,7 @@ Reading: Ghostty alone writes tab order; this module writes only membership, nam
 | Out | native moves through Ghostty's `move_tab` action | `moveNatively` |
 | Out | window subtitle with the workspace name (empty with the top tab bar) | `WorkspaceTitle.apply` |
 | Out | snapshot saved with each window | `WorkspaceRestore.encode` |
-| Out | `terminalTabsDidChange` and a restorable-state refresh for changed sets | `publish` |
+| Out | `terminalTabsDidChange` (object: the registry, which its own observer ignores) and a restorable-state refresh for changed sets | `publish`. A publish made while observers run (the sidebar redraw calls `sync`) asks for one more round instead of nesting; at most 3 rounds, then an error is logged |
 
 ## How it works
 
