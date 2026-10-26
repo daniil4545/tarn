@@ -10,27 +10,33 @@ struct ThemePicker: View {
 
     @State private var filter = ""
 
-    private let catalog = ThemeCatalog.shared
-    private let names = ThemeCatalog.shared.names
+    /// The theme folders are read once per process, as the earlier list was: the row is built
+    /// again on each write and reload. A theme added while tarn runs shows after a restart.
+    private static let names = ThemeCatalog.shared.names
+    private static let base = ThemeCatalog.shared.base(among: names)
+    private static let rest = ThemeCatalog.shared.rest(among: names)
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Base themes").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
             VStack(alignment: .leading, spacing: 2) {
-                ThemeRow(name: "", chosen: current == "", pick: pick)
-                ForEach(catalog.base(among: names), id: \.self) { name in
+                if showsDefault { ThemeRow(name: "", chosen: current == "", pick: pick) }
+                ForEach(ThemeCatalog.matching(Self.base, query: filter), id: \.self) { name in
                     ThemeRow(name: name, chosen: current == name, pick: pick)
                 }
             }
             HStack {
                 Text("All themes").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
-                Text("\(rest.count)").font(.caption).foregroundStyle(.tertiary)
+                Text("\(Self.rest.count)").font(.caption).foregroundStyle(.tertiary)
             }
             .padding(.top, 4)
             TextField("Filter themes", text: $filter)
                 .textFieldStyle(.roundedBorder)
                 .accessibilityLabel("Filter themes")
             ScrollView {
+                if shown.isEmpty && !showsDefault && ThemeCatalog.matching(Self.base, query: filter).isEmpty {
+                    Text("No themes match").font(.caption).foregroundStyle(.secondary).padding(8)
+                }
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 2) {
                     ForEach(shown, id: \.self) { name in
                         ThemeRow(name: name, chosen: current == name, pick: pick)
@@ -44,12 +50,10 @@ struct ThemePicker: View {
         .padding(.top, 4)
     }
 
-    private var rest: [String] { catalog.rest(among: names) }
+    private var shown: [String] { ThemeCatalog.matching(Self.rest, query: filter) }
 
-    private var shown: [String] {
-        let query = filter.trimmingCharacters(in: .whitespaces)
-        return query.isEmpty ? rest : rest.filter { $0.localizedCaseInsensitiveContains(query) }
-    }
+    /// The default entry stays while the filter is empty or says "default".
+    private var showsDefault: Bool { ThemeCatalog.matching(["default"], query: filter).count == 1 }
 }
 
 /// A theme as a button: sample, name, and whether it is light or dark.
@@ -58,13 +62,15 @@ private struct ThemeRow: View {
     let chosen: Bool
     let pick: (String) -> Void
 
+    private var palette: ThemePalette? { name.isEmpty ? nil : ThemeSamples.palette(of: name) }
+
     var body: some View {
         Button { pick(name) } label: {
             HStack(spacing: 8) {
-                ThemeSample(palette: name.isEmpty ? nil : ThemeSamples.palette(of: name))
+                ThemeSample(palette: palette)
                 Text(name.isEmpty ? "default" : name).lineLimit(1).truncationMode(.tail)
                 Spacer(minLength: 4)
-                if let palette = name.isEmpty ? nil : ThemeSamples.palette(of: name) {
+                if let palette {
                     Text(palette.background.isLight ? "light" : "dark").font(.caption).foregroundStyle(.secondary)
                 }
             }

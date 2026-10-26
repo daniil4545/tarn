@@ -69,15 +69,12 @@ private struct GhosttyOptionRow: View {
         .padding(.vertical, 2)
     }
 
-    @ViewBuilder private var themePicker: some View {
-        switch store.display(option) {
-        case let .value(current):
-            ThemePicker(current: current) { store.set(option, to: $0) }
-        case .fromGhosttyConfig:
-            ThemePicker(current: nil) { store.set(option, to: $0) }
-        case .raw:
-            EmptyView()
-        }
+    /// One picker for every state of the row, so its filter and scroll survive a pick and Reset.
+    /// The value is nil while the Ghostty config decides.
+    private var themePicker: some View {
+        var current: String?
+        if case let .value(value) = store.display(option) { current = value }
+        return ThemePicker(current: current) { store.set(option, to: $0) }
     }
 
     /// Live options say nothing; the others say when they apply.
