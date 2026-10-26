@@ -41,7 +41,9 @@ check:
 release:
 	@test -z "$$(git status --porcelain)" || { echo "release: the tree has changes or untracked files, commit first"; exit 1; }
 	@test ! -L macos/GhosttyKit.xcframework || { echo "release: macos/GhosttyKit.xcframework must not be a link: the core is built here"; exit 1; }
-	nice -n 10 zig build -Doptimize=ReleaseFast -Demit-macos-app=false -j4
+	# An explicit version: on a tarn-v* tag build.zig panics, it wants upstream's vX.Y.Z tag.
+	nice -n 10 zig build -Doptimize=ReleaseFast -Demit-macos-app=false -j4 \
+		-Dversion-string=$$(sed -n 's/^ *\.version = "\(.*\)",/\1/p' build.zig.zon)+$$(git rev-parse --short HEAD)
 	rm -r -f $(SYMROOT)/$(CONFIG)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration $(CONFIG) SYMROOT=$(SYMROOT) \
 		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) $(NOCOV) -jobs 4 build 2>&1 | tail -15
