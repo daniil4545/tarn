@@ -1,6 +1,7 @@
-// Drag inside the sidebar: a tab row onto a header (end of that workspace) or onto a row (before
-// it in the upper half, after it in the lower), a workspace header into the gap nearest the
-// pointer. Both are marked by a line where the row will land, as SidebarModel.dropSlot in the app.
+// Drag inside the sidebar: a tab row onto a header (end of that workspace, the header gets a
+// frame) or onto a row (before it in the upper half, after it in the lower, a line where it
+// lands), a workspace header into the gap nearest the pointer (a line). Slots follow
+// SidebarModel.dropSlot in the app.
 import { bus } from "./bus.js";
 
 let drag = null; // {tab: id} | {ws: id}
@@ -34,20 +35,15 @@ export function startSidebarDrag() {
 
 function clearMarks() {
   document.querySelectorAll(".wsline").forEach((x) => x.remove());
+  document.querySelectorAll(".dropmark").forEach((x) => x.classList.remove("dropmark"));
 }
 
-// Where a dragged tab lands: {ws, before (a tab id or null for the end), edge (the element whose
-// top or bottom the line takes), bottom}. Null off the rows.
+// Where a dragged tab lands: {ws, before (a tab id or null for the end), head (over a header),
+// edge (the row whose top or bottom the line takes), bottom}. Null off the rows.
 function tabSlot(e) {
   const head = e.target.closest(".wsh[data-wsh]"), row = e.target.closest(".tab[data-tabid]");
-  const rowsOf = (h) => {
-    const rows = [];
-    for (let x = h.nextElementSibling; x?.matches(".tab[data-tabid]"); x = x.nextElementSibling) rows.push(x);
-    return rows;
-  };
   if (head) {
-    const rows = rowsOf(head);
-    return { ws: head.dataset.wsh, before: null, edge: rows.at(-1) ?? head, bottom: true };
+    return { ws: head.dataset.wsh, before: null, head };
   }
   if (!row) return null;
   let owner = row;
@@ -62,6 +58,7 @@ function markTab(e) {
   const at = tabSlot(e);
   if (!at) return;
   e.preventDefault();
+  if (at.head) return at.head.classList.add("dropmark");
   const sb = document.getElementById("sidebar"), r = at.edge.getBoundingClientRect();
   const line = Object.assign(document.createElement("div"), { className: "wsline" });
   line.style.top = `${(at.bottom ? r.bottom : r.top) - sb.getBoundingClientRect().top + sb.scrollTop - 1}px`;
