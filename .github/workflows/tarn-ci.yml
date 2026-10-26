@@ -1,0 +1,59 @@
+# tarn CI: the same checks as `make -f tarn.mk check` plus the browser demo checks.
+# Upstream workflows stay in this folder for clean upstream merges; they never run here.
+name: tarn-ci
+
+on:
+  push:
+    branches: [ci-probe]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tarn-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Demo unit tests
+        run: node --test demo/test/unit
+      - name: Demo checks
+        run: |
+          google-chrome --version
+          for c in 0 a b c e2e review; do
+            uv run -q --with playwright python -I demo/test/check_$c.py
+          done
+
+  app:
+    runs-on: xcode-27
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.17.0
+      - name: Toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          command -v swiftlint shellcheck || true
+      - name: Linters
+        run: brew install swiftlint shellcheck
+      - name: Build GhosttyKit
+        run: zig build -Demit-macos-app=false
+      - name: make -f tarn.mk check
+        run: make -f tarn.mk check
+      - name: Test log
+        if: failure()
+        run: tail -200 macos/build/test.log || true
