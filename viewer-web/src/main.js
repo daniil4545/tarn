@@ -27,6 +27,7 @@ import { protobuf } from "@codemirror/legacy-modes/mode/protobuf";
 import { javascript, json, typescript } from "@codemirror/legacy-modes/mode/javascript";
 import { css } from "@codemirror/legacy-modes/mode/css";
 import { html, xml } from "@codemirror/legacy-modes/mode/xml";
+import { createFind, findField } from "./find.js";
 
 const $ = id => document.getElementById(id);
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -264,7 +265,7 @@ function mountEditor(path, text, scroll) {
       doc: text,
       extensions: [
         ...(crlf ? [EditorState.lineSeparator.of("\r\n")] : []),
-        lineNumbers(), history(), drawSelection(), highlightActiveLine(),
+        lineNumbers(), history(), drawSelection(), highlightActiveLine(), findField,
         ...editorLanguage(docs[path]),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.updateListener.of(u => { if (u.docChanged && cm && !cm.applying) scheduleEdit(path, u.state.sliceDoc()); }),
@@ -447,7 +448,12 @@ window.tarn = {
     box.focus();
   },
   setFocus(on) { $("app").classList.toggle("focus", !!on); },
+  find(cmd) { find.run(cmd); },
 };
+
+const find = createFind({ box: () => $("vcontent"), editor: () => cm && cm.view, focusContent: () => window.tarn.focusContent() });
+$("vbody").append(find.bar);
+new MutationObserver(() => find.refresh()).observe($("vcontent"), { childList: true });
 
 function setMode(force) {
   const path = activePath();
