@@ -234,9 +234,10 @@ struct SidebarInteraction: NSViewRepresentable {
             menuProvider?()
         }
 
-        /// The row as drawn, for the drag image.
+        /// The row as drawn, for the drag image. SwiftUI draws the row in its hosting view: the
+        /// representable's own host draws nothing, and its snapshot is blank.
         private func snapshot() -> NSImage {
-            let host = superview ?? self
+            let host = window?.contentView ?? self
             let rect = host.convert(bounds, from: self)
             guard let rep = host.bitmapImageRepForCachingDisplay(in: rect) else {
                 return NSImage(size: bounds.size)
