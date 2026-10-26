@@ -66,7 +66,7 @@ While a file tab, a viewer or a terminal is dragged, a frame shows the space it 
 | elsewhere in a pane | the half of that pane on the nearest edge |
 | over the dragged pane itself | red frame, refused |
 
-Panes only split in two, so a quarter needs an area already split on that axis. Rectangle uses a 5 px edge because the screen edge stops the pointer; inside a window it does not, hence 24 px. The top edge gives the top half, not a full window (zoom is Ghostty's cmd+shift+enter); no thirds. Terminals: inside the block they use the pane zones; a lone terminal moves the whole block in area zones; split terminals get a red frame in area zones when viewers are open.
+Panes only split in two, so a quarter needs an area already split on that axis. Rectangle uses a 5 px edge because the screen edge stops the pointer; inside a window it does not, hence 24 px. The top edge gives the top half, not a full window (zoom is Ghostty's cmd+shift+enter); no thirds. Terminals: inside the block they use the pane zones; a lone terminal moves the whole block in area zones; split terminals get a red frame in area zones when viewers are open, except where a strip or a corner lies over the block: there it is a terminal's edge and Ghostty's pane zones work (T-178).
 
 ## 4. User scenarios
 

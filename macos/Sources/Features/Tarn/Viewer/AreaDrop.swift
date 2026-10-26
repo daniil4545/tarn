@@ -103,7 +103,14 @@ enum AreaDrop {
             // Without viewers the block is the whole area: Ghostty's zones are the only ones.
             guard !tree.viewers.isEmpty else { return nil }
             moving = block
-            if !loneTerminal { refusal = splitRefusal }
+            if !loneTerminal {
+                // Inside the block, its edge strips and corners too, the terminals split among
+                // themselves with Ghostty's zones; only a viewer's side refuses them.
+                let inBlock = frames(of: root, in: CGRect(origin: .zero, size: size))
+                    .contains { $0.0 === block && $0.1.contains(point) }
+                if inBlock { return nil }
+                refusal = splitRefusal
+            }
         case .file:
             // A file opens a new viewer or joins one; nothing leaves the layout yet.
             moving = nil
