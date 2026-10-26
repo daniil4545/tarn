@@ -95,9 +95,11 @@ struct AgentProcessCacheTests {
             window.close()
         }
 
-        // The shell takes a moment to become the pty's foreground process.
+        // The shell takes a moment to become the pty's foreground process. A hidden window sends
+        // no events, so the registry is asked to look as Ghostty's observers would.
         let deadline = ContinuousClock.now + .seconds(5)
         while reads.isEmpty, ContinuousClock.now < deadline {
+            WorkspaceRegistry.shared.sync()
             model.refresh()
             try await Task.sleep(for: .milliseconds(50))
         }
