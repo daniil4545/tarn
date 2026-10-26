@@ -897,14 +897,30 @@ def run(base):
             "R1 rows are wide by default: a second line with the folder",
             rows > 0 and count(f"{TAB}.wide") == rows and "~" in n(f"{TAB} .l2").first.inner_text(),
         )
-        cmd(pg, "config.set", {"key": "tab-rows", "value": "narrow"})
-        check("R2 Row size Narrow gives one-line rows", count(f"{TAB}.wide") == 0 and count(TAB) == rows)
+        pg.evaluate("document.activeElement.blur()")
+        pg.keyboard.press("Meta+Comma")
+        pg.click("#settings input[name='tabrows'][value='narrow']")
+        pg.click("#settingsClose")
+        check("R2 Settings, Row size, Narrow gives one-line rows", count(f"{TAB}.wide") == 0 and count(TAB) == rows)
+        pg.reload()
+        pg.wait_for_selector(TAB)
+        check("R2a Row size survives a reload", count(f"{TAB}.wide") == 0)
         cmd(pg, "config.set", {"key": "tab-rows", "value": "wide"})
         before = count(VIEWER)
         pg.click("#sbViewer")
         check("R3 the header viewer button opens the pane, as Cmd+B", count(VIEWER) == before + 1)
         pg.click("#sbViewer")
         check("R4 a second press hides it", not vis(VIEWER))
+        pg.click("#sbToggle")
+        pg.click("#sbViewer")
+        check("R4a the rail has the viewer button too", vis(VIEWER))
+        pg.click("#sbViewer")
+        pg.click("#sbToggle")
+        pg.evaluate("window.prompt = () => 'keyed'")
+        pg.evaluate("document.activeElement.blur()")
+        pg.keyboard.press("Control+Alt+Shift+T")
+        check("R4b Shift+Cmd+T (fallback Ctrl+Alt+Shift+T) asks a name and opens the workspace",
+              any(w["name"] == "keyed" for w in snap()["wss"]))
         pg.evaluate("window.prompt = () => 'top'")  # an earlier check replaced window.prompt
         pg.click("#wsNewTop")
         check(

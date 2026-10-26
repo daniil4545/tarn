@@ -7,6 +7,7 @@ import { flatTabs } from "./workspace.js";
 import { terminals } from "./layout.js";
 import { tabStatus, workspaceStatus, isAgentTab } from "./tab-status.js";
 import { esc } from "./esc.js";
+import { clock } from "./clock.js";
 
 export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
@@ -80,7 +81,7 @@ function detail(tab, registry) {
   const session = terminals(tab.layout).map((t) => registry[t.pane]).find((x) => x && x.state !== "idle");
   const folder = tab.cwd.replace(/^\/Users\/[^/]+/, "~");
   if (!session) return folder;
-  const minutes = Math.floor((Date.now() - session.since) / 60000);
+  const minutes = Math.floor((clock.now() - session.since) / 60000);
   return `claude · ${folder} · ${minutes < 1 ? "now" : `${minutes}m`}`;
 }
 
