@@ -113,6 +113,7 @@ Known limits: detection latency up to 2 s on a visible window; hidden windows re
 | `AgentProcessTests` | `displayTitle` cases, every agent has name and icon |
 | `WorkspaceTitleTests` | subtitle text |
 | `SidebarMenuTests` | every item of the tab and workspace menus sends a message its target handles (the selector once resolved to `performSelector:`); Rename Workspace opens its sheet |
+| `TabRowsTests` | the second line of a wide row: folder and minutes in state, "now" under a minute, hours, no folder |
 | `SidebarWidthTests` | width clamp (NaN, infinity, out of range); a click in the grab zone does not reach the rows, and a click 4 pt right of the line reaches the terminal (real hit test); during a drag the terminal keeps its frame and a wider sidebar lies over it |
 | `AgentProcessCacheTests` | the cache counts reads per pid, a non-agent answer is cached, the next turn reads again; five `SidebarModel.refresh` calls of a real controller read its shell once (fails if `makeTab` bypasses the cache) |
 
