@@ -1,5 +1,7 @@
+import AppKit
 import Foundation
 import Testing
+import WebKit
 @testable import Ghostty
 
 /// The window colors derived from a terminal theme (`docs/modules/settings.md`).
@@ -90,27 +92,35 @@ struct ThemeColorsTests {
 
     // MARK: - The window colors
 
-    @Test func aDarkThemeGivesDarkWindowColors() throws {
-        let chrome = ThemeChrome(try #require(ThemePalette(themeFile: Self.dracula)))
-        #expect(!chrome.isLight)
-        #expect(chrome.surface.hex == "#343641")
-        #expect(chrome.accent.hex == "#bd93f9")
-        // The divider is darker than the background.
-        #expect(chrome.divider.luminance < chrome.background.luminance)
-        #expect(chrome.muted.luminance < chrome.foreground.luminance)
+    /// Every derived color of a theme, as `#rrggbb`, in the order of the demo's `deriveChrome`.
+    private func derived(_ chrome: ThemeChrome) -> [String: String] {
+        [
+            "surface": chrome.surface.hex, "menu": chrome.menu.hex, "line": chrome.line.hex,
+            "divider": chrome.divider.hex, "muted": chrome.muted.hex, "key": chrome.key.hex,
+            "code": chrome.code.hex, "accent": chrome.accent.hex,
+        ]
     }
 
-    @Test func aLightThemeGivesLightWindowColors() throws {
+    /// Expected values come from `deriveChrome` of `demo/js/chrome-theme.js` (branch hotfix-1.0.1-5-demo),
+    /// run in node on the same background, text and palette. A change of the rule fails here.
+    @Test func aDarkThemeGivesTheDemoColors() throws {
+        let chrome = ThemeChrome(try #require(ThemePalette(themeFile: Self.dracula)))
+        #expect(!chrome.isLight)
+        #expect(derived(chrome) == [
+            "surface": "#343641", "menu": "#3d3f49", "line": "#494b54", "divider": "#16171e",
+            "muted": "#a9aaab", "key": "#86878b", "code": "#32343f", "accent": "#bd93f9",
+        ])
+    }
+
+    /// Latte is where the muted text fades less than 38% to keep contrast 4.5:1 with the background.
+    @Test func aLightThemeGivesTheDemoColors() throws {
         let chrome = ThemeChrome(try #require(ThemePalette(themeFile: Self.latte)))
         #expect(chrome.isLight)
-        #expect(chrome.surface.luminance < chrome.background.luminance)
-        #expect(chrome.divider.luminance < chrome.surface.luminance)
-        #expect(chrome.accent.hex == "#1e66f5")
-        // Text on the sidebar stays readable; muted text is weaker than text but still apart from the surface.
-        // The demo rule gives Latte muted text 2.66:1 (report W-G); the rule is kept as the user approved it.
-        #expect(chrome.foreground.contrast(with: chrome.surface) >= 4.5)
-        #expect(chrome.muted.contrast(with: chrome.surface) > 2.5)
-        #expect(chrome.muted.contrast(with: chrome.surface) < chrome.foreground.contrast(with: chrome.surface))
+        #expect(derived(chrome) == [
+            "surface": "#e5e7ed", "menu": "#dfe1e7", "line": "#d5d7df", "divider": "#babcbf",
+            "muted": "#696c82", "key": "#a6a8b6", "code": "#e7e9ee", "accent": "#1e66f5",
+        ])
+        #expect(chrome.muted.contrast(with: chrome.background) >= 4.5)
     }
 
     @Test func theAccentSkipsAColorBelowThreeToOne() {
@@ -168,6 +178,30 @@ struct ThemeColorsTests {
         #expect(variables["--p-accent"] == "#bd93f9")
         let script = ViewerColors.script(for: chrome)
         #expect(script.contains("\"--p-bg\":\"#282a36\""))
+    }
+
+    @Test func theColorsAreAUserScriptAtDocumentStart() throws {
+        let content = WKUserContentController()
+        let dracula = ThemeChrome(try #require(ThemePalette(themeFile: Self.dracula)))
+        ViewerColors.install(dracula, in: content)
+        ViewerColors.install(nil, in: content)
+        // The second call replaces the first: a reload gets only the current colors.
+        #expect(content.userScripts.count == 1)
+        #expect(content.userScripts[0].injectionTime == .atDocumentStart)
+        #expect(content.userScripts[0].isForMainFrameOnly)
+        #expect(content.userScripts[0].source == ViewerColors.script(for: nil))
+        ViewerColors.install(dracula, in: content)
+        #expect(content.userScripts[0].source == ViewerColors.script(for: dracula))
+    }
+
+    /// A theme, then `window-theme = system`: the color behind the page goes back to the page's own.
+    @Test func theColorBehindThePageReturnsToTheBuiltInOneWithoutATheme() throws {
+        let themed = ThemeChrome.current(for: try TemporaryConfig("background = #eff1f5\nforeground = #4c4f69"))
+        let system = ThemeChrome.current(for: try TemporaryConfig("window-theme = system\nbackground = #eff1f5"))
+        #expect(system == nil)
+        #expect(ViewerColors.underPageColor(for: themed, dark: true) == NSColor(srgbRed: 0xEF / 255, green: 0xF1 / 255, blue: 0xF5 / 255, alpha: 1))
+        #expect(ViewerColors.underPageColor(for: system, dark: true) == NSColor(srgbRed: 0.157, green: 0.165, blue: 0.212, alpha: 1))
+        #expect(ViewerColors.underPageColor(for: system, dark: false) == .white)
     }
 
     @Test func noThemeClearsTheViewerVariables() {
