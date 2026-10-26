@@ -316,6 +316,11 @@ final class SidebarModel: ObservableObject {
         registry.newTab(in: group.workspace.id, from: window)
     }
 
+    /// Opens, shows or hides the viewer pane of the window, as Cmd+B does.
+    func toggleViewer() {
+        (window?.windowController as? TerminalController)?.toggleViewer(nil)
+    }
+
     func newWorkspace() {
         guard let window else { return }
         WorkspacePrompt.newWorkspace(in: window)
@@ -760,6 +765,7 @@ struct Sidebar: View {
             if isCollapsed {
                 VStack(spacing: 4) {
                     collapseButton
+                    viewerButton
                     newTabButton
                 }
                 .padding(.vertical, 6)
@@ -778,6 +784,7 @@ struct Sidebar: View {
                 HStack {
                     collapseButton
                     Spacer()
+                    viewerButton
                     newWorkspaceButton
                     newTabButton
                 }
@@ -834,6 +841,12 @@ struct Sidebar: View {
     private var collapseButton: some View {
         SidebarButton(systemName: "sidebar.left", label: isCollapsed ? "Show Sidebar" : "Hide Sidebar") {
             isCollapsed.toggle()
+        }
+    }
+
+    private var viewerButton: some View {
+        SidebarButton(systemName: "sidebar.right", label: "Toggle File Viewer") {
+            model.toggleViewer()
         }
     }
 
