@@ -115,3 +115,47 @@ enum AgentProcess {
         return argv.count == argc ? argv : nil
     }
 }
+
+/// Answers of `AgentProcess.agent(pid:)` kept for the current run loop turn. Every tab window
+/// has its own sidebar model, and one tab event (a title change) makes all N of them rebuild
+/// their tabs; without this each model re-read every process, 2*N^2 reads per event
+/// (T-106). A pid read once in a turn is shared, so a pass costs one read per pid; an event has two passes (2*N reads, not 2*N^2). The
+/// next turn starts empty: the second refresh after a tab event and the 2 s timer see a
+/// process that was replaced by `exec`.
+@MainActor
+enum AgentProcessCache {
+    /// How a pid is read. Tests replace it to count the reads.
+    static var reader: (pid_t) -> String? = { AgentProcess.agent(pid: $0) }
+
+    /// The reads that missed the cache since the last `reset`.
+    private(set) static var misses = 0
+
+    private static var entries: [pid_t: String?] = [:]
+    private static var isClearScheduled = false
+
+    static func agent(pid: pid_t) -> String? {
+        if let hit = entries[pid] { return hit }
+        misses += 1
+        let agent = reader(pid)
+        entries[pid] = .some(agent)
+        scheduleClear()
+        return agent
+    }
+
+    /// Forgets every answer and the miss count.
+    static func reset() {
+        entries.removeAll()
+        misses = 0
+    }
+
+    private static func scheduleClear() {
+        guard !isClearScheduled else { return }
+        isClearScheduled = true
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                isClearScheduled = false
+                entries.removeAll()
+            }
+        }
+    }
+}

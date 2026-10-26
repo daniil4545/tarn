@@ -4,6 +4,8 @@ import SwiftUI
 struct AgentBadge: View {
     let agent: AgentSession
 
+    @Environment(\.chromeInk) private var ink
+
     var body: some View {
         if let color {
             Circle()
@@ -13,12 +15,13 @@ struct AgentBadge: View {
         }
     }
 
+    /// The four state colors stay the same in every theme; only "done and seen" follows the text color.
     private var color: Color? {
         switch agent.state {
         case .working: .blue
         case .permission: .orange
         case .waiting where agent.failed: .red
-        case .waiting: agent.seen ? Color.secondary.opacity(0.35) : .green
+        case .waiting: agent.seen ? ink.text(0.35) : .green
         case .idle: nil
         }
     }

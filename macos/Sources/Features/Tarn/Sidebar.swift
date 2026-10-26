@@ -63,7 +63,21 @@ final class SidebarModel: ObservableObject {
     /// A quick answer was given on this tab's card; it stays closed until the pointer leaves.
     var answeredTab: ObjectIdentifier?
 
-    private let card = TabCardPopover()
+    /// The one card popover, made when the first card opens: an `NSPopover` with its hosting
+    /// controller cost about 4 ms of a window's first layout (T-149) and most windows never open one.
+    private var cardStorage: TabCardPopover?
+
+    private var card: TabCardPopover {
+        if let cardStorage { return cardStorage }
+        let card = TabCardPopover()
+        card.onClose = { [weak self] in self?.cardTab = nil }
+        card.onHoverChange = { [weak self] in
+            guard let self, !self.card.isHovering, let id = self.cardTab else { return }
+            self.closeCardSoon(id)
+        }
+        cardStorage = card
+        return card
+    }
 
     /// The tab under the pointer; a force click there opens its card at once.
     var hoveredTab: ObjectIdentifier?
@@ -88,12 +102,6 @@ final class SidebarModel: ObservableObject {
 
     init() {
         SessionRegistry.shared.start()
-
-        card.onClose = { [weak self] in self?.cardTab = nil }
-        card.onHoverChange = { [weak self] in
-            guard let self, !self.card.isHovering, let id = self.cardTab else { return }
-            self.closeCardSoon(id)
-        }
 
         pressureMonitor = NSEvent.addLocalMonitorForEvents(matching: .pressure) { [weak self] event in
             MainActor.assumeIsolated {
@@ -206,7 +214,7 @@ final class SidebarModel: ObservableObject {
             .compactMap { view in
                 view.surfaceModel?.foregroundPID
                     .flatMap { pid_t(exactly: $0) }
-                    .flatMap(AgentProcess.agent)
+                    .flatMap(AgentProcessCache.agent)
                     .map { (view: view, agent: $0) }
             }
             .first
@@ -240,7 +248,7 @@ final class SidebarModel: ObservableObject {
               let tab = groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }),
               let anchor = rowAnchors[id]?.view, anchor.window != nil
         else {
-            card.close()
+            cardStorage?.close()
             return
         }
         card.show(tab, anchor: anchor) { [weak self] in
@@ -517,7 +525,7 @@ final class SidebarModel: ObservableObject {
 
     private func menuItem(_ title: String, isEnabled: Bool = true, handler: @escaping () -> Void) -> NSMenuItem {
         let action = MenuAction(handler)
-        let item = NSMenuItem(title: title, action: #selector(MenuAction.perform(_:)), keyEquivalent: "")
+        let item = NSMenuItem(title: title, action: #selector(MenuAction.run(_:)), keyEquivalent: "")
         item.target = action
         // The item's target is weak, so the item itself keeps the action alive.
         item.representedObject = action
@@ -525,7 +533,9 @@ final class SidebarModel: ObservableObject {
         return item
     }
 
-    /// Runs a closure as a menu item's action.
+    /// Runs a closure as a menu item's action. The method is not called `perform`: the
+    /// selector `MenuAction.perform(_:)` resolves to `NSObject.perform(_:)` (`performSelector:`),
+    /// so every item of the menus once sent the wrong message and did nothing.
     private final class MenuAction: NSObject {
         private let handler: () -> Void
 
@@ -533,7 +543,7 @@ final class SidebarModel: ObservableObject {
             self.handler = handler
         }
 
-        @objc func perform(_ sender: Any?) {
+        @objc func run(_ sender: Any?) {
             handler()
         }
     }
@@ -562,11 +572,14 @@ struct SidebarLayout<Content: View>: View {
     /// The width during a resize drag. It is stored once the drag ends: a stored width
     /// re-lays out every tab window, hidden ones included, which made the drag stutter.
     @State private var dragWidth: Double?
+    @State private var dividerHovered = false
 
-    init(model: SidebarModel, ghostty: Ghostty.App, @ViewBuilder content: () -> Content) {
+    /// `dragWidth` starts a layout as if a resize drag were under way; tests use it.
+    init(model: SidebarModel, ghostty: Ghostty.App, dragWidth: Double? = nil, @ViewBuilder content: () -> Content) {
         self.model = model
         self.ghostty = ghostty
         self.content = content()
+        _dragWidth = State(initialValue: dragWidth)
     }
 
     var body: some View {
@@ -577,47 +590,110 @@ struct SidebarLayout<Content: View>: View {
         }
     }
 
+    private var layoutWidth: Double {
+        Sidebar.widths(isCollapsed: isCollapsed, stored: width, drag: dragWidth).layout
+    }
+
+    private var shownWidth: Double {
+        Sidebar.widths(isCollapsed: isCollapsed, stored: width, drag: dragWidth).shown
+    }
+
     private var sidebarAndContent: some View {
         HStack(spacing: 0) {
-            Sidebar(model: model, isCollapsed: $isCollapsed)
-                .frame(width: isCollapsed ? Sidebar.collapsedWidth : dragWidth ?? width)
-                .background(ghostty.config.backgroundColor.opacity(ghostty.config.backgroundOpacity))
-                .environment(\.colorScheme, NSColor(ghostty.config.backgroundColor).isLightColor ? .light : .dark)
-                .overlay(alignment: .trailing) {
-                    if !isCollapsed { resizeHandle }
-                }
-
-            Rectangle()
-                .fill(Color.primary.opacity(0.12))
-                .frame(width: Sidebar.dividerWidth)
+            sidebarColumn
+                // Above the terminal beside it: the grab zone and, while the sidebar is
+                // dragged wider, the sidebar itself lie over the terminal.
+                .zIndex(1)
 
             content
         }
     }
 
-    /// An invisible strip along the sidebar's right edge that resizes it. It lies inside
-    /// the sidebar: the terminal view next to it would take the clicks and set its own cursor.
-    private var resizeHandle: some View {
+    /// Live resize without a terminal resize. Every frame of a drag would give the terminal a new
+    /// size, and each size is a pty resize, a reflow and a SIGWINCH for the shell. The column
+    /// therefore holds its space in the layout at the width the drag began with, and the
+    /// sidebar and its divider are drawn over that space, reaching past it when the sidebar
+    /// grows. The terminal keeps its size until the mouse is released; then the stored width
+    /// changes the layout once. This is the deferred resize of an `NSSplitView` that
+    /// does not adjust its subviews while the divider moves, and the same idea as cmux's
+    /// coalesced resizes during a divider drag (changelog 0.64.20; behavior only, not code).
+    private var sidebarColumn: some View {
         Color.clear
-            .frame(width: 10)
-            .contentShape(Rectangle())
-            .gesture(resizeGesture)
-            .onHover { isHovering in
-                if isHovering {
-                    NSCursor.resizeLeftRight.push()
-                } else {
-                    NSCursor.pop()
+            .frame(width: layoutWidth + Sidebar.dividerWidth)
+            .overlay(alignment: .leading) {
+                HStack(spacing: 0) {
+                    Sidebar(model: model, isCollapsed: $isCollapsed)
+                        .frame(width: shownWidth)
+                        .background(sidebarFill)
+                        .environment(\.colorScheme, isLightTheme ? .light : .dark)
+                        .environment(\.chromeInk, ink)
+                        .foregroundStyle(ink.text())
+
+                    divider
+                        .zIndex(1)
+
+                    // The sidebar is narrower than its held space: the rest takes the sidebar's fill, so the
+                    // edge moves with the pointer and the terminal stays where it is.
+                    if shownWidth < layoutWidth {
+                        sidebarFill.frame(width: layoutWidth - shownWidth).allowsHitTesting(false)
+                    }
                 }
             }
+    }
+
+    /// The colors of the terminal theme (`window-theme` auto or ghostty), or nil for the built-in
+    /// palettes. Config changes arrive through `ghostty.config`, so a theme change repaints at once.
+    private var ink: ChromeInk {
+        ChromeInk(theme: ThemeChrome.current(for: ghostty.config))
+    }
+
+    private var isLightTheme: Bool {
+        ink.theme?.isLight ?? NSColor(ghostty.config.backgroundColor).isLightColor
+    }
+
+    private var sidebarFill: Color {
+        let base = ink.theme?.surface.color ?? ghostty.config.backgroundColor
+        return base.opacity(ghostty.config.backgroundOpacity)
+    }
+
+    /// The line between the sidebar and the terminal. In the expanded sidebar it carries the
+    /// grab zone that resizes it, the way Ghostty's `SplitView.Divider` does: a visible line
+    /// in a wider transparent frame that straddles the edge.
+    private var divider: some View {
+        ZStack {
+            if !isCollapsed {
+                Color.clear
+                    .frame(width: Sidebar.edgeGrabWidth)
+                    .contentShape(Rectangle())
+                    .gesture(resizeGesture)
+                    .backport.pointerStyle(.resizeLeftRight)
+                    .onHover { isHovering in
+                        // macOS 15 and later use the pointer style above.
+                        if #available(macOS 15, *) { return }
+                        if isHovering {
+                            NSCursor.resizeLeftRight.push()
+                        } else {
+                            NSCursor.pop()
+                        }
+                    }
+                    .onHover { dividerHovered = $0 }
+                    // Most of the zone lies over the sidebar: the terminal keeps its first columns.
+                    .offset(x: -Sidebar.edgeGrabOffset)
+            }
+            Rectangle()
+                // The theme's accent marks the grab zone while the pointer is on it or it is dragged.
+                .fill(dividerHovered || dragWidth != nil ? ink.accent : ink.divider)
+                .frame(width: Sidebar.dividerWidth)
+        }
+        .frame(width: Sidebar.dividerWidth)
     }
 
     private var resizeGesture: some Gesture {
         DragGesture(minimumDistance: 1, coordinateSpace: .global)
             .onChanged { value in
-                let start = widthAtDragStart ?? width
+                let start = widthAtDragStart ?? Sidebar.clampedWidth(width)
                 widthAtDragStart = start
-                let range = Sidebar.widthRange
-                dragWidth = min(max((start + value.translation.width).rounded(), range.lowerBound), range.upperBound)
+                dragWidth = Sidebar.clampedWidth(start + value.translation.width)
             }
             .onEnded { _ in
                 if let dragWidth { width = dragWidth }
@@ -633,6 +709,14 @@ struct Sidebar: View {
     static let widthKey = "TarnSidebarWidth"
     static let defaultWidth: Double = 200
     static let widthRange: ClosedRange<Double> = 120...400
+    /// The width of the transparent zone over the sidebar's edge that takes the resize drag.
+    /// Mostly over the sidebar: `edgeGrabOverTerminal` points of it reach the terminal.
+    static let edgeGrabWidth: CGFloat = 14
+    /// How much of the zone lies over the terminal: its first column and the click or selection
+    /// that starts at the edge of a line must reach the terminal (3 pt, as Ghostty's divider takes).
+    static let edgeGrabOverTerminal: CGFloat = 3
+    /// How far the zone moves left of its centered place on the line.
+    static var edgeGrabOffset: CGFloat { (edgeGrabWidth - CGFloat(dividerWidth)) / 2 - edgeGrabOverTerminal }
     static let collapsedWidth: Double = 40
     static let dividerWidth: Double = 1
     /// The space at the sides of the list and between rows. Rows and headers pad themselves
@@ -640,6 +724,22 @@ struct Sidebar: View {
     /// its line.
     static let listInset: CGFloat = 6
     static let rowGap: CGFloat = 2
+
+    /// `width` held in `widthRange`. A stored value outside the range, or not a number, would
+    /// draw a sidebar that is hidden, too wide or of no width, so it falls back instead.
+    static func clampedWidth(_ width: Double) -> Double {
+        guard width.isFinite else { return defaultWidth }
+        return min(max(width.rounded(), widthRange.lowerBound), widthRange.upperBound)
+    }
+
+    /// The width the sidebar holds in the layout, which sets the terminal's size, and the width it
+    /// is drawn at. They differ only during a resize drag: the drag moves the drawn width and
+    /// leaves the layout alone until it ends.
+    static func widths(isCollapsed: Bool, stored: Double, drag: Double?) -> (layout: Double, shown: Double) {
+        guard !isCollapsed else { return (collapsedWidth, collapsedWidth) }
+        let layout = clampedWidth(stored)
+        return (layout, drag.map(clampedWidth) ?? layout)
+    }
 
     /// The width the sidebar and its divider currently take out of a window's content.
     static var occupiedWidth: CGFloat {
@@ -651,7 +751,7 @@ struct Sidebar: View {
             return collapsedWidth + dividerWidth
         }
 
-        let width = defaults.object(forKey: widthKey) as? Double ?? defaultWidth
+        let width = clampedWidth(defaults.object(forKey: widthKey) as? Double ?? defaultWidth)
         return width + dividerWidth
     }
 
@@ -668,7 +768,7 @@ struct Sidebar: View {
                 .padding(.vertical, 6)
 
                 ScrollView(showsIndicators: false) {
-                    LazyVStack(spacing: 0) {
+                    VStack(spacing: 0) {
                         // The rail has no headers, so it lists every tab, folded or not.
                         ForEach(model.groups) { group in
                             ForEach(group.tabs) { tab in
@@ -690,14 +790,18 @@ struct Sidebar: View {
                 GeometryReader { proxy in
                     ScrollView {
                         VStack(spacing: 0) {
-                            LazyVStack(alignment: .leading, spacing: 0) {
+                            VStack(alignment: .leading, spacing: 0) {
                                 ForEach(model.groups) { group in
                                     WorkspaceHeader(model: model, group: group)
                                     ForEach(visibleTabs(of: group)) { tab in
                                         SidebarRow(model: model, tab: tab, isCompact: false)
+                                            .transition(.opacity)
                                     }
                                 }
                             }
+                            // Only a fold or unfold animates: a title change or a reorder keeps
+                            // its jump, as the rows of a moved tab are not new rows.
+                            .animation(Motion.fold, value: foldedWorkspaces)
                             // The rest of the height takes drops after the last row.
                             tail.frame(maxWidth: .infinity, minHeight: 24, maxHeight: .infinity)
                         }
@@ -707,6 +811,11 @@ struct Sidebar: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// The workspaces that are folded, which the fold animation follows.
+    private var foldedWorkspaces: [Workspace.ID] {
+        model.groups.filter(\.workspace.collapsed).map(\.id)
     }
 
     /// A folded workspace shows no tabs; selecting one of them unfolds it.
@@ -752,17 +861,22 @@ private struct SidebarButton: View {
     let action: () -> Void
 
     @State private var isHovering = false
+    @Environment(\.chromeInk) private var ink
 
     var body: some View {
         Button(action: action) {
             Image(systemName: systemName)
                 .font(.system(size: size * 0.45, weight: .medium))
                 .frame(width: size, height: size)
-                .background(RoundedRectangle(cornerRadius: 5).fill(Color.primary.opacity(isHovering ? 0.12 : 0)))
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(ink.text(isHovering ? 0.12 : 0))
+                        .animation(Motion.hover, value: isHovering)
+                )
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(ink.muted)
         .onHover { isHovering = $0 }
         .help(label)
         .accessibilityLabel(label)
@@ -777,12 +891,14 @@ private struct SidebarRow: View {
     let isCompact: Bool
 
     @State private var isHovering = false
+    @Environment(\.chromeInk) private var ink
 
     var body: some View {
         content
             .font(.system(size: 13))
-            .foregroundStyle(Color.primary.opacity(tab.isSelected ? 1 : 0.7))
-            .background(RoundedRectangle(cornerRadius: 5).fill(fill))
+            .foregroundStyle(ink.text(tab.isSelected ? 1 : 0.7))
+            // Scoped to the fill: the close button and the card logic still switch at once.
+            .background(RoundedRectangle(cornerRadius: 5).fill(fill).animation(Motion.hover, value: fill))
             .background(RowAnchor { model.rowAnchors[tab.id] = WeakView(view: $0) })
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -864,8 +980,8 @@ private struct SidebarRow: View {
     }
 
     private var fill: Color {
-        if tab.isSelected { return Color.primary.opacity(0.14) }
-        return Color.primary.opacity(isHovering ? 0.07 : 0)
+        if tab.isSelected { return ink.text(0.14) }
+        return ink.text(isHovering ? 0.07 : 0)
     }
 
     @ViewBuilder
@@ -920,7 +1036,7 @@ private struct SidebarRow: View {
             if let keyEquivalent = tab.keyEquivalent {
                 Text(keyEquivalent)
                     .font(.system(size: 11))
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(ink.faint)
             }
         }
         .padding(.leading, 4)

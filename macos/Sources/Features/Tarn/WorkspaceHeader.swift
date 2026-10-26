@@ -9,11 +9,15 @@ struct WorkspaceHeader: View {
     let group: SidebarModel.Group
 
     @State private var isHovering = false
+    @Environment(\.chromeInk) private var ink
 
     var body: some View {
         HStack(spacing: 4) {
-            Image(systemName: group.workspace.collapsed ? "chevron.right" : "chevron.down")
+            // One arrow turned a quarter: the fold animates it instead of swapping two symbols.
+            Image(systemName: "chevron.right")
                 .font(.system(size: 8, weight: .bold))
+                .rotationEffect(.degrees(group.workspace.collapsed ? 0 : 90))
+                .animation(Motion.fold, value: group.workspace.collapsed)
                 .frame(width: 10)
             Text(group.workspace.name)
                 .lineLimit(1)
@@ -21,7 +25,7 @@ struct WorkspaceHeader: View {
             if group.workspace.collapsed {
                 if let agent = group.worstAgent { AgentBadge(agent: agent) }
                 Text("\(group.tabs.count)")
-                    .foregroundStyle(.tertiary)
+                    .foregroundStyle(ink.faint)
             }
             if isHovering {
                 Button {
@@ -38,7 +42,7 @@ struct WorkspaceHeader: View {
             }
         }
         .font(.system(size: 11, weight: .semibold))
-        .foregroundStyle(.secondary)
+        .foregroundStyle(ink.muted)
         .padding(.horizontal, 6)
         .padding(.top, 8)
         .padding(.bottom, 2)
