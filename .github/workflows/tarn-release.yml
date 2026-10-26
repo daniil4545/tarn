@@ -6,7 +6,6 @@ name: tarn-release
 on:
   push:
     tags: ["tarn-v*"]
-    branches: [ci-probe]
 
 permissions:
   contents: write
