@@ -58,11 +58,20 @@ Display of a row: the value in the file if the control can show it; a raw read-o
 
 Help: `KeyReference.groups` is a fixed list of actions (Ghostty has no call that lists bindings). For each, `keyboardShortcut(for:)` gives the key in effect, else "not bound". Actions bound as performable (undo, redo, clear screen, search) get no trigger from Ghostty, so those rows carry the Ghostty default keys. Viewer keys come from `ViewerWebView.keyTable`, source "tarn".
 
+Theme row (T-151): under the row, `ThemePicker` lists the base themes (the entry `default`, then Catppuccin Latte, Catppuccin Mocha, Atom One Light, Atom One Dark, Gruvbox Light, Gruvbox Dark, Dracula; `ThemeCatalog.baseNames`) with a sample each (background, text, palette red, green, yellow, blue, read from the theme file by `ThemeCatalog.palette(of:)`), then every other installed theme (771 minus 7) with a filter. One theme is chosen and written as `theme = <name>`; there is no light and dark pair. The names are the files of `ghostty/themes` in the user's folder and the app bundle, the folders Ghostty reads (`src/config/theme.zig:20`).
+
+Window colors from the theme: `ThemePalette(config:)` reads `background`, `foreground` and `palette` of the live config with `ghostty_config_get`; `ThemeChrome` derives the rest with one rule for every theme (the rule of `demo/js/chrome-theme.js`): sidebar surface = background plus 6% of the text color, divider = background toward black (22% on a light theme, 45% on a dark one), muted text = text 38% toward the background, faint text 55%, accent = the first of blue, bright blue, cyan, magenta with contrast 3:1 against the background, else the text color. Light or dark is the background luminance (WCAG, above 0.4). `window-theme` `auto` and `ghostty` use this; `system`, `light` and `dark` keep the built-in palettes (`ThemeChrome.current` returns nil). The sidebar and the viewer repaint on `ghosttyConfigDidChange`, so a theme change needs no restart.
+
+Cmd+W closes the settings window: the menu item Close sends `close:` (and Close Window `closeWindow:`) down the responder chain, and `NSWindow` answers neither; `TarnSettingsController` has both actions, as `AboutController` does.
+
 ## Files
 
 | Path | Role |
 |---|---|
-| `macos/Sources/Features/Tarn/TarnSettings.swift` | `TabStyle`, `TarnSettingsController`, `TarnSettingsView` sections |
+| `macos/Sources/Features/Tarn/TarnSettings.swift` | `TabStyle`, `TarnSettingsController` (also the `close:` and `closeWindow:` actions), `TarnSettingsView` sections |
+| `macos/Sources/Features/Tarn/ThemeColors.swift` | `ThemeColor` (mix, luminance, contrast), `ThemePalette` (theme file and config reading, accent), `ThemeChrome` (derived window colors), `ChromeInk` environment |
+| `macos/Sources/Features/Tarn/ThemeCatalog.swift` | theme folders, names, base list, palette from a theme file |
+| `macos/Sources/Features/Tarn/ThemePicker.swift` | the base list, the filter and the full list with samples |
 | `macos/Sources/Features/Tarn/TarnConfigFile.swift` | file model (entries and verbatim lines), parse, set, remove, text, path, save, `load` |
 | `macos/Sources/Features/Tarn/GhosttyOption.swift` | the option catalog |
 | `macos/Sources/Features/Tarn/GhosttyOptionReader.swift` | effective value through `ghostty_config_get` |
@@ -113,6 +122,9 @@ All in `macos/Tests/Tarn/`.
 | `TarnConfigFileTests` | round trip, comments kept, header, repeatable keys, line breaks, XDG path, Ghostty reads what we wrote, precedence over user file, include and theme, font-family clear line, reset, empty and missing file, failed write, symlink |
 | `GhosttyOptionStoreTests` | set writes and reloads, default value still written, reset removes one line, empty default entry, bad number, catalog order, hand edit kept between writes, failed write, raw display, unreadable options, notification source |
 | `GhosttyOptionTests` | unique keys, choice defaults, catalog defaults equal a loaded config, repeatable clear, apply labels, whole numbers |
+| `ThemeColorsTests` | hex and mix math, WCAG contrast, theme file parse (comments, bad lines, missing colors), palette from a config, light and dark window colors, accent skips a color below 3:1 and falls back to the text color, the rule over every installed theme, `window-theme` switch, viewer variables |
+| `ThemeCatalogTests` | the base list is the seven themes and each is installed, the rest is the others, folders merge and the user's wins, a path is not a theme, XDG folder |
+| `SettingsWindowCloseTests` | the settings controller answers `close:` and `closeWindow:` |
 | `KeyReferenceTests` | unique ids, each Ghostty action resolves, unbound text, keybind change visible, performable defaults, viewer keys from the table |
 
 ## Extending it

@@ -58,6 +58,7 @@ private struct GhosttyOptionRow: View {
                 control
             }
             Text(option.help).font(.caption).foregroundStyle(.secondary)
+            if option.control == .theme { themePicker }
             if let applies = appliesText {
                 Text(applies).font(.caption).foregroundStyle(.secondary)
             }
@@ -66,6 +67,17 @@ private struct GhosttyOptionRow: View {
             }
         }
         .padding(.vertical, 2)
+    }
+
+    @ViewBuilder private var themePicker: some View {
+        switch store.display(option) {
+        case let .value(current):
+            ThemePicker(current: current) { store.set(option, to: $0) }
+        case .fromGhosttyConfig:
+            ThemePicker(current: nil) { store.set(option, to: $0) }
+        case .raw:
+            EmptyView()
+        }
     }
 
     /// Live options say nothing; the others say when they apply.
@@ -102,11 +114,10 @@ private struct GhosttyOptionRow: View {
             }
             .labelsHidden().fixedSize()
         case .theme:
-            Picker(option.key, selection: binding) {
-                Text(current == nil ? GhosttyOptionStore.fromGhosttyConfigText : "default").tag("")
-                ForEach(ThemeList.names, id: \.self) { Text($0).tag($0) }
-            }
-            .labelsHidden().fixedSize()
+            // The choice is made in the list under the row.
+            Text(current.map { $0.isEmpty ? "default" : $0 } ?? GhosttyOptionStore.fromGhosttyConfigText)
+                .font(.system(.body, design: .monospaced))
+                .foregroundStyle(.secondary)
         case let .number(range):
             CommittedField(option: option, store: store, text: current, range: range)
         case let .slider(range, step):
@@ -178,20 +189,4 @@ private struct CommittedSlider: View {
                 .frame(width: 40, alignment: .trailing)
         }
     }
-}
-
-/// Theme names Ghostty can load: the user's `ghostty/themes` and the app's own folder
-/// (`src/config/theme.zig:20`).
-private enum ThemeList {
-    static let names: [String] = {
-        let environment = ProcessInfo.processInfo.environment
-        let config = environment["XDG_CONFIG_HOME"].flatMap { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : nil }
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config")
-        let folders = [
-            config.appendingPathComponent("ghostty/themes"),
-            Bundle.main.resourceURL?.appendingPathComponent("ghostty/themes"),
-        ].compactMap { $0 }
-        let all = folders.flatMap { (try? FileManager.default.contentsOfDirectory(atPath: $0.path)) ?? [] }
-        return Set(all.filter { !$0.hasPrefix(".") }).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
-    }()
 }
