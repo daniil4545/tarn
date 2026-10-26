@@ -105,6 +105,11 @@ final class ViewerWebView: WKWebView {
         onCommand?("closeTab")
     }
 
+    /// The font size items of the View menu (Cmd+=, Cmd+-, Cmd+0) zoom the viewer, not the terminal.
+    @IBAction func increaseFontSize(_ sender: Any?) { ViewerZoom.change(by: 1) }
+    @IBAction func decreaseFontSize(_ sender: Any?) { ViewerZoom.change(by: -1) }
+    @IBAction func resetFontSize(_ sender: Any?) { ViewerZoom.change(by: 0) }
+
     @IBAction func splitRight(_ sender: Any?) { onLayout?(.split(.right)) }
     @IBAction func splitLeft(_ sender: Any?) { onLayout?(.split(.left)) }
     @IBAction func splitDown(_ sender: Any?) { onLayout?(.split(.bottom)) }
@@ -129,10 +134,15 @@ final class ViewerWebController: NSObject {
     private var started = false
     private var wantsFocus = false
     private var themeObserver: AnyCancellable?
+    private var zoomObserver: AnyCancellable?
 
     init(model: ViewerModel) {
         self.model = model
         super.init()
+        zoomObserver = NotificationCenter.default.publisher(for: .tarnViewerZoomDidChange)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.webView?.pageZoom = ViewerZoom.current() }
+            }
         // A theme change in Settings reloads the config; the page takes the new colors at once.
         themeObserver = NotificationCenter.default.publisher(for: .ghosttyConfigDidChange)
             .sink { [weak self] note in
@@ -187,6 +197,7 @@ final class ViewerWebController: NSObject {
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
+        view.pageZoom = ViewerZoom.current()
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif
