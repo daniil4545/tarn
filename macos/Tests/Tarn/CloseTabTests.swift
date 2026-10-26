@@ -8,8 +8,9 @@ import Testing
 @MainActor
 struct CloseTabTests {
 
-    private func live() -> [NSWindow] {
-        NSApp.windows.filter { $0.windowController is TerminalController && $0.isVisible }
+    /// The visible tabs of the test's own window: other suites run in parallel with their own windows.
+    private func live(_ first: NSWindow) -> [NSWindow] {
+        (first.tabGroup?.windows ?? [first]).filter(\.isVisible)
     }
 
     private func wait(_ condition: () -> Bool) async throws {
@@ -54,32 +55,35 @@ struct CloseTabTests {
         // Ghostty's native `move_tab` never runs (it asserts inside AppKit in a hidden test host).
         let defaultID = try #require(registry.workspace(of: firstWindow)?.id)
         registry.newTab(in: defaultID, from: firstWindow)
-        try await wait { live().count == 2 }
+        try await wait { live(firstWindow).count == 2 }
         let second = try #require(firstWindow.tabGroup?.windows.last)
         #expect(registry.createWorkspace(named: "B", from: second))
-        try await wait { live().count == 3 }
+        try await wait { live(firstWindow).count == 3 }
         let third = try #require(firstWindow.tabGroup?.windows.last)
         let bID = try #require(registry.workspace(of: third)?.id)
         registry.newTab(in: bID, from: third)
-        try await wait { live().count == 4 }
-        #expect(live().count == 4)
-        #expect(Set(live().compactMap { $0.tabGroup?.windows.count }) == [4])
+        try await wait { live(firstWindow).count == 4 }
+        #expect(live(firstWindow).count == 4)
+        #expect(Set(live(firstWindow).compactMap { $0.tabGroup?.windows.count }) == [4])
 
         // Cmd+W: the menu item "Close" sends `close:` to the window controller of the selected tab.
         for expected in [3, 2] {
-            let target = try #require(live().last { registry.workspace(of: $0)?.name == "B" } ?? live().last)
+            let tabs = live(firstWindow)
+            let target = try #require(tabs.last { registry.workspace(of: $0)?.name == "B" } ?? tabs.last)
             target.makeKeyAndOrderFront(nil)
             let controller = try #require(target.windowController as? TerminalController)
             controller.close(self)
             // A shell that has not settled yet asks "Close Tab?"; the user answers Close.
             try await wait {
                 if let sheet = target.attachedSheet { target.endSheet(sheet, returnCode: .alertFirstButtonReturn) }
-                return live().count == expected
+                return live(firstWindow).count == expected
             }
-            #expect(live().count == expected)
-            #expect(Set(live().compactMap { $0.tabGroup?.windows.count }) == [expected])
+            #expect(live(firstWindow).count == expected)
+            #expect(Set(live(firstWindow).compactMap { $0.tabGroup?.windows.count }) == [expected])
         }
-        for controller in TerminalController.all { controller.closeWindowImmediately() }
-        try await wait { live().isEmpty }
+        for window in live(firstWindow) {
+            (window.windowController as? TerminalController)?.closeWindowImmediately()
+        }
+        try await wait { live(firstWindow).isEmpty }
     }
 }
