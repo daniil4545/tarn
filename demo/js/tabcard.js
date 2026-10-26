@@ -11,6 +11,8 @@ const OPEN_AFTER = 500, CLOSE_AFTER = 200;
 let shown = null;
 let openTimer = 0;
 let closeTimer = 0;
+// Answers picked in the card so far, per pane; cleared when the request changes.
+const picked = new Map();
 
 
 // Same text as the app card: "Tool: detail" for a tool request, the detail alone for a question.
@@ -25,9 +27,9 @@ function show(id) {
   const s = read("workspaces"), tab = s.tabs[id], row = document.querySelector(`#sidebar .tab[data-tabid="${id}"]`);
   if (!tab || !row) return hide();
   const status = tabStatus(tab, read("registry")), session = status?.session;
-  const ask = status?.kind === "permission" && session.answerable && session.request
-    ? `<div class="req"><code>${esc(requestText(session.request))}</code><div class="btns"><button data-answer="${status.pane}" data-allow="true">Allow</button><button data-answer="${status.pane}" data-allow="false">Deny</button></div></div>`
-    : "";
+  const asking = status?.kind === "permission" && session.answerable && session.request;
+  const ask = !asking ? "" : session.request.questions ? questionStep(status.pane, session.request)
+    : `<div class="req"><code>${esc(requestText(session.request))}</code><div class="btns"><button data-answer="${status.pane}" data-allow="true">Allow</button><button data-answer="${status.pane}" data-allow="false">Deny</button></div></div>`;
   let card = document.getElementById("tabcard");
   if (!card) {
     card = Object.assign(document.createElement("div"), { id: "tabcard", className: "card" });
@@ -39,6 +41,31 @@ function show(id) {
   card.style.left = `${r.right + 8}px`;
   card.style.top = `${Math.max(8, Math.min(r.top - 6, innerHeight - card.offsetHeight - 8))}px`;
   shown = id;
+}
+
+// AskUserQuestion with several questions: one question at a time, then all answers in one reply.
+// A multi-select question needs the full dialog, so the card shows no buttons then.
+function questionStep(pane, request) {
+  const { questions } = request;
+  if (questions.some((q) => q.multiSelect)) return `<div class="req"><code>${esc(request.detail)}</code><div class="dim">${questions.length} questions: answer in the terminal</div></div>`;
+  const done = picked.get(pane)?.request === request ? picked.get(pane).answers : [];
+  const q = questions[done.length];
+  const step = questions.length > 1 ? `<div class="dim">Question ${done.length + 1} of ${questions.length}</div>` : "";
+  const buttons = q.options.map((o, i) => `<button data-qpane="${pane}" data-qopt="${i}">${esc(o.label)}</button>`).join("");
+  return `<div class="req">${step}<code>${esc(q.question)}</code><div class="btns">${buttons}</div></div>`;
+}
+
+function pick(button) {
+  const pane = button.dataset.qpane, session = read("registry")[pane], request = session?.request;
+  if (!request?.questions) return;
+  const entry = picked.get(pane)?.request === request ? picked.get(pane) : { request, answers: [] };
+  entry.answers.push(request.questions[entry.answers.length].options[Number(button.dataset.qopt)].label);
+  picked.set(pane, entry);
+  if (entry.answers.length < request.questions.length) return show(shown);
+  picked.delete(pane);
+  bus.cmd("card.answer", { pane, answers: Object.fromEntries(request.questions.map((q, i) => [q.question, entry.answers[i]])) });
+  bus.emit("toast", { text: "Answers sent to the agent" });
+  hide();
 }
 
 function hide() {
@@ -66,6 +93,8 @@ export function startTabCard() {
     closeTimer = setTimeout(hide, CLOSE_AFTER);
   });
   document.addEventListener("click", (e) => {
+    const option = e.target.closest("[data-qopt]");
+    if (option) return pick(option);
     const button = e.target.closest("[data-answer]");
     if (!button) return;
     const allow = button.dataset.allow === "true";

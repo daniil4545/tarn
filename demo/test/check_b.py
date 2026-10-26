@@ -708,6 +708,24 @@ def run(base):
             "N17 a working agent's card shows its state",
             "Working" in pg.inner_text("#tabcard"),
         )
+        pg.wait_for_function("__tarn.snapshot().registry.p1.state === 'waiting'", timeout=15000)
+        n('[data-pane="p1"] canvas').first.click()
+        pg.keyboard.type("which style?")
+        pg.keyboard.press("Enter")
+        pg.wait_for_function("__tarn.snapshot().registry.p1.state === 'permission'", timeout=10000)
+        pg.hover(f"{TAB}[data-tabid='t1']")
+        pg.wait_for_timeout(700)
+        card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
+        check("Q1 two questions: the card shows the first with its options", "Question 1 of 2" in card and count("#tabcard [data-qopt]") == 2, card[:80])
+        pg.click("#tabcard [data-qopt='0']")
+        card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
+        check("Q2 an option moves the card to the next question", "Question 2 of 2" in card and "rows" in card, card[:80])
+        pg.click("#tabcard [data-qopt='1']")
+        pg.wait_for_function("__tarn.screen('p1').includes('Rows: Narrow')", timeout=10000)
+        check(
+            "Q3 the last option sends all answers in one reply and closes the card",
+            "Tabs: Sidebar" in pg.evaluate("__tarn.screen('p1')") and not vis("#tabcard"),
+        )
         pg.mouse.move(700, 500)
 
         # ---- workspace close and window ----

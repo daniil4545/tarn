@@ -207,7 +207,7 @@ export function startPanes({ vfs: disk }) {
   bus.handle("term.clear", (p) => target(p)?.clear());
   bus.handle("term.font", (p) => target(p)?.adjustFont(p.op));
   bus.handle("term.prompt", (p) => target(p)?.jumpPrompt(p.dir));
-  bus.handle("card.answer", ({ pane, allow }) => panes.get(pane)?.answer(allow));
+  bus.handle("card.answer", ({ pane, allow, answers }) => panes.get(pane)?.answer(answers ?? allow));
 
   // Window-level effects of pane options; panes apply their own in applyConfig.
   const root = document.documentElement;
