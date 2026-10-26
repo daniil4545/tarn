@@ -25,7 +25,8 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Demo unit tests
-        run: node --test demo/test/unit
+        # File arguments: the runner's Node 22 does not take a folder.
+        run: node --test demo/test/unit/*.test.mjs
       - name: Demo checks
         run: |
           google-chrome --version

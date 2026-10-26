@@ -28,6 +28,7 @@ LSREG    :=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 
 check:
 	cd macos && swiftlint lint --strict Sources/Features/Tarn Tests/Tarn
+	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
 		-jobs 4 -skip-testing GhosttyUITests test > $(SYMROOT)/test.log 2>&1 || \
 		{ grep -E "error:|failed|\*\* TEST" $(SYMROOT)/test.log | tail -40; exit 1; }
