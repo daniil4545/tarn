@@ -869,6 +869,16 @@ struct ViewerPaneKeyTests {
         #expect(!calls.contains("tarn.focusContent()"))
     }
 
+    /// Ghostty's Find items (Cmd+F, Cmd+G, Shift+Cmd+G, Hide) search the page while it has the keyboard.
+    @Test func findItemsOfTheMenuSearchThePage() throws {
+        let model = ViewerModel(root: NSTemporaryDirectory())
+        var calls: [String] = []
+        model.handle(["t": "ready"])
+        model.script = { calls.append($0) }
+        for name in ["find:open", "find:next", "find:prev", "find:hide"] { model.command(name) }
+        #expect(calls == ["open", "next", "prev", "hide"].map { "tarn.find(\"\($0)\")" })
+    }
+
     @Test func enterOnAFileThatDoesNotOpenLeavesTheKeyboardInTheTree() throws {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }

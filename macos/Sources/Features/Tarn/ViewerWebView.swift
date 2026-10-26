@@ -153,6 +153,12 @@ final class ViewerWebView: WKWebView {
     /// Zoom is a terminal's (user decision 2026-10-26): from a viewer it does nothing, rather than
     /// zoom the terminal the keyboard is not in.
     @IBAction func splitZoom(_ sender: Any?) {}
+
+    /// The Find items of Ghostty's menu search the page (`viewer-web/src/find.js`), not the terminal.
+    @IBAction func find(_ sender: Any?) { onCommand?("find:open") }
+    @IBAction func findNext(_ sender: Any?) { onCommand?("find:next") }
+    @IBAction func findPrevious(_ sender: Any?) { onCommand?("find:prev") }
+    @IBAction func findHide(_ sender: Any?) { onCommand?("find:hide") }
 }
 
 /// Owns the web view of one viewer pane: loads the page, serves its assets, forwards messages.

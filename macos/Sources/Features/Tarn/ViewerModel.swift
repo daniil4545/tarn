@@ -261,6 +261,8 @@ final class ViewerModel {
     func command(_ name: String) {
         switch name {
         case "save", "mode": runScript("tarn.cmd(\(literal(name)))")
+        case "find:open", "find:next", "find:prev", "find:hide":
+            runScript("tarn.find(\(literal(String(name.dropFirst(5)))))")
         case "tree": onPaneKey?()
         case "closeTab": closeActiveTab()
         default: break
