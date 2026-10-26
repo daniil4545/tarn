@@ -48,7 +48,7 @@ Labels follow the canon: `waiting` and not `seen` is shown as "done, not seen"; 
 
 ## Drop marks
 
-`dnd.js` draws one `.drop` element in `#ws`: a 3 px bar in the system accent (`--sys-accent`) at the cut between the dragged window and what stays (the middle of the target for a half, the top edge of the content for a drop into a viewer's tabs). A refused drop has no bar: the element holds a gray chip with the reason. In the sidebar a dragged tab row gets `lifted` (hidden) and a solid copy (`dragghost`) follows the pointer; a `dropgap` of the row's height stands where it lands and grows open in 150 ms while the old one closes: before a row in its upper half, after it in its lower half, at the end of a workspace over its header. A workspace move draws `wsline`, a 3 px line in the system accent where it lands.
+`dnd.js` draws one `.drop` element in `#ws`: a 3 px bar in the system accent (`--sys-accent`) at the cut between the dragged window and what stays (the middle of the target for a half, the top edge of the content for a drop into a viewer's tabs). A refused drop has no bar: the element holds a gray chip with the reason. In the sidebar a tab row drags with pointer events, not HTML5 drag (browsers lose the drop or cancel the drag when the list moves under it): after a 4 px move the row gets `lifted` (hidden), a solid copy (`dragghost`) follows the pointer, and the element below the landing place takes the row's slot as a top margin that slides open in 150 ms: before a row in its upper half, after it in its lower half, at the end of a workspace over its header. Esc or a release outside the sidebar leaves the tab where it was. A workspace move is HTML5 drag and draws `wsline`, a 3 px line in the system accent where it lands.
 
 ## Config
 

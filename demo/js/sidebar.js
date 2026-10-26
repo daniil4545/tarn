@@ -64,7 +64,7 @@ function render() {
   const row = (id) => {
     const t = s.tabs[id], status = tabStatus(t, reg);
     const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
-    const attrs = `role="tab" draggable="true" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
+    const attrs = `role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
     if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
     return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div><div class="l2">${esc(detail(t, reg))}</div></div></div>`;
   };

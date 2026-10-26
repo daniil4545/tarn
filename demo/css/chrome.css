@@ -71,9 +71,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* sidebar drop line where a workspace lands: the system accent, as in a macOS list */
 .wsline { position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 1px; background: var(--sys-accent); pointer-events: none; }
 /* a dragged tab leaves the list; the rows slide apart to the gap where it lands, as in Warp */
-.tab.lifted { display: none; }
-.dropgap { margin-left: 12px; border-radius: 5px; background: rgba(127, 127, 127, .08); transition: height .15s ease-out; }
-.dropgap.closing { pointer-events: none; }
+.sidebar .tab[data-tabid] { user-select: none; }
+.sidebar .tab.lifted { display: none; }
+body.dragging .sidebar > * { transition: margin-top .15s ease-out; }
 .tab.dragghost { position: fixed; z-index: 30; pointer-events: none; color: var(--fg); background: var(--menu); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
 .tab.dragghost .x { opacity: 1; }
 .tab.dragghost .key { display: none; }
