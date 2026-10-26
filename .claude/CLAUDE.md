@@ -83,7 +83,6 @@ Project profile for `~/.claude/docs/pipeline.md`:
   3. Ghostty's behavior is changed by our layer on top (overlay, subclass, delegate, config), never by editing the logic of its file.
   4. When a layer on top cannot do it, the user decides case by case, with the reason the layer fails.
 - No network calls, telemetry or accounts in our code.
-- Ported code keeps its license header and an entry in `THIRD_PARTY.md`; no GPL, AGPL, BSL or unlicensed code.
 - `hook.sh` never blocks or fails an agent: for any input it exits 0 within 100 ms and prints nothing. The one exception is `permission.sh` (the `PermissionRequest` hook), which waits for the card while the app holds its connection (`docs/spec.md` 2.3).
 - Nothing edits `~/.claude/settings.json`; hooks ship as a Claude Code plugin.
 - No agent command moves focus or presses Enter for the user.
