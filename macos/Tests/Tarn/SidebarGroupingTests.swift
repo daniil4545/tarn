@@ -124,4 +124,15 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(TabKey()), lowerHalf: false, in: groups) == nil)
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .header(UUID()), lowerHalf: false, in: groups) == nil)
     }
+
+    // A tab split into several agents names the pane whose state its dot shows.
+    @Test func rowTextFollowsTheMostUrgentPane() {
+        let working = session(.working), asking = session(.permission)
+        let panes = [UUID(), working.surfaceID, asking.surfaceID]
+        let sessions = [working.surfaceID: working, asking.surfaceID: asking]
+        #expect(SidebarModel.textPane(panes, agents: [nil, "claude", "claude"], sessions: sessions) == 2)
+        // With no agent state the first pane running an agent names the row.
+        #expect(SidebarModel.textPane(panes, agents: [nil, "claude", "claude"], sessions: [:]) == 1)
+        #expect(SidebarModel.textPane(panes, agents: [nil, nil, nil], sessions: [:]) == nil)
+    }
 }

@@ -123,6 +123,33 @@ struct AgentSessionTests {
         #expect(rest.map(\.request.detail) == left)
     }
 
+    // A question answered in the agent's own dialog finishes with its answers added to the input;
+    // a call without a field of the wait, with another value, or of an empty wait leaves it.
+    @Test(arguments: [
+        (["questions": [["question": "Which?"]], "answers": ["Which?": "A"], "annotations": [String: Any]()], true),
+        (["answers": ["Which?": "A"]], false),
+        (["questions": [["question": "Other?"]], "answers": ["Other?": "A"]], false),
+    ] as [([String: Any], Bool)])
+    func questionAnsweredInTheDialogEndsItsWait(finished: [String: Any], ends: Bool) {
+        let card = PendingAnswer(request: AgentRequest(kind: .question, tool: "AskUserQuestion", detail: "Which?", options: ["A"]),
+                                 input: ["questions": [["question": "Which?"]]], reply: Hook())
+        let event: [String: Any] = ["tool_name": "AskUserQuestion", "tool_input": finished]
+        #expect(PendingAnswer.remaining([card], after: "PostToolUse", event).isEmpty == ends)
+    }
+
+    // A parallel call whose input holds another's ends its own wait, not the other.
+    @Test func exactCallEndsItsOwnWaitFirst() {
+        let plain: [String: Any] = ["command": "ls"]
+        var background = plain
+        background["run_in_background"] = true
+        let event: [String: Any] = ["tool_name": "Bash", "tool_input": background]
+        let rest = PendingAnswer.remaining(waiting([plain, background]), after: "PostToolUse", event)
+        #expect(rest.map { $0.input.count } == [1])
+
+        let empty = waiting([[:]])
+        #expect(PendingAnswer.remaining(empty, after: "PostToolUse", event).count == 1)
+    }
+
     @Test func waitingHookHoldsThePermissionCard() {
         let first = AgentRequest(kind: .tool, tool: "Bash", detail: "make test", options: [])
         var shown = session(after: [prompt, toolDone])
