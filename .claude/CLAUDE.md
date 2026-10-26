@@ -72,7 +72,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 - Branches: a stage goes in `s<N>-<name>`; merge into `main` on acceptance with the user's confirmation.
 - Work record is the GitHub PR (user decision 2026-10-25): acceptance and review remarks, blocking questions and their answers go as comments on the PR, not into files or session messages; a peer session is pointed to the comment link.
 - Upstream: `upstream/main` is merged into `main` on a schedule, one merge commit; conflicts at insertion points get their own commit.
-- Hosting: GitHub `daniil4545/tarn`. CI: none of ours yet; upstream workflows are not relied on. `gh` resolves to `ghostty-org/ghostty` by default: always pass `-R daniil4545/tarn`.
+- Hosting: GitHub `daniil4545/tarn`. CI: `tarn-ci.yml` runs `make -f tarn.mk check` (runner `xcode-27`) and the demo checks (Linux) on every PR to `main`; a PR merges only with it green. A tag `tarn-v<version>` builds the release zip in `tarn-release.yml` and attaches it to the release (a missing one is created as a draft); release notes stay hand-written. `tarn-upstream.yml` runs the same CI weekly on `main` with `upstream/main` merged in, as an early warning. Upstream workflows are disabled in the repository settings; a new one an upstream merge brings starts enabled, disable it. `gh` resolves to `ghostty-org/ghostty` by default: always pass `-R daniil4545/tarn`.
 - Linters: upstream gets `typos` and `prettier` from `nix develop`; here they come from brew. `prettier` is not run on our markdown: padded tables push `docs/` over its size limits.
 
 ## Critical invariants
