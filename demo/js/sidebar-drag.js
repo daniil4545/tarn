@@ -1,74 +1,168 @@
-// Drag inside the sidebar: a tab row onto a header (end of that workspace, the header gets a
-// frame) or onto a row (before it in the upper half, after it in the lower, a line where it
-// lands), a workspace header into the gap nearest the pointer (a line). Slots follow
+// Drag inside the sidebar. A tab row follows the pointer as in Warp: after a 4 px move the row
+// folds out of the list, a solid copy follows the pointer, and the rows slide apart to a gap where
+// it lands: before a row in its upper half, after it in its lower half, at the end of a workspace
+// over its header, at the end of the last workspace below the rows. Tab rows use pointer events,
+// not HTML5 drag: browsers lose the drop or cancel the drag when the list moves under it. A
+// workspace header goes into the gap nearest the pointer (HTML5 drag, a line). Slots follow
 // SidebarModel.dropSlot in the app.
 import { bus } from "./bus.js";
 
-let drag = null; // {tab: id} | {ws: id}
+let drag = null; // {ws: id} during a workspace drag
+let press = null; // {row, x, y, id, moved} from pointerdown until pointerup
+let tab = null; // {id, row, height, ghost, grab, at: {ws, before}, below} once a tab moves
 
 export function startSidebarDrag() {
   const sb = document.getElementById("sidebar");
+  sb.addEventListener("pointerdown", (e) => {
+    const row = e.target.closest(".tab[data-tabid]");
+    if (e.button !== 0 || !row || e.target.closest("button") || sb.classList.contains("rail")) return;
+    press = { row, x: e.clientX, y: e.clientY, id: e.pointerId, moved: false };
+  });
+  document.addEventListener("pointermove", (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    if (!tab) {
+      // A drag ended by Esc waits for the release; a row rebuilt under the press is gone.
+      if (press.moved || Math.hypot(e.clientX - press.x, e.clientY - press.y) < 4) return;
+      if (!press.row.isConnected) return void (press = null);
+      press.moved = true;
+      tab = lift(press.row, press);
+    }
+    tab.ghost.style.left = `${e.clientX - tab.grab.x}px`;
+    tab.ghost.style.top = `${e.clientY - tab.grab.y}px`;
+    moveGap(sb, document.elementFromPoint(e.clientX, e.clientY), e.clientY);
+  });
+  document.addEventListener("pointerup", (e) => {
+    if (!press || e.pointerId !== press.id) return;
+    const { moved } = press;
+    press = null;
+    if (!moved) return;
+    // The click that ends a drag, dispatched before any timer, does not select the row under it.
+    document.addEventListener("click", swallow, true);
+    setTimeout(() => document.removeEventListener("click", swallow, true));
+    if (!tab) return;
+    const inside = sb.contains(document.elementFromPoint(e.clientX, e.clientY));
+    const done = tab;
+    endTab();
+    if (inside) bus.cmd("tab.move", { id: done.id, ...done.at });
+  });
+  document.addEventListener("pointercancel", () => { press = null; endTab(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") endTab(); });
+
   sb.addEventListener("dragstart", (e) => {
-    const row = e.target.closest(".tab[data-tabid]"), head = e.target.closest(".wsh[data-wsh]");
-    if (!row && !head) return;
-    drag = row ? { tab: row.dataset.tabid } : { ws: head.dataset.wsh };
+    const head = e.target.closest(".wsh[data-wsh]");
+    if (!head) return;
+    drag = { ws: head.dataset.wsh };
     document.body.classList.add("dragging");
     e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", "tarn-tab");
+    e.dataTransfer.setData("text/plain", "tarn-workspace");
   });
   sb.addEventListener("dragover", (e) => {
     if (!drag) return;
-    clearMarks();
-    if (drag.tab) markTab(e); else drawLine(e);
+    e.preventDefault();
+    drawLine(e);
   });
   sb.addEventListener("drop", (e) => {
     if (!drag) return;
     e.preventDefault();
-    if (drag.tab) dropTab(e); else dropWorkspace(e);
+    dropWorkspace(e);
   });
   document.addEventListener("dragend", () => {
+    if (!drag) return;
     drag = null;
     document.body.classList.remove("dragging");
-    clearMarks();
+    document.querySelectorAll(".wsline").forEach((x) => x.remove());
   });
 }
 
-function clearMarks() {
-  document.querySelectorAll(".wsline").forEach((x) => x.remove());
-  document.querySelectorAll(".dropmark").forEach((x) => x.classList.remove("dropmark"));
+function swallow(e) {
+  e.stopPropagation();
 }
 
-// Where a dragged tab lands: {ws, before (a tab id or null for the end), head (over a header),
-// edge (the row whose top or bottom the line takes), bottom}. Null off the rows.
-function tabSlot(e) {
-  const head = e.target.closest(".wsh[data-wsh]"), row = e.target.closest(".tab[data-tabid]");
-  if (head) {
-    return { ws: head.dataset.wsh, before: null, head };
-  }
-  if (!row) return null;
+// The row folds to nothing and the element below it takes the row's slot as a top margin, so
+// nothing moves until the pointer does.
+function lift(row, at) {
   let owner = row;
   while (!owner.dataset.wsh) owner = owner.previousElementSibling;
   const r = row.getBoundingClientRect();
-  if (e.clientY < r.top + r.height / 2) return { ws: owner.dataset.wsh, before: row.dataset.tabid, edge: row, bottom: false };
-  const next = row.nextElementSibling?.matches(".tab[data-tabid]") ? row.nextElementSibling : null;
-  return { ws: owner.dataset.wsh, before: next?.dataset.tabid ?? null, edge: row, bottom: true };
+  const ghost = Object.assign(row.cloneNode(true), { className: `${row.className} dragghost` });
+  Object.assign(ghost.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px` });
+  ghost.removeAttribute("data-tabid");
+  document.body.append(ghost);
+  document.body.classList.add("dragging");
+  bus.emit("drag:start", {});
+  // The slot is the row and the space between rows.
+  const t = {
+    id: row.dataset.tabid, row, height: r.height + parseFloat(getComputedStyle(row.parentElement).rowGap || 0), ghost,
+    grab: { x: at.x - r.left, y: at.y - r.top }, at: { ws: owner.dataset.wsh, before: nextTab(row) }, below: null,
+  };
+  row.classList.add("lifted");
+  openGap(t, nextShown(row), false);
+  return t;
 }
 
-function markTab(e) {
-  const at = tabSlot(e);
-  if (!at) return;
-  e.preventDefault();
-  if (at.head) return at.head.classList.add("dropmark");
-  const sb = document.getElementById("sidebar"), r = at.edge.getBoundingClientRect();
-  const line = Object.assign(document.createElement("div"), { className: "wsline" });
-  line.style.top = `${(at.bottom ? r.bottom : r.top) - sb.getBoundingClientRect().top + sb.scrollTop - 1}px`;
-  sb.append(line);
+function endTab() {
+  if (!tab) return;
+  tab.row.classList.remove("lifted");
+  if (tab.below) tab.below.style.marginTop = "";
+  tab.ghost.remove();
+  tab = null;
+  document.body.classList.remove("dragging");
+  bus.emit("drag:end", {});
 }
 
-function dropTab(e) {
-  const at = tabSlot(e);
-  if (!at || at.before === drag.tab) return;
-  bus.cmd("tab.move", { id: drag.tab, ws: at.ws, before: at.before });
+// The gap stands above `below`: a tab row, the next workspace header or the New workspace button.
+// Its own margin is read with the slide off, so a margin still sliding back does not count.
+function openGap(t, below, slide) {
+  if (t.below) t.below.style.marginTop = "";
+  t.below = below;
+  below.style.transition = "none";
+  below.style.marginTop = "";
+  const base = parseFloat(getComputedStyle(below).marginTop);
+  below.style.transition = slide ? "" : "none";
+  below.style.marginTop = `${base + t.height}px`;
+  if (!slide) requestAnimationFrame(() => { below.style.transition = ""; });
+}
+
+function nextShown(el) {
+  let n = el.nextElementSibling;
+  while (n?.classList.contains("lifted")) n = n.nextElementSibling;
+  return n;
+}
+
+// The next shown tab row of the same workspace, or null at its end.
+function nextTab(el) {
+  const n = nextShown(el);
+  return n?.matches(".tab[data-tabid]") ? n.dataset.tabid : null;
+}
+
+// Where a tab over `el` at height `y` lands and the element the gap goes above. Null between the
+// rows, the gap included: the gap stays where it is.
+function tabSlot(sb, el, y) {
+  if (!el || !sb.contains(el)) return null;
+  const end = document.getElementById("wsNew");
+  if (el.closest("#wsNew") || (el === sb && y >= end.getBoundingClientRect().top)) {
+    const heads = sb.querySelectorAll(".wsh[data-wsh]");
+    return heads.length ? { ws: heads[heads.length - 1].dataset.wsh, before: null, below: end } : null;
+  }
+  const head = el.closest(".wsh[data-wsh]"), row = el.closest(".tab[data-tabid]");
+  if (head) {
+    let below = nextShown(head);
+    while (below.matches(".tab[data-tabid]")) below = nextShown(below);
+    return { ws: head.dataset.wsh, before: null, below };
+  }
+  if (!row || row.classList.contains("lifted")) return null;
+  let owner = row;
+  while (!owner.dataset.wsh) owner = owner.previousElementSibling;
+  const r = row.getBoundingClientRect();
+  if (y < r.top + r.height / 2) return { ws: owner.dataset.wsh, before: row.dataset.tabid, below: row };
+  return { ws: owner.dataset.wsh, before: nextTab(row), below: nextShown(row) };
+}
+
+function moveGap(sb, el, y) {
+  const at = tabSlot(sb, el, y);
+  if (!at || at.below === tab.below) return;
+  tab.at = { ws: at.ws, before: at.before };
+  openGap(tab, at.below, true);
 }
 
 // Slot i is the gap before group i; a group spans from its header to the next header.
@@ -80,7 +174,7 @@ function slot(y) {
 }
 
 function drawLine(e) {
-  e.preventDefault();
+  document.querySelectorAll(".wsline").forEach((x) => x.remove());
   const sb = document.getElementById("sidebar"), line = Object.assign(document.createElement("div"), { className: "wsline" });
   line.style.top = `${slot(e.clientY).y - 4}px`;
   sb.append(line);
