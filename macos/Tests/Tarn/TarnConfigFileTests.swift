@@ -1,4 +1,5 @@
-import Foundation
+import AppKit
+import Carbon.HIToolbox
 import SwiftUI
 import Testing
 @testable import Ghostty
@@ -235,6 +236,32 @@ struct TarnConfigFileTests {
         let url = try #require(TarnConfigFile.defaultsURL)
         let file = try TarnConfigFile.read(from: url)
         #expect(file.entries.contains { $0.key == "keybind" && $0.value == "super+shift+t=unbind" })
+    }
+
+    /// Fails when `loadConfig` skips the defaults: Ghostty's own undo binding would still be there.
+    @Test @MainActor func shiftCmdTIsFreeAndCmdZStillUndoes() throws {
+        let config = try TemporaryConfig("")
+        #expect(!isBinding(config, "T", keyCode: kVK_ANSI_T, flags: [.command, .shift]))
+        #expect(isBinding(config, "z", keyCode: kVK_ANSI_Z, flags: [.command]))
+    }
+
+    @Test @MainActor func theFileMenuHasNewWorkspaceOnShiftCmdT() throws {
+        let items = (NSApp.mainMenu?.items ?? []).flatMap { $0.submenu?.items ?? [] }
+        let item = try #require(items.first { $0.action == #selector(TerminalController.newWorkspace(_:)) })
+        #expect(item.keyEquivalent == "T" && item.keyEquivalentModifierMask == .command)
+    }
+
+    @MainActor private func isBinding(_ config: Ghostty.Config, _ text: String, keyCode: Int, flags: NSEvent.ModifierFlags) -> Bool {
+        guard let cfg = config.config,
+              let event = NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                characters: text, charactersIgnoringModifiers: text.lowercased(), isARepeat: false, keyCode: UInt16(keyCode))
+        else { return false }
+        var key = event.ghosttyKeyEvent(GHOSTTY_ACTION_PRESS)
+        return text.withCString { ptr in
+            key.text = ptr
+            return ghostty_config_key_is_binding(cfg, key)
+        }
     }
 
     /// The defaults load first: were they loaded last, their unbind would drop this line.
