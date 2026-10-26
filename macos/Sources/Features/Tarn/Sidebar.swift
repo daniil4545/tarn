@@ -318,10 +318,7 @@ final class SidebarModel: ObservableObject {
 
     func newWorkspace() {
         guard let window else { return }
-        WorkspacePrompt.askName(title: "New Workspace", message: "The workspace opens with one new tab.", initial: "", in: window) { [weak self] name in
-            guard let self, let window = self.window else { return }
-            self.registry.createWorkspace(named: name, from: window)
-        }
+        WorkspacePrompt.newWorkspace(in: window)
     }
 
     func rename(_ group: Group) {

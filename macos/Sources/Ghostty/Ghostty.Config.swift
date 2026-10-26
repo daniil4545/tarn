@@ -65,6 +65,8 @@ extension Ghostty {
                 return nil
             }
 
+            TarnConfigFile.load(into: cfg, from: TarnConfigFile.defaultsURL)
+
             // Load our configuration from files, CLI args, and then any referenced files.
             if let path {
                 ghostty_config_load_file(cfg, path)

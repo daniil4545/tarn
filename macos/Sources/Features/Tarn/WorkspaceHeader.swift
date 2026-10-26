@@ -121,6 +121,14 @@ enum WorkspacePrompt {
         }
     }
 
+    /// Asks for a name and creates the workspace with one new tab in `window`.
+    static func newWorkspace(in window: NSWindow) {
+        askName(title: "New Workspace", message: "The workspace opens with one new tab.", initial: "", in: window) { [weak window] name in
+            guard let window else { return }
+            WorkspaceRegistry.shared.createWorkspace(named: name, from: window)
+        }
+    }
+
     /// Names the count of tabs that move.
     static func confirmDelete(
         _ name: String,
@@ -140,5 +148,13 @@ enum WorkspacePrompt {
         alert.beginSheetModal(for: window) { response in
             if response == .alertFirstButtonReturn { done() }
         }
+    }
+}
+
+extension TerminalController {
+    /// The File menu item "New Workspace" (Shift+Cmd+T), found through the responder chain.
+    @IBAction func newWorkspace(_ sender: Any?) {
+        guard let window else { return }
+        WorkspacePrompt.newWorkspace(in: window)
     }
 }
