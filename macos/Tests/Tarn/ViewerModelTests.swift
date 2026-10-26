@@ -639,6 +639,21 @@ struct ViewerClickAndKeyTests {
         #expect(ViewerRouter.decide("./nope.md", cwd: dir) == .missing(raw: "./nope.md"))
     }
 
+    /// A path that ends a sentence arrives with its period: Ghostty's link regex drops a trailing
+    /// `.` or `,` from URLs only.
+    @Test func sentencePunctuationAfterAPathIsDroppedOnlyWhenTheFullNameIsMissing() throws {
+        let dir = try folder()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/end.", atomically: true, encoding: .utf8)
+        let plain = ViewerRouter.Decision.open(OpenTarget(path: dir + "/a.md", line: nil))
+        #expect(ViewerRouter.decide(dir + "/a.md.", cwd: nil) == plain)
+        #expect(ViewerRouter.decide("./a.md,", cwd: dir) == plain)
+        #expect(ViewerRouter.decide("a.md..", cwd: dir) == plain)
+        #expect(ViewerRouter.decide("./a.md:3.", cwd: dir) == .open(OpenTarget(path: dir + "/a.md", line: 3)))
+        #expect(ViewerRouter.decide("./end.", cwd: dir) == .open(OpenTarget(path: dir + "/end.", line: nil)))
+        #expect(ViewerRouter.decide("./nope.md.", cwd: dir) == .missing(raw: "./nope.md."))
+    }
+
     @Test func workingDirectoryOfAProcessIsReadFromTheKernel() {
         let own = ViewerPaths.cwd(ofPid: getpid())
         #expect(own.map { URL(fileURLWithPath: $0).resolvingSymlinksInPath().path }
