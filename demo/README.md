@@ -21,7 +21,7 @@ No backend, no build step, no network: ES modules and vendored files only.
 | Easy-to-catch grab zones: 14 px grab zones centred on split dividers and on the sidebar edge, resize cursor; the pane handle stays Ghostty's (80x12, dots in the top 20% of the pane) | built in 1.0.1; the app's sidebar zone leans into the sidebar so the first terminal column stays clickable |
 | Sidebar width stops at its limits when dragged; only the toggle button folds it to the rail | built in 1.0.1 |
 | Theme picker: base themes on top (three light and dark pairs and Dracula), all 771 themes below with a filter, one theme chosen; sidebar, title bar, menus and viewer take their colors from the terminal theme; the demo starts dark | built in 1.0.1 |
-| Wide sidebar rows (task title, then folder and time in its state; the icon names the agent) with a Settings switch Row size, wide by default; header buttons Toggle File Viewer and New Workspace; Shift+Cmd+T for a new workspace | planned: drawn here for approval; Shift+Cmd+T is in the app PR #18 |
+| Wide sidebar rows (task title, then folder and time in its state; the icon names the agent) with a Settings switch Row size, wide by default; header buttons Toggle File Viewer and New Workspace; Shift+Cmd+T for a new workspace | built in the app (#18, #21, #22) |
 | Card answers AskUserQuestion with several questions one at a time ("Question 1 of 2"), then sends all answers in one reply; a multi-select question still goes to the terminal. Try it: ask `claude` something with a question mark | planned: drawn here for approval |
 | `tarn` CLI | built in the app: `tarn open`, `tarn ls`, `tarn notify`. The demo has `open` and `ls`; `tarn new` (R15, second wave) is planned and prints "planned: not in the app yet" on its first run |
 
