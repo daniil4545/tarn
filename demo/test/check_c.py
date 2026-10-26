@@ -410,6 +410,7 @@ def option_rows_check(pg):
 
 # Changes the control of a row to another value the way a user does, and fires the change event.
 CHANGE = """key => {
+  if (key === 'theme') return document.querySelector('.tbtn[aria-selected=false]').click();
   const el = document.getElementById('g-' + key);
   if (el.type === 'checkbox') el.checked = !el.checked;
   else if (el.tagName === 'SELECT') el.value = el.options[el.selectedIndex === 0 ? 1 : 0].value;
@@ -427,15 +428,28 @@ def effect_checks(pg):
     light = theme()
     cfg("window-theme", "dark")
     dark = theme()
+    check(
+        "S14 window-theme forces light or dark",
+        (light, dark) == ("light", "dark"),
+        str((light, dark)),
+    )
     pg.emulate_media(color_scheme="light")
-    cfg("window-theme", "auto")
-    auto_light = theme()
+    cfg("window-theme", "system")
+    system_light = theme()
     pg.emulate_media(color_scheme="dark")
     pg.wait_for_function("document.documentElement.dataset.theme === 'dark'")
     check(
-        "S14 window-theme forces light or dark and auto follows the system",
-        (light, dark, auto_light) == ("light", "dark", "light"),
-        str((light, dark, auto_light)),
+        "S14a window-theme system follows the system",
+        system_light == "light",
+        system_light,
+    )
+    pg.emulate_media(color_scheme="light")
+    cfg("window-theme", "auto")
+    auto_light_system = theme()
+    check(
+        "S14b window-theme auto follows the terminal theme, not the system",
+        auto_light_system == "dark",
+        auto_light_system,
     )
     cfg("background-opacity", 0.5)
     cfg("background-blur", True)
@@ -500,6 +514,108 @@ def effect_checks(pg):
     )
 
 
+def theme_checks(pg):
+    """T-147 and the theme picker: base pairs on top, full list below, the window takes the theme colors."""
+    s = pg.locator
+    css = lambda sel, prop: pg.evaluate(
+        "([s, p]) => getComputedStyle(document.querySelector(s))[p]", [sel, prop]
+    )
+    root_var = lambda name: pg.evaluate(
+        "n => document.documentElement.style.getPropertyValue(n)", name
+    )
+    page_theme = lambda: pg.evaluate("document.documentElement.dataset.theme")
+    cmd(pg, "config.reset")
+    pg.keyboard.press("Meta+Comma")
+    pg.click("#setNav [data-sec='appearance']")
+    pairs = pg.eval_on_selector_all(
+        ".tpair", "els => els.map(e => [...e.querySelectorAll('.tbtn small')].map(s => s.textContent))"
+    )
+    names = pg.eval_on_selector_all(".tbase .tbtn", "els => els.map(e => e.dataset.themePick)")
+    check(
+        "T1 base themes: the default, three light and dark pairs and Dracula on top",
+        pairs == [["light", "dark"]] * 3 + [["dark"]]
+        and len(names) == 8
+        and names[0] == ""
+        and names[-1] == "Dracula",
+        f"{pairs} {names}",
+    )
+    total = s(".tall .tbtn").count()
+    base_bottom = s(".tbase").bounding_box()
+    full = s(".tall").bounding_box()
+    check(
+        "T2 the full list is below the base themes and holds the rest of the 771",
+        total == 771 - 7 and full["y"] > base_bottom["y"] + base_bottom["height"] - 1,
+        str(total),
+    )
+    pg.fill("#themeFilter", "nord")
+    shown = pg.eval_on_selector_all(".tall .tbtn:not([hidden])", "els => els.map(e => e.dataset.name)")
+    check(
+        "T3 the filter narrows the full list",
+        0 < len(shown) < 20 and all("nord" in n for n in shown),
+        str(shown),
+    )
+    pg.fill("#themeFilter", "")
+    pg.click("[data-theme-pick='Catppuccin Latte']")
+    latte = {
+        "config": pg.evaluate("__tarn.snapshot().config.theme"),
+        "page": page_theme(),
+        "bg": root_var("--bg"),
+        "sidebar": css("#sidebar", "backgroundColor"),
+        "engine": pg.evaluate("__tarn.term('p1')?.options.theme.background ?? null"),
+    }
+    check(
+        "T4 picking a base theme sets the terminal, the sidebar and the page from it",
+        latte["config"] == "Catppuccin Latte"
+        and latte["page"] == "light"
+        and latte["bg"] == "#eff1f5"
+        and latte["sidebar"] == "rgb(229, 231, 237)",
+        str(latte),
+    )
+    canvas_bg = pg.evaluate(
+        "(() => { const c = document.querySelector('.tabview:not([hidden]) .pane-term canvas');"
+        " return [...c.getContext('2d').getImageData(20, 300, 1, 1).data].join(','); })()"
+    )
+    check(
+        "T4b the terminal canvas repaints with the new theme background",
+        canvas_bg == "239,241,245,255",
+        canvas_bg,
+    )
+    check(
+        "T4a the picked theme is marked and the row shows the Set mark",
+        s("[data-theme-pick='Catppuccin Latte'][aria-selected=true]").count() == 1
+        and s("[data-opt='theme'] .set").count() == 1,
+    )
+    pg.click("[data-theme-pick='Catppuccin Mocha']")
+    mocha = (page_theme(), root_var("--bg"), root_var("--accent"))
+    check(
+        "T5 the dark pair makes the window dark with the palette accent",
+        mocha == ("dark", "#1e1e2e", "#89b4fa"),
+        str(mocha),
+    )
+    cmd(pg, "config.set", {"key": "window-theme", "value": "dark"})
+    check(
+        "T6 a forced window theme drops the theme colors",
+        root_var("--bg") == "" and page_theme() == "dark",
+        root_var("--bg"),
+    )
+    cmd(pg, "config.reset", {"key": "window-theme"})
+    pg.click("#settingsClose")
+    cmd(pg, "viewer.open", {"path": SPEC})
+    pg.wait_for_function(
+        "[...document.querySelectorAll('.viewer-pane iframe')].every("
+        "(f) => f.contentDocument?.readyState === 'complete' && f.contentWindow.tarn)"
+    )
+    viewer_bg = pg.evaluate(
+        "document.querySelector('.viewer-pane iframe').contentDocument.documentElement.style.getPropertyValue('--p-bg')"
+    )
+    check("T7 the viewer takes the theme background", viewer_bg == "#1e1e2e", viewer_bg)
+    cmd(pg, "config.reset", {"key": "theme"})
+    viewer_bg = pg.evaluate(
+        "document.querySelector('.viewer-pane iframe').contentDocument.documentElement.style.getPropertyValue('--p-bg')"
+    )
+    check("T8 a theme change reaches an open viewer", viewer_bg == "#282c34", viewer_bg)
+
+
 def path_checks(pg):
     got = pg.evaluate(
         """async () => {
@@ -531,10 +647,16 @@ def path_checks(pg):
 def main():
     with server() as base:  # noqa: SIM117 (the page needs the server address)
         with app_page(base) as (pg, errors, requests):
+            check(
+                "T0 the demo starts dark even when the system is light",
+                pg.evaluate("document.documentElement.dataset.theme") == "dark"
+                and pg.evaluate("matchMedia('(prefers-color-scheme: light)').matches"),
+            )
             cmd(pg, "vfs.write", {"path": SPEC, "text": SPEC_TEXT, "by": "test"})
             path_checks(pg)
             viewer_checks(pg)
             settings_checks(pg)
+            theme_checks(pg)
             external = [r for r in requests if not r.startswith(base)]
             check(
                 "X1 no request leaves the demo origin", not external, str(external[:3])

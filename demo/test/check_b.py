@@ -103,6 +103,25 @@ def run(base):
         def cur():
             return snap()["cur"]
 
+        def drop_look():
+            """Computed look of the drop mark: fill, chip fill, border width, transition, text."""
+            return pg.evaluate(
+                "(() => { const d = document.querySelector('#ws > .drop'); if (!d) return null;"
+                " const c = getComputedStyle(d), s = d.querySelector('span');"
+                " return {bg: c.backgroundColor, border: c.borderTopWidth, transition: c.transitionDuration,"
+                " text: d.textContent, chip: s ? getComputedStyle(s).backgroundColor : null}; })()"
+            )
+
+        # A drop is a 3 px line in the system accent at the cut where the window will stand
+        def accent_line(look, box):
+            return (
+                look is not None
+                and look["bg"] == "rgb(10, 132, 255)"
+                and look["border"] == "0px"
+                and look["transition"] == "0s"
+                and min(box["width"], box["height"]) == 3
+            )
+
         # ---- layouts and splits ----
         check(
             "1 start: one terminal, no viewer", count(TERM) == 1 and count(VIEWER) == 0
@@ -213,6 +232,15 @@ def run(base):
         pg.mouse.move(box["x"] + 30, box["y"] + 20)
         pg.wait_for_timeout(250)
         check("25c dots show in the top band of the pane", dots() == "0.6", dots())
+        pg.mouse.move(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.8)
+        pg.wait_for_timeout(250)
+        check("D6 dots stay hidden below the top 20% of the pane, as in Ghostty", dots() == "0", dots())
+        grip = n(f"{TERM} .grip").first.bounding_box()
+        check(
+            "D7 the grab handle keeps Ghostty's size, 80x12",
+            round(grip["width"]) == 80 and round(grip["height"]) == 12,
+            str(grip),
+        )
         set_config("drag-handle", "never")
         check("25d drag-handle never removes the handle", not vis(f"{TERM} .grip"))
         set_config("drag-handle", "always")
@@ -229,6 +257,19 @@ def run(base):
         pg.mouse.up()
         w1 = n(LEAF).first.bounding_box()["width"]
         check("26 split divider drag resizes", w1 > w0 + 60, f"{w0:.0f} -> {w1:.0f}")
+        sd = n(".tabview:not([hidden]) .sdiv.row").first.bounding_box()
+        hit = [
+            pg.evaluate(
+                "([x, y]) => document.elementFromPoint(x, y)?.classList.contains('sdiv')",
+                [sd["x"] + dx, sd["y"] + 200],
+            )
+            for dx in (-5, sd["width"] + 4)
+        ]
+        check("D10 the divider grab zone is 14 px across", all(hit), str(hit))
+        check(
+            "D11 the divider shows a resize cursor",
+            pg.evaluate("getComputedStyle(document.querySelector('.sdiv.row')).cursor") == "col-resize",
+        )
         check("N5 the dragged ratio is in the state", layout("tab.layout.ratio") != 0.5)
 
         pg.keyboard.press("Control+Meta+ArrowLeft")
@@ -473,6 +514,12 @@ def run(base):
             {"dataTransfer": dt, "clientX": head["x"] + 20, "clientY": head["y"] + 4},
         )
         line = n(".wsline").bounding_box()
+        line_color = pg.evaluate("getComputedStyle(document.querySelector('.wsline')).backgroundColor")
+        check(
+            "D5 the sidebar drop line is the system accent",
+            line_color == "rgb(10, 132, 255)",
+            line_color,
+        )
         check(
             "W13b dragging a workspace draws a line in the gap above the target",
             line is not None and abs(line["y"] + 2 - head["y"]) <= 6,
@@ -544,17 +591,39 @@ def run(base):
             pg.mouse.up()
 
         drag_grip(-500)
-        check(
-            "W22 drag the edge all the way left folds the sidebar to the rail",
-            count(".wsh") == 0,
-        )
-        drag_grip(150)
         width = n("#sidebar").bounding_box()["width"]
         check(
-            "W23 drag the rail edge right opens the sidebar again",
-            count(".wsh") == 2 and abs(width - 194) <= 2,
+            "W22 drag the edge all the way left stops at the minimum, the sidebar stays open",
+            count(".wsh") == 2 and width == 120,
             f"width={width}",
         )
+        drag_grip(900)
+        width = n("#sidebar").bounding_box()["width"]
+        check(
+            "W22a drag the edge all the way right stops at the maximum, the sidebar stays open",
+            count(".wsh") == 2 and width == 400,
+            f"width={width}",
+        )
+        grip = n("#sbGrip").bounding_box()
+        side = n("#sidebar").bounding_box()
+        check(
+            "W22b the edge grab zone is 14 px wide and reaches both sides of the sidebar edge",
+            grip["width"] >= 14 and grip["x"] < side["x"] + side["width"] < grip["x"] + grip["width"],
+            str((grip, side)),
+        )
+        check(
+            "W22c the edge shows a resize cursor",
+            pg.evaluate("getComputedStyle(document.getElementById('sbGrip')).cursor")
+            == "col-resize",
+        )
+        pg.click("#sbToggle")
+        drag_grip(150)
+        check(
+            "W23 only the button folds the sidebar: a drag on the rail edge does nothing",
+            count(".wsh") == 0 and n("#sidebar").bounding_box()["width"] < 60,
+        )
+        pg.click("#sbToggle")
+        check("W23a the button opens the sidebar again", count(".wsh") == 2)
 
         # ---- tabs at the top ----
         set_config("tab-style", "top")
@@ -732,10 +801,18 @@ def run(base):
         )
         pg.wait_for_timeout(250)
         frame = n("#ws > .drop").bounding_box()
+        look = drop_look()
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
         check(
-            "V6 a file over the left half of a viewer frames the whole left half",
-            frame is not None and abs(frame["width"] - (vb["width"] / 2 - 8)) <= 3,
+            "D1 the drop mark over a viewer half is a 3 px system accent line",
+            accent_line(look, frame),
+            f"{look} {frame}",
+        )
+        check(
+            "V6 a file over the left half of a viewer draws the line at the cut in the middle",
+            frame is not None
+            and abs(frame["x"] + frame["width"] / 2 - (vb["x"] + vb["width"] / 2)) <= 2
+            and abs(frame["height"] - (vb["height"] - 32)) <= 3,
             str(frame),
         )
 
@@ -757,8 +834,15 @@ def run(base):
         box, dt, pos = area_over(ftabs(0), 10, 300)
         frame = n("#ws > .drop").bounding_box()
         check(
-            "A1 a file at the left edge of the tab area frames the left half of the area",
-            frame is not None and abs(frame["width"] - (box["width"] / 2 - 8)) <= 3,
+            "D2 the drop mark at the tab area edge is a 3 px system accent line",
+            accent_line(drop_look(), frame),
+            str(frame),
+        )
+        check(
+            "A1 a file at the left edge of the tab area draws the line in the middle of the area",
+            frame is not None
+            and abs(frame["x"] + frame["width"] / 2 - (box["x"] + box["width"] / 2)) <= 2
+            and abs(frame["height"] - box["height"]) <= 3,
             str(frame),
         )
         area_drop(pos, dt)
@@ -771,10 +855,15 @@ def run(base):
         frame = n("#ws > .drop").bounding_box()
         ratio = layout("tab.layout.ratio")
         check(
-            "A3 the top left corner of a split area frames its top left quarter",
+            "D3 the drop mark in a corner of the tab area is a 3 px system accent line",
+            accent_line(drop_look(), frame),
+            str(frame),
+        )
+        check(
+            "A3 the top left corner of a split area draws a line across its top left part, at the half",
             frame is not None
-            and abs(frame["width"] - (box["width"] * ratio - 8)) <= 3
-            and abs(frame["height"] - (box["height"] / 2 - 8)) <= 3,
+            and abs(frame["width"] - box["width"] * ratio) <= 3
+            and abs(frame["y"] + frame["height"] / 2 - (box["y"] + box["height"] / 2)) <= 2,
             f"{frame} ratio={ratio}",
         )
         area_drop(pos, dt)
@@ -788,6 +877,12 @@ def run(base):
         pg.keyboard.press("Meta+d")
         area_over(n(f"{TERM} .grip"), box["width"] - 10, 300)
         check("A5 split terminals cannot go to the area edge", vis("#ws > .drop.deny"))
+        look = drop_look()
+        check(
+            "D4 a refused drop has no line, only a gray chip with the reason",
+            look["bg"] == "rgba(0, 0, 0, 0)" and look["chip"] == "rgb(110, 112, 120)" and look["text"] != "",
+            str(look),
+        )
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
 
         while count(VIEWER):

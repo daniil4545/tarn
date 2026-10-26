@@ -145,7 +145,7 @@ def story(base):
         pg.click("#setNav [data-sec='appearance']")
         pg.fill("#g-font-size", "16")
         pg.press("#g-font-size", "Tab")
-        pg.select_option("#g-theme", "dracula")
+        pg.click("[data-theme-pick='Dracula']")
         opts = pg.evaluate(
             "[__tarn.term('p6').options.fontSize, __tarn.term('p6').options.theme.background]"
         )
@@ -184,7 +184,7 @@ def story(base):
             "E12 a reload keeps tabs and settings",
             len(s["workspaces"]["tabs"]) == total
             and s["config"]["font-size"] == 16
-            and s["config"]["theme"] == "dracula",
+            and s["config"]["theme"] == "Dracula",
         )
 
         # reset the demo from the palette

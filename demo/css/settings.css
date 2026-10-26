@@ -51,6 +51,23 @@
 .opt .reset { background: none; border: 0; color: var(--set-accent); font: inherit; font-size: 11.5px; cursor: pointer; padding: 0; }
 #tarnConf { margin: 6px 0 0; padding: 8px 10px; background: var(--set-field); border: 1px solid var(--set-line); border-radius: 6px; font: 11.5px/1.5 var(--font-mono); white-space: pre-wrap; }
 
+/* theme picker: base pairs on top, the full list with a filter below */
+.opt-theme .themes { grid-column: 1 / -1; margin-top: 6px; }
+.themes h5 { margin: 8px 0 4px; font-size: 11px; font-weight: 600; color: var(--set-muted); text-transform: uppercase; letter-spacing: .04em; }
+.themes .tcount { font-weight: 400; margin-left: 4px; }
+.tbase { display: flex; flex-direction: column; gap: 4px; }
+.tpair { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.tbtn { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 4px 6px; background: none; border: 1px solid transparent; border-radius: 6px; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.tbtn:hover { background: rgba(127, 127, 127, .14); }
+.tbtn[aria-selected="true"] { border-color: var(--set-blue); background: color-mix(in srgb, var(--set-blue) 16%, transparent); }
+.tsw { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 74px; padding: 3px 6px; border-radius: 4px; border: 1px solid rgba(127, 127, 127, .35); font: 600 12px var(--font-mono); }
+.tdots { display: flex; gap: 2px; }
+.tdots i { width: 6px; height: 6px; border-radius: 50%; display: block; }
+.tnm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tbtn small { flex: none; color: var(--set-muted); font-size: 10.5px; }
+.tfilter { width: 100%; margin-bottom: 4px; background: var(--set-field); color: var(--set-fg); border: 1px solid var(--set-line); border-radius: 5px; font: 12px var(--font-mono); padding: 3px 6px; }
+.tall { max-height: 190px; overflow: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 4px; align-content: start; border: 1px solid var(--set-line); border-radius: 6px; padding: 4px; }
+
 .keys { width: 100%; border-collapse: collapse; font-size: 12px; }
 .keys th { text-align: left; font-weight: 500; font-size: 10.5px; color: var(--set-muted); padding-bottom: 4px; }
 .keys td { padding: 4px 8px 4px 0; border-top: 1px solid var(--set-line); vertical-align: top; }

@@ -1,6 +1,6 @@
 // Draws the layout trees into the tab area. Every tab has its own container (hidden when not
 // current); a pane element is moved into the new structure, never rebuilt. Dividers, the grab
-// handle band and focus by direction live here too.
+// handle and focus by direction live here too.
 import { bus } from "./bus.js";
 import { read } from "./state.js";
 import * as tree from "./layout.js";

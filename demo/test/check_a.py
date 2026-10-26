@@ -508,7 +508,7 @@ def config_and_keys(base):
             )
             time.sleep(0.3)
 
-        setting("theme", "dracula")
+        setting("theme", "Dracula")
         check("theme reaches the engine", option("theme.background") == "#282a36")
         check(
             "theme reaches the CSS",

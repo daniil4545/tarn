@@ -4,13 +4,14 @@
 import { bus } from "./bus.js";
 import { register, read } from "./state.js";
 import { isObject, load, save } from "./storage.js";
+import { THEME_NAMES } from "./themes.js";
 
 const bool = (def) => ({ def, type: "bool" });
 const num = (def, min, max, step = 1) => ({ def, type: "number", min, max, step });
 const pick = (def, values) => ({ def, type: "enum", values });
 
 export const OPTIONS = Object.freeze({
-  theme: pick("", ["", "dracula", "catppuccin-mocha", "nord"]),
+  theme: pick("", ["", ...THEME_NAMES]),
   "window-theme": pick("auto", ["auto", "system", "light", "dark", "ghostty"]),
   "font-family": { def: "", type: "text" },
   "font-size": num(13, 6, 32),

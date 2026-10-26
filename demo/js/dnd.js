@@ -1,12 +1,12 @@
 // Drop zones for panes, viewers and files (docs/specs/windows-workspaces.md section 3a).
-// A frame shows the space the dragged thing will take. Zones, first match wins: a corner of the
+// A line shows where the dragged thing will stand: the cut between it and what stays. Zones, first match wins: a corner of the
 // tab area, a strip at its edge, the tab bar or middle of a viewer, the half of a pane.
 // File drags carry JSON in the data-drag attribute: {kind: "file", path, from?: viewerId, idx?}.
 import { bus } from "./bus.js";
 import * as tree from "./layout.js";
 import { currentTab } from "./workspace.js";
 
-const EDGE = 24, CORNER = 48, VIEWER_BAR = 32, MIDDLE = 0.15, INSET = 4;
+const EDGE = 24, CORNER = 48, VIEWER_BAR = 32, MIDDLE = 0.15, LINE = 3;
 const HALF = { left: [0, 0, 0.5, 1], right: [0.5, 0, 0.5, 1], top: [0, 0, 1, 0.5], bottom: [0, 0.5, 1, 0.5] };
 const NO_SPLIT = "Split terminals stay together: drag them inside the block";
 
@@ -79,7 +79,7 @@ function resolve(e) {
 }
 
 // What a drop would do, as {frame: [l, t, w, h] in pixels, deny, run}.
-function plan(frame, deny, run) { return { frame, deny, run }; }
+function plan(frame, deny, run, zone) { return { frame, deny, run, zone }; }
 
 function place(zone, target) {
   const id = draggedId();
@@ -111,10 +111,11 @@ function resolveArea(e, tab, a) {
     const row = rest.dir === "row", side = row ? (h === "left" ? "a" : "b") : (v === "top" ? "a" : "b");
     const start = side === "a" ? 0 : rest.ratio, size = side === "a" ? rest.ratio : 1 - rest.ratio;
     const f = row ? [start, v === "top" ? 0 : 0.5, size, 0.5] : [h === "left" ? 0 : 0.5, start, 0.5, size];
-    return plan(frameOf(f), deny, place(row ? v : h, { child: side }));
+    const zone = row ? v : h;
+    return plan(frameOf(f), deny, place(zone, { child: side }), zone);
   }
   const zone = strip ?? (Math.min(x, a.w - x) < Math.min(y, a.h - y) ? h : v);
-  return plan(frameOf(HALF[zone]), deny, place(zone, "root"));
+  return plan(frameOf(HALF[zone]), deny, place(zone, "root"), zone);
 }
 
 function blockBox(leafEl) {
@@ -133,11 +134,11 @@ function resolveLeaf(e, tab) {
   if (drag.term) {
     const zone = edgeZone(r, e);
     const deny = el.dataset.kind === "viewer" ? (lone ? null : "Split terminals stay together: drag the viewer to the block edge") : (id === drag.term ? "Drop on another terminal" : null);
-    return plan(frameOf(r, zone), deny, place(zone, { leaf: id }));
+    return plan(frameOf(r, zone), deny, place(zone, { leaf: id }), zone);
   }
   if (el.dataset.kind === "term") {
     const b = blockBox(el), zone = edgeZone(b, e);
-    return plan(frameOf(b, zone), null, place(zone, "block"));
+    return plan(frameOf(b, zone), null, place(zone, "block"), zone);
   }
   // A viewer: its tab bar or middle box means "into this viewer", the rest the half of it.
   const fx = (e.clientX - r.x) / r.w, fy = (e.clientY - r.y) / r.h;
@@ -147,20 +148,30 @@ function resolveLeaf(e, tab) {
   const deny = own ? "Drop on another pane" : null;
   if (into) {
     const run = drag.file ? () => bus.cmd("viewer.take", { to: id, drag: drag.file }) : () => bus.cmd("viewer.merge", { from: drag.viewer, to: id });
-    return plan([below.x, below.y, below.w, below.h], deny, run);
+    return plan([below.x, below.y, below.w, below.h], deny, run, "into");
   }
   const zone = edgeZone(r, e);
-  return plan(frameOf(below, zone), deny, place(zone, { leaf: id }));
+  return plan(frameOf(below, zone), deny, place(zone, { leaf: id }), zone);
 }
 
-function showFrame({ frame, deny }) {
+// The cut between the new window and the rest, as a LINE-wide bar centred on it. `frame` is the
+// space the new window takes; a drop into a viewer's tabs marks the top edge of its content.
+function lineOf([x, y, w, h], zone) {
+  const half = LINE / 2;
+  if (zone === "left") return [x + w - half, y, LINE, h];
+  if (zone === "top") return [x, y + h - half, w, LINE];
+  if (zone === "right") return [x - half, y, LINE, h];
+  return [x, y - half, w, LINE];
+}
+
+function showFrame({ frame, deny, zone }) {
   const ws = document.getElementById("ws"), origin = ws.getBoundingClientRect();
   let el = ws.querySelector(":scope > .drop");
   if (!el) { el = Object.assign(document.createElement("div"), { className: "drop" }); ws.append(el); }
   el.classList.toggle("deny", Boolean(deny));
   el.innerHTML = deny ? `<span>${deny}</span>` : "";
-  const [x, y, w, h] = frame;
-  Object.assign(el.style, { left: `${x - origin.left + INSET}px`, top: `${y - origin.top + INSET}px`, width: `${w - 2 * INSET}px`, height: `${h - 2 * INSET}px` });
+  const [x, y, w, h] = deny ? frame : lineOf(frame, zone);
+  Object.assign(el.style, { left: `${x - origin.left}px`, top: `${y - origin.top}px`, width: `${w}px`, height: `${h}px` });
 }
 
 const clearFrame = () => document.querySelectorAll("#ws > .drop").forEach((d) => d.remove());
