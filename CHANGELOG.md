@@ -2,6 +2,23 @@
 
 Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.Z` tags in this repository belong to upstream Ghostty.
 
+## [tarn-v1.2.0] - 2026-10-26
+
+### Added
+
+- Shift+Cmd+T opens a new workspace; it no longer reopens a closed tab (Cmd+Z still does).
+- Viewer zoom: Cmd+=, Cmd+- and Cmd+0 in a viewer pane, one zoom for every viewer, kept across launches.
+- Find in the viewer: Cmd+F, Cmd+G and Shift+Cmd+G, in the rendered file and in the source.
+- Toggle File Viewer button in the sidebar header.
+- Wide sidebar rows: the tab title, then the folder and the minutes in the agent's state. Settings, Tabs, Row size switches to one line.
+
+### Fixed
+
+- With a viewer open, split terminals move among themselves again, also at the window edge.
+- While a viewer has the keyboard, the tab and window keys work (Cmd+1 to Cmd+9, next and previous tab, and the rest), and so do Move Divider and Equalize Splits.
+- A question answered in Claude Code's own dialog leaves the sidebar at once.
+- A tab split into several terminals names, in its sidebar row, the pane its state dot speaks of.
+
 ## [tarn-v1.1.0] - 2026-10-26
 
 ### Fixed
