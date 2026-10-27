@@ -10,7 +10,7 @@ enum WorkspaceFolder {
 
     /// True when `path` is `folder` or lies below it, compared by path components:
     /// `/a/F-old` is not inside `/a/F`. Both sides resolve symlinks, so a logical shell path
-    /// under a symlinked folder still matches the stored real path.
+    /// under a symlinked folder still matches the stored real path. Only existing paths resolve.
     static func contains(_ folder: String, _ path: String) -> Bool {
         let base = URL(fileURLWithPath: folder).resolvingSymlinksInPath().standardized.pathComponents
         let target = URL(fileURLWithPath: path).resolvingSymlinksInPath().standardized.pathComponents

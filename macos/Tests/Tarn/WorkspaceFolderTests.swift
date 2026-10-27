@@ -39,6 +39,8 @@ struct WorkspaceFolderTests {
         let tree = try tree()
         defer { try? FileManager.default.removeItem(atPath: tree.root) }
         let real = try #require(WorkspaceFolder.standardized(tree.folder))
+        // A shell's directory exists; a path that does not keeps its symlinks.
+        try FileManager.default.createDirectory(atPath: tree.folder + "/macos", withIntermediateDirectories: false)
         #expect(WorkspaceFolder.contains(real, tree.link + "/macos"))
         #expect(WorkspaceFolder.contains(real, "/private" + real))
     }
@@ -63,8 +65,10 @@ struct WorkspaceFolderTests {
     // spec: docs/specs/workspace-folder.md S3. Q1 and Q4 pick the workspace that holds the folder.
     @Test func theFirstTabOfTheWorkspaceWithTheFolderIsChosen() throws {
         var set = WorkspaceSet.makeDefault(tabs: [t[0], t[1]])
-        let notes = try #require(set.create(name: "notes", folder: "/p/notes"))
-        let tarn = try #require(set.create(name: "tarn", folder: "/p/tarn"))
+        let createdNotes = set.create(name: "notes", folder: "/p/notes")
+        let createdTarn = set.create(name: "tarn", folder: "/p/tarn")
+        let notes = try #require(createdNotes)
+        let tarn = try #require(createdTarn)
         set.join(t[2], to: tarn)
         set.join(t[3], to: tarn)
         set.join(t[1], to: notes)
@@ -99,14 +103,16 @@ struct WorkspaceFolderTests {
 
     @Test func createWithARelativeFolderIsRefused() {
         var set = WorkspaceSet()
-        #expect(set.create(name: "x", folder: "relative") == nil)
+        let created = set.create(name: "x", folder: "relative")
+        #expect(created == nil)
         #expect(set.workspaces.isEmpty)
     }
 
     // spec: docs/specs/workspace-folder.md S21
     @Test func aSnapshotKeepsTheFolderThroughEncoding() throws {
         var set = WorkspaceSet.makeDefault(tabs: [t[0]])
-        let tarn = try #require(set.create(name: "tarn", folder: "/p/tarn"))
+        let created = set.create(name: "tarn", folder: "/p/tarn")
+        let tarn = try #require(created)
         set.join(t[1], to: tarn)
         let data = try WorkspaceSnapshot(set: set, tabKey: t[0], order: [t[0], t[1]]).encoded()
         let back = try WorkspaceSnapshot.decode(data).makeSet()
@@ -133,11 +139,14 @@ struct WorkspaceFolderTests {
         #expect(set.workspaces[0].name == "No project")
         #expect(book.isPlain(set))
         let id = set.workspaces[0].id
-        #expect(set.rename(id, to: "Default"))
+        let toDefault = set.rename(id, to: "Default")
+        #expect(toDefault)
         #expect(book.isPlain(set))
-        #expect(set.rename(id, to: "Work"))
+        let toWork = set.rename(id, to: "Work")
+        #expect(toWork)
         #expect(!book.isPlain(set))
-        #expect(set.rename(id, to: "No project"))
+        let back = set.rename(id, to: "No project")
+        #expect(back)
         set.setFolder(id, "/p/tarn")
         #expect(!book.isPlain(set))
         set.setFolder(id, nil)
