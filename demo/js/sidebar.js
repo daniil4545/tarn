@@ -61,19 +61,30 @@ function render() {
   }
   const key = (id) => { const i = order.indexOf(id); return i < 8 ? `⌘${i + 1}` : i === order.length - 1 ? "⌘9" : ""; };
   const wide = read("config")["tab-rows"] === "wide";
-  const row = (id) => {
+  const row = (w) => (id) => {
     const t = s.tabs[id], status = tabStatus(t, reg);
-    const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
+    const out = isAgentTab(t, reg) && outsideFolder(w, t.cwd);
+    const mark = out && !wide ? `<span class="out" title="Outside the ${esc(w.name)} folder">!</span>` : "";
+    const line = `<span class="t">${esc(t.title)}</span>${mark}${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
     const attrs = `role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
     if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
-    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div><div class="l2">${esc(detail(t, reg))}</div></div></div>`;
+    const l2 = out
+      ? `<div class="l2 out" title="Outside the ${esc(w.name)} folder">! ${esc(detail(t, reg))}</div>`
+      : `<div class="l2">${esc(detail(t, reg))}</div>`;
+    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
   sb.innerHTML = top + s.wss.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
     const head = `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
-    return head + (w.collapsed ? "" : w.tabs.map(row).join(""));
+    return head + (w.collapsed ? "" : w.tabs.map(row(w)).join(""));
   }).join("") + '<button class="tab add" id="wsNew">+ New workspace</button>';
+}
+
+// An agent outside the folder of its workspace (docs/specs/workspace-folder.md D21). A workspace
+// with no folder never marks.
+function outsideFolder(ws, cwd) {
+  return Boolean(ws.folder) && cwd !== ws.folder && !cwd.startsWith(`${ws.folder}/`);
 }
 
 // The second line of a wide row: the folder and how long the agent is in its state. The icon

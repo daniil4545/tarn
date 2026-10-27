@@ -25,6 +25,7 @@ No backend, no build step, no network: ES modules and vendored files only.
 | Theme picker: base themes on top (three light and dark pairs and Dracula), all 771 themes below with a filter, one theme chosen; sidebar, title bar, menus and viewer take their colors from the terminal theme; the demo starts dark | built in 1.0.1 |
 | Wide sidebar rows (task title, then folder and time in its state; the icon names the agent) with a Settings switch Row size, wide by default; header buttons Toggle File Viewer and New Workspace; Shift+Cmd+T for a new workspace | built in the app (#18, #21, #22) |
 | Card answers AskUserQuestion with several questions one at a time ("Question 1 of 2"), then sends all answers in one reply; a multi-select question still goes to the terminal. Try it: ask `claude` something with a question mark | planned: drawn here for approval |
+| Workspace by folder (`docs/specs/workspace-folder.md`): an agent outside its workspace's folder gets an orange "!" in its row ("Claude · review" in tarn); with tabs at the top and two or more workspaces each title starts with its workspace, dimmed | planned: drawn here for approval |
 | `tarn` CLI | built in the app: `tarn open`, `tarn ls`, `tarn notify`. The demo has `open` and `ls`; `tarn new` (R15, second wave) is planned and prints "planned: not in the app yet" on its first run |
 
 ## Run
