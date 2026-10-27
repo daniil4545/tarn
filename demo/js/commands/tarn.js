@@ -1,7 +1,7 @@
-// The tarn CLI as agents and people use it: open, ls, new, wait (docs/specs/agent-cli.md 4).
+// The tarn CLI as agents and people use it: open, ls, new (docs/specs/agent-cli.md 4).
 // None of these moves focus or presses Enter. `new` opens a split below the caller, or to its
 // right with --right; the demo pane is a shell, it does not run the command.
-const USAGE = "usage: tarn <open path[:line] | ls [--json] | new [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S]>";
+const USAGE = "usage: tarn <open path[:line] | ls [--json] | new [--right] [--cwd D] -- <cmd...>>";
 
 function open(ctx) {
   const arg = ctx.args[1];
@@ -39,21 +39,12 @@ function split(ctx) {
   return undefined;
 }
 
-// A demo pane runs no command and is always idle: the wait answers at once, as on an idle shell pane.
-function wait(ctx) {
-  const id = ctx.args.slice(1).find((a, i, all) => !a.startsWith("--") && all[i - 1] !== "--timeout");
-  if (!id) return ctx.out(USAGE);
-  if (!ctx.panes().some((r) => r.pane === id)) return ctx.out(`tarn: no pane matched: ${id}`);
-  return ctx.out("succeed  exit 0  0.0s");
-}
-
 export function tarn(ctx) {
   const sub = ctx.args[0];
   switch (sub) {
     case "open": return open(ctx);
     case "ls": return list(ctx);
     case "new": return split(ctx);
-    case "wait": return wait(ctx);
     default: return ctx.out(USAGE);
   }
 }

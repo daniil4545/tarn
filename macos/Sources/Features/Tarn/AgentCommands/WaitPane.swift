@@ -119,14 +119,8 @@ final class PaneWaits {
     nonisolated static func commandFinished(pane: UUID, exitCode: Int, durationNs: UInt64) {
         MainActor.assumeIsolated { shared.commandFinished(pane: pane, exitCode: exitCode, durationNs: durationNs) }
     }
-
-    nonisolated static func childExited(pane: UUID) {
-        MainActor.assumeIsolated { shared.childExited(pane: pane) }
-    }
-
-    nonisolated static func surfaceTreeChanged() {
-        MainActor.assumeIsolated { shared.surfaceTreeChanged() }
-    }
+    nonisolated static func childExited(pane: UUID) { MainActor.assumeIsolated { shared.childExited(pane: pane) } }
+    nonisolated static func surfaceTreeChanged() { MainActor.assumeIsolated { shared.surfaceTreeChanged() } }
 
     /// Starts a wait: the answer at once, or nil while the reply is held.
     func begin(pane: UUID, facts: PaneFacts, timeout: Double?, reply: any WaitSink) -> Result<[String: Any], AgentRefusal>? {
@@ -215,7 +209,8 @@ final class PaneWaits {
                 let outcome = WaitOutcome(state: "closed", exitCode: nil, durationMs: Int(Date().timeIntervalSince(started) * 1000))
                 answer(pane, .success(outcome.fields))
             }
-            forget(pane)
+            marks[pane] = nil
+            integrated.remove(pane)
         }
     }
 
@@ -227,11 +222,6 @@ final class PaneWaits {
                 PaneWaits.shared.closed(panes: controller.surfaceTree.map(\.id))
             }
         }
-    }
-
-    private func forget(_ pane: UUID) {
-        marks[pane] = nil
-        integrated.remove(pane)
     }
 
     private func answer(_ pane: UUID, _ result: Result<[String: Any], AgentRefusal>) {
