@@ -157,7 +157,9 @@ struct AgentArrivalTests {
         _ = book.selected(t[2])
         _ = book.edit(t[0]) { $0.join(t[0], to: tarn) }
         _ = book.arrived(t[0], selected: true)
-        #expect(book.folderForNewSurface(from: t[0], order: [t[2], t[1], t[0], t[3]], split: false) == "/p/F")
+        let fresh = TabKey()
+        _ = book.pass([[t[2], t[1], t[0], t[3], fresh]], selected: [fresh])
+        #expect(book.workspace(of: fresh)?.id == tarn)
     }
 
     // spec: docs/specs/workspace-folder.md S30

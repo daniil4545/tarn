@@ -214,15 +214,11 @@ struct WorkspaceBook {
         return set.runs(order: group.tabs).first?.workspace.id ?? set.workspaces.first?.id ?? UUID()
     }
 
-    /// The folder of the workspace a new surface lands in (D20). A tab: the workspace
-    /// `targetWorkspace` picks for the window's `order`, as the membership pass will see it (the
-    /// selected tab is then the new one, unknown here), so folder and membership agree. A split:
-    /// the workspace of `tab`; the pending target is not read.
-    func folderForNewSurface(from tab: TabKey, order: [TabKey], split: Bool) -> String? {
-        guard let id = setOf[tab], let set = sets[id] else { return nil }
-        if split { return set.workspace(of: tab)?.folder }
-        let target = targetWorkspace(in: set, group: Group(tabs: order, selected: nil), winner: id)
-        return set.workspace(target)?.folder
+    /// The tab a new tab of `workspace` inherits from, as cmux does: `selected` when it is in
+    /// `workspace`, else the workspace's last tab in `order`; nil for an empty workspace.
+    func sourceTab(for workspace: Workspace.ID, order: [TabKey], selected: TabKey) -> TabKey? {
+        let tabs = order.filter { self.workspace(of: $0)?.id == workspace }
+        return tabs.contains(selected) ? selected : tabs.last
     }
 
     // MARK: Agent arrival (D21, D26, D27)
