@@ -58,7 +58,6 @@ struct WorkspaceHeader: View {
                 payload: { (.workspace, group.workspace.id.uuidString) },
                 onClick: { model.toggleFold(group) },
                 menu: { model.contextMenu(for: group) },
-                toolTip: Self.tip(group),
                 dragOver: { kind, value, lowerHalf in
                     model.dragOver(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
                 },
@@ -67,7 +66,8 @@ struct WorkspaceHeader: View {
                     model.drop(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
                 },
                 dragEnded: { _, _ in model.dragExit() },
-                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0
+                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0,
+                toolTip: Self.tip(group)
             )
         )
         .accessibilityAddTraits(.isButton)

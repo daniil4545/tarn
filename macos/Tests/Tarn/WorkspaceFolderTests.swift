@@ -35,6 +35,15 @@ struct WorkspaceFolderTests {
     }
 
     // spec: docs/specs/workspace-folder.md S26
+    @Test func aPathThroughASymlinkLiesInsideTheRealFolder() throws {
+        let tree = try tree()
+        defer { try? FileManager.default.removeItem(atPath: tree.root) }
+        let real = try #require(WorkspaceFolder.standardized(tree.folder))
+        #expect(WorkspaceFolder.contains(real, tree.link + "/macos"))
+        #expect(WorkspaceFolder.contains(real, "/private" + real))
+    }
+
+    // spec: docs/specs/workspace-folder.md S26
     @Test func containsComparesPathComponents() {
         #expect(WorkspaceFolder.contains("/a/F", "/a/F"))
         #expect(WorkspaceFolder.contains("/a/F", "/a/F/macos"))

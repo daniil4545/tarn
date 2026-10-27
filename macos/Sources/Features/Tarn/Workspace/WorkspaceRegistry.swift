@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 import OSLog
 
 /// A workspace and the tab windows in it, top to bottom.
@@ -290,7 +291,9 @@ final class WorkspaceRegistry {
             return false
         }
         if selectFirstTab(inFolder: path, except: nil, from: window) { return true }
-        return openWorkspace(name: WorkspaceFolder.name(of: path), folder: path, from: window)
+        // The name comes from the folder as picked: a symlink `proj` names the workspace `proj`.
+        let name = WorkspaceFolder.name(of: URL(fileURLWithPath: folder).standardized.path)
+        return openWorkspace(name: name, folder: path, from: window)
     }
 
     /// Sets the folder of `workspace`, or removes it with nil. A folder another workspace holds
@@ -323,8 +326,11 @@ final class WorkspaceRegistry {
         book.setPendingTarget(created, for: tab)
         publish(changed.map { [$0] } ?? [])
         if let folder, let controller = window.windowController as? TerminalController {
-            // Ghostty's own path for a tab with a base config: the first tab starts in the folder.
-            var config = Ghostty.SurfaceConfiguration()
+            // Ghostty's own path for a tab with a base config, inherited as Cmd+T inherits it
+            // (font size, tab context); only the working directory is the folder.
+            var config = controller.focusedSurface?.surface.map {
+                Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB))
+            } ?? Ghostty.SurfaceConfiguration()
             config.workingDirectory = folder
             _ = TerminalController.newTab(controller.ghostty, from: window, withBaseConfig: config)
         } else {
