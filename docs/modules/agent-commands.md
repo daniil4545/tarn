@@ -31,7 +31,7 @@ Reading: `AgentCommands` builds the rows of every pane, resolves the caller and 
 
 ## How it works
 
-Rows (`AgentCommands.livePanes`): every surface of every terminal window in screen order (`SessionRegistry.orderedWindows`), hidden splits of a zoomed tab included. `tab` is the window's `TabKey`, `workspace` its workspace id from `WorkspaceRegistry`, nil for the quick terminal. `cwd` is `workingDirectory`, `process` the kernel name of the foreground process (`AgentProcess.comm`), `branch` from `ProjectInfo`, `host` empty until #39, `state` `AgentSession.listState` or empty.
+Rows (`AgentCommands.livePanes`): every surface of every terminal window in screen order (`SessionRegistry.orderedWindows`), hidden splits of a zoomed tab included. `tab` is the window's `TabKey`, `workspace` its workspace id from `WorkspaceRegistry`, nil for the quick terminal. `process` is the kernel name (`AgentProcess.comm`) of the foreground group's leader, or, when the leader is `/usr/bin/login` (a command Ghostty starts, as `new` does), of login's child in the group (`AgentProcess.foreground`); `cwd` is `workingDirectory` (OSC 7), else the cwd of that process (`AgentProcess.cwd`, as WezTerm `divine_current_working_dir`), `branch` from `ProjectInfo`, `host` empty until #39, `state` `AgentSession.listState` or empty.
 
 Scope (`AgentScope.resolve`): an unknown caller is `not in a tarn tab`, a caller outside the workspaces `not in a workspace`, both code 1. The scope holds the panes of the caller's workspace only (B3). `AgentScope.pane` refuses an id outside the scope with `no pane matched: <id>`, code 4, and never falls back to another pane (B5).
 

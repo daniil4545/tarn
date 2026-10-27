@@ -92,6 +92,61 @@ struct AgentProcessTests {
         }
     }
 
+    /// Runs `argv` as the leader of a new process group, as a pane's process is.
+    private func withGroup(_ argv: [String], _ body: (pid_t) throws -> Void) throws {
+        var attr: posix_spawnattr_t?
+        posix_spawnattr_init(&attr)
+        defer { posix_spawnattr_destroy(&attr) }
+        posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETPGROUP))
+        posix_spawnattr_setpgroup(&attr, 0)
+        var cArgs = argv.map { strdup($0) } + [nil]
+        defer { cArgs.forEach { free($0) } }
+        var pid: pid_t = 0
+        try #require(posix_spawn(&pid, argv[0], nil, &attr, &cArgs, environ) == 0)
+        defer {
+            killpg(pid, SIGKILL)
+            waitpid(pid, nil, 0)
+        }
+        try body(pid)
+    }
+
+    /// `pid` once it is not `group` and `comm` names it, or nil after 5 s.
+    private func settled(_ group: pid_t, comm: String) -> pid_t? {
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let pid = AgentProcess.foreground(group: group)
+            if pid != group, AgentProcess.comm(pid: pid) == comm { return pid }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return nil
+    }
+
+    /// spec: T-218 - a pane `tarn new` opened shows its command and folder, not login's.
+    @Test func aCommandStartedThroughLoginIsTheForegroundProcess() throws {
+        let user = String(cString: getpwuid(getuid()).pointee.pw_name)
+        // `exec` as Ghostty's `exec -l`: login's child becomes the command (`/bin/sh` is bash by kernel name).
+        try withGroup(["/usr/bin/login", "-flp", user, "/bin/sh", "-c", "cd /tmp && exec sleep 30"]) { login in
+            #expect(AgentProcess.comm(pid: login) == "login")
+            let command = try #require(settled(login, comm: "sleep"), "login's child never appeared")
+            #expect(AgentProcess.cwd(pid: command) == "/private/tmp")
+        }
+    }
+
+    /// spec: T-218 - an agent keeps its group while its tools run: the leader still stands for it.
+    @Test func aGroupLeaderThatIsNotLoginStandsForItsGroup() throws {
+        try withGroup(["/bin/sh", "-c", "sleep 30; :"]) { shell in
+            // sleep, the tool, must be in the group before the check means anything.
+            let deadline = Date().addingTimeInterval(5)
+            var pids = [pid_t](repeating: 0, count: 16)
+            func members() -> Int {
+                Int(proc_listpids(UInt32(PROC_PGRP_ONLY), UInt32(shell), &pids, Int32(pids.count * 4))) / 4
+            }
+            while members() < 2, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+            try #require(members() == 2, "sleep never joined the group")
+            #expect(AgentProcess.foreground(group: shell) == shell)
+        }
+    }
+
     @Test func unreadablePidIsNotAnAgent() {
         #expect(AgentProcess.agent(pid: 999_999) == nil)
     }
