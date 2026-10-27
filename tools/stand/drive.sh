@@ -97,6 +97,7 @@ case "$cmd" in
       }
       r")
     [ -n "$wid" ] || fail "the stand has no window on screen"
+    rm -f "$1"
     screencapture -x -o -l "$wid" "$1" 2>/dev/null && [ -s "$1" ] ||
       fail "no screenshot: grant Screen Recording to the terminal running this and restart it"
     echo "$1"
