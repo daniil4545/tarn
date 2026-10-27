@@ -17,15 +17,6 @@ enum WorkspaceFolder {
         return target.count >= base.count && Array(target.prefix(base.count)) == base
     }
 
-    /// D20: where a new surface starts. The inherited directory stays when it lies inside `folder`;
-    /// anything else, nil included, gives `folder`. No folder, or one that is gone from disk (S9),
-    /// returns `inherited` unchanged.
-    static func startDirectory(inherited: String?, folder: String?, exists: (String) -> Bool) -> String? {
-        guard let folder, exists(folder) else { return inherited }
-        if let inherited, contains(folder, inherited) { return inherited }
-        return folder
-    }
-
     /// D21, S14, S15: the workspace an agent at `path` belongs to among `runs`. The deepest folder
     /// wins; on a tie the `current` workspace, then the upper one. Nil: no folder holds `path`.
     static func home(for path: String, in runs: [WorkspaceSet.Run], current: Workspace.ID?) -> Workspace.ID? {

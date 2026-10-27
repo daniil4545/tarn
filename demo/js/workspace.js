@@ -177,12 +177,13 @@ const homeWs = (s) => {
 };
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
-// A new tab or split in a workspace with a folder starts in the inherited folder when it lies
-// inside, else in the workspace folder (docs/specs/workspace-folder.md D20).
+// A new tab or split starts where Ghostty starts it: the folder of the current tab. A tab for
+// another workspace (its "+") inherits from that workspace's last tab, as cmux does (D20 dropped).
 const inside = (folder, cwd) => cwd === folder || cwd.startsWith(`${folder}/`);
 const startCwd = (s, ws) => {
-  const inherited = inheritedCwd(s);
-  return ws?.folder && !inside(ws.folder, inherited) ? ws.folder : inherited;
+  if (!ws || !cfg("window-inherit-working-directory") || ws.tabs.includes(s.cur)) return inheritedCwd(s);
+  const last = ws.tabs[ws.tabs.length - 1];
+  return last ? s.tabs[last].cwd : inheritedCwd(s);
 };
 
 function addTab(s, ws, { cwd = startCwd(s, ws), title = `zsh · ${short(cwd)}` } = {}) {
@@ -352,7 +353,7 @@ const COMMANDS = {
       tab.layout = tree.setAt(tab.layout, at, tree.join(tree.at(tab.layout, at), viewer ? { viewer: fresh } : { pane: fresh }, ZONE[dir]));
       if (focus) tab.focus = fresh;
       tab.zoom = null;
-      ensurePane(fresh, startCwd(s, wsOf(s, tab.id)));
+      ensurePane(fresh, cfg("window-inherit-working-directory") ? tab.cwd : "~");
       return fresh;
     });
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
