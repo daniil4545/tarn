@@ -58,7 +58,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R17 | Subagent panel inside a session | second | 14 requests |
 | R18 | Tracker connector: the `tk` task of each session in the sidebar | second | `tk` links tasks to session ids |
 | R11 | HTML and PDF in the viewer | later | 5 PDF paths, HTML opened in a browser |
-| R13 | SSH sessions in the sidebar | later | 3-4 mentions |
+| R13 | SSH sessions in the sidebar: an ssh tab shows the title the remote shell sets, as every terminal does; no host parser (user decision 2026-10-27, T-250) | 2.0 | 3-4 mentions |
 | R14 | Phone access to waiting sessions, free, outside the home network | later, guide | - |
 | R22 | Preview of a localhost server an agent starts | later | Tellurion trial 2026-10-23 |
 | R23 | State for codex and opencode sessions | later | codex shows no state in the first version |
