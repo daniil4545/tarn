@@ -14,7 +14,6 @@ export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor"
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
 const VIEWER = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M10 2.5v11"/></svg>';
 const NEWWS = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><path d="M1.5 4.5v8h13v-7H8L6.5 3.5h-5z"/><path d="M8 7.5v4M6 9.5h4"/></svg>';
-const GEAR = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>';
 const TOGGLE = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="1.5" y="2.5" width="13" height="11" rx="2"/><path d="M6 2.5v11"/></svg>';
 
 const MIN = 120, MAX = 400;
@@ -54,10 +53,9 @@ function render() {
   sb.classList.toggle("flatlist", !grouped);
   const viewer = isOn("viewer") ? button("sbViewer", "Toggle File Viewer (Cmd+B)", VIEWER) : "";
   const newWs = grouped ? button("wsNewTop", "New workspace (Cmd+Shift+T)", NEWWS) : "";
-  const settings = button("sbSettings", "Settings (Cmd+,)", GEAR);
   const top = ui.rail
-    ? `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${settings}${viewer}${button("sbNew", "New tab", "+")}</div>`
-    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${settings}${newWs}<span class="grow"></span>${viewer}${button("sbNew", "New tab", "+")}</div>`;
+    ? `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${viewer}${button("sbNew", "New tab", "+")}</div>`
+    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${newWs}<span class="grow"></span>${viewer}${button("sbNew", "New tab", "+")}</div>`;
   const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
     sb.innerHTML = top + (grouped ? s.wss : [{ tabs: order }]).map((w) => w.tabs.map((id) => {
@@ -103,7 +101,7 @@ function setUi(patch) {
 }
 
 function onClick(e) {
-  const hit = e.target.closest("[data-tabclose], [data-wsnewtab], .wsh[data-wsh], #wsNew, #wsNewTop, #sbViewer, #sbSettings, #sbToggle, #sbNew, .tab[data-tabid]");
+  const hit = e.target.closest("[data-tabclose], [data-wsnewtab], .wsh[data-wsh], #wsNew, #wsNewTop, #sbViewer, #sbToggle, #sbNew, .tab[data-tabid]");
   if (!hit) return;
   const { dataset } = hit;
   if (dataset.tabclose) return bus.cmd("tab.close", { id: dataset.tabclose });
@@ -111,7 +109,6 @@ function onClick(e) {
   if (dataset.wsh) return bus.cmd("ws.fold", { id: dataset.wsh });
   if (hit.id === "wsNew" || hit.id === "wsNewTop") return newWorkspace();
   if (hit.id === "sbViewer") return bus.cmd("viewer.cmd", { name: "tree" });
-  if (hit.id === "sbSettings") return bus.cmd("settings.open");
   if (hit.id === "sbToggle") return setUi({ rail: !ui.rail });
   if (hit.id === "sbNew") return bus.cmd("tab.new");
   bus.cmd("tab.go", { id: dataset.tabid });

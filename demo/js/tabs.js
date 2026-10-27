@@ -28,6 +28,6 @@ function render(bar) {
   bar.innerHTML = order.map((id, i) => {
     const t = s.tabs[id];
     const mark = grouped ? `<span class="tw">${esc(s.wss.find((w) => w.tabs.includes(id)).name)}</span>` : "";
-    return `<div class="ttab" role="tab" aria-selected="${id === s.cur}" data-toptab="${id}" title="${esc(t.cwd)}"><button class="tx" data-tabclose="${id}" aria-label="Close tab">✕</button><span class="tt">${esc(t.title)}</span>${mark}${dot(tabStatus(t, reg))}<span class="tk">${key(i)}</span></div>`;
+    return `<div class="ttab" role="tab" aria-selected="${id === s.cur}" data-toptab="${id}" title="${esc(t.cwd)}"><button class="tx" data-tabclose="${id}" aria-label="Close tab">✕</button>${mark}<span class="tt">${esc(t.title)}</span>${dot(tabStatus(t, reg))}<span class="tk">${key(i)}</span></div>`;
   }).join("") + '<button class="tplus" id="topNew" aria-label="New tab" title="New tab">+</button>';
 }

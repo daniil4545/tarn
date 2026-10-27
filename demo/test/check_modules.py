@@ -272,9 +272,9 @@ def workspace_checks(pg):
 def main():
     with server() as base:  # noqa: SIM117 (the page needs the server address)
         with app_page(base) as (pg, errors, requests):
-            pg.click("#sbSettings")
+            pg.click("#tbSettings")
             check(
-                "M0 the sidebar Settings button opens Settings",
+                "M0 the Settings button at the top right of the window opens Settings",
                 pg.locator("#settings .setwin").is_visible(),
             )
             pg.click("#setNav [data-sec='modules']")
