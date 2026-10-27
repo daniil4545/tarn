@@ -168,7 +168,7 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S10 | No inheritance | `window-inherit-working-directory = false`, Cmd+T in "tarn" | new tab starts at `F` | | fast |
 | S11 | Agent joins | tab in "No project" at `F/macos`, `claude` starts | tab moves to the end of "tarn" with one native move; not marked manual | | fast |
 | S12 | Agent at home | tab in "tarn" at `F`, agent starts | no move | | fast |
-| S13 | Agent outside any folder | tab in "tarn" at `P`, agent starts | no move; the row shows the mark; in "No project" no mark | | fast |
+| S13 | Agent outside any folder | tab in "tarn" at `P`, agent starts | no move; the row shows the mark; in a restored "No project" no mark; in "~" no mark under home | | fast |
 | S14 | Nested folders | "dev" at `~/Dev`, "tarn" at `~/Dev/self-projects/tarn`, agent at `F/macos` | tab joins "tarn" | | fast |
 | S15 | Same folder twice | after Merge All Windows two workspaces hold `F` | a tab already in one of them stays; else it joins the upper one | | fast |
 | S16 | Manual wins | user drags the tab from "tarn" to "notes", later an agent starts at `F` | no move; after relaunch still no move | | fast |
@@ -206,9 +206,9 @@ Limits (what the code never does):
 
 | Entity | Change | Owner | Key or invariant |
 |---|---|---|---|
-| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for "No project" and old workspaces |
+| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for a restored "No project" and old workspaces; the home folder for "~" (T-245) |
 | `WorkspaceSet.manual` | new, `Set<TabKey>` | `WorkspaceSet` | only members (`makeSet` drops keys not in `members`); removed with the tab; `absorb` unites both sets' marks; `ClosedTab` carries it and `reinsert` puts it on the new key |
-| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one workspace named "No project" or "Default" with no folder |
+| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one unrenamed "~" with the home folder, or one "No project" or "Default" with no folder (T-245) |
 | `WorkspaceSnapshot.Entry.folder` | new optional field | `WorkspaceRestore` | missing in old snapshots decodes as nil; version stays 1 |
 | `WorkspaceSnapshot.manual` | new optional field `[TabKey]` | `WorkspaceRestore` | missing decodes as empty |
 | deciding agent pid per tab | new, runtime | `WorkspaceBook` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |
