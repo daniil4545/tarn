@@ -33,7 +33,7 @@ struct AgentProcessTests {
         #expect(!AgentProcess.looksLikeVersion("python3.12"))
     }
 
-    /// Runs `program` from a link named `file` with `argv`, so the kernel name is `file`.
+    /// Runs `program` from a link named `file` with `argv`; the kernel name stays `program`'s.
     private func withProcess(
         file: String,
         program: String = "/bin/sleep",
@@ -145,6 +145,32 @@ struct AgentProcessTests {
             try #require(members() == 2, "sleep never joined the group")
             #expect(AgentProcess.foreground(group: shell) == shell)
         }
+    }
+
+    /// spec: T-250 - an ssh tab keeps the remote shell's title.
+    @Test func anSSHClientIsNamedByItsKernelName() throws {
+        // The kernel names a process after the link's target, so this is the real client; the
+        // proxy command keeps it waiting with no network and no user config.
+        let ssh = ["ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ProxyCommand=sleep 30", "tarn-test"]
+        try withProcess(file: "ssh", program: "/usr/bin/ssh", argv: ssh) { pid in
+            #expect(execed(pid, comm: "ssh"), "the kernel name never became ssh")
+            #expect(AgentProcess.isSSH(pid: pid))
+            #expect(AgentProcess.agent(pid: pid) == nil)
+        }
+        try withProcess(file: "sleep", argv: ["sleep", "30"]) { pid in
+            #expect(execed(pid, comm: "sleep"), "the kernel name never became sleep")
+            #expect(!AgentProcess.isSSH(pid: pid))
+        }
+    }
+
+    /// Whether `pid` took the kernel name `comm` within 5 s: posix_spawn returns before exec.
+    private func execed(_ pid: pid_t, comm: String) -> Bool {
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if AgentProcess.comm(pid: pid) == comm { return true }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        return false
     }
 
     @Test func unreadablePidIsNotAnAgent() {
