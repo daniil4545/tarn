@@ -111,6 +111,8 @@ Decisions:
 - D25. With tabs at the top and two or more workspaces in the set, a native tab title is
   "<workspace> · <Ghostty title>", the workspace part dimmed (user, 2026-10-27). One workspace:
   Ghostty's title alone. This makes D21 moves visible in both tab styles. Model change: yes.
+  Superseded for the order by the modules decision (2026-10-27, `docs/specs/modules.md` section 5): the
+  name stands after the title in our tab mark, no insertion point; the name shows when Workspaces is on and the set has two or more workspaces (D25's condition kept).
 - D26. The arrival check runs on the registry's tab notifications (title changes post them)
   and on agent session updates; no new timer. The tab keeps the pid of the agent that decided
   (any pane). The check runs only when the tab has no live deciding pid; then the first agent

@@ -44,6 +44,7 @@ final class WorkspaceRegistry {
     private var surfaceCache: [ObjectIdentifier: Set<UUID>] = [:]
 
     private init() {
+        book.frozen = !TarnModules.isOn(.workspaces)
         let center = NotificationCenter.default
         center.addObserver(forName: .terminalTabsDidChange, object: nil, queue: .main) { [weak self] note in
             // Delivered synchronously on the main thread. Our own `publish` posts with `self` as the
@@ -83,6 +84,24 @@ final class WorkspaceRegistry {
     /// The workspace of a tab window.
     func workspace(of window: NSWindow) -> Workspace? {
         entries[ObjectIdentifier(window)].flatMap { book.workspace(of: $0.key) }
+    }
+
+    // MARK: Module switch
+
+    /// Workspaces off freezes the workspaces as they are; on again regroups the tabs. The pass
+    /// runs now and tells the sidebars.
+    var isFrozen: Bool { book.frozen }
+
+    func setFrozen(_ frozen: Bool) {
+        guard book.frozen != frozen else { return }
+        book.frozen = frozen
+        book.regroupPending = !frozen
+        // The switch is clicked in another window (Settings); the native moves raise the tabs they
+        // move, so the window that had the keyboard gets it back.
+        let keyWindow = NSApp.keyWindow
+        sync()
+        if let keyWindow, NSApp.keyWindow !== keyWindow { keyWindow.makeKeyAndOrderFront(nil) }
+        NotificationCenter.default.post(name: .terminalTabsDidChange, object: self)
     }
 
     // MARK: Following Ghostty
@@ -268,6 +287,10 @@ final class WorkspaceRegistry {
 
     /// A new tab in `workspace`, after its last tab.
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
+        guard !book.frozen else {
+            (window.windowController as? TerminalController)?.newTab(nil)
+            return
+        }
         let tab = key(for: window)
         book.setPendingTarget(workspace, for: tab)
         (window.windowController as? TerminalController)?.newTab(nil)
@@ -308,6 +331,7 @@ final class WorkspaceRegistry {
     /// path that is not absolute.
     @discardableResult
     func createWorkspace(folder: String, from window: NSWindow) -> Bool {
+        guard !book.frozen else { return false }
         guard let path = WorkspaceFolder.standardized(folder) else {
             Self.logger.error("workspace: folder not absolute value=\(folder, privacy: .public)")
             return false
@@ -329,6 +353,7 @@ final class WorkspaceRegistry {
     }
 
     private func openWorkspace(name: String, folder: String?, from window: NSWindow) -> Bool {
+        guard !book.frozen else { return false }
         let tab = key(for: window)
         var created: Workspace.ID?
         let changed = book.edit(tab) { created = $0.create(name: name, folder: folder) }
@@ -385,12 +410,12 @@ final class WorkspaceRegistry {
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
         isBusy = true
-        let changed = book.edit(tab) { $0.join(tab, to: workspace) }
+        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace) }
         let destination = Self.destination(
             of: tab,
             in: order,
             before: neighbour.map(key(for:)),
-            isMember: { book.workspace(of: $0)?.id == workspace }
+            isMember: { [frozen = book.frozen] in frozen || book.workspace(of: $0)?.id == workspace }
         )
         moveNatively(window, by: destination - index)
         isBusy = false

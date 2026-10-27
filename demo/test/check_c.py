@@ -368,12 +368,13 @@ def settings_checks(pg):
     check("S3a the red light closes the settings window", not vis("#settings"))
 
     pg.keyboard.press("Meta+Comma")
-    pg.click("input[name=tabstyle][value=top]")
+    pg.click("#setNav [data-sec='modules']")
+    pg.click("#m-sidebar")
     check(
-        "S2a the tab style radio writes tab-style",
+        "S2a the Sidebar switch in Modules writes tab-style",
         pg.evaluate("__tarn.snapshot().config['tab-style']") == "top",
     )
-    pg.click("input[name=tabstyle][value=sidebar]")
+    pg.click("#m-sidebar")
 
     pg.click("#setNav [data-sec='appearance']")
     check(

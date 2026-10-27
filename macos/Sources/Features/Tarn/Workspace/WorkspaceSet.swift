@@ -22,6 +22,8 @@ struct WorkspaceSet: Equatable {
     static let defaultName = "No project"
     /// The name sets had before "No project"; restored sets keep it.
     static let legacyDefaultName = "Default"
+    /// The workspace that takes new tabs while Workspaces is off: the home folder, named "~".
+    static let homeName = "~"
 
     /// One window's workspaces. Not part of the stored state.
     struct Run: Equatable {
@@ -252,6 +254,40 @@ struct WorkspaceSet: Equatable {
 
         if members != before.members || workspaces != before.workspaces { revision = before.revision + 1 }
         return reorders
+    }
+
+    /// Workspaces are off: a tab with no workspace joins the workspace whose folder is the home
+    /// folder (one folder, one workspace); a new one named "~" is made when the set has none.
+    /// Nothing else moves, whatever the order of the tabs.
+    mutating func reconcileFrozen(current: [TabKey], home: String = NSHomeDirectory()) {
+        let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
+        guard !fresh.isEmpty else { return }
+        let folder = WorkspaceFolder.standardized(home) ?? home
+        let target: Workspace.ID
+        if let existing = workspaces.first(where: { $0.folder == folder }) {
+            target = existing.id
+        } else {
+            var created = Workspace(name: Self.homeName)
+            created.folder = folder
+            workspaces.append(created)
+            target = created.id
+        }
+        for tab in fresh { members[tab] = target }
+        revision += 1
+    }
+
+    /// Workspaces are on again: the native moves that make every workspace one run, in the order of
+    /// first appearance. Membership does not change.
+    func regroup(order: [TabKey]) -> [Reorder] {
+        var current = order
+        var moves: [Reorder] = []
+        for (place, tab) in runs(order: order).flatMap(\.tabs).enumerated() {
+            guard let at = current.firstIndex(of: tab), at != place else { continue }
+            current.remove(at: at)
+            current.insert(tab, at: place)
+            moves.append(Reorder(tab: tab, delta: place - at))
+        }
+        return moves
     }
 
     /// Makes the workspaces of `known` contiguous again. Ghostty moves one tab at a time, so

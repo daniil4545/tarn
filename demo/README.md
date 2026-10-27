@@ -14,10 +14,14 @@ No backend, no build step, no network: ES modules and vendored files only.
 | Sidebar and agent states | built |
 | Viewer (markdown, mermaid, code, save) | built |
 | Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built: Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
-| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
+| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, open panes are hidden (their tabs and unsaved text stay) and come back when it is on again; Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off; the Toggle File Viewer button hides |
 | Workspaces, splits, layout | built |
 | Find in the viewer (Cmd+F, Cmd+G, Shift+Cmd+G while the viewer has the keyboard): a bar at the top right like Ghostty's terminal search, n/m count, Enter and Shift+Enter step, Esc gives the keyboard back or closes an empty bar; view and source mode | built: Ghostty's Find menu items reach the page |
 | Settings | built |
+| Settings > Modules (first section): five switches Sidebar, File viewer, Workspaces, Permission card, Notifications, each applies at once; Permission card is greyed with "needs Sidebar" while Sidebar is off; Agents line with Claude Code version and three checks (sample data); the tab style picker moves into the Sidebar row; a Settings button at the top right of the window (demo only, the app keeps Cmd+, and the menu) | built (T-205, #34; the Settings button at the top right is demo only) |
+| Workspaces off: flat list without headers, new tabs go to the workspace with folder ~ (named "~"), drag only reorders; frozen workspaces return on again. With Sidebar off the top tabs carry the workspace name | built (T-205, #34) |
+| Permission card off: the hover card keeps title and state and drops Allow, Deny and answers | built (T-205, #34) |
+| Notifications off: no banner for an agent that needs you, Cmd+U does nothing (the demo draws the banner and Cmd+U, built in the app as R4) | built (T-205, #34) |
 | Drop feedback: a 3 px system accent line where the dragged window will stand (at the cut), a gray chip with the reason on a refusal; a workspace dragged in the sidebar shows an accent line where it lands | built in 1.0.1; a terminal dropped on a terminal keeps Ghostty's own half highlight |
 | Sidebar tab drag as in Warp: the row lifts out solid and follows the pointer, the rows slide apart to a gap where it lands (above a row in its upper half, below it in its lower half, at the end of a workspace over its header) | planned; the app still frames the header and draws a line |
 | Easy-to-catch grab zones: 14 px grab zones centred on split dividers and on the sidebar edge, resize cursor; the pane handle stays Ghostty's (80x12, dots in the top 20% of the pane) | built in 1.0.1; the app's sidebar zone leans into the sidebar so the first terminal column stays clickable |
@@ -47,6 +51,7 @@ uv run --with playwright python -I demo/test/check_b.py     # layout, workspaces
 uv run --with playwright python -I demo/test/check_c.py     # viewer, settings, Help
 uv run --with playwright python -I demo/test/check_e2e.py   # the whole user story
 uv run --with playwright python -I demo/test/check_review.py # regressions found in code review, privacy scan
+uv run --with playwright python -I demo/test/check_modules.py  # Settings > Modules and its switches
 node --test demo/test/unit                                  # the shell without a browser
 ```
 

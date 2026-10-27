@@ -102,9 +102,9 @@ def folder_story(pg):
     cmd(pg, "tab.go", {"id": "t1"})
     cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
     check(
-        "F5 with two or more workspaces a top tab starts with its workspace",
-        pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn ·"
-        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "No project ·",
+        "F5 with tabs at the top a tab reads title, then its workspace (user decision 2026-10-27)",
+        pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn"
+        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "No project",
     )
     cmd(pg, "config.reset", {"key": "tab-style"})
 

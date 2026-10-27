@@ -130,6 +130,7 @@ enum WorkspacePrompt {
 
     /// Asks for a folder in a sheet and opens a workspace for it (D19). Cancel does nothing.
     static func newWorkspace(in window: NSWindow) {
+        guard TarnModules.isOn(.workspaces) else { return }
         chooseFolder(title: "New Workspace", message: "Choose the project folder. The workspace opens with one new tab there.", in: window) { [weak window] folder in
             guard let window else { return }
             WorkspaceRegistry.shared.createWorkspace(folder: folder, from: window)

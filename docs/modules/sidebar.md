@@ -29,7 +29,7 @@ Reading: one `SidebarModel` per window controller derives `groups` from the regi
 | In | 2 s timer, only while the window is visible | `SidebarModel.init` |
 | In | `WorkspaceRegistry.runs(for:)` | `SidebarModel.refresh` |
 | In | `SessionRegistry.sessions` | `SidebarModel.agent(in:)` |
-| In | tab style `TarnTabStyle`, row size `TarnTabRows` (wide by default: title, then folder and minutes in state; narrow: one line), sidebar width and collapsed in `UserDefaults` | `SidebarLayout`, `Sidebar` |
+| In | the Sidebar switch (tab style `TarnTabStyle`), row size `TarnTabRows` (wide by default: title, then folder and minutes in state; narrow: one line), sidebar width and collapsed in `UserDefaults` | `SidebarLayout`, `Sidebar` |
 | In | drags of a tab row or a workspace header (private pasteboard types `com.daniil4545.tarn.tab`, `.workspace`) | `TabDragSource.swift`, `SidebarModel.drop` |
 | Out | tab select, close, new tab, context menu | `SidebarModel` |
 | Out | workspace commands: new tab in, new workspace, rename, delete, fold, move tab, move workspace | `WorkspaceRegistry` |
@@ -103,7 +103,7 @@ Rows 1 to 6 and 9 of [architecture.md](../architecture.md): `sidebarModel` prope
 
 Startup (T-149): the sidebar adds little to the first window. A profile of the first layout (Time Profiler, ReleaseLocal) showed three costs of ours: `window.tabGroup` read in `WorkspaceRegistry.bookGroups` (AppKit builds a tab bar for a lone window, the largest), the card popover built in `SidebarModel.init` (now built on first use) and the lazy stacks of the list (now plain stacks; a window lists a handful of tabs). Removing the sidebar and the viewer wrapper altogether moved startup by a few milliseconds, inside the run-to-run noise of the benchmark; see `docs/bench.md`.
 
-Known limits: detection latency up to 2 s on a visible window; hidden windows refresh on notifications only. The top tab style shows no workspaces; membership keeps working.
+Known limits: detection latency up to 2 s on a visible window; hidden windows refresh on notifications only. Sidebar off (tab style `top`): the native tab bar shows each tab with the agent mark `NativeTabMark` in its accessory view, and while Workspaces is on and the set has two or more workspaces, that mark carries the workspace name too. Ghostty draws the tab title and puts the accessory after it, so the order is title, workspace name, state dot (user decision 2026-10-27; no insertion point). Workspaces off: the sidebar is one flat list in native tab order with no headers, New Workspace and the Move to menu are hidden, and a drag only reorders. File viewer off: the Toggle File Viewer button is hidden. Permission card off: the hover card keeps title, folder and state and has no Allow, Deny or answers.
 
 ## Tests
 

@@ -46,6 +46,8 @@ CLI (`cli/tarn`, POSIX sh with `nc -U`, `awk`, `tr`): builds the request line, e
 
 Why a shell client: it needs the same base tools as `hook.sh` (`sh`, `nc -U`, `awk`, `tr`), nothing to build or sign, no runtime (`python3` on a bare macOS is an installer stub). Rejected: a Swift helper target, a Python client. The CLI lives in `Contents/MacOS/tarn`, so the app executable must keep a different name (`ghostty`); the alternative `Contents/Resources/bin/tarn` plus a `PATH` prepend was rejected as an own mechanism.
 
+Notifications off (Settings > Modules): `Attention` raises no banner (delivered ones stay in Notification Center), Cmd+U does nothing and its menu item is hidden, `tarn notify` answers "notifications are off in Settings", and Claude Code's own terminal notifications (OSC 9 and 777) are no longer suppressed. The sidebar dots and the registry state keep working.
+
 Cmd+U has no default Ghostty binding; a user binding on `super+u` wins over the menu item. Known limits: Cmd+U does nothing while the Settings window is key. `agentSessionID` is not reset when an agent dies without `SessionEnd`, so terminal notifications of that surface stay suppressed.
 
 ## Files
