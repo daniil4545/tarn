@@ -26,11 +26,9 @@ Reading: the registry feeds every state change to the gate; the gate decides, Gh
 | Direction | What | Where |
 |---|---|---|
 | In | a state change of a session (old, new, focused) | `SessionRegistry.receive` -> `Attention.consider` |
-| In | `{"version":1,"cmd":"ls","json":bool}` | `AttentionCommands.handle` |
-| In | `{"version":1,"cmd":"notify","surface":<uuid>,"text":...}` | same, `SessionRegistry.notify` |
+| In | `{"version":1,"cmd":"notify","surface":<uuid>,"text":...}` | `AttentionCommands.handle`, `SessionRegistry.notify` |
 | In | OSC 9/777 of a surface | `Ghostty.App.showDesktopNotification` -> `Attention.suppresses` |
 | Out | a notification: title = the project (git root folder name; the working folder outside git; `tarn` when the directory is unknown), body from `docs/spec.md` 11 | `Ghostty.App.showDesktopNotification(_:title:body:)` |
-| Out | `ls` reply: `text` rows, or `sessions` with the `Session` fields | `AttentionCommands` |
 
 ## How it works
 
@@ -42,9 +40,9 @@ Suppression: a terminal notification from a surface whose record has a non-empty
 
 Jump (`AttentionJump`, after Limpid `AttentionState.swift`): candidates are live sessions with a need or a note. Order: `failed`, `permission`, `waiting` or note; inside a group unseen first (a note counts as unseen), then the longest wait (`since`, or `noteSince` for a note without state). The cursor goes to the entry after the focused session and wraps, so repeated presses cycle through seen sessions too; when the focused session is the only candidate, or there is none, the menu action beeps. `SessionRegistry.liveSessions` drops records whose surface is gone and lists surfaces of every `BaseTerminalController` window: tab groups first, then other windows such as the quick terminal (`SessionRegistry.screenOrder`). Focus uses `BaseTerminalController.focusSurface`, which also shows a hidden quick terminal.
 
-`tarn ls` rows: `n  project  branch  state  age`, `n` is the position in screen order (windows in tab groups, tabs, splits); `-` for no branch; `failed` shows for a failed waiting session; `age` is `45s`, `2m`, `3h`, `2d`; `project` and `branch` come from `ProjectInfo` (git root folder name, `HEAD`); `cwd` is the surface `workingDirectory` (OSC 7, else the cwd of the foreground process), the same directory the sidebar and the banner title use. JSON `sessions` entries: `surface`, `agentSessionID`, `cwd`, `project`, `branch`, `state`, `since` (ISO 8601), `seen`, `failed`, `note`.
+`tarn ls` lists terminal panes, not sessions: [agent-commands.md](agent-commands.md). Its `STATE` column is `AgentSession.listState`: the state name, `failed` for a failed waiting session.
 
-CLI (`cli/tarn`, POSIX sh with `nc -U`, `awk`, `tr`): builds the request line, escapes text into JSON, prints the decoded `text` field or the whole reply for `--json`. Errors go to stderr as `tarn: <text>` with exit 1: the app's `error`, or `tarn is not running`, `no answer from tarn` (5 s, `TARN_TIMEOUT`), `bad answer from tarn`, `TARN_SURFACE is not set`. The reply `version` is not checked. `open` resolves a relative path against `$PWD`. The app puts the CLI folder on `PATH`: the core appends the folder of the app executable (`src/termio/Exec.zig:681-710`), here `Contents/MacOS`.
+CLI (`cli/tarn`, POSIX sh with `nc -U`, `awk`, `tr`): builds the request line, escapes text into JSON, prints the decoded `text` field or the whole reply for `--json`. Errors go to stderr as `tarn: <text>` with exit 1, or the reply's `code` (sorted keys put it first): the app's `error`, or `tarn is not running`, `no answer from tarn` (5 s, `TARN_TIMEOUT`), `bad answer from tarn`, `not in a tarn tab` (no `TARN_SURFACE`). The reply `version` is not checked. `open` resolves a relative path against `$PWD`. The app puts the CLI folder on `PATH`: the core appends the folder of the app executable (`src/termio/Exec.zig:681-710`), here `Contents/MacOS`.
 
 Why a shell client: it needs the same base tools as `hook.sh` (`sh`, `nc -U`, `awk`, `tr`), nothing to build or sign, no runtime (`python3` on a bare macOS is an installer stub). Rejected: a Swift helper target, a Python client. The CLI lives in `Contents/MacOS/tarn`, so the app executable must keep a different name (`ghostty`); the alternative `Contents/Resources/bin/tarn` plus a `PATH` prepend was rejected as an own mechanism.
 

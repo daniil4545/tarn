@@ -53,7 +53,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R10 | Several agents per project shown as separate sessions | first | - |
 | R4 | One notification per need; jump to the next session that needs the user by a click | first | 13.5% of replies come after more than 10 min |
 | R12 | Editor-like prompt input | first, Claude Code itself, verify | - |
-| R15 | `tarn new` and `tarn send`: hand-over between sessions | second | 50+ manual hand-overs |
+| R15 | agent commands on panes: `tarn new`, `run`, `wait`, `read`, `close`, no `send` (`docs/specs/agent-cli.md`) | second | 50+ manual hand-overs |
 | R16 | `tarn run`: a command for the user with output back to the agent | second | ~35 pasted outputs |
 | R17 | Subagent panel inside a session | second | 14 requests |
 | R18 | Tracker connector: the `tk` task of each session in the sidebar | second | `tk` links tasks to session ids |
@@ -264,7 +264,7 @@ Code sources. Reference projects were picked from seven MIT agent terminals on l
 - Notification title `<project>`, body `Waiting for you`.
 - Notification title `<project>`, body `Failed, see the session`.
 - Notification title `<project>`, body: the text of `tarn notify`.
-- `tarn ls` row: `3  tarn  main  permission  2m`; `tarn ls --json` returns the `Session` fields.
+- `tarn ls`: a header `PANE  TAB  TITLE  CWD  PROCESS  BRANCH  HOST  STATE` and one row per terminal pane of the caller's workspace; `tarn ls --json` returns `panes` (`docs/specs/agent-cli.md` 4).
 - `tarn open` on a missing file: `tarn: no such file: <path>`, exit code 1.
 
 ## 12. Decisions and open questions
@@ -288,7 +288,7 @@ Code sources. Reference projects were picked from seven MIT agent terminals on l
 Open for the second wave, from the spec review of 2026-10-21 (resolve before designing R15-R18):
 
 1. `tarn send`: a target without bracketed paste executes newlines; the text needs encoding per paste mode (`src/Surface.zig:3431`, `paste.zig:109-113`).
-2. Session address in the CLI: `tarn ls` numbers shift; commands need the surface UUID or the Claude session id.
+2. Closed: a pane is addressed by its surface UUID, the value of `TARN_SURFACE` (`docs/specs/agent-cli.md` 3).
 3. `tarn run`: timeout, sudo, large output, parallel calls, where the command runs, whether the user can edit it.
 4. `tarn new`: whether the entry prompt is submitted; which `claude` command and permission mode; tab or split.
 5. Tracker `ask` versus hook state: `ask` is a field shown in the sidebar, not a state transition; polling `tk` at most once per N seconds; `/clear` changes the session id.

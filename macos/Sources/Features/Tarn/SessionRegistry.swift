@@ -237,6 +237,7 @@ final class SessionRegistry {
                 return
             }
             if ViewerRouter.handleCommand(message, reply: reply) { return }
+            if AgentCommands.handle(message, reply: reply) { return }
             if AttentionCommands.handle(message, reply: reply) { return }
             self?.receive(message, reply: reply)
         }
@@ -501,11 +502,15 @@ final class SessionRegistry {
     /// Surfaces in screen order: windows in tab groups, tabs left to right, splits in tree order,
     /// then windows outside any tab group such as the quick terminal.
     static func orderedSurfaces() -> [Ghostty.SurfaceView] {
-        let windows = screenOrder(
+        orderedWindows().flatMap { ($0.windowController as? BaseTerminalController).map { Array($0.surfaceTree) } ?? [] }
+    }
+
+    /// Terminal windows in the order of `orderedSurfaces`.
+    static func orderedWindows() -> [NSWindow] {
+        screenOrder(
             terminals: TerminalController.all.compactMap(\.window),
             all: NSApp.windows.filter { $0.windowController is BaseTerminalController }
         ) { $0.tabGroup?.windows ?? [$0] }
-        return windows.flatMap { ($0.windowController as? BaseTerminalController).map { Array($0.surfaceTree) } ?? [] }
     }
 
     /// Terminal windows first, each followed by the rest of its tab group, then every other window.

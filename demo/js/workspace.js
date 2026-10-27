@@ -298,19 +298,21 @@ const COMMANDS = {
   }),
 
   // A terminal splits into a terminal; a viewer into another viewer that opens `path`.
-  "pane.split": ({ id, dir, kind = "terminal", path }) => {
+  // `focus: false` (`tarn new`) leaves the focus where it was. Returns the new id.
+  "pane.split": ({ id, dir, kind = "terminal", path, focus = true }) => {
     const created = update((s) => {
-      const tab = currentTab(s), target = id ?? tab.focus;
+      const tab = (id && tabOfLeaf(s, id)) || currentTab(s), target = id ?? tab.focus;
       if (leafCount(tab) >= CAP) return toast(`At most ${CAP} panes in a tab`);
       const at = tree.pathOf(tab.layout, target), viewer = kind === "viewer";
       const fresh = nextId(viewer ? "v" : "p");
       tab.layout = tree.setAt(tab.layout, at, tree.join(tree.at(tab.layout, at), viewer ? { viewer: fresh } : { pane: fresh }, ZONE[dir]));
-      tab.focus = fresh;
+      if (focus) tab.focus = fresh;
       tab.zoom = null;
       ensurePane(fresh, startCwd(s, wsOf(s, tab.id)));
       return fresh;
     });
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
+    return created;
   },
 
   "pane.close": ({ id, exited = false }) => {
