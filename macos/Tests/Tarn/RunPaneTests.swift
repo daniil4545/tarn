@@ -26,6 +26,7 @@ struct RunPaneTests {
             ("a\tb", RunPane.controlCharacter),
             ("\u{1B}[A", RunPane.controlCharacter),
             ("a\u{7F}", RunPane.controlCharacter),
+            ("a\u{85}b", RunPane.controlCharacter),
         ]
         for (argument, refusal) in cases {
             let result = RunPane.run(["argv": ["echo", argument]], scope)

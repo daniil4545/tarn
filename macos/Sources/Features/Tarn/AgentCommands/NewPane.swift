@@ -17,6 +17,8 @@ enum NewPane {
     static func open(_ message: [String: Any], _ scope: AgentScope, kind: RunMark.Kind) -> Result<[String: Any], AgentRefusal> {
         guard let argv = message["argv"] as? [String], !argv.isEmpty else { return .failure(AgentRefusal(text: "no command")) }
         guard let command = ShellQuote.join(argv) else { return .failure(notOneLine) }
+        // Typed input reaches the line editor as keys: Ctrl+O submits in zsh and bash, Tab completes (B2).
+        if kind == .run, Ghostty.Shell.containsControlCharacters(command) { return .failure(RunPane.controlCharacter) }
         guard let caller = SessionRegistry.surfaceView(scope.caller.pane),
               let controller = BaseTerminalController.controller(owning: caller)
         else { return .failure(.notInTab) }
