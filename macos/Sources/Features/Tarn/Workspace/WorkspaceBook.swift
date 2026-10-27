@@ -106,7 +106,7 @@ struct WorkspaceBook {
             let oldTabs = live.filter { setOf[$0] == old }
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
                 // Merge All Windows: the loser's workspaces come whole, with their names. A window
-                // that holds only its stock `Default` has nothing to keep: it is the same as a tab
+                // that holds only its stock "No project" has nothing to keep: it is the same as a tab
                 // dragged in and joins the target.
                 won.absorb(loser)
                 sets[winner] = won
@@ -156,9 +156,11 @@ struct WorkspaceBook {
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
     }
 
-    /// A set that is one unrenamed `Default`: a window nobody has set up.
-    private func isPlain(_ set: WorkspaceSet) -> Bool {
-        set.workspaces.count == 1 && set.workspaces[0].name == WorkspaceSet.defaultName
+    /// A set that is one unrenamed "No project" (or the older "Default") with no folder: a
+    /// window nobody has set up.
+    func isPlain(_ set: WorkspaceSet) -> Bool {
+        guard set.workspaces.count == 1, set.workspaces[0].folder == nil else { return false }
+        return [WorkspaceSet.defaultName, WorkspaceSet.legacyDefaultName].contains(set.workspaces[0].name)
     }
 
     /// The set each group follows. A set belongs to the group that holds most of its live tabs; a
@@ -215,7 +217,7 @@ struct WorkspaceBook {
     }
 
     /// Puts a reopened tab back where `closed` says: its set (recreated when gone, with the
-    /// names and fold kept but no empty `Default`) and its workspace (recreated when deleted).
+    /// names and fold kept but no empty "No project") and its workspace (recreated when deleted).
     mutating func reinsert(_ tab: TabKey, from closed: ClosedTab) {
         let id = closed.set.id
         var set = sets[id] ?? WorkspaceSet(id: id, revision: closed.set.revision)

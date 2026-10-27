@@ -9,6 +9,8 @@ struct Workspace: Equatable, Identifiable, Codable {
     var id = UUID()
     var name: String
     var collapsed = false
+    /// The project folder (D19): absolute and standardized; nil for "No project".
+    var folder: String?
 }
 
 /// The workspaces of one Ghostty window and which tab sits in which one.
@@ -17,8 +19,10 @@ struct Workspace: Equatable, Identifiable, Codable {
 /// a contiguous run of the native tab order, so workspace order is derived from the order of
 /// tabs and never stored (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
-    static let defaultName = "Default"
-    /// The workspace that takes new tabs while Workspaces is off: the home folder.
+    static let defaultName = "No project"
+    /// The name sets had before "No project"; restored sets keep it.
+    static let legacyDefaultName = "Default"
+    /// The workspace that takes new tabs while Workspaces is off: the home folder, named "~".
     static let homeName = "~"
 
     /// One window's workspaces. Not part of the stored state.
@@ -60,7 +64,7 @@ struct WorkspaceSet: Equatable {
         self.revision = revision
     }
 
-    /// A set with `Default` holding `tabs`.
+    /// A set with `No project` holding `tabs`.
     static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
         let workspace = Workspace(name: defaultName)
         return WorkspaceSet(
@@ -114,11 +118,15 @@ struct WorkspaceSet: Equatable {
 
     // MARK: Edits
 
-    /// Adds an empty workspace and returns it, or nil for a blank name. The workspace
-    /// gets its tab right after; until then it is in no run.
-    mutating func create(name: String) -> Workspace.ID? {
+    /// Adds an empty workspace and returns it, or nil for a blank name or a folder that is not
+    /// an absolute path. The workspace gets its tab right after; until then it is in no run.
+    mutating func create(name: String, folder: String? = nil) -> Workspace.ID? {
         guard let name = Self.cleaned(name) else { return nil }
-        let workspace = Workspace(name: name)
+        var workspace = Workspace(name: name)
+        if let folder {
+            guard let path = WorkspaceFolder.standardized(folder) else { return nil }
+            workspace.folder = path
+        }
         workspaces.append(workspace)
         revision += 1
         return workspace.id
@@ -132,6 +140,11 @@ struct WorkspaceSet: Equatable {
         workspaces[index].name = name
         revision += 1
         return true
+    }
+
+    /// The first tab of the workspace that holds `folder` (Q1).
+    func firstTab(inFolder folder: String, order: [TabKey]) -> TabKey? {
+        runs(order: order).first { $0.workspace.folder == folder }?.tabs.first
     }
 
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {
@@ -243,20 +256,23 @@ struct WorkspaceSet: Equatable {
         return reorders
     }
 
-    /// Workspaces are off: a tab with no workspace joins "~" (created when missing) and nothing else
-    /// moves, whatever the order of the tabs.
-    mutating func reconcileFrozen(current: [TabKey]) {
+    /// Workspaces are off: a tab with no workspace joins the workspace whose folder is the home
+    /// folder (one folder, one workspace); a new one named "~" is made when the set has none.
+    /// Nothing else moves, whatever the order of the tabs.
+    mutating func reconcileFrozen(current: [TabKey], home: String = NSHomeDirectory()) {
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         guard !fresh.isEmpty else { return }
-        let home: Workspace.ID
-        if let existing = workspaces.first(where: { $0.name == Self.homeName }) {
-            home = existing.id
+        let folder = WorkspaceFolder.standardized(home) ?? home
+        let target: Workspace.ID
+        if let existing = workspaces.first(where: { $0.folder == folder }) {
+            target = existing.id
         } else {
-            let created = Workspace(name: Self.homeName)
+            var created = Workspace(name: Self.homeName)
+            created.folder = folder
             workspaces.append(created)
-            home = created.id
+            target = created.id
         }
-        for tab in fresh { members[tab] = home }
+        for tab in fresh { members[tab] = target }
         revision += 1
     }
 
@@ -305,7 +321,7 @@ struct WorkspaceSet: Equatable {
         }
     }
 
-    /// `target` when it exists, else the first workspace, else a new `Default`.
+    /// `target` when it exists, else the first workspace, else a new `No project`.
     private mutating func ensureWorkspace(_ target: Workspace.ID) -> Workspace.ID {
         if workspace(target) != nil { return target }
         if let first = workspaces.first { return first.id }

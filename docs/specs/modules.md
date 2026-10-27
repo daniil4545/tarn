@@ -19,7 +19,7 @@ Issue #34, task T-205. Every tarn feature is a module the user switches on or of
 3. A switch applies at once, with no restart, as the File viewer and tab style switches do today.
 4. An off module shows no UI and does not react to events. Light observers (the control socket, the session registry) may keep running; zero cost is not required.
 5. State lives in UserDefaults, like the current switches.
-6. Workspaces off imitates a tarn with no workspaces: windows and tabs behave as if workspaces did not exist. The current workspaces are frozen, tabs of frozen workspaces stay visible, new work goes to a workspace "~" (home folder). On again the frozen workspaces come back and "~" stays.
+6. Workspaces off imitates a tarn with no workspaces: windows and tabs behave as if workspaces did not exist. The current workspaces are frozen, tabs of frozen workspaces stay visible, new work goes to a workspace with the home folder as its folder, named "~" (an existing workspace with that folder takes it). On again the frozen workspaces come back and "~" stays.
 7. Claude Code: the Modules section shows one agent line, Claude Code, with its version and checks that tarn works with it; no module is gated by the version. Other agents (Codex, pi, OpenCode) come when tarn supports them.
 8. One PR into `dev`.
 9. Benchmark: all modules off against all on goes into the report, with no threshold.
@@ -105,7 +105,7 @@ flowchart LR
 - `TarnModule: String, CaseIterable`: title, detail, key, `needs`. `TarnModules.isOn(_:)` returns the effective state.
 - Sidebar: `TabStyle` stays the store; `TabStyle.applyToOpenWindows` stays the apply path.
 - File viewer: a pane is drawn when `!hidden && isOn(.viewer)`, so the user's Cmd+B hide (`ViewerHost.hidden`, `ViewerHost.swift:22`) stays its own state.
-- Workspaces: off sets a frozen flag in `WorkspaceRegistry`; `sync` (`WorkspaceRegistry.swift:90-108`) then assigns new tabs to "~" and moves nothing; on clears the flag and runs `sync`. The workspaces themselves are the frozen state. `WorkspaceTitle` (`Workspace/WorkspaceTitle.swift:7`) and `NativeTabMark` show the name when the module is on, whatever the tab style.
+- Workspaces: off sets a frozen flag in `WorkspaceRegistry`; `sync` (`WorkspaceRegistry.swift:90-108`) then assigns new tabs to the workspace whose folder is the home folder and moves nothing (that workspace is a regular workspace of the folder model, `docs/specs/workspace-folder.md`: folder = home directory, named "~"; a set that already has a workspace with that folder, whatever its name, gets the new tabs: one folder, one workspace); on clears the flag and runs `sync`. The workspaces themselves are the frozen state. `WorkspaceTitle` (`Workspace/WorkspaceTitle.swift:7`) and `NativeTabMark` show the name when the module is on, whatever the tab style.
 - Permission card: `SessionRegistry.closePending` (`SessionRegistry.swift:452-471`) gives the empty reply.
 - Menu items (New Workspace, Toggle File Viewer, Jump to waiting session) are hidden from our code by walking `NSApp.mainMenu` for their actions at the first `SidebarModel` and on each change; no new insertion point in Ghostty files.
 

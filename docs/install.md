@@ -48,6 +48,7 @@ tarn open docs/spec.md       # open a text file in the viewer
 tarn ls                      # the panes of this workspace: PANE TAB TITLE CWD PROCESS ...
 tarn ls --json               # the same panes as JSON
 tarn notify "build done"     # mark this session and notify you
+tarn new -- npm test         # a split below this pane running the command; prints its pane id
 ```
 
 Details: [attention.md](modules/attention.md). Outside a Tarn terminal, call `/Applications/Tarn.app/Contents/MacOS/tarn`.

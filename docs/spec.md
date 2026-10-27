@@ -53,7 +53,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R10 | Several agents per project shown as separate sessions | first | - |
 | R4 | One notification per need; jump to the next session that needs the user by a click | first | 13.5% of replies come after more than 10 min |
 | R12 | Editor-like prompt input | first, Claude Code itself, verify | - |
-| R15 | `tarn new` and `tarn send`: hand-over between sessions | second | 50+ manual hand-overs |
+| R15 | agent commands on panes: `tarn new`, `run`, `wait`, `read`, `close`, no `send` (`docs/specs/agent-cli.md`) | second | 50+ manual hand-overs |
 | R16 | `tarn run`: a command for the user with output back to the agent | second | ~35 pasted outputs |
 | R17 | Subagent panel inside a session | second | 14 requests |
 | R18 | Tracker connector: the `tk` task of each session in the sidebar | second | `tk` links tasks to session ids |

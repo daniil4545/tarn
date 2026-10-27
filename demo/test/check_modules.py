@@ -261,9 +261,9 @@ def workspace_checks(pg):
     names = [g[0] for g in groups(pg)]
     check(
         "M27 Workspaces on again: frozen groups return with '~' holding the new tab",
-        names[:3] == ["tarn", "website", "Default"]
+        names[:4] == ["tarn", "website", "No project", "~"]
         and pg.evaluate("__tarn.snapshot().workspaces.wss[0].tabs.includes('t4')")
-        and names[-1] == "~"
+        and pg.evaluate("__tarn.snapshot().workspaces.wss.find((w) => w.name === '~').folder") == "~"
         and headers(pg) == len(names),
         repr(names),
     )

@@ -8,6 +8,8 @@ import Testing
 struct WorkspaceFreezeTests {
     private let t = (0..<6).map { _ in TabKey() }
 
+    private let home = WorkspaceFolder.standardized(NSHomeDirectory())
+
     /// Two workspaces: A holds t0 and t1, B holds t2.
     private func seeded() -> WorkspaceBook {
         var book = WorkspaceBook()
@@ -24,6 +26,7 @@ struct WorkspaceFreezeTests {
         let outcome = book.pass([[t[0], t[1], t[2], t[3]]])
         #expect(outcome.reorders.isEmpty)
         #expect(book.workspace(of: t[3])?.name == "~")
+        #expect(book.workspace(of: t[3])?.folder == home)
         #expect(book.workspace(of: t[0])?.name == first.first)
         #expect(book.workspace(of: t[2])?.name == "B")
     }
@@ -52,6 +55,21 @@ struct WorkspaceFreezeTests {
         _ = book.pass([[t[0], t[1], t[2], t[3]]])
         _ = book.pass([[t[0], t[1], t[2], t[3], t[4]]])
         #expect(book.workspace(of: t[3])?.id == book.workspace(of: t[4])?.id)
+    }
+
+    // One folder, one workspace: a workspace that already has the home folder takes the new tabs.
+    @Test func anExistingHomeFolderWorkspaceTakesTheNewTabs() {
+        var book = seeded()
+        let existing = book.edit(t[2]) { set in
+            if let id = set.create(name: "Home base", folder: NSHomeDirectory()) { set.join(t[2], to: id) }
+        }
+        #expect(existing != nil)
+        book.frozen = true
+        _ = book.pass([[t[0], t[1], t[2], t[3]]])
+        #expect(book.workspace(of: t[3])?.name == "Home base")
+        #expect(book.workspace(of: t[3])?.id == book.workspace(of: t[2])?.id)
+        #expect(book.set(of: t[3])?.workspaces.filter { $0.folder == home }.count == 1)
+        #expect(book.set(of: t[3])?.workspaces.contains { $0.name == "~" } == false)
     }
 
     @Test func onAgainTheTabsRegroupAndHomeStays() {
