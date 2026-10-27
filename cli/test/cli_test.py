@@ -240,7 +240,19 @@ def main() -> int:
         )
         check("wait ignores TARN_TIMEOUT", code == 0 and out.startswith("error"), out)
         # --timeout takes ^[0-9]+(\.[0-9]+)?$ only; a bad one sends nothing.
-        for bad in [".5", "5.", ".", "-1", "1e99", "", "1.2.3", "abc"]:
+        for bad in [
+            ".5",
+            "5.",
+            ".",
+            "-1",
+            "1e99",
+            "",
+            "1.2.3",
+            "abc",
+            "007",
+            "00",
+            "01.5",
+        ]:
             (code, out, err), req = with_server(
                 home, done, ["wait", SURFACE, "--timeout", bad]
             )
@@ -249,7 +261,7 @@ def main() -> int:
                 (code, out, err) == (1, "", "tarn: bad timeout\n") and req == [],
                 (code, err, req),
             )
-        for good in ["0", "1.5", "99999999999999999999"]:
+        for good in ["0", "0.5", "10", "1.5", "99999999999999999999"]:
             (code, _, _), req = with_server(
                 home, done, ["wait", SURFACE, "--timeout", good]
             )

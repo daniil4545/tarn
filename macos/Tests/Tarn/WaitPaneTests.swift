@@ -257,4 +257,23 @@ struct WaitPaneTests {
         var value: Bool { lock.withLock { flag } }
         func set() { lock.withLock { flag = true } }
     }
+
+    /// Only the pane's own shell (child of login) is an idle prompt; a nested shell, `zsh -c` and a
+    /// script interpreter have a shell for parent and are commands.
+    @Test func onlyTheRootShellCountsAsShellInForeground() {
+        let cases: [(comm: String?, parent: String?, root: Bool)] = [
+            ("zsh", "login", true),
+            ("bash", "login", true),
+            ("bash", "zsh", false),
+            ("zsh", "zsh", false),
+            ("sh", "bash", false),
+            ("env", "login", false),
+            ("python3", "zsh", false),
+            ("zsh", nil, false),
+            (nil, "login", false),
+        ]
+        for item in cases {
+            #expect(AgentProcess.isRootShell(comm: item.comm, parentComm: item.parent) == item.root, "\(item)")
+        }
+    }
 }

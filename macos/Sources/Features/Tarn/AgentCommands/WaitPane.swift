@@ -275,12 +275,11 @@ enum WaitPane {
     @MainActor
     static func facts(of view: Ghostty.SurfaceView) -> PaneFacts {
         let pid = view.surfaceModel?.foregroundPID.map { AgentProcess.foreground(group: pid_t($0)) }
-        let comm = pid.flatMap(AgentProcess.comm) ?? ""
         return PaneFacts(
             processExited: view.processExited,
             promptReadable: confirmCloseSurface == "true",
             atPrompt: !view.needsConfirmQuit,
-            shellInForeground: ["zsh", "bash", "fish", "sh", "dash", "nu", "login"].contains(comm)
+            shellInForeground: pid.map(AgentProcess.isRootShell(pid:)) ?? false
         )
     }
 }

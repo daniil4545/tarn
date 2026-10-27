@@ -97,6 +97,17 @@ enum AgentProcess {
         return members.first { $0 > 0 && $0 != group && parent($0) == group } ?? group
     }
 
+    /// A pane's own shell is a shell whose parent is Ghostty's `login`. A nested shell, `zsh -c` or a
+    /// script interpreter has a shell for parent: it is a command, not an idle prompt.
+    static func isRootShell(comm: String?, parentComm: String?) -> Bool {
+        guard let comm, ["zsh", "bash", "fish", "sh", "dash", "nu"].contains(comm) else { return false }
+        return parentComm == "login"
+    }
+
+    static func isRootShell(pid: pid_t) -> Bool {
+        isRootShell(comm: comm(pid: pid), parentComm: parent(pid).flatMap { comm(pid: $0) })
+    }
+
     private static func parent(_ pid: pid_t) -> pid_t? {
         var info = proc_bsdshortinfo()
         let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
