@@ -1,6 +1,8 @@
 # Agent CLI: commands an agent needs, and a skill
 
-Status: draft 2026-10-27, issue #40, task T-204, after spec review pass 1. Canon for the `tarn` commands an agent calls. Extends `docs/spec.md` 2.2 and 11; closes open questions 2, 3 and 4 of `docs/spec.md` 12. No code yet.
+Status: draft 2026-10-27, issue #40, task T-204, after two spec review passes and a survey of analog semantics. Canon for the `tarn` commands an agent calls. Extends `docs/spec.md` 2.2 and 11; closes open questions 2, 3 and 4 of `docs/spec.md` 12. No code yet.
+
+Rule of this spec (`.claude/CLAUDE.md`, behavior comes from analogs): every behavior names its source; own behavior carries "Prior art: searched where - found what" and a user decision.
 
 ## Contents
 
@@ -9,16 +11,15 @@ Status: draft 2026-10-27, issue #40, task T-204, after spec review pass 1. Canon
 3. Model
 4. Commands
 5. Ghostty first
-6. Prior art
+6. Analogs and sources
 7. Boundaries and their tests
 8. Scenarios
-9. Decisions
-10. Open questions
-11. Slicing and dependents
+9. Open questions
+10. Slicing and dependents
 
 ## 1. Goal and limits
 
-The agent is a full user of the terminal. It opens files, starts commands next to itself, reads their screens and learns the result. Focus and keystrokes stay with the human: no command moves focus or presses Enter for the user (`.claude/CLAUDE.md`, critical invariants).
+The agent is a full user of the terminal. It opens files, starts commands next to itself, reads their screens, learns the result and closes what it opened. Focus and keystrokes stay with the human: no command moves focus or presses Enter for the user (`.claude/CLAUDE.md`, critical invariants).
 
 Evidence of need, from the user's transcripts (lower bounds, `~/Dev/knowledge/inbox/tarn-agent-cli-git-2026-10-27-1136.md`): requests to open a file 179, a new tab or terminal 97, a command typed by hand 81.
 
@@ -26,18 +27,19 @@ Is not:
 
 - Text input into an existing pane. Agents talk to each other through Claude Code `SendMessage`. This replaces `tarn send` of R15 (`docs/spec.md` 1).
 - Switching modules on or off.
-- Closing, renaming or moving panes and tabs.
+- Renaming or moving panes and tabs.
 - Panes outside the caller's workspace.
 
 ## 2. Decided by the user
 
-- U1 (2026-10-27). `tarn run` returns at once with the pane id; `tarn wait <pane>` blocks until the command ends and prints the exit code and the tail of the output. Rejected: `run` that blocks (the Bash tool timeout cuts the wait while the user has not pressed Enter yet); no return at all (the agent cannot know when the command ended).
-- U2 (2026-10-27). The CLI stays in the app bundle, already on `PATH` in every tarn surface (`docs/install.md` 44). `tarn skill` prints the skill bundled in the same build. The plugin carries a short skill that only says: run `tarn skill`; no `tarn` command means you are not in tarn, do nothing. Rejected: the CLI in the plugin `bin/` (two `tarn` on `PATH`; plugin and app versions drift, and the socket protocol breaks).
-- U3 (2026-10-27). `tarn new` starts any command at once, agents included (`tarn new -- claude "do X"`). The command is the process of the pane; nobody presses Enter. Rejected: no agents through `new` (one more rule, an extra keypress for every neighbour agent); `new` equal to `run` (a dev server would wait for the user, against #43 sleep mode).
-- U4 (2026-10-27). `wait` on a `new` pane ends when its process exits. Rejected: `wait` only for `run` (the agent would poll the screen for `npm test`).
-- U5 (2026-10-27). `new` and `run` open a split in the caller's tab by default, focus stays where it is; `--tab` opens a tab right below the caller's row in the sidebar. Rejected: a tab only (Ghostty `newTab` selects the tab and activates the app, O1); a split only (a long server takes the agent's space for good).
-
-- U6 (2026-10-27). A split in a tab with a zoomed pane clears the zoom, as Cmd+D does. Rejected: refusing with `tarn: tab is zoomed` (the agent could not start anything in that tab before `--tab`).
+- U1 (2026-10-27). `tarn run` returns at once with the pane id; `tarn wait <pane>` blocks until the command ends. Rejected: `run` that blocks like Otty `pane run` (the Bash tool timeout cuts the wait while the user has not pressed Enter); no return at all.
+- U2. The CLI stays in the app bundle, on `PATH` in every tarn surface (`docs/install.md` 44); `tarn skill` prints the skill of the same build, as herdr `--skill` and Luvus `skill show`. The plugin carries a stub skill: run `tarn skill`; no `tarn` command means you are not in tarn. Rejected: the CLI in the plugin `bin/` (two `tarn` on `PATH`, versions drift).
+- U3. `tarn new` starts any command at once, agents included. Rejected: no agents through `new`; `new` equal to `run`.
+- U4. `wait` on a `new` pane ends when its process exits.
+- U5. `new` and `run` open a split in the caller's tab by default, focus unchanged; `--tab` opens a tab right below the caller's row. Rejected: a tab only; a split only.
+- U6. A split in a tab with a zoomed pane clears the zoom, as Cmd+D does.
+- U7. The agent closes the splits and tabs it opened with `tarn close`, after it has read the result. Rejected: closing by itself after `wait`.
+- U8. On macOS Ghostty cannot report the exit code of a configured command (`src/Surface.zig:1304-1305`); `wait` on a `new` pane says so honestly, as Otty does for a pane that cannot report. Rejected: an own wrapper that prints OSC 133 marks (no analog; a program with its own marks may break the pair).
 
 ## 3. Model
 
@@ -49,87 +51,78 @@ flowchart LR
   cmds -->|"caller workspace"| ws["WorkspaceRegistry"]
   cmds -->|"split, no focus"| tree["Ghostty split tree"]
   cmds -->|"read text"| surf["Ghostty surface"]
-  surf -->|"command finished, child exited"| runs["Run table"]
-  runs -->|"result"| sock
+  surf -->|"command finished, child exited"| waits["Waits"]
+  waits -->|"state, exit code"| sock
 ```
 
-Reading: every command names its caller by `TARN_SURFACE`; the app resolves the caller's workspace and refuses any pane outside it; a run stores its result when the command ends, and `wait` reads it. Sources: `cli/tarn`, `ControlSocket.swift`, `SurfaceView.swift:659`.
+Reading: every command names its caller by `TARN_SURFACE`; the app resolves the caller's workspace and refuses any pane outside it; a wait holds its reply until the pane reports an end. Sources: `cli/tarn`, `ControlSocket.swift`, `SurfaceView.swift:659`.
 
-Terms as in `docs/specs/windows-workspaces.md` 1. The CLI addresses panes, not tabs: a pane id is the UUID of a terminal surface, the same value as `TARN_SURFACE`. The CLI accepts any unique prefix of at least 4 hex characters. The caller is the pane the agent runs in; its workspace is the workspace of the tab that holds that pane.
+Terms as in `docs/specs/windows-workspaces.md` 1. The CLI addresses panes: a pane id is the UUID of a terminal surface, the same value as `TARN_SURFACE`. Source: Otty `$OTTY_PANE_ID`, herdr `HERDR_PANE_ID`, WezTerm `$WEZTERM_PANE`: the env names the caller's pane.
 
 Entities:
 
 | Entity | Fields | Writer | Lives |
 | --- | --- | --- | --- |
-| Pane row | id, tab title, cwd, process, agent, state, branch, host | built on request from `WorkspaceRegistry` (panes) and `SessionRegistry` (agent state) | while the pane lives |
-| Run | pane id, kind `new` or `run`, owner pane, command line, state, result | `AgentCommands`; the result only by the end handler | until its pane closes |
-| Result | exit code or unknown, duration, tail at the end | end handler | with its run |
-| Waiter | run, deadline, held `Reply` | `AgentCommands`, like `PendingAnswer` (`SessionRegistry.swift:220`) | until answered |
+| Pane row | pane id, tab id, workspace, title, cwd, process, branch, host, agent state | built on request from `WorkspaceRegistry`, the surfaces and `SessionRegistry` | while the pane lives |
+| Run mark | pane id, kind `new` or `run` | `AgentCommands` on `new` and `run` | until the pane closes |
+| Wait | pane id, deadline, held `Reply` | `AgentCommands`, like `PendingAnswer` (`SessionRegistry.swift:220`) | until answered |
 
-Run state:
+What ends a wait:
 
-```mermaid
-stateDiagram-v2
-  [*] --> started: tarn new or tarn run
-  started --> finished: end event [first after start]
-  started --> closed: pane closed
-  finished --> closed: pane closed
-  closed --> [*]
-```
+| Pane | End event | Source |
+| --- | --- | --- |
+| a shell pane, `run` or plain | Ghostty `command_finished` from OSC 133 shell integration | Otty `pane wait`: "For an ordinary shell pane it means no command is running, which needs Shell Integration (OSC 133)" |
+| a `new` pane | process exit, Ghostty `show_child_exited` | kitty `--wait-for-child-to-exit` |
+| a pane already idle | answers at once | herdr: "`agent wait` returns immediately when the current status matches"; Otty `pane wait` "exits 0 as soon as the pane is idle" |
+| a pane that closes during the wait | answers with state `closed` | Luvus: pane exit during a wait returns `reason:"pane_closed"` |
 
-End event: Ghostty `command_finished` of the pane for both kinds. For kind `run` it comes from the shell integration marks of the user's shell. For kind `new` it comes from marks our wrapper prints around the command (4.4), because on macOS Ghostty runs a command through `/usr/bin/login` and its exit code detection does not work there (`src/Surface.zig:1304-1305`). Ghostty `show_child_exited` without an end event before it gives the result `exit ?` (U4: the process exit ends the wait). Inside Ghostty `start_command` exists (`src/Surface.zig:1194`) but is not an app action, so the app cannot tell "typed" from "running". Only the first end event after start counts; later commands the user runs in that pane do not change the result. Runs live in memory: after an app restart a pane may come back with the same UUID, and `wait` on it answers `tarn: no such run`.
+Own rule, the `run` pane: its typed command waits for the user's Enter, so the pane looks idle before the command starts. A `wait` on a pane with a run mark of kind `run` therefore waits for the next `command_finished`, not for idle. Prior art: searched Otty, herdr, kitty, WezTerm, Luvus, cctabs - every `run` submits with Enter, none leaves Enter to the user; the rule follows U1.
 
-Pane close: the end handler learns it from `surfaceTreeDidChange` of the pane's controller (`BaseTerminalController.swift:336`), the insertion point that also serves `--tab`. A run whose pane closes before its end event becomes `closed`. A finished run keeps its result after the pane closes, until its first answer or 10 minutes: a `new` pane closes on the user's key press, often before the agent asks.
-
-`wait` rules: a finished run answers at once with its result; a started run holds the reply until the end event, the deadline or the pane close; a new `wait` on the same run replaces a held one, which is closed without an answer (its CLI may be dead: a killed background task); `wait` after the answer returns the same result again. A pane moved to another workspace during `wait` keeps its run: the workspace check is done when the command arrives.
+Several waits on one pane are all answered by the same event; a cancelled one (its CLI killed) is released when its connection closes. Source: Luvus "Cancellation, timeout, and exit release pending wait ownership"; kitty sends `cancel_async` on timeout.
 
 ## 4. Commands
 
 Common rules, for every command except `skill`:
 
-- Request and reply are one JSON line each, with `version`, as in `docs/spec.md` 2.2. Reply keys: `ok`, `error`, plus the command's own keys.
-- Error: stderr `tarn: <text>`, nothing on stdout, exit code 1 (current rule, `cli/tarn`). Usage errors and unknown options are errors too.
-- No `TARN_SURFACE`: `tarn: not in a tarn tab`. The caller in no workspace (quick terminal, `SessionRegistry.swift:501`): `tarn: not in a workspace`.
-- A pane id that matches nothing in the caller's workspace: `tarn: no such pane: <id>`; matches two: `tarn: ambiguous pane: <id>`. Never a fallback to the selected pane.
-- Anything unexpected in the app: a log line with command, caller and reason (as `AttentionCommands.swift:126`) and an error reply; state does not change.
-- `--json` prints the reply object instead of text, where the command has a text form.
+- Request and reply are one JSON line each, with `version` (`docs/spec.md` 2.2). Source: herdr "newline-delimited JSON over a local socket".
+- Error: stderr `tarn: <text>`, nothing on stdout, exit code 1 (current rule, `cli/tarn`).
+- No `TARN_SURFACE`: `tarn: not in a tarn tab`, exit 1. Source: herdr `--current` "errors when HERDR_PANE_ID is unavailable". The caller in no workspace (quick terminal): `tarn: not in a workspace`.
+- A pane id that matches no pane of the caller's workspace: `tarn: no pane matched: <id>`, exit 4, never a fallback to the selected pane. Source: Otty "a non-matching selector fails with No pane/tab matched selector (exit 4) rather than falling back to the active one".
+- `--json` prints the reply object instead of text. Source: Otty `--json`, current `tarn ls --json`.
 
-| Command | What it does | Stdout | Exit |
+| Command | What it does | Stdout | Source |
 | --- | --- | --- | --- |
-| `tarn open <path> [:line]` | opens a file in the viewer (exists) | nothing | 0, 1 |
-| `tarn notify <text>` | marks the caller and notifies (exists) | nothing | 0, 1 |
-| `tarn ls [--json]` | terminal panes of the caller's workspace | rows | 0, 1 |
-| `tarn new [--tab] [--cwd D] [--title T] -- <cmd...>` | new pane with the command started | pane id | 0, 1 |
-| `tarn run [--tab] [--cwd D] -- <cmd...>` | new pane with a shell, the command typed, not submitted | pane id | 0, 1 |
-| `tarn wait <pane> [--timeout S] [--lines N]` | result of the run in that pane | exit line, tail | 0, 1, 2, 3 |
-| `tarn read <pane> [--lines N]` | screen text of a pane | text | 0, 1 |
-| `tarn module ls [--json]` | modules and their switches | rows | 0, 1 |
-| `tarn skill` | the skill of this build | markdown | 0, 1 |
+| `tarn open <path> [:line]` | opens a file in the viewer (exists) | nothing | current `cli/tarn` |
+| `tarn notify <text>` | marks the caller and notifies (exists) | nothing | current `cli/tarn` |
+| `tarn ls [--json]` | terminal panes of the caller's workspace | table | WezTerm `cli list` |
+| `tarn new [--tab] [--right] [--cwd D] [--title T] -- <cmd...>` | new pane with the command started | pane id | kitty `launch --keep-focus`, WezTerm `split-pane` |
+| `tarn run [--tab] [--right] [--cwd D] -- <cmd...>` | new pane with a shell, the command typed, not submitted | pane id | herdr `send-text` (non-submitting) |
+| `tarn wait <pane> [--timeout S]` | waits for the end of the command | state line | Otty `pane wait`, `pane run --format json` |
+| `tarn read <pane> [--lines N]` | screen text of a pane | text | herdr `pane read` |
+| `tarn close <pane>` | closes a pane | nothing | WezTerm `kill-pane`, herdr `pane close` |
+| `tarn module ls [--json]` | modules and their switches | table | current `ls` form |
+| `tarn skill` | the skill of this build | markdown | herdr `--skill`, Luvus `skill show` |
 
 Details:
 
-1. `ls`. One row per terminal pane of the caller's workspace, plain shells included: `<id8>  <tab title>  <cwd>  <process>  <branch>  <state>`, `-` for an empty field, `*` before the caller's row. `--json`: `{"ok":true,"panes":[...],"self":"<uuid>"}`, the row fields per pane. `host` stays empty until #39. The current `ls` lists agent sessions of all windows without `TARN_SURFACE` (`AttentionCommands.swift:151`, `cli/tarn:109-118`); it becomes the caller's workspace only, needs `TARN_SURFACE`, and the JSON key `sessions` becomes `panes`. Dependents: section 11.
-2. Placement of `new` and `run`. Default: a split to the right of the caller's pane, inside the caller's tab, built from Ghostty's split tree (section 5). The new tree is assigned without Ghostty's undo, so the user's Cmd+Z never removes an agent's pane. A change of the split tree drops the first responder in SwiftUI (`SurfaceView.swift:1067-1070`, `BaseTerminalController.swift:530-535`), so the layer gives it back to the pane that held it before, as Ghostty's own close path does. A zoomed pane in the caller's tab is unzoomed, as with Cmd+D (`SplitTree.swift:125-130`, U6); focus stays. `--tab`: a tab in the caller's workspace, right below the caller's row, not selected; it needs T-206 (move a tab without focus) and ships after it. With `--tab`, a minimized window or non-native fullscreen of the caller is refused with `tarn: window not available` instead of Ghostty's deminiaturize or alert.
-3. Command line. Exactly one argument after `--` is taken as a shell line as written (`tarn run -- 'make && make install'`). Two or more are joined by spaces; an argument with a character outside `A-Za-z0-9_./=:,+@%-` is put in POSIX single quotes, `'` inside written as `'\''`. So `tarn new -- claude "do X"` runs `claude 'do X'`, and the user approves `git commit -m 'fix bug'`, a line a human reads. The CLI and the app both refuse a newline, a carriage return, a tab or any other control character: `tarn: command must be one line`. `--cwd` defaults to `$PWD` of the CLI, as `open` does (`cli/tarn:105`).
-4. `new`. On macOS Ghostty runs a configured command as `/usr/bin/login -flp <user> /bin/bash --noprofile --norc -c "exec -l <command>"` (`src/termio/Exec.zig:1933-1962`), so a raw line would lose everything after `&&` or a `cd`. The layer therefore passes one wrapper as the command: the user's login shell with `-l -c` and the quoted script `printf '\033]133;C\007'; <line>; printf '\033]133;D;%d\007' $?`. The login shell gives the user's `PATH`; the two marks are OSC 133 C and D, which Ghostty turns into `command_finished` with the exit code (`src/Surface.zig:1194-1222`). Ghostty turns on `wait-after-command` for any configured command (`src/apprt/embedded.zig:568-573`), so after exit the last screen stays until the user presses a key. `--title` sets Ghostty's `titleOverride` on the tab (`BaseTerminalController.swift:105`) and needs `--tab`; without it: `tarn: --title needs --tab`. Prints the pane id.
-5. `run`. The pane starts the user's login shell and gets the line as typed input without a newline (Ghostty `initialInput`). The user reads it, may edit it, and presses Enter. Prints the pane id. The skill tells the agent to tell the user what waits in that pane.
-6. `wait`. Rules in section 3. `--timeout` default 600 s, max 3600 s; the CLI waits for the socket `--timeout` plus 5 s, not `TARN_TIMEOUT` (`cli/tarn:83`). Output: `exit <code>  <duration>`, `exit ?` when Ghostty does not know the code (`-1`, `src/apprt/action.zig:1023`), then the tail: the last `--lines` lines of the pane read at the end event (default 50, max 2000). Exit codes of `tarn` itself: 0 the run ended, whatever its code; 2 deadline, `tarn: timeout`, reply field `"timeout":true`; 3 the pane closed before the end, `tarn: pane closed`, reply field `"closed":true`; 1 any other error. The app quitting during `wait` closes the connection: `tarn: no answer from tarn`, exit 1. Only the owner pane waits on a run: `tarn: not your run`. A `run` pane whose shell has no Ghostty shell integration never reports the end; `wait` hits the deadline, and the skill says so.
-7. `read`. Plain text of the last `--lines` lines, screen and scrollback, default 100, max 2000, trailing spaces trimmed. The caller's own pane is allowed. Fresh read, not Ghostty's 500 ms cache.
-8. `module ls`. One row per module of #34: `<name>  on|off|unavailable`. Read only. Before #34 lands: `tarn: no modules in this build`.
-9. `skill`. Prints the skill file of the app bundle without the socket, so it works while the app starts. Source `cli/SKILL.md`; the existing build phase that installs `cli/tarn` into `Contents/MacOS` (`macos/Ghostty.xcodeproj/project.pbxproj:413-423`) also installs it as `Contents/Resources/tarn/SKILL.md`. The first line carries the app version. Up to 8 KB: one page of rules, then one example per command.
+1. `ls`. A table with a header, one row per terminal pane of the caller's workspace: `PANE  TAB  TITLE  CWD  PROCESS  BRANCH  HOST  STATE`. `--json`: `{"ok":true,"panes":[{"pane","tab","workspace","title","cwd","process","branch","host","state"}]}`. Form from WezTerm `cli list`: header `WINID TABID PANEID WORKSPACE SIZE TITLE CWD`, `--format json` with `window_id, tab_id, pane_id, workspace, size, title, cwd`. Fields from issue #40 ("folder, process, branch, host, state"); `host` is empty until #39, `state` is the agent state of `docs/spec.md` 8 or `-`. The caller knows its own pane from `TARN_SURFACE`, no mark in the table (no analog has one). The current `ls` lists agent sessions of all windows without `TARN_SURFACE` (`AttentionCommands.swift:151`); it becomes the caller's workspace and the key `sessions` becomes `panes`. Dependents: section 10.
+2. Placement of `new` and `run`. Default: a split below the caller's pane, `--right` to the right, focus unchanged. Sources: WezTerm `split-pane`, "the default is equivalent to `--bottom`"; herdr "pane splitting, leave focus unchanged by default"; kitty `--keep-focus`; Otty "Every pane it opens is opened without stealing focus". Built from Ghostty's split tree without its undo (section 5). A zoomed pane in the caller's tab is unzoomed (U6). `--tab`: a tab right below the caller's row, not selected (U5), after T-206; a minimized window or non-native fullscreen of the caller: `tarn: window not available`. Sources for `--tab`: WezTerm `spawn`, herdr `tab create`, Otty `tab new`.
+3. Command. The arguments after `--` are the command line: the program and its arguments, as kitty does ("Any command line arguments are assumed to be the command line used to run in the new window"; several commands need an explicit `sh -c "a && b"`) and WezTerm (`--` ends the options). Ghostty takes one shell string, so the app joins the arguments with POSIX quoting by the rules of Python `shlex.join`: an argument is quoted only when it has a character outside the safe set. A newline or a carriage return in an argument is refused, `tarn: command must be one line`: it would press Enter (B2). `--cwd` defaults to the cwd of the caller's pane, relative paths resolve against the CLI's current directory. Source: herdr "new terminals follow ... the source pane", "the CLI expands relative --cwd"; Luvus "Relative paths resolve against the CLI caller's current directory".
+4. `new`. The pane runs the command as its process. After exit the last screen stays until a key press: Ghostty turns on `wait-after-command` for any configured command (`src/apprt/embedded.zig:568-573`). Source: kitty `--hold`, WezTerm `exit_behavior = "Hold"`. `--title` names the tab and needs `--tab`, as Otty `tab new --title` (Otty splits take no title); kitty `--title`. Prints the pane id. Source: kitty "Prints out the id of the newly opened window", WezTerm "Outputs the pane-id".
+5. `run`. The pane starts the user's login shell and gets the line as typed input with no newline (Ghostty `initialInput`). The user reads it, may edit it, presses Enter. Prints the pane id. Source: herdr `send-text`, "non-submitting"; Otty `send-text`, "Nothing is appended automatically".
+6. `wait`. Ends by the table of section 3. No timeout by default; `--timeout S` sets one. Source: Otty `--timeout-secs` "0 = forever", herdr "wait indefinitely when --timeout is omitted". The CLI holds the socket connection for the whole wait, not `TARN_TIMEOUT` (`cli/tarn:83`); the skill tells the agent to run `wait` as a background task. Output: `<state>  exit <code>  <duration>`, `--json` `{"state","exit_code","command","duration_ms"}`. Source: Otty `pane run --format json` `{ "state": "succeed", "exit_code": 0, "command": "./deploy.sh", "duration_ms": 1234 }`. States: `succeed`, `error` (Otty), `closed` (Luvus `pane_closed`). Exit codes of `tarn wait`, all from Otty `pane wait`: 0 the end was reported, whatever the command's code; 4 no pane matched; 6 the pane cannot report the code (a `new` pane on macOS, U8, with `tarn: exit code unknown`; a shell without OSC 133 integration, with `tarn: no shell integration`, at once and not after a hang, as Otty: "the wait exits immediately and says so rather than hanging"); 9 timeout, `tarn: timeout`. Output is not part of the reply: the agent calls `read`. Source: Otty `pane run` "reports its process state ... not its output".
+7. `read`. Plain text of the last `--lines` lines of the screen and scrollback, default 80, ANSI stripped. Source: herdr `pane read --lines N`, recent default 80, "ANSI escapes are stripped by default"; kitty `get-text` "By default, only plain text is returned".
+8. `close`. Closes the pane immediately, with no confirmation, whatever runs in it. Source: WezTerm `kill-pane` "Immediately and without prompting"; herdr "CLI/API closes remain immediate". Ghostty: `closeSurface(_:withConfirmation: false)` (`BaseTerminalController.swift:458-480`), focus stays where it was (`removeSurfaceNode`, `:516-535`); the pane of a `--tab` tab closes the tab. A wait on that pane answers `closed`. Which panes to close is a rule of the skill, not a check in the app. Source: Otty "The skill is instructed to close only panes it opened itself, and never the one it is running in".
+9. `module ls`. One row per module of #34: `MODULE  STATE`, state `on`, `off` or `unavailable`. Read only. Before #34: `tarn: no modules in this build`.
+10. `skill`. Prints the skill file of the bundle without the socket. Source `cli/SKILL.md`; the build phase that installs `cli/tarn` (`macos/Ghostty.xcodeproj/project.pbxproj:413-423`) also installs it as `Contents/Resources/tarn/SKILL.md`. The first line carries the app version. Source: herdr "the release-matched copy bundled with that binary".
 
-Text samples:
-
-- `tarn ls`: `* 3f2a91c0  tarn  ~/Dev/tarn  claude  main  working`
-- `tarn wait 3f2a`: `exit 0  12.4s`, then the tail
-- `tarn run -- "$(printf 'a\nb')"`: `tarn: command must be one line`
-
-Skill content, the rules part:
+Skill rules (Otty skill and herdr skill as models):
 
 - You never move focus and never press Enter for the user; no command does.
-- Watch long work in `tarn new`; a command the user must approve goes into `tarn run`, then `tarn wait` as a background task, and you tell the user which pane waits.
+- Watch long work in `tarn new`; a command the user must approve goes into `tarn run`, then `tarn wait` as a background task; tell the user which pane waits.
 - A server never ends: do not `wait` on it, `read` it.
-- Do not poll `tarn read` for a result; use `tarn wait`.
+- `wait` exit 6: say so to the user verbatim, read the pane, do not sleep and retry (Otty skill rule).
+- Close only panes you opened, never your own, after you have read the result; leave a failed command's pane and a server open until the user says.
 - To talk to another agent use `SendMessage`, never a pane.
 - Asking the user to open a file is wrong: `tarn open`.
 
@@ -137,85 +130,72 @@ Skill content, the rules part:
 
 | Need | Ghostty has | Where | Our part |
 | --- | --- | --- | --- |
-| split without focus | `SplitTree.inserting`; `surfaceTree` is a published property whose `didSet` updates controllers; `newSplit` moves focus and `replaceSurfaceTree` always registers undo | `BaseTerminalController.swift:49-52`, `282-316`, `540-582` | insert, assign the tree, give the first responder back with `Ghostty.moveFocus` |
-| pane closed | `surfaceTreeDidChange` | `BaseTerminalController.swift:336` | insertion point that tells the run table |
-| tab in a workspace | `WorkspaceRegistry.newTab(in:from:)` with a pending target, Ghostty `newTab` | `WorkspaceRegistry.swift:269-274`, `TerminalController.swift:424` | O1, T-206 |
-| command of a pane | `SurfaceConfiguration.command`, `workingDirectory`, `environmentVariables`; `wait-after-command` on for commands | `SurfaceView.swift:581-591`, `src/apprt/embedded.zig:568-573` | fill the configuration |
+| split without focus | `SplitTree.inserting`; `surfaceTree` published property; `newSplit` moves focus and `replaceSurfaceTree` always registers undo | `BaseTerminalController.swift:49-52`, `282-316`, `540-582` | insert, assign the tree, give the first responder back with `Ghostty.moveFocus` (a tree change drops it, `SurfaceView.swift:1067-1070`) |
+| tab in a workspace | `WorkspaceRegistry.newTab(in:from:)`, Ghostty `newTab` | `WorkspaceRegistry.swift:269-274`, `TerminalController.swift:424` | O1, T-206 |
+| command, cwd, env | `SurfaceConfiguration.command`, `workingDirectory`, `environmentVariables`; `wait-after-command` for commands | `SurfaceView.swift:581-591`, `src/apprt/embedded.zig:568-573` | fill the configuration |
 | typed, not submitted input | `SurfaceConfiguration.initialInput` | `SurfaceView.swift:594` | the line without a newline |
-| end of a `run` command | action `command_finished` with exit code | `src/Surface.zig:1198-1222`, `Ghostty.App.swift:773-774` | insertion point in the dispatch at `773`, before the `notify-on-command-finish` guard (default `never`, `src/config/Config.zig:1214`) |
-| end of a `new` process | our wrapper's OSC 133 marks, then `command_finished`; `show_child_exited` as the fallback | `Ghostty.App.swift:1877-1891` | insertion point before the guard at `1888`, which drops exits with `timetime_ms` 0 |
-| screen text | `ghostty_surface_read_text`; `cachedScreenContents` | `include/ghostty.h:1239`, `SurfaceView_AppKit.swift:223` | a fresh read of the last N lines |
+| end of a shell command | `command_finished` with exit code | `src/Surface.zig:1194-1222`, `Ghostty.App.swift:773-774` | insertion point at `773`, before the `notify-on-command-finish` guard (default `never`, `src/config/Config.zig:1214`) |
+| end of a `new` process | `show_child_exited` | `Ghostty.App.swift:1877-1891` | insertion point before the guard at `1888` |
+| pane closed | `surfaceTreeDidChange` | `BaseTerminalController.swift:336` | insertion point that answers waits |
+| close without alert | `closeSurface(_:withConfirmation:)` | `BaseTerminalController.swift:458-480` | call with `false` |
+| screen text | `ghostty_surface_read_text`; `cachedScreenContents` (500 ms cache) | `include/ghostty.h:1239`, `SurfaceView_AppKit.swift:223` | a fresh read of the last N lines |
 | tab title | `titleOverride` | `BaseTerminalController.swift:105` | set it for `--tab --title` |
-| caller identity | env per surface | `SurfaceView.swift:659` (`TARN_SURFACE`, ours) | none |
 
 The three insertion points go into `docs/architecture.md`, boundary with Ghostty, with the PR that adds them.
 
-## 6. Prior art
+## 6. Analogs and sources
 
-| Project | Licence | Takes | Leaves |
-| --- | --- | --- | --- |
-| cctabs `generativereality/cctabs` 6fda99c | MIT | `ls --json` with self, unknown option is an error, thin skill | Tabby only; binary on npm apart from the skill; `send` into other tabs; `new -B` activates the tab, then returns focus |
-| Otty `docs.otty.sh` | closed | `pane run` + `wait` instead of polling; no fallback to the active element; panes "opened without stealing focus" | `send-keys` with Enter |
-| Luvus (ex-bohay) `RizRiyz/luvus` 9cd3ee0 | Apache-2.0 | `skill show` prints the version-matched skill of the binary; `pane split --no-focus`; JSON result or error | `agent keys`; no-focus as an option instead of the rule |
-| herdr | Apache-2.0 | `herdr --skill`, release-matched copy | input into other panes |
-| cmux | GPL-3.0, BSL | `read-screen`, `notify` | `send` into the focused terminal |
+| Project | Licence | Source of |
+| --- | --- | --- |
+| Otty `docs.otty.sh` | closed, behavior only | no fallback and exit 4; `pane wait` exit codes 0, 6, 9; wait without timeout; state JSON; close rule of the skill; "opened without stealing focus" |
+| herdr `herdrdev/herdr` 2713feb | Apache-2.0 | newline JSON socket; focus unchanged on split; non-submitting `send-text`; `read --lines`, default 80, ANSI stripped; immediate close; `--skill` |
+| kitty `kovidgoyal/kitty` 02dd29a | GPL-3.0, behavior only | argv command line; `--keep-focus`; `--hold`; `--wait-for-child-to-exit`; prints the id |
+| WezTerm `wezterm/wezterm` e68a8ec | MIT | `cli list` table and JSON; `split-pane` default bottom, `--right`; `kill-pane` without prompting |
+| Luvus `RizRiyz/luvus` 9cd3ee0 | Apache-2.0 | `pane_closed` during a wait; release of cancelled waits; relative `--cwd`; `skill show` |
+| cctabs `generativereality/cctabs` 6fda99c | MIT | `ls --json`; thin skill with references |
+| Python `shlex.join` | PSF | quoting of the command line |
 
-Reports of task T-204: `recon-cctabs.md`, `recon-others.md`, `spec-review.md`; the earlier survey in `~/Dev/knowledge/inbox/tarn-agent-cli-git-2026-10-27-1136.md`.
+Reports of task T-204: `recon-cctabs.md`, `recon-others.md`, `recon-semantics.md`, `spec-review.md`; the earlier survey in `~/Dev/knowledge/inbox/tarn-agent-cli-git-2026-10-27-1136.md`.
 
 ## 7. Boundaries and their tests
 
-What the CLI never does, for any input. Each line gets a test; app tests live in `macos/Tests/Tarn`, run by `make -f tarn.mk check`.
+What the CLI never does, for any input. App tests live in `macos/Tests/Tarn`, run by `make -f tarn.mk check`.
 
 | Boundary | Test |
 | --- | --- |
-| B1. No command changes the active app, the key window, the selected tab or the first responder | app test with the user's pane focused: run every command, check all four after two run loop ticks (the first responder drops a tick later); with another app active and with a minimized caller window: a manual check by the user at acceptance, written in the PR |
-| B2. No command writes a newline, Enter or a control character into any surface | unit test of the command line rule in the CLI and in the app, with `\n`, `\r`, `\t` |
-| B3. No command reaches a pane outside the caller's workspace | two workspaces in one window and one in a second window (D10): `ls`, `read`, `wait` see only their own |
+| B1. No command changes the active app, the key window, the selected tab or the first responder | app test with the user's pane focused: every command, all four checked after two run loop ticks; with another app active and a minimized caller window: a manual check at acceptance, written in the PR |
+| B2. No command writes a newline or Enter into any surface | unit test of the command line rule in the CLI and in the app |
+| B3. No command reaches a pane outside the caller's workspace | two workspaces in one window and one in a second window (D10) |
 | B4. No command writes into an existing pane | there is no command for it; the socket refuses unknown commands |
-| B5. A wrong id never falls back to the selected pane | test with a missing and an ambiguous prefix |
+| B5. A wrong id never falls back to the selected pane | test with a missing id: exit 4 |
 | B6. `hook.sh` stays within 100 ms | the hook test is unchanged |
 
 ## 8. Scenarios
 
-1. Open a file. The agent wrote a report. `tarn open docs/report.md`; the viewer shows it; the user keeps typing in the agent pane.
-2. Dev server. `tarn new --tab --title web -- npm run dev`; a row `web` appears under the agent's row; the agent reads `tarn read <id> --lines 30` for the port.
-3. Tests next to the agent. `tarn new -- npm test` opens a split; `tarn wait <id>` returns `exit 1` and the failures; the screen stays until the user presses a key.
-4. Approved command. `tarn run -- sudo make install` prints `3f2a`; a split shows the typed command next to the agent; the agent calls `tarn wait 3f2a` as a background task and tells the user. The user reads, presses Enter, types the password. `wait` returns `exit 0` and the tail.
-5. User edits the command before Enter. `wait` returns the result of what ran.
-6. User refuses. The user closes the split: `wait` exits 3, `tarn: pane closed`; the agent does not retry.
-7. User is away. `wait` hits 600 s: exit 2. The agent waits again or asks.
-8. Neighbour agent. `tarn new --tab -- claude "review PR 51"`; the new session shows in the sidebar with its state; the agents talk through `SendMessage`.
-9. Outside tarn. In iTerm the plugin skill runs `tarn skill`, the command is missing, the agent does nothing more.
+1. Open a file. `tarn open docs/report.md`; the viewer shows it; the user keeps typing in the agent pane.
+2. Dev server. `tarn new --tab --title web -- npm run dev`; a row `web` appears under the agent's row; the agent reads `tarn read <id> --lines 30` for the port and leaves the tab open.
+3. Tests next to the agent. `tarn new -- npm test` opens a split below; `tarn wait <id>` exits 6 on macOS, `tarn: exit code unknown`; the agent reads the pane, sees the failures, tells the user and leaves the split open.
+4. Approved command. `tarn run -- sudo make install`; a split shows the typed command; the agent runs `tarn wait <id>` as a background task and tells the user. The user presses Enter and types the password. `wait` prints `succeed  exit 0  12.4s`; the agent reads the pane and closes it.
+5. User refuses. The user closes the split: `wait` prints `closed`; the agent does not retry.
+6. Neighbour agent. `tarn new --tab -- claude 'review PR 51'`; the new session shows in the sidebar; the agents talk through `SendMessage`.
+7. Outside tarn. In iTerm the stub skill runs `tarn skill`, the command is missing, the agent does nothing more.
 
-## 9. Decisions
+## 9. Open questions
 
-- Name `open` stays; the draft `view` is dropped: `open` is in `docs/spec.md` 11 already, two names for one action cost more.
-- Address by pane UUID prefix, not by row number: rows shift (`docs/spec.md` 12, question 2). Rejected: Claude session id (absent for plain panes, changes on `/clear`); tab id (a tab holds several panes, and `TARN_SURFACE` names a pane).
-- Scope is the caller's workspace (issue #40). Rejected: all panes (cctabs `scrollback`). Affects #41 neighbours, which reads the same rows.
-- Only the owner pane waits on a run. Rejected: anyone waits on any pane (a second agent would follow the first one's approval).
-- The result is kept at the end event. Rejected: the tail read at `wait` time (a later command of the user would replace it).
-- Exit codes 0, 1, 2 timeout, 3 closed. Rejected: forwarding the command's exit code (it collides with 1).
-- Split to the right, as Cmd+D. Revisit if users ask for down.
-- Skill up to 8 KB: cctabs ships 36 KB plus 13 references, and every session pays for it. Revisit if agents misuse a command twice.
+- O1. `--tab` without selection. Ghostty `newTab` changes focus on several paths: `parent.deminiaturize` (`TerminalController.swift:456`), an alert sheet in non-native fullscreen (`438-446`), `tabGroup.selectedWindow` (`493`), `showWindowSafely` (`502`), `NSApp.activate` on the next tick (`510-520`); placement under the caller needs T-206. The `--tab` PR first runs a spike with tarn inactive and with the caller's window minimized. If B1 cannot hold without editing Ghostty logic, the user decides.
+- O2. `initialInput` and a slow zsh rc file: whether the typed line survives until the prompt is not checked; the `run` PR tests it with the user's zsh.
 
-## 10. Open questions
-
-- O1. `--tab` without selection. Ghostty `newTab` changes focus on several paths: `parent.deminiaturize` (`TerminalController.swift:456`), an alert sheet in non-native fullscreen (`438-446`), `tabGroup.selectedWindow` (`493`), `showWindowSafely` (`502`), `NSApp.activate` on the next tick (`510-520`); placing the tab under the caller adds `moveNatively` (`WorkspaceRegistry.swift:97-104`, `259-261`), which T-206 replaces. The `--tab` PR first runs a spike with tarn inactive and with the caller's window minimized: create, then restore selection, key window and activation. If B1 cannot hold without editing Ghostty logic, the user decides.
-- O2. The tail is the last N lines of the pane, not the exact output; it may include the prompt. Selecting by shell integration marks is not checked.
-- O3. `initialInput` and a slow zsh rc file: whether the typed line survives until the prompt is not checked; the `run` PR tests it with the user's zsh.
-- O4. The wrapper marks of 4.4 when the command itself is a full-screen program or another agent that prints its own OSC 133: whether Ghostty pairs our D with our C is not checked; the `new` PR tests it with `claude`.
-
-## 11. Slicing and dependents
+## 10. Slicing and dependents
 
 Each PR into `dev`, under 400 lines of code, in this order:
 
 | PR | Content | Depends on |
 | --- | --- | --- |
-| 1 | `AgentCommands` skeleton, caller and workspace check, `ls` on panes, id prefix, B3, B5; demo `ls` | none |
-| 2 | `new` as a split, wrapper, command line rule, B1, B2; demo split | 1 |
-| 3 | run table, end and close insertion points, `wait` in the app and the CLI, O4 test | 2 |
-| 4 | `run` as a split, O3 test | 3 |
-| 5 | `read` | 1 |
+| 1 | `AgentCommands` skeleton, caller and workspace check, `ls` on panes, exit 4, B3, B5; demo `ls` | none |
+| 2 | `new` as a split, command line rule, B1, B2; demo split | 1 |
+| 3 | waits, end and close insertion points, `wait` in the app and the CLI | 2 |
+| 4 | `run` as a split, O2 test | 3 |
+| 5 | `read` and `close` | 1 |
 | 6 | `skill`, the plugin stub skill, `module ls` | 1, #34 for real rows |
 | 7 | `--tab` for `new` and `run`, O1 spike | 2, T-206 |
 
