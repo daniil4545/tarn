@@ -43,6 +43,7 @@ worktree:
 	ln -s $(CURDIR)/zig-out .worktrees/$(NAME)/zig-out
 
 dev:
+	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
 		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) $(NOCOV) -jobs 4 build > $(SYMROOT)/dev.log 2>&1 || \
 		{ grep -E "error:" $(SYMROOT)/dev.log | tail -20; exit 1; }

@@ -26,17 +26,19 @@ flowchart LR
    It prints `HOME` and `TARN_SURFACE`; `drive.sh tarn` sets them itself.
 3. Drive, one action per call. Before typing into a fresh pane wait for its prompt
    (`drive.sh wait '>'`): text sent earlier runs late. After a command wait for its output with
-   `wait <text>`; after a UI action give the app 0.5-1 s (`/bin/sleep 1`) to draw:
+   `wait <text>` for text only the output has: the typed command is on the screen too, so print a
+   computed value (`echo ok-$((1+1))`, wait for `ok-2`). After a UI action give the app 0.5-1 s
+   (`/bin/sleep 1`) to draw:
 
    | What | Command |
    | --- | --- |
    | paste text | `sh tools/stand/drive.sh type 'ls -la'` |
    | press a key | `sh tools/stand/drive.sh key enter`, `key t command` |
    | Ghostty action | `sh tools/stand/drive.sh action new_split:right` (names: `ghostty +list-actions`) |
-| other pane | `sh tools/stand/drive.sh action goto_split:previous` |
+   | other pane | `sh tools/stand/drive.sh action goto_split:previous` |
    | agent CLI | `sh tools/stand/drive.sh tarn open README.md`, `tarn ls --json`, `tarn notify hi` |
    | screen text | `sh tools/stand/drive.sh screen` |
-| wait for output | `sh tools/stand/drive.sh wait 'ok' 10` (fails after 10 s) |
+   | wait for output | `sh tools/stand/drive.sh wait ok-2 10` (fails after 10 s) |
    | screenshot | `sh tools/stand/drive.sh shot <scratchpad>/name.png`, then Read the png |
 
 4. Read: screen text first, it is cheap and exact for terminal output. A screenshot for what text

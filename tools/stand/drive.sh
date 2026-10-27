@@ -24,8 +24,10 @@ fail() {
 pid=$(pgrep -f "$stand/Tarn.app/Contents/MacOS/ghostty" | head -1) || true
 [ -n "$pid" ] || fail "the stand is not running: make -f tarn.mk live"
 
-# Runs AppleScript on the focused terminal; argv passes text without quoting.
+# Runs AppleScript on the focused terminal; argv passes text without quoting. The stand is checked
+# before each call: a stand that died would be relaunched by bundle id with the real home.
 osa() {
+  kill -0 "$pid" 2>/dev/null || fail "the stand exited: make -f tarn.mk live"
   osascript - "$@" <<EOF
 on run argv
   tell application id "$id"
@@ -37,15 +39,18 @@ EOF
 }
 
 # Ghostty writes the screen to a file and puts its path on the clipboard: keep the user's text.
+# An empty screen writes no file and leaves the clipboard alone: only a fresh screen.txt is removed.
 screen() {
   saved=$(pbpaste)
   script='perform action "write_screen_file:copy" on t'
-  osa >/dev/null
+  result=$(osa)
   file=$(pbpaste)
   printf '%s' "$saved" | pbcopy
-  [ -f "$file" ] || fail "no screen file"
+  [ "$result" = true ] && [ "$file" != "$saved" ] && [ "${file##*/}" = screen.txt ] && [ -f "$file" ] ||
+    fail "no screen text (empty screen?)"
   cat "$file"
   rm -f "$file"
+  rmdir "${file%/*}" 2>/dev/null || true
 }
 
 cmd="${1:-}"
@@ -72,7 +77,8 @@ case "$cmd" in
   wait)
     [ $# -ge 1 ] || fail "usage: drive.sh wait <text> [seconds]"
     i=0
-    until screen | grep -q -F -- "$1"; do
+    # The screen is read whole before the match: grep -q in a pipe would cut screen before its cleanup.
+    until text=$(screen 2>/dev/null) && case "$text" in *"$1"*) true ;; *) false ;; esac; do
       i=$((i + 1))
       [ "$i" -lt $((${2:-10} * 2)) ] || fail "no \"$1\" on the screen after ${2:-10} s"
       sleep 0.5
@@ -91,7 +97,7 @@ case "$cmd" in
       }
       r")
     [ -n "$wid" ] || fail "the stand has no window on screen"
-    screencapture -x -o -l "$wid" "$1" 2>/dev/null ||
+    screencapture -x -o -l "$wid" "$1" 2>/dev/null && [ -s "$1" ] ||
       fail "no screenshot: grant Screen Recording to the terminal running this and restart it"
     echo "$1"
     ;;
