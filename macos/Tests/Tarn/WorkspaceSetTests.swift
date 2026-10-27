@@ -109,6 +109,16 @@ struct WorkspaceSetTests {
         #expect(copy.runs(order: tabs) == set.runs(order: tabs))
     }
 
+    // spec: docs/specs/workspace-folder.md S21 - a snapshot saved with manual marks still restores
+    @Test func aSnapshotWithTheDroppedManualKeyDecodes() throws {
+        let set = threeWorkspaces()
+        let snapshot = WorkspaceSnapshot(set: set, tabKey: tabs[0], order: tabs)
+        var json = try #require(JSONSerialization.jsonObject(with: snapshot.encoded()) as? [String: Any])
+        json["manual"] = [tabs[0].uuidString]
+        let restored = try WorkspaceSnapshot.decode(JSONSerialization.data(withJSONObject: json))
+        #expect(restored == snapshot)
+    }
+
     @Test func snapshotKeepsTabsThatHaveNoWindowYet() {
         let set = threeWorkspaces()
         let snapshot = WorkspaceSnapshot(set: set, tabKey: tabs[0], order: Array(tabs[0...2]))

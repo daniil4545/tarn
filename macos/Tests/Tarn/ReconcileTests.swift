@@ -68,6 +68,16 @@ struct ReconcileTests {
         #expect(rows(set, order) == order)
     }
 
+    @Test func brokenRunsWithAnUnchangedOrderEndContiguous() {
+        var set = twoWorkspaces()
+        // Membership changed but the native order did not (the move was late or lost).
+        set.join(t[0], to: b.id)
+        let order = Array(t[0...3])
+        _ = set.reconcile(previous: order, current: order, target: a.id)
+        #expect(set.isContiguous(order))
+        #expect(rows(set, order) == order)
+    }
+
     @Test func twoChangesAtOnceEndContiguous() {
         var set = twoWorkspaces()
         // Two tabs hop at once: no single mover heals the order.

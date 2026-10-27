@@ -43,8 +43,8 @@ flowchart LR
   ses -->|"hook events"| hub
 ```
 
-A workspace is a project: a folder, its tabs and the hub page. Tabs join by folder; the user's
-manual choice wins; a tab stays after `cd`. The sidebar navigates, the hub shows state.
+A workspace is a project: a folder, its tabs and the hub page. A tab stays in the workspace
+it was opened in, also after `cd`. The sidebar navigates, the hub shows state.
 
 ## 4. Plan
 
