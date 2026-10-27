@@ -64,6 +64,8 @@ export function createPane(id, { cwd }) {
     adjustFont,
     clear: () => shell?.clear(true),
     answer: (allow) => shell?.answer(allow),
+    // `tarn run`: the line lands at the first prompt as typed keys, never with Enter.
+    type: (text) => pane.started.then(() => shell.input(text)),
     jumpPrompt,
     dispose() {
       subs.forEach((off) => off());
@@ -96,7 +98,11 @@ export function createPane(id, { cwd }) {
       case "cwd": bus.emit("pane:cwd", { pane: id, cwd: data.cwd }); break;
       case "exit": bus.cmd("pane.close", { id, exited: true }); break;
       case "viewer.open": bus.cmd("viewer.open", { ...data, pane: id }); break;
-      case "pane.new": return bus.cmd("pane.split", { id, dir: data.right ? "right" : "down", focus: false });
+      case "pane.new": {
+        const fresh = bus.cmd("pane.split", { id, dir: data.right ? "right" : "down", focus: false });
+        if (fresh && data.typed) panes.get(fresh)?.type(data.typed);
+        return fresh;
+      }
       case "hook": bus.cmd("hook", { pane: id, ...data }); break;
       case "command": notifyWhenDone(data); break;
       default: throw new Error(`unknown shell event: ${name}`);

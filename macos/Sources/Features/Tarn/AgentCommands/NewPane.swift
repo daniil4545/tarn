@@ -1,28 +1,45 @@
 import AppKit
 
 /// `tarn new [--right] [--cwd D] -- <cmd...>`: a split below the caller's pane, or to its right, that
-/// runs the command; focus stays where it was (`docs/specs/agent-cli.md` 4.2-4.4). Placement follows
+/// runs the command; `tarn run` shares the path (`RunPane`); focus stays where it was (`docs/specs/agent-cli.md` 4.2-4.4). Placement follows
 /// WezTerm `cli split-pane` (default bottom) and kitty `launch --keep-focus`.
 enum NewPane {
     static let notOneLine = AgentRefusal(text: "command must be one line")
 
     @MainActor
     static func run(_ message: [String: Any], _ scope: AgentScope) -> Result<[String: Any], AgentRefusal> {
+        open(message, scope, kind: .new)
+    }
+
+    /// The path `new` and `run` share: the command line, the caller's tab, the split and the run mark.
+    /// A `new` pane runs the line as its command; a `run` pane starts the login shell with the line typed.
+    @MainActor
+    static func open(_ message: [String: Any], _ scope: AgentScope, kind: RunMark.Kind) -> Result<[String: Any], AgentRefusal> {
         guard let argv = message["argv"] as? [String], !argv.isEmpty else { return .failure(AgentRefusal(text: "no command")) }
         guard let command = ShellQuote.join(argv) else { return .failure(notOneLine) }
         guard let caller = SessionRegistry.surfaceView(scope.caller.pane),
               let controller = BaseTerminalController.controller(owning: caller)
         else { return .failure(.notInTab) }
 
-        var config = Ghostty.SurfaceConfiguration()
-        config.command = command
+        var config = configuration(kind, command: command)
         config.workingDirectory = (message["cwd"] as? String) ?? caller.workingDirectory
         let direction: SplitTree<Ghostty.SurfaceView>.NewDirection = message["right"] as? Bool == true ? .right : .down
         guard let pane = split(controller, at: caller, direction: direction, config: config) else {
             return .failure(AgentRefusal(text: "split failed"))
         }
-        PaneWaits.shared.marks[pane.id] = RunMark(kind: .new, command: command)
+        PaneWaits.shared.marks[pane.id] = RunMark(kind: kind, command: command)
         return .success(["pane": pane.id.uuidString])
+    }
+
+    /// `run` leaves `command` empty, so Ghostty starts the user's login shell, and types the line with no
+    /// newline (Ghostty `input`, `src/config/Config.zig:1305-1346`): Enter stays with the user (B2).
+    static func configuration(_ kind: RunMark.Kind, command: String) -> Ghostty.SurfaceConfiguration {
+        var config = Ghostty.SurfaceConfiguration()
+        switch kind {
+        case .new: config.command = command
+        case .run: config.initialInput = command
+        }
+        return config
     }
 
     /// Inserts a new surface next to `at` and assigns the tree directly: `newSplit` would move the

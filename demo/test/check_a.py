@@ -348,6 +348,19 @@ def tarn_cli(base):
             "git status follows vfs edits",
             has(pg, "p7", r"\?\? scratch\.txt") and has(pg, "p7", r" M docs/spec\.md"),
         )
+        # spec: agent-cli 4.5, B2 - run types the line at the new pane's prompt, never Enter.
+        printed = r"tarn run -- make install\s*\n(p\d+)\s*\n"
+        run(pg, "p7", "tarn run -- make install")
+        found = re.findall(printed, until(pg, "p7", printed))
+        typed = found[-1] if found else ""
+        check(
+            "tarn run types the command in a split and leaves Enter to the user",
+            typed != ""
+            and has(pg, typed, r"% make install\s*$")
+            and pg.evaluate("document.activeElement.tagName") == active
+            and last_prompt_line(pg, "p7").endswith("%"),
+            screen(pg, typed) if typed else screen(pg, "p7"),
+        )
         check(
             "tarn: no page errors",
             not errors and not pg.evaluate("__tarn.errors"),
