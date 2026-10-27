@@ -39,7 +39,17 @@ struct SidebarMenuTests {
     @Test func workspaceMenuItemsSendAMessageTheirTargetHandles() {
         let (model, _) = makeModel()
         let menu = model.contextMenu(for: SidebarModel.Group(workspace: Workspace(name: "Alpha"), tabs: []))
-        #expect(itemsWithActions(menu).map(\.title) == ["New Tab", "Collapse", "Rename Workspace...", "Delete Workspace..."])
+        #expect(itemsWithActions(menu).map(\.title) == ["New Tab", "Collapse", "Rename Workspace...", "Set Folder...", "Delete Workspace..."])
+        expectHandled(itemsWithActions(menu))
+    }
+
+    // spec: docs/specs/workspace-folder.md S22. Remove Folder shows only for a workspace with a folder.
+    @Test func removeFolderShowsOnlyWithAFolder() {
+        let (model, _) = makeModel()
+        var withFolder = Workspace(name: "Alpha")
+        withFolder.folder = "/tmp/alpha"
+        let menu = model.contextMenu(for: SidebarModel.Group(workspace: withFolder, tabs: []))
+        #expect(itemsWithActions(menu).map(\.title).contains("Remove Folder"))
         expectHandled(itemsWithActions(menu))
     }
 

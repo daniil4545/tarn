@@ -9,6 +9,8 @@ struct Workspace: Equatable, Identifiable, Codable {
     var id = UUID()
     var name: String
     var collapsed = false
+    /// The project folder (D19): absolute and standardized; nil for "No project".
+    var folder: String?
 }
 
 /// The workspaces of one Ghostty window and which tab sits in which one.
@@ -17,7 +19,9 @@ struct Workspace: Equatable, Identifiable, Codable {
 /// a contiguous run of the native tab order, so workspace order is derived from the order of
 /// tabs and never stored (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
-    static let defaultName = "Default"
+    static let defaultName = "No project"
+    /// The name sets had before "No project"; restored sets keep it.
+    static let legacyDefaultName = "Default"
 
     /// One window's workspaces. Not part of the stored state.
     struct Run: Equatable {
@@ -58,7 +62,7 @@ struct WorkspaceSet: Equatable {
         self.revision = revision
     }
 
-    /// A set with `Default` holding `tabs`.
+    /// A set with `No project` holding `tabs`.
     static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
         let workspace = Workspace(name: defaultName)
         return WorkspaceSet(
@@ -112,11 +116,15 @@ struct WorkspaceSet: Equatable {
 
     // MARK: Edits
 
-    /// Adds an empty workspace and returns it, or nil for a blank name. The workspace
-    /// gets its tab right after; until then it is in no run.
-    mutating func create(name: String) -> Workspace.ID? {
+    /// Adds an empty workspace and returns it, or nil for a blank name or a folder that is not
+    /// an absolute path. The workspace gets its tab right after; until then it is in no run.
+    mutating func create(name: String, folder: String? = nil) -> Workspace.ID? {
         guard let name = Self.cleaned(name) else { return nil }
-        let workspace = Workspace(name: name)
+        var workspace = Workspace(name: name)
+        if let folder {
+            guard let path = WorkspaceFolder.standardized(folder) else { return nil }
+            workspace.folder = path
+        }
         workspaces.append(workspace)
         revision += 1
         return workspace.id
@@ -130,6 +138,27 @@ struct WorkspaceSet: Equatable {
         workspaces[index].name = name
         revision += 1
         return true
+    }
+
+    /// Sets the folder of a workspace, or removes it with nil. Tabs do not move (S22). A path
+    /// that is not absolute changes nothing.
+    mutating func setFolder(_ id: Workspace.ID, _ folder: String?) {
+        guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        let path: String?
+        if let folder {
+            guard let standard = WorkspaceFolder.standardized(folder) else { return }
+            path = standard
+        } else {
+            path = nil
+        }
+        guard workspaces[index].folder != path else { return }
+        workspaces[index].folder = path
+        revision += 1
+    }
+
+    /// The first tab of the workspace that holds `folder`, skipping `except` (Q1, Q4).
+    func firstTab(inFolder folder: String, order: [TabKey], except: Workspace.ID? = nil) -> TabKey? {
+        runs(order: order).first { $0.workspace.folder == folder && $0.workspace.id != except }?.tabs.first
     }
 
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {
@@ -272,7 +301,7 @@ struct WorkspaceSet: Equatable {
         }
     }
 
-    /// `target` when it exists, else the first workspace, else a new `Default`.
+    /// `target` when it exists, else the first workspace, else a new `No project`.
     private mutating func ensureWorkspace(_ target: Workspace.ID) -> Workspace.ID {
         if workspace(target) != nil { return target }
         if let first = workspaces.first { return first.id }

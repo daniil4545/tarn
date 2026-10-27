@@ -10,6 +10,8 @@ struct WorkspaceSnapshot: Codable, Equatable {
         var id: UUID
         var name: String
         var collapsed: Bool
+        /// Missing in snapshots saved before folders; decodes as nil.
+        var folder: String?
         /// In tab order.
         var tabKeys: [TabKey]
     }
@@ -37,7 +39,7 @@ struct WorkspaceSnapshot: Codable, Equatable {
                 members[key] = entry.id
                 any = true
             }
-            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed)) }
+            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: entry.folder)) }
         }
         return WorkspaceSet(id: setID, workspaces: kept, members: members, revision: revision)
     }
@@ -70,13 +72,16 @@ extension WorkspaceSnapshot {
                 id: run.workspace.id,
                 name: run.workspace.name,
                 collapsed: run.workspace.collapsed,
+                folder: run.workspace.folder,
                 tabKeys: run.tabs + extra.sorted { $0.uuidString < $1.uuidString }
             )
         }
         for workspace in set.workspaces where !shown.contains(workspace.id) {
             let keys = set.tabs(in: workspace.id).sorted { $0.uuidString < $1.uuidString }
             if !keys.isEmpty {
-                entries.append(Entry(id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, tabKeys: keys))
+                entries.append(Entry(
+                    id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, folder: workspace.folder, tabKeys: keys
+                ))
             }
         }
         self.workspaces = entries
