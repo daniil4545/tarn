@@ -313,9 +313,9 @@ Top tab bar (D25):
 | Stage | Checkable result | Depends on | Excludes | Check |
 |---|---|---|---|---|
 | 0. Demo | the mark (section 5 sketch) and the top tab prefix drawn in `demo/`; the user approves the look | none | app code | demo checks |
-| 1. Folder on a workspace | Shift+Cmd+T opens a folder panel; header menu Set Folder...; folders and marks saved and restored; "No project" | none | start directory, arrival | unit S1-S3, S21, S22, S26, S31 |
+| 1. Folder on a workspace | Shift+Cmd+T opens a folder panel; header menu Set Folder... and Remove Folder; the folder in the header tooltip; folders saved and restored; "No project"; the first tab of a new workspace starts in its folder | none | start directory of other tabs, arrival, manual marks (stage 3, their only writer) | unit S1-S3, S21 (folders), S22, S26 |
 | 2. Start directory | new tabs and splits start per D20 | 1 | arrival | unit S4-S10, S34 |
-| 3. Agent arrival | probe of D26 first; agent tabs join by folder; manual wins; sidebar mark | 1 | top tab prefix | unit S11-S20, S27-S33 |
+| 3. Agent arrival | probe of D26 first; agent tabs join by folder; manual marks saved and restored, manual wins; sidebar mark | 1 | top tab prefix | unit S11-S21 (marks), S27-S33 |
 | 4. Tab prefix | native titles with the prefix when tabs are at the top | 1 | | unit S23, S25, S35; live S24 |
 
 Each stage is one PR to `dev` under 400 lines of code; docs (`docs/modules/workspaces.md`,
