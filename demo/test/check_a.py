@@ -302,12 +302,12 @@ def tarn_cli(base):
             "tarn open on a missing file",
             has(pg, "p7", r"tarn: no such file: nope\.md"),
         )
-        run(pg, "p7", "tarn new")
+        run(pg, "p7", "tarn new -- npm test", r"\np\d+\s*\n")
+        agent = [c for c in calls(pg, "pane.split") if c.get("focus") is False]
         check(
-            "tarn new asks for a tab and does not take focus",
-            len(calls(pg, "tab.new")) == 1
-            and calls(pg, "tab.new")[0]["select"] is False,
-            str(calls(pg, "tab.new")),
+            "tarn new splits below the caller and does not take focus",
+            agent == [{"id": "p7", "dir": "down", "focus": False}],
+            str(calls(pg, "pane.split")),
         )
         check(
             "agent commands leave focus and input alone",

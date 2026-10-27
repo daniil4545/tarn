@@ -1,8 +1,7 @@
-// The tarn CLI as agents and people use it: open, ls, new (docs/spec.md section 11).
-// None of these moves focus or presses Enter. `open` and `ls` (panes of this workspace) are in the app;
-// `new` is second wave (R15), so its first run prints PLANNED.
-const PLANNED = "planned: not in the app yet";
-const USAGE = "usage: tarn <open path[:line] | ls [--json] | new (planned)>";
+// The tarn CLI as agents and people use it: open, ls, new (docs/specs/agent-cli.md 4).
+// None of these moves focus or presses Enter. `new` opens a split below the caller, or to its
+// right with --right; the demo pane is a shell, it does not run the command.
+const USAGE = "usage: tarn <open path[:line] | ls [--json] | new [--right] [--cwd D] -- <cmd...>>";
 
 function open(ctx) {
   const arg = ctx.args[1];
@@ -28,18 +27,24 @@ function list(ctx) {
   return ctx.out(table.map(line).join("\n"));
 }
 
+function split(ctx) {
+  const args = ctx.args.slice(1);
+  const end = args.indexOf("--");
+  const options = end < 0 ? args : args.slice(0, end);
+  const command = end < 0 ? [] : args.slice(end + 1);
+  const known = options.every((o, i) => o === "--right" || o === "--cwd" || options[i - 1] === "--cwd");
+  if (!command.length || !known) return ctx.out(USAGE);
+  const pane = ctx.emit("pane.new", { right: options.includes("--right") });
+  if (pane) ctx.out(pane);
+  return undefined;
+}
+
 export function tarn(ctx) {
   const sub = ctx.args[0];
-  if (sub === "new" && !ctx.planned.has(sub)) {
-    ctx.planned.add(sub);
-    ctx.out(PLANNED);
-  }
   switch (sub) {
     case "open": return open(ctx);
     case "ls": return list(ctx);
-    case "new":
-      ctx.emit("tab.new", {});
-      return undefined;
+    case "new": return split(ctx);
     default: return ctx.out(USAGE);
   }
 }

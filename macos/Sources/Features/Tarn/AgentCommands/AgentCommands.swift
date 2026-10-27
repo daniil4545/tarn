@@ -60,6 +60,7 @@ enum AgentCommands {
     @MainActor
     static let handlers: [String: Handler] = [
         "ls": ListPanes.run,
+        "new": NewPane.run,
     ]
 
     /// Answers a command of `handlers`; false for any other line.

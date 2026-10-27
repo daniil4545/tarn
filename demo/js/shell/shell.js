@@ -1,7 +1,7 @@
 // The zsh stand-in. Pure over its arguments: no DOM, no engine, so Node tests drive it.
 // createShell({vfs, emit, write, clock, identity, history, cols, panes, paneId})
 //   write(data)       bytes for the terminal
-//   emit(name, data)  cwd, prompt, command, exit, viewer.open, tab.new, hook
+//   emit(name, data)  cwd, prompt, command, exit, viewer.open, pane.new (returns the pane id), hook
 //   input(data)       bytes from the terminal
 import { crlf } from "./ansi.js";
 import { createEditor } from "./line-editor.js";
@@ -68,7 +68,6 @@ export function createShell({ vfs, emit, write, clock, identity, history, cols, 
 
   const ctx = {
     paneId,
-    planned: new Set(), // tarn subcommands that already printed the planned notice
     vfs,
     identity,
     emit,

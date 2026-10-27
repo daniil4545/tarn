@@ -67,7 +67,7 @@ flowchart LR
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works |
 | Browser demo | static page that mimics the window; not part of the app | [demo.md](modules/demo.md) | works |
 | Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket command `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
-| Agent commands | socket commands on panes of the caller's workspace: `ls` | [agent-commands.md](modules/agent-commands.md) | works |
+| Agent commands | socket commands on panes of the caller's workspace: `ls`, `new` | [agent-commands.md](modules/agent-commands.md) | works |
 
 Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names its suites.
 
