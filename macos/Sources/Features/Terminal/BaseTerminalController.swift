@@ -343,6 +343,7 @@ class BaseTerminalController: NSWindowController,
             focusedSurface = nil
         }
         syncSurfaceTreeOcclusionState()
+        PaneWaits.surfaceTreeChanged() // tarn: wait
     }
 
     /// Update all surfaces with the focus state. This ensures that libghostty has an accurate view about

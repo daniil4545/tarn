@@ -1663,6 +1663,7 @@ extension Ghostty {
             case GHOSTTY_TARGET_SURFACE:
                 guard let surface = target.target.surface else { return }
                 guard let surfaceView = self.surfaceView(from: surface) else { return }
+                PaneWaits.commandFinished(pane: surfaceView.id, exitCode: Int(v.exit_code), durationNs: v.duration) // tarn: wait
 
                 // Determine if we even care about command finish notifications
                 guard let config = (NSApplication.shared.delegate as? AppDelegate)?.ghostty.config else { return }
@@ -1883,6 +1884,7 @@ extension Ghostty {
             case GHOSTTY_TARGET_SURFACE:
                 guard let surface = target.target.surface else { return false }
                 guard let surfaceView = self.surfaceView(from: surface) else { return false }
+                PaneWaits.childExited(pane: surfaceView.id) // tarn: wait
                 // We handle this when the window is visible and timetime_ms is greater than 0,
                 // which will rule out exit codes on launch
                 guard surfaceView.window != nil, v.timetime_ms > 0 else { return false }

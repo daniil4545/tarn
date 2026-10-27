@@ -125,6 +125,7 @@ extension ControlSocket {
         private let fd: Int32
         private let queue: DispatchQueue
         private var isClosed = false
+        private var peerTimer: DispatchSourceTimer?
 
         fileprivate init(fd: Int32, queue: DispatchQueue) {
             self.fd = fd
@@ -137,12 +138,34 @@ extension ControlSocket {
             if !isClosed { close(fd) }
         }
 
+        /// Calls `handler` once when the other end hangs up before an answer, and closes the
+        /// connection. A held reply (`tarn wait`) uses it to release a cancelled request. `nc` shuts
+        /// down its writing side after the request, so a read of zero bytes is no hang-up; POLLHUP
+        /// is set only once both directions are down.
+        func watchPeer(_ handler: @escaping @Sendable () -> Void) {
+            queue.async { [self] in
+                guard !isClosed else { return }
+                let timer = DispatchSource.makeTimerSource(queue: queue)
+                timer.schedule(deadline: .now() + 0.5, repeating: 0.5)
+                timer.setEventHandler { [self] in
+                    var probe = pollfd(fd: fd, events: Int16(POLLOUT), revents: 0)
+                    guard poll(&probe, 1, 0) > 0, probe.revents & Int16(POLLHUP) != 0 else { return }
+                    send(Data())
+                    handler()
+                }
+                peerTimer = timer
+                timer.resume()
+            }
+        }
+
         /// Writes `line` and closes the connection; an empty line only closes it. A hook
         /// that is gone makes the write fail, which is fine: nobody waits for it.
         func send(_ line: Data) {
             queue.async { [self] in
                 guard !isClosed else { return }
                 isClosed = true
+                peerTimer?.cancel()
+                peerTimer = nil
                 line.withUnsafeBytes { buf in
                     var offset = 0
                     while offset < buf.count, let base = buf.baseAddress {

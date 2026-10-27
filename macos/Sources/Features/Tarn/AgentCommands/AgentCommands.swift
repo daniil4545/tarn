@@ -66,9 +66,29 @@ enum AgentCommands {
     /// Answers a command of `handlers`; false for any other line.
     @MainActor
     static func handle(_ message: [String: Any], reply sink: ControlSocket.Reply) -> Bool {
-        guard let command = message["cmd"] as? String, let handler = handlers[command] else { return false }
+        guard let command = message["cmd"] as? String else { return false }
+        if command == "wait" {
+            waitCommand(message, reply: sink)
+            return true
+        }
+        guard let handler = handlers[command] else { return false }
         sink.send(answer(command, handler, message: message, panes: livePanes()))
         return true
+    }
+
+    /// `wait` holds its reply until the pane reports an end, so it is not a `Handler`.
+    @MainActor
+    private static func waitCommand(_ message: [String: Any], reply sink: ControlSocket.Reply) {
+        let result: Result<[String: Any], AgentRefusal>?
+        if message["version"] as? Int != 1 {
+            result = .failure(AgentRefusal(text: "unsupported version"))
+        } else {
+            switch AgentScope.resolve(caller: message["surface"] as? String, in: livePanes()) {
+            case .success(let scope): result = WaitPane.start(message, scope: scope, reply: sink)
+            case .failure(let refusal): result = .failure(refusal)
+            }
+        }
+        if let result { sink.send(encode("wait", result, surface: message["surface"] as? String)) }
     }
 
     /// The reply line of `handler` for `message`, with the panes of every window given; logs a refusal.
@@ -80,11 +100,16 @@ enum AgentCommands {
         } else {
             result = AgentScope.resolve(caller: message["surface"] as? String, in: panes).flatMap { handler(message, $0) }
         }
+        return encode(command, result, surface: message["surface"] as? String)
+    }
+
+    /// The reply line of a result; logs a refusal.
+    static func encode(_ command: String, _ result: Result<[String: Any], AgentRefusal>, surface: String?) -> Data {
         switch result {
         case .success(let fields):
             return AttentionCommands.reply(fields)
         case .failure(let refusal):
-            logger.info("\(command, privacy: .public) refused: \(refusal.text, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
+            logger.info("\(command, privacy: .public) refused: \(refusal.text, privacy: .public) surface=\(surface ?? "-", privacy: .public)")
             return AttentionCommands.reply(["error": refusal.text, "code": refusal.code])
         }
     }
