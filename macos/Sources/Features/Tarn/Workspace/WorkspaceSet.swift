@@ -18,6 +18,8 @@ struct Workspace: Equatable, Identifiable, Codable {
 /// tabs and never stored (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
     static let defaultName = "Default"
+    /// The workspace that takes new tabs while Workspaces is off: the home folder.
+    static let homeName = "~"
 
     /// One window's workspaces. Not part of the stored state.
     struct Run: Equatable {
@@ -239,6 +241,37 @@ struct WorkspaceSet: Equatable {
 
         if members != before.members || workspaces != before.workspaces { revision = before.revision + 1 }
         return reorders
+    }
+
+    /// Workspaces are off: a tab with no workspace joins "~" (created when missing) and nothing else
+    /// moves, whatever the order of the tabs.
+    mutating func reconcileFrozen(current: [TabKey]) {
+        let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
+        guard !fresh.isEmpty else { return }
+        let home: Workspace.ID
+        if let existing = workspaces.first(where: { $0.name == Self.homeName }) {
+            home = existing.id
+        } else {
+            let created = Workspace(name: Self.homeName)
+            workspaces.append(created)
+            home = created.id
+        }
+        for tab in fresh { members[tab] = home }
+        revision += 1
+    }
+
+    /// Workspaces are on again: the native moves that make every workspace one run, in the order of
+    /// first appearance. Membership does not change.
+    func regroup(order: [TabKey]) -> [Reorder] {
+        var current = order
+        var moves: [Reorder] = []
+        for (place, tab) in runs(order: order).flatMap(\.tabs).enumerated() {
+            guard let at = current.firstIndex(of: tab), at != place else { continue }
+            current.remove(at: at)
+            current.insert(tab, at: place)
+            moves.append(Reorder(tab: tab, delta: place - at))
+        }
+        return moves
     }
 
     /// Makes the workspaces of `known` contiguous again. Ghostty moves one tab at a time, so

@@ -31,6 +31,10 @@ struct WorkspaceBook {
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
+    /// Workspaces are off: new tabs join "~" and no tab or workspace moves (`docs/modules/workspaces.md`).
+    var frozen = false
+    /// Workspaces came back on: the next pass regroups the tabs instead of repairing membership.
+    var regroupPending = false
     private var setOf: [TabKey: UUID] = [:]
     /// Tabs seen in a group that held every live tab of their set. A settled tab that shows
     /// up in a group without its set has left it. Restored tabs start unsettled: AppKit
@@ -79,13 +83,15 @@ struct WorkspaceBook {
         // does not depend on the order of the groups (AppKit lists windows front to back).
         let groups = groups.filter { !$0.tabs.isEmpty }
         let winners = winningSets(for: groups)
+        let regroup = regroupPending && !frozen
+        regroupPending = false
         for (group, winner) in zip(groups, winners) {
-            reconcile(group, winner: winner, into: &outcome)
+            reconcile(group, winner: winner, regroup: regroup, into: &outcome)
         }
         return outcome
     }
 
-    private mutating func reconcile(_ group: Group, winner: UUID, into outcome: inout Outcome) {
+    private mutating func reconcile(_ group: Group, winner: UUID, regroup: Bool, into outcome: inout Outcome) {
         let members = Set(group.tabs)
         var touched = Set<UUID>()
 
@@ -125,7 +131,14 @@ struct WorkspaceBook {
         for tab in fresh { setOf[tab] = winner }
 
         let previous = (seenOrder[winner] ?? []).filter(members.contains)
-        outcome.reorders += set.reconcile(previous: previous, current: group.tabs, target: target)
+        if frozen {
+            set.reconcileFrozen(current: group.tabs)
+        } else if regroup {
+            set.reconcileFrozen(current: group.tabs)
+            outcome.reorders += set.regroup(order: group.tabs)
+        } else {
+            outcome.reorders += set.reconcile(previous: previous, current: group.tabs, target: target)
+        }
         if !fresh.isEmpty {
             if let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
             pendingTarget[winner] = nil

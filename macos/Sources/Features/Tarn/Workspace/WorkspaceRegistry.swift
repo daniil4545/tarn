@@ -43,6 +43,7 @@ final class WorkspaceRegistry {
     private var surfaceCache: [ObjectIdentifier: Set<UUID>] = [:]
 
     private init() {
+        book.frozen = !TarnModules.isOn(.workspaces)
         let center = NotificationCenter.default
         center.addObserver(forName: .terminalTabsDidChange, object: nil, queue: .main) { [weak self] note in
             // Delivered synchronously on the main thread. Our own `publish` posts with `self` as the
@@ -82,6 +83,18 @@ final class WorkspaceRegistry {
     /// The workspace of a tab window.
     func workspace(of window: NSWindow) -> Workspace? {
         entries[ObjectIdentifier(window)].flatMap { book.workspace(of: $0.key) }
+    }
+
+    // MARK: Module switch
+
+    /// Workspaces off freezes the workspaces as they are; on again regroups the tabs. The pass
+    /// runs now and tells the sidebars.
+    func setFrozen(_ frozen: Bool) {
+        guard book.frozen != frozen else { return }
+        book.frozen = frozen
+        book.regroupPending = !frozen
+        sync()
+        NotificationCenter.default.post(name: .terminalTabsDidChange, object: self)
     }
 
     // MARK: Following Ghostty
@@ -267,6 +280,10 @@ final class WorkspaceRegistry {
 
     /// A new tab in `workspace`, after its last tab.
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
+        guard !book.frozen else {
+            (window.windowController as? TerminalController)?.newTab(nil)
+            return
+        }
         let tab = key(for: window)
         book.setPendingTarget(workspace, for: tab)
         (window.windowController as? TerminalController)?.newTab(nil)
@@ -276,6 +293,7 @@ final class WorkspaceRegistry {
     /// A new workspace with one new tab. False for a blank name.
     @discardableResult
     func createWorkspace(named name: String, from window: NSWindow) -> Bool {
+        guard !book.frozen else { return false }
         let tab = key(for: window)
         var created: Workspace.ID?
         let changed = book.edit(tab) { created = $0.create(name: name) }
@@ -322,12 +340,12 @@ final class WorkspaceRegistry {
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
         isBusy = true
-        let changed = book.edit(tab) { $0.join(tab, to: workspace) }
+        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace) }
         let destination = Self.destination(
             of: tab,
             in: order,
             before: neighbour.map(key(for:)),
-            isMember: { book.workspace(of: $0)?.id == workspace }
+            isMember: { [frozen = book.frozen] in frozen || book.workspace(of: $0)?.id == workspace }
         )
         moveNatively(window, by: destination - index)
         isBusy = false
