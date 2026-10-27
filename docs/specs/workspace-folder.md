@@ -129,7 +129,9 @@ Decisions:
   the moment of the move, so a deleted workspace or a changed folder is never a stale target.
   Accepted: moving a tab that is not selected in the key window selects it for an instant
   (`moveNatively`) and gives the selection back. A moved selected tab updates the target of
-  the next new tab (`lastSelected`), and a collapsed destination unfolds as for a new tab.
+  the next new tab (`lastSelected`), and a collapsed destination unfolds as for a new tab; a tab
+  that arrives in the background does neither (a VS Code explorer reveals only the active editor).
+  While Workspaces is off the deciding pid is still kept, so an agent started then is no arrival later (R4).
   Model change: no.
 
 Canon decisions this spec replaces (the stage named edits `docs/specs/windows-workspaces.md`):

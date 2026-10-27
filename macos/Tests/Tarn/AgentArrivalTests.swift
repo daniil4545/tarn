@@ -170,12 +170,50 @@ struct AgentArrivalTests {
     }
 
     // spec: docs/specs/workspace-folder.md S32
-    @Test func aCollapsedDestinationUnfolds() {
+    @Test func aCollapsedDestinationUnfoldsForASelectedArrivalOnly() {
         var (book, tarn, _) = makeBook()
         _ = book.edit(t[1]) { $0.setCollapsed(tarn, true) }
         _ = book.edit(t[0]) { $0.join(t[0], to: tarn) }
+        #expect(book.arrived(t[0], selected: false) == nil)
+        #expect(book.workspace(of: t[0])?.collapsed == true)
         #expect(book.arrived(t[0], selected: true) != nil)
         #expect(book.workspace(of: t[0])?.collapsed == false)
+    }
+
+    // spec: docs/specs/workspace-folder.md S20
+    @Test func aFolderInAnotherWindowIsNeverAnArrivalTarget() {
+        var (book, _, _) = makeBook()
+        let other = TabKey()
+        let outside = TabKey()
+        _ = book.pass([[t[0], t[2], t[1], t[3]], [other, outside]])
+        _ = book.edit(other) { $0.rename($0.workspaces[0].id, to: "far") }
+        _ = book.edit(other) { _ = $0.create(name: "elsewhere", folder: "/z/only") }
+        #expect(book.arrival(of: outside, at: "/p/F") == nil)
+        #expect(book.arrival(of: t[0], at: "/z/only") == nil)
+        _ = start(&book, outside, at: "/p/F")
+        #expect(book.takeArrival(outside) == nil)
+    }
+
+    // spec: docs/specs/workspace-folder.md S28
+    @Test func aQueuedTabWaitsUntilItsWindowGroupIsKey() {
+        var (book, _, _) = makeBook()
+        _ = start(&book, t[0], at: "/p/F")
+        #expect(book.runnable(in: [TabKey()]).isEmpty)
+        #expect(book.pendingTabs == [t[0]])
+        #expect(book.runnable(in: [t[2], t[0]]) == [t[0]])
+    }
+
+    // spec: docs/specs/workspace-folder.md R4
+    @Test func anAgentStartedWhileFrozenQueuesNothingAndIsNoArrivalLater() {
+        var (book, _, _) = makeBook()
+        book.frozen = true
+        _ = start(&book, t[0], at: "/p/F")
+        #expect(book.pendingTabs.isEmpty)
+        book.frozen = false
+        var calls = 0
+        _ = book.checkArrival(t[0], alive: alive) { calls += 1; return (10, "/q/after-cd") }
+        #expect(calls == 0)
+        #expect(book.pendingTabs.isEmpty)
     }
 
     // spec: docs/specs/workspace-folder.md S33
@@ -195,8 +233,9 @@ struct AgentArrivalTests {
         #expect(!WorkspaceRegistry.isAlive(Int32.max))
     }
 
-    /// T-106: a tab with a live deciding process reads nothing; a new pid costs one read.
-    @MainActor @Test func theCheckReadsAProcessOncePerTurn() {
+    /// T-106: each agent pid costs one cache read; a tab with a live deciding process costs none,
+    /// and later lookups of the same pid in the turn (the sidebar's) are hits.
+    @MainActor @Test func theCheckCostsOneCacheReadPerNewPid() {
         let saved = AgentProcessCache.reader
         AgentProcessCache.reader = { _ in "claude" }
         AgentProcessCache.reset()
@@ -205,11 +244,20 @@ struct AgentArrivalTests {
             AgentProcessCache.reset()
         }
         var (book, _, _) = makeBook()
-        for _ in 0..<5 {
-            _ = book.checkArrival(t[0], alive: alive) {
-                AgentProcessCache.agent(pid: 10) == nil ? nil : (10, "/p/F")
+        func sync() {
+            for (index, tab) in t.enumerated() {
+                let pid = pid_t(10 + index)
+                _ = book.checkArrival(tab, alive: alive) {
+                    AgentProcessCache.agent(pid: pid) == nil ? nil : (pid, "/q")
+                }
             }
         }
-        #expect(AgentProcessCache.misses == 1)
+        sync()
+        #expect(AgentProcessCache.misses == t.count)
+        sync()
+        sync()
+        #expect(AgentProcessCache.misses == t.count)
+        _ = AgentProcessCache.agent(pid: 10)
+        #expect(AgentProcessCache.misses == t.count)
     }
 }

@@ -255,11 +255,16 @@ struct WorkspaceBook {
         guard let path, path.hasPrefix("/") else {
             return note("agent without a usable path value=\(path ?? "nil")", tab: tab, set: setOf[tab])
         }
-        pending[tab] = path
+        if !frozen { pending[tab] = path }
         return nil
     }
 
     var pendingTabs: [TabKey] { pending.keys.sorted { $0.uuidString < $1.uuidString } }
+
+    /// D27: the queued tabs that may move now, those of the key window group. The rest wait.
+    func runnable(in keyGroup: [TabKey]) -> [TabKey] {
+        pendingTabs.filter(keyGroup.contains)
+    }
 
     /// Takes the queued entry of `tab` and gives its destination now, so a deleted workspace or a
     /// changed folder is never a stale target.
@@ -268,14 +273,15 @@ struct WorkspaceBook {
     }
 
     /// An arrival move happened: a selected tab becomes the target of the next new tab, and a
-    /// collapsed destination unfolds. Returns the set when its table changed.
+    /// collapsed destination unfolds, both only when the arriving tab is selected (S32); a
+    /// background arrival changes neither. Returns the set when its table changed.
     mutating func arrived(_ tab: TabKey, selected: Bool) -> UUID? {
         guard let id = setOf[tab], var set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
         if selected {
             lastSelected[id] = workspace.id
             lastSelectedTab[id] = tab
         }
-        guard workspace.collapsed else { return nil }
+        guard selected, workspace.collapsed else { return nil }
         set.setCollapsed(workspace.id, false)
         sets[id] = set
         return id

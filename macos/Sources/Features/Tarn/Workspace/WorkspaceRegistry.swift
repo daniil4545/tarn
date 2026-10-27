@@ -136,7 +136,6 @@ final class WorkspaceRegistry {
     /// D26: a tab with no live deciding process looks for an agent in its panes. Agent pids come
     /// from the per-turn cache (T-106); the working directory is read only for the pid found.
     private func checkArrivals() {
-        guard !book.frozen else { return }
         for window in NSApp.windows where isTab(window) {
             guard let tab = entries[ObjectIdentifier(window)]?.key,
                   let controller = window.windowController as? TerminalController
@@ -173,8 +172,8 @@ final class WorkspaceRegistry {
     private func runArrivals() {
         guard !book.frozen, let keyWindow = NSApp.keyWindow else { return }
         let keyGroup = group(of: keyWindow)
-        for tab in book.pendingTabs {
-            guard let window = window(for: tab), keyGroup.contains(where: { $0 === window }) else { continue }
+        for tab in book.runnable(in: keyGroup.map(key(for:))) {
+            guard let window = window(for: tab) else { continue }
             guard let destination = book.takeArrival(tab) else { continue }
             let selected = keyGroup.count < 2 || window.tabGroup?.selectedWindow === window
             moveTab(window, to: destination, byUser: false)
