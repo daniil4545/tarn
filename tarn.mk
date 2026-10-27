@@ -1,5 +1,7 @@
-# tarn make targets. Usage: make -f tarn.mk check | release | bench
+# tarn make targets. Usage: make -f tarn.mk check | release | bench | worktree NAME=<branch> | live [STAND_APP=<app>]
 #
+# worktree a task worktree .worktrees/NAME on a new branch from origin/dev, linked to this checkout's built core
+# live     a second Tarn with its own home and control socket next to the user's (tools/stand/stand.sh), for live checks
 # check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
 # bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
@@ -24,7 +26,21 @@ BENCH    := $(CURDIR)/dist/bench
 NOCOV    := ENABLE_CODE_COVERAGE=NO CLANG_COVERAGE_MAPPING=NO
 LSREG    :=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check release bench
+STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
+
+.PHONY: check release bench worktree live
+
+# The core (GhosttyKit.xcframework, zig-out) is untracked and slow to build: every worktree links this one.
+worktree:
+	@test -n "$(NAME)" || { echo "worktree: NAME=<branch> is required"; exit 1; }
+	@test -d macos/GhosttyKit.xcframework -a ! -L macos/GhosttyKit.xcframework || { echo "worktree: run it in the main checkout, where the core is built"; exit 1; }
+	git fetch -q origin dev
+	git worktree add -b $(NAME) .worktrees/$(NAME) origin/dev
+	ln -s $(CURDIR)/macos/GhosttyKit.xcframework .worktrees/$(NAME)/macos/GhosttyKit.xcframework
+	ln -s $(CURDIR)/zig-out .worktrees/$(NAME)/zig-out
+
+live:
+	sh tools/stand/stand.sh $(STAND_APP)
 
 check:
 	cd macos && swiftlint lint --strict Sources/Features/Tarn Tests/Tarn
