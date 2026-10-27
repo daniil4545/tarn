@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import DEMO, Checks, app_page, server, show_pane
+from lib import DEMO, Checks, app_page, cmd, server, show_pane
 
 check = Checks()
 TERM = '.tabview:not([hidden]) .leaf[data-kind="term"]'
@@ -46,6 +46,69 @@ def ready(pg):
     pg.wait_for_selector("html[data-ready=true]")
 
 
+def folder_story(pg):
+    """docs/specs/workspace-folder.md: the outside-folder mark, the fixed folder, top tab prefix."""
+    out = pg.locator(f"{TAB}[data-tabid='t2'] .l2.out")
+    check(
+        "F1 an agent outside its workspace folder is marked; one inside is not",
+        out.count() == 1
+        and "Outside the tarn folder" in (out.get_attribute("title") or "")
+        and pg.locator(f"{TAB}[data-tabid='t1'] .out").count() == 0,
+    )
+    check(
+        "F2 a workspace without a folder never marks",
+        pg.locator(f"{TAB}[data-tabid='t6'] .out").count() == 0,
+    )
+    pg.locator("[data-wsh='w1']").first.click(button="right")
+    check(
+        "F3 the workspace menu has no Set Folder or Remove Folder: the folder is fixed",
+        pg.locator("[data-wsren='w1']").count() == 1
+        and pg.locator("[data-wsfolder], [data-wsunfolder]").count() == 0,
+    )
+    pg.keyboard.press("Escape")
+    cmd(pg, "tab.go", {"id": "t2"})
+    cmd(pg, "tab.new", {"ws": "w1"})
+    fresh = snap(pg)["workspaces"]["cur"]
+    check(
+        "F6 a new tab from a tab outside the folder starts in the workspace folder",
+        snap(pg)["workspaces"]["tabs"][fresh]["cwd"] == "~/code/tarn",
+    )
+    cmd(pg, "tab.close", {"id": fresh})
+
+    def agent_tab(cwd):
+        cmd(pg, "tab.new", {"ws": "w0", "cwd": cwd})
+        tab = snap(pg)["workspaces"]["cur"]
+        return tab, snap(pg)["workspaces"]["tabs"][tab]["layout"]["pane"]
+
+    def ws_of(tab):
+        return next(w["id"] for w in snap(pg)["workspaces"]["wss"] if tab in w["tabs"])
+
+    arrived, pane = agent_tab("~/code/tarn/docs")
+    cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
+    check(
+        "F7 an agent started in a project folder moves its tab to the end of that workspace, not marked manual",
+        snap(pg)["workspaces"]["wss"][0]["tabs"][-1] == arrived
+        and not snap(pg)["workspaces"]["tabs"][arrived].get("manual"),
+    )
+    placed, pane = agent_tab("~/code/tarn")
+    cmd(pg, "tab.move", {"id": placed, "ws": "w2"})
+    cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
+    check(
+        "F8 a tab moved by hand stays where the user put it when its agent starts",
+        ws_of(placed) == "w2" and snap(pg)["workspaces"]["tabs"][placed].get("manual") is True,
+    )
+    for tab in (arrived, placed):
+        cmd(pg, "tab.close", {"id": tab})
+    cmd(pg, "tab.go", {"id": "t1"})
+    cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
+    check(
+        "F5 with two or more workspaces a top tab starts with its workspace",
+        pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn ·"
+        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "No project ·",
+    )
+    cmd(pg, "config.reset", {"key": "tab-style"})
+
+
 def story(base):
     with app_page(base) as (pg, errors, requests):
         s = snap(pg)
@@ -53,8 +116,9 @@ def story(base):
             "E1 the demo opens on the seed: six tabs, three workspaces",
             len(s["workspaces"]["tabs"]) == 6 and len(s["workspaces"]["wss"]) == 3,
         )
+        folder_story(pg)
 
-        # type in the shell (Default workspace, tab 6)
+        # type in the shell (No project workspace, tab 6)
         show_pane(pg, "p6")
         pg.locator("[data-pane='p6'] canvas").first.click()
         until(pg, "p6", "%")

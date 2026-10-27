@@ -1,4 +1,5 @@
 import AppKit
+import GhosttyKit
 import OSLog
 
 /// A workspace and the tab windows in it, top to bottom.
@@ -273,16 +274,56 @@ final class WorkspaceRegistry {
         expirePendingTarget(of: tab)
     }
 
-    /// A new workspace with one new tab. False for a blank name.
+    /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for
+    /// a name any more (Q2); the model keeps the entry point.
     @discardableResult
     func createWorkspace(named name: String, from window: NSWindow) -> Bool {
+        openWorkspace(name: name, folder: nil, from: window)
+    }
+
+    /// A workspace for `folder` with one new tab that starts in it (D19). A folder this window's
+    /// set already has selects that workspace's first tab and creates nothing (Q1). False for a
+    /// path that is not absolute.
+    @discardableResult
+    func createWorkspace(folder: String, from window: NSWindow) -> Bool {
+        guard let path = WorkspaceFolder.standardized(folder) else {
+            Self.logger.error("workspace: folder not absolute value=\(folder, privacy: .public)")
+            return false
+        }
+        if selectFirstTab(inFolder: path, from: window) { return true }
+        // The name comes from the folder as picked: a symlink `proj` names the workspace `proj`.
+        let name = WorkspaceFolder.name(of: URL(fileURLWithPath: folder).standardized.path)
+        return openWorkspace(name: name, folder: path, from: window)
+    }
+
+    private func selectFirstTab(inFolder folder: String, from window: NSWindow) -> Bool {
+        let order = group(of: window).map(key(for:))
+        guard let set = book.set(of: key(for: window)),
+              let tab = set.firstTab(inFolder: folder, order: order),
+              let target = self.window(for: tab)
+        else { return false }
+        target.makeKeyAndOrderFront(nil)
+        return true
+    }
+
+    private func openWorkspace(name: String, folder: String?, from window: NSWindow) -> Bool {
         let tab = key(for: window)
         var created: Workspace.ID?
-        let changed = book.edit(tab) { created = $0.create(name: name) }
+        let changed = book.edit(tab) { created = $0.create(name: name, folder: folder) }
         guard let created else { return false }
         book.setPendingTarget(created, for: tab)
         publish(changed.map { [$0] } ?? [])
-        (window.windowController as? TerminalController)?.newTab(nil)
+        if let folder, let controller = window.windowController as? TerminalController {
+            // Ghostty's own path for a tab with a base config, inherited as Cmd+T inherits it
+            // (font size, tab context); only the working directory is the folder.
+            var config = controller.focusedSurface?.surface.map {
+                Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB))
+            } ?? Ghostty.SurfaceConfiguration()
+            config.workingDirectory = folder
+            _ = TerminalController.newTab(controller.ghostty, from: window, withBaseConfig: config)
+        } else {
+            (window.windowController as? TerminalController)?.newTab(nil)
+        }
         expirePendingTarget(of: tab)
         return true
     }

@@ -61,19 +61,30 @@ function render() {
   }
   const key = (id) => { const i = order.indexOf(id); return i < 8 ? `⌘${i + 1}` : i === order.length - 1 ? "⌘9" : ""; };
   const wide = read("config")["tab-rows"] === "wide";
-  const row = (id) => {
+  const row = (w) => (id) => {
     const t = s.tabs[id], status = tabStatus(t, reg);
-    const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
+    const out = isAgentTab(t, reg) && outsideFolder(w, t.cwd);
+    const mark = out && !wide ? `<span class="out" title="Outside the ${esc(w.name)} folder">!</span>` : "";
+    const line = `<span class="t">${esc(t.title)}</span>${mark}${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
     const attrs = `role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
     if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
-    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div><div class="l2">${esc(detail(t, reg))}</div></div></div>`;
+    const l2 = out
+      ? `<div class="l2 out" title="Outside the ${esc(w.name)} folder">! ${esc(detail(t, reg))}</div>`
+      : `<div class="l2">${esc(detail(t, reg))}</div>`;
+    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
   sb.innerHTML = top + s.wss.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
-    const head = `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
-    return head + (w.collapsed ? "" : w.tabs.map(row).join(""));
+    const head = `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? `${esc(w.folder)} · ` : ""}${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
+    return head + (w.collapsed ? "" : w.tabs.map(row(w)).join(""));
   }).join("") + '<button class="tab add" id="wsNew">+ New workspace</button>';
+}
+
+// An agent outside the folder of its workspace (docs/specs/workspace-folder.md D21). A workspace
+// with no folder never marks.
+function outsideFolder(ws, cwd) {
+  return Boolean(ws.folder) && cwd !== ws.folder && !cwd.startsWith(`${ws.folder}/`);
 }
 
 // The second line of a wide row: the folder and how long the agent is in its state. The icon
@@ -106,15 +117,21 @@ function onClick(e) {
   bus.cmd("tab.go", { id: dataset.tabid });
 }
 
+// The app shows the macOS folder panel; the browser has none, so the demo asks for a path.
+// A folder another workspace already has selects that workspace (docs/specs/workspace-folder.md Q1).
 function newWorkspace() {
-  const name = prompt("Workspace name")?.trim();
-  if (name) bus.cmd("ws.new", { name });
+  const folder = prompt("Folder for the new workspace", "~/code")?.trim().replace(/\/+$/, "");
+  if (!folder) return;
+  const { wss } = read("workspaces"), open = wss.find((w) => w.folder === folder && w.tabs.length);
+  if (open) return bus.cmd("tab.go", { id: open.tabs[0] });
+  bus.cmd("ws.new", { name: folder.slice(folder.lastIndexOf("/") + 1) || folder, folder });
 }
 
 function renameWorkspace(id) {
   const ws = read("workspaces").wss.find((w) => w.id === id), name = prompt("Workspace name", ws.name)?.trim();
   if (name) bus.cmd("ws.rename", { id, name });
 }
+
 
 function deleteWorkspace(id) {
   const { wss } = read("workspaces"), at = wss.findIndex((w) => w.id === id), into = wss[at > 0 ? at - 1 : 1];

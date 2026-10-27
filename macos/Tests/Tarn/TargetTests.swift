@@ -69,7 +69,7 @@ struct TargetTests {
         #expect(book.set(of: t[0])?.workspace(fresh) != nil)
 
         let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["Default", "Notes"])
+        #expect(book.names([t[0], t[1], t[2]]) == ["No project", "Notes"])
         #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
     }
 

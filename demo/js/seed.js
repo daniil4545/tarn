@@ -3,16 +3,16 @@
 export const WORKSPACES = {
   tabs: {
     t1: { id: "t1", title: "Claude · spec", cwd: "~/code/tarn", layout: { pane: "p1" } },
-    t2: { id: "t2", title: "Claude · review", cwd: "~/code/tarn", layout: { pane: "p2" } },
+    t2: { id: "t2", title: "Claude · review", cwd: "~/code", layout: { pane: "p2" } },
     t3: { id: "t3", title: "git · tarn", cwd: "~/code/tarn", layout: { pane: "p3" } },
     t4: { id: "t4", title: "ssh staging", cwd: "root@staging:~", layout: { pane: "p4" } },
     t5: { id: "t5", title: "Claude · website", cwd: "~/code/website", layout: { pane: "p5" } },
     t6: { id: "t6", title: "~", cwd: "~", layout: { pane: "p6" } },
   },
   wss: [
-    { id: "w1", name: "tarn", tabs: ["t1", "t2", "t3", "t4"] },
-    { id: "w2", name: "website", tabs: ["t5"] },
-    { id: "w0", name: "Default", tabs: ["t6"] },
+    { id: "w1", name: "tarn", folder: "~/code/tarn", tabs: ["t1", "t2", "t3", "t4"] },
+    { id: "w2", name: "website", folder: "~/code/website", tabs: ["t5"] },
+    { id: "w0", name: "No project", tabs: ["t6"] },
   ],
   cur: "t1",
 };

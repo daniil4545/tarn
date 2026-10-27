@@ -572,15 +572,23 @@ def run(base):
         check("W10l a tab let go below the rows goes to the end of the last workspace", ws_tabs(last_ws)[-1] == "t2", str(ws_tabs(last_ws)))
         after_t2 = order[order.index("t2") + 1 :]
         cmd(pg, "tab.move", {"id": "t2", "ws": "w1", "before": after_t2[0] if after_t2 else None})
-        reply["answers"] = iter(["home"])
+        reply["answers"] = iter(["~/code/home/"])
         pg.click("#wsNew")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
         check(
-            "W11 a new workspace asks a name only, goes last and starts with one tab",
+            "W11 a new workspace asks a folder, is named after it, goes last and starts in it with one tab",
             home is not None
+            and home.get("folder") == "~/code/home"
             and len(home["tabs"]) == 1
             and snap()["wss"][-1]["name"] == "home"
-            and cur() == home["tabs"][0],
+            and cur() == home["tabs"][0]
+            and snap()["tabs"][home["tabs"][0]]["cwd"] == "~/code/home",
+        )
+        reply["answers"] = iter(["~/code/home"])
+        pg.click("#wsNew")
+        check(
+            "W11a a folder that a workspace already has selects it instead of a second one",
+            sum(w.get("folder") == "~/code/home" for w in snap()["wss"]) == 1,
         )
         n(f".wsh[data-wsh='{home['id']}']").click(button="right")
         pg.click("#ctx [data-wsdel]")
@@ -591,7 +599,7 @@ def run(base):
         for tab_id in ws_tabs("w0"):
             pg.click(f"{TAB}[data-tabid='{tab_id}'] .x")
         check(
-            "W13 closing the last tab of Default closes Default like any workspace",
+            "W13 closing the last tab of No project closes it like any workspace",
             count(".wsh") == 2 and count(".wsh[data-wsh='w0']") == 0,
         )
         drag(n(".wsh[data-wsh='w2']"), n(".wsh[data-wsh='w1']"), 0.5, 0.5)
@@ -805,7 +813,7 @@ def run(base):
 
         # ---- workspace close and window ----
         heads = count(".wsh")
-        pg.evaluate("window.prompt = (q) => (q === 'Workspace name' ? 'work' : '')")
+        pg.evaluate("window.prompt = (q) => (q === 'Folder for the new workspace' ? '~/work' : '')")
         pg.click("#wsNew")
         check(
             "O1 a new workspace shows its header with one tab",
@@ -830,9 +838,9 @@ def run(base):
         )
         pg.keyboard.press("Meta+n")
         check(
-            "O5 a new window starts with Default and one tab",
+            "O5 a new window starts with No project and one tab",
             [w["name"] + ":" + str(len(w["tabs"])) for w in snap()["wss"]]
-            == ["Default:1"]
+            == ["No project:1"]
             and count(".wsh") == 1,
         )
 
