@@ -4,6 +4,10 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ## [Unreleased]
 
+### Added
+
+- Settings > Modules: switch Sidebar, File viewer, Workspaces, Permission card and Notifications on or off at once; a Claude Code line with its version and checks (#34).
+
 ### Changed
 
 - A tab dragged in the sidebar leaves the list, and the rows slide apart to a gap where it will land, as in Warp; no accent line for tabs.

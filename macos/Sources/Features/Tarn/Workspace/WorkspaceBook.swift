@@ -28,9 +28,15 @@ struct WorkspaceBook {
         /// The set as it was just before the tab left.
         let set: WorkspaceSet
         let workspace: Workspace
+        /// The tab was placed by hand (D22); an undo keeps the mark.
+        let manual: Bool
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
+    /// Workspaces are off: new tabs join "~" and no tab or workspace moves (`docs/modules/workspaces.md`).
+    var frozen = false
+    /// Workspaces came back on: the next pass regroups the tabs instead of repairing membership.
+    var regroupPending = false
     private var setOf: [TabKey: UUID] = [:]
     /// Tabs seen in a group that held every live tab of their set. A settled tab that shows
     /// up in a group without its set has left it. Restored tabs start unsettled: AppKit
@@ -79,13 +85,15 @@ struct WorkspaceBook {
         // does not depend on the order of the groups (AppKit lists windows front to back).
         let groups = groups.filter { !$0.tabs.isEmpty }
         let winners = winningSets(for: groups)
+        let regroup = regroupPending && !frozen
+        regroupPending = false
         for (group, winner) in zip(groups, winners) {
-            reconcile(group, winner: winner, into: &outcome)
+            reconcile(group, winner: winner, regroup: regroup, into: &outcome)
         }
         return outcome
     }
 
-    private mutating func reconcile(_ group: Group, winner: UUID, into outcome: inout Outcome) {
+    private mutating func reconcile(_ group: Group, winner: UUID, regroup: Bool, into outcome: inout Outcome) {
         let members = Set(group.tabs)
         var touched = Set<UUID>()
 
@@ -100,7 +108,7 @@ struct WorkspaceBook {
             let oldTabs = live.filter { setOf[$0] == old }
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
                 // Merge All Windows: the loser's workspaces come whole, with their names. A window
-                // that holds only its stock `Default` has nothing to keep: it is the same as a tab
+                // that holds only its stock "No project" has nothing to keep: it is the same as a tab
                 // dragged in and joins the target.
                 won.absorb(loser)
                 sets[winner] = won
@@ -125,7 +133,14 @@ struct WorkspaceBook {
         for tab in fresh { setOf[tab] = winner }
 
         let previous = (seenOrder[winner] ?? []).filter(members.contains)
-        outcome.reorders += set.reconcile(previous: previous, current: group.tabs, target: target)
+        if frozen {
+            set.reconcileFrozen(current: group.tabs)
+        } else if regroup {
+            set.reconcileFrozen(current: group.tabs)
+            outcome.reorders += set.regroup(order: group.tabs)
+        } else {
+            outcome.reorders += set.reconcile(previous: previous, current: group.tabs, target: target)
+        }
         if !fresh.isEmpty {
             if let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
             pendingTarget[winner] = nil
@@ -143,9 +158,11 @@ struct WorkspaceBook {
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
     }
 
-    /// A set that is one unrenamed `Default`: a window nobody has set up.
-    private func isPlain(_ set: WorkspaceSet) -> Bool {
-        set.workspaces.count == 1 && set.workspaces[0].name == WorkspaceSet.defaultName
+    /// A set that is one unrenamed "No project" (or the older "Default") with no folder: a
+    /// window nobody has set up.
+    func isPlain(_ set: WorkspaceSet) -> Bool {
+        guard set.workspaces.count == 1, set.workspaces[0].folder == nil else { return false }
+        return [WorkspaceSet.defaultName, WorkspaceSet.legacyDefaultName].contains(set.workspaces[0].name)
     }
 
     /// The set each group follows. A set belongs to the group that holds most of its live tabs; a
@@ -189,12 +206,23 @@ struct WorkspaceBook {
         return set.runs(order: group.tabs).first?.workspace.id ?? set.workspaces.first?.id ?? UUID()
     }
 
+    /// The folder of the workspace a new surface lands in (D20). A tab: the workspace
+    /// `targetWorkspace` picks for the window's `order`, as the membership pass will see it (the
+    /// selected tab is then the new one, unknown here), so folder and membership agree. A split:
+    /// the workspace of `tab`; the pending target is not read.
+    func folderForNewSurface(from tab: TabKey, order: [TabKey], split: Bool) -> String? {
+        guard let id = setOf[tab], let set = sets[id] else { return nil }
+        if split { return set.workspace(of: tab)?.folder }
+        let target = targetWorkspace(in: set, group: Group(tabs: order, selected: nil), winner: id)
+        return set.workspace(target)?.folder
+    }
+
     // MARK: Closing and coming back
 
     /// Notes a tab that is about to close. Returns what is needed to put it back.
     mutating func closing(_ tab: TabKey) -> ClosedTab? {
         guard let id = setOf[tab], let set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
-        let closed = ClosedTab(tab: tab, set: set, workspace: workspace)
+        let closed = ClosedTab(tab: tab, set: set, workspace: workspace, manual: set.isManual(tab))
         var outcome = Outcome()
         closeQuietly(tab, into: &outcome)
         live.remove(tab)
@@ -202,7 +230,7 @@ struct WorkspaceBook {
     }
 
     /// Puts a reopened tab back where `closed` says: its set (recreated when gone, with the
-    /// names and fold kept but no empty `Default`) and its workspace (recreated when deleted).
+    /// names and fold kept but no empty "No project") and its workspace (recreated when deleted).
     mutating func reinsert(_ tab: TabKey, from closed: ClosedTab) {
         let id = closed.set.id
         var set = sets[id] ?? WorkspaceSet(id: id, revision: closed.set.revision)
@@ -210,6 +238,7 @@ struct WorkspaceBook {
             set.add(closed.workspace)
         }
         set.join(tab, to: closed.workspace.id)
+        if closed.manual { set.markManual(tab) }
         sets[id] = set
         setOf[tab] = id
         settled.insert(tab)

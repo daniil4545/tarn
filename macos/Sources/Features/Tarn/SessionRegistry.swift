@@ -225,6 +225,12 @@ final class SessionRegistry {
     /// Shows a banner (surface, title, body); tests replace it.
     var deliver: (UUID, String, String) -> Void = { Attention.show(surface: $0, title: $1, body: $2) }
 
+    /// The module state the registry follows; tests replace it.
+    var isOn: (TarnModule) -> Bool = { TarnModules.isOn($0) }
+
+    /// A hook event reached the registry since tarn started (the "events" check of Settings).
+    private(set) var eventsSeen = false
+
     /// When a working surface first looked idle by its own signals (Esc gives no event).
     private var idleSince: [UUID: Date] = [:]
 
@@ -237,6 +243,7 @@ final class SessionRegistry {
                 return
             }
             if ViewerRouter.handleCommand(message, reply: reply) { return }
+            if AgentCommands.handle(message, reply: reply) { return }
             if AttentionCommands.handle(message, reply: reply) { return }
             self?.receive(message, reply: reply)
         }
@@ -271,11 +278,13 @@ final class SessionRegistry {
     /// Applies one hook event to the session of `surface`.
     func process(_ name: String, _ event: [String: Any], message: [String: Any], reply: ControlSocket.Reply?, surface: SurfaceContext) {
         let surfaceID = surface.id
+        eventsSeen = true
         var waiting = pending[surfaceID] ?? []
         if name == "PermissionRequest", message["reply"] as? Bool == true, let reply {
             let request = AgentSession.request(from: event)
             // The card has no buttons for several questions or a multi-select; the dialog answers.
-            if request.kind == .question && request.options.isEmpty {
+            // With the card off the agent shows its own dialog at once.
+            if !isOn(.permissionCard) || (request.kind == .question && request.options.isEmpty) {
                 reply.send(Data())
             } else {
                 waiting.append(PendingAnswer(request: request, input: event["tool_input"] as? [String: Any] ?? [:], reply: reply))
@@ -415,6 +424,7 @@ final class SessionRegistry {
     }
 
     func notify(_ text: String, surface: SurfaceContext) -> String? {
+        guard isOn(.notifications) else { return "notifications are off in Settings" }
         let note = Attention.trimmed(note: text)
         guard !note.isEmpty else { return "empty text" }
         let old = sessions[surface.id] ?? AgentSession(surfaceID: surface.id)
@@ -433,10 +443,11 @@ final class SessionRegistry {
 
     /// True when a live agent session owns the surface, so its OSC 9/777 notifications are dropped.
     func suppresses(_ surfaceID: UUID) -> Bool {
-        !(sessions[surfaceID]?.agentSessionID.isEmpty ?? true)
+        isOn(.notifications) && !(sessions[surfaceID]?.agentSessionID.isEmpty ?? true)
     }
 
     private func raise(_ surface: SurfaceContext, body: String) {
+        guard isOn(.notifications) else { return }
         Self.logger.info("raised for \(surface.id, privacy: .public)")
         deliver(surface.id, ProjectInfo.resolve(cwd: surface.pwd).name, body)
     }
@@ -448,6 +459,18 @@ final class SessionRegistry {
     }
 
     // MARK: Pending answers
+
+    /// The permission card switched off (or the sidebar did): every waiting hook gets the empty
+    /// reply, so the agent shows its own dialog, and no card keeps its buttons.
+    func permissionCardChanged() {
+        guard !isOn(.permissionCard) else { return }
+        for id in Array(pending.keys) { closePending(id) }
+        for (id, var session) in sessions where session.answerable {
+            session.answerable = false
+            sessions[id] = session
+        }
+        NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
+    }
 
     private func closePending(_ id: UUID) {
         pending[id]?.forEach { $0.reply.send(Data()) }
@@ -501,11 +524,15 @@ final class SessionRegistry {
     /// Surfaces in screen order: windows in tab groups, tabs left to right, splits in tree order,
     /// then windows outside any tab group such as the quick terminal.
     static func orderedSurfaces() -> [Ghostty.SurfaceView] {
-        let windows = screenOrder(
+        orderedWindows().flatMap { ($0.windowController as? BaseTerminalController).map { Array($0.surfaceTree) } ?? [] }
+    }
+
+    /// Terminal windows in the order of `orderedSurfaces`.
+    static func orderedWindows() -> [NSWindow] {
+        screenOrder(
             terminals: TerminalController.all.compactMap(\.window),
             all: NSApp.windows.filter { $0.windowController is BaseTerminalController }
         ) { $0.tabGroup?.windows ?? [$0] }
-        return windows.flatMap { ($0.windowController as? BaseTerminalController).map { Array($0.surfaceTree) } ?? [] }
     }
 
     /// Terminal windows first, each followed by the rest of its tab group, then every other window.

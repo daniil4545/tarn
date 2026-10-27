@@ -66,7 +66,8 @@ flowchart LR
 | Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works |
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works |
 | Browser demo | static page that mimics the window; not part of the app | [demo.md](modules/demo.md) | works |
-| Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket commands `ls` and `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
+| Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket command `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
+| Agent commands | socket commands on panes of the caller's workspace: `ls`, `new` | [agent-commands.md](modules/agent-commands.md) | works |
 
 Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names its suites.
 
@@ -111,8 +112,9 @@ One environment: the local macOS app. One config file of ours: `~/.config/tarn/g
 | `TARN_SURFACE` | tells hooks which surface they run in | the app, for each surface shell |
 | socket path | `~/Library/Application Support/tarn/tarn.sock` | constant in `ControlSocket.path` |
 | sidebar width, collapsed | layout | `UserDefaults` (`TarnSidebarWidth`, `TarnSidebarCollapsed`) |
-| tab style `TarnTabStyle`: `sidebar` (default) or `top` | sidebar or native tab bar | settings window, `UserDefaults` |
-| `TarnFileViewer` | the file viewer on or off, default on | settings window, `UserDefaults` |
+| module Sidebar, key `TarnTabStyle`: `sidebar` (default, on) or `top` (off) | sidebar or native tab bar | Settings > Modules, `UserDefaults` |
+| module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules and File Viewer, `UserDefaults` |
+| modules Workspaces, Permission card, Notifications, keys `TarnModule.workspaces`, `TarnModule.permissionCard`, `TarnModule.notifications` | default on; Permission card needs Sidebar; a wrong type counts as on and is logged (category `settings`) | Settings > Modules, `UserDefaults`; launch arguments such as `-TarnModule.workspaces NO` win without writing (the bench uses them) |
 | plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.2.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
 
 Logs: `os_log`, subsystem `tarn`, categories `registry`, `socket`, `viewer`, `attention`, `settings`, `workspace`; view in Console.app. Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (3600 s).
@@ -157,6 +159,8 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 28 | `macos/Tests/Update/UpdaterOffTests.swift` | tests: the feed is empty, checking for updates leaves the state idle | the invariant of row 27 stays checked |
 | 29 | `macos/Assets.xcassets/AppIcon.appiconset`, the PNG files of `AppIconImage.imageset` | tarn icon replaces Ghostty's | the app has its own icon |
 | 30 | `macos/Sources/App/MainMenu.xib` | File menu: item "New Workspace", key equivalent `T` (Shift+Cmd+T), action `newWorkspace:` to the first responder, after "New Tab" | Shift+Cmd+T opens a new workspace; `tarn-defaults.conf` unbinds Ghostty's `super+shift+t=undo`, so the key reaches the menu, and undo keeps Cmd+Z; a user `keybind` on the key wins |
+| 31 | `macos/Sources/App/AppDelegate.swift` | in `ghosttyNewTab`: `config` is `var`, then `config = MainActor.assumeIsolated { WorkspaceRegistry.shared.prepare(config, from: window, split: false) }` | a new tab in a workspace with a folder starts per D20 |
+| 32 | `macos/Sources/Features/Terminal/BaseTerminalController.swift` | in `ghosttyDidNewSplit`: `config` is `var`, then `config = WorkspaceRegistry.shared.prepare(config, from: window, split: true)` | a new split starts per D20 |
 Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows are numbered in the order they were added, and the table is sorted by number. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).

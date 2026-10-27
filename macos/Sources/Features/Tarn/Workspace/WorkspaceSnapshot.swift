@@ -10,6 +10,8 @@ struct WorkspaceSnapshot: Codable, Equatable {
         var id: UUID
         var name: String
         var collapsed: Bool
+        /// Missing in snapshots saved before folders; decodes as nil.
+        var folder: String?
         /// In tab order.
         var tabKeys: [TabKey]
     }
@@ -25,6 +27,8 @@ struct WorkspaceSnapshot: Codable, Equatable {
     var tabKey: TabKey
     /// In run order.
     var workspaces: [Entry]
+    /// Tabs placed by hand (D22). Missing in snapshots saved before marks; decodes as empty.
+    var manual: [TabKey] = []
 
     /// The set this snapshot describes. A tab listed twice stays in the first workspace;
     /// a workspace without a tab is dropped.
@@ -37,9 +41,9 @@ struct WorkspaceSnapshot: Codable, Equatable {
                 members[key] = entry.id
                 any = true
             }
-            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed)) }
+            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: entry.folder)) }
         }
-        return WorkspaceSet(id: setID, workspaces: kept, members: members, revision: revision)
+        return WorkspaceSet(id: setID, workspaces: kept, members: members, manual: Set(manual), revision: revision)
     }
 
     func encoded() throws -> Data {
@@ -55,6 +59,16 @@ struct WorkspaceSnapshot: Codable, Equatable {
 }
 
 extension WorkspaceSnapshot {
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        setID = try container.decode(UUID.self, forKey: .setID)
+        revision = try container.decode(Int.self, forKey: .revision)
+        tabKey = try container.decode(TabKey.self, forKey: .tabKey)
+        workspaces = try container.decode([Entry].self, forKey: .workspaces)
+        manual = try container.decodeIfPresent([TabKey].self, forKey: .manual) ?? []
+    }
+
     /// `order` is the native tab order of the window's group. Members that are not in it
     /// (a window still being restored) follow their workspace's live tabs.
     init(set: WorkspaceSet, tabKey: TabKey, order: [TabKey]) {
@@ -70,15 +84,19 @@ extension WorkspaceSnapshot {
                 id: run.workspace.id,
                 name: run.workspace.name,
                 collapsed: run.workspace.collapsed,
+                folder: run.workspace.folder,
                 tabKeys: run.tabs + extra.sorted { $0.uuidString < $1.uuidString }
             )
         }
         for workspace in set.workspaces where !shown.contains(workspace.id) {
             let keys = set.tabs(in: workspace.id).sorted { $0.uuidString < $1.uuidString }
             if !keys.isEmpty {
-                entries.append(Entry(id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, tabKeys: keys))
+                entries.append(Entry(
+                    id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, folder: workspace.folder, tabKeys: keys
+                ))
             }
         }
         self.workspaces = entries
+        self.manual = set.manual.sorted { $0.uuidString < $1.uuidString }
     }
 }

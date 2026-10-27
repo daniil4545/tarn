@@ -8,6 +8,7 @@ import { terminals } from "./layout.js";
 import { tabStatus, workspaceStatus, isAgentTab } from "./tab-status.js";
 import { esc } from "./esc.js";
 import { clock } from "./clock.js";
+import { isOn } from "./modules.js";
 
 export const AGENT = '<svg class="agent" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.8 6.2L20 6l-4.2 4.9L22 12l-6.2 1.1L20 18l-6.2-2.2L12 22l-1.8-6.2L4 18l4.2-4.9L2 12l6.2-1.1L4 6l6.2 2.2z"/></svg>';
 const TERM = '<svg class="agent" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg>';
@@ -47,33 +48,51 @@ function render() {
   sb.style.width = ui.rail ? "" : `${ui.width}px`;
   const label = ui.rail ? "Show Sidebar" : "Hide Sidebar";
   const button = (id, title, glyph) => `<button class="ib" id="${id}" title="${title}" aria-label="${title}">${glyph}</button>`;
-  const viewer = button("sbViewer", "Toggle File Viewer (Cmd+B)", VIEWER);
+  // Modules: the viewer button follows File viewer, New Workspace follows Workspaces.
+  const grouped = isOn("workspaces");
+  sb.classList.toggle("flatlist", !grouped);
+  const viewer = isOn("viewer") ? button("sbViewer", "Toggle File Viewer (Cmd+B)", VIEWER) : "";
+  const newWs = grouped ? button("wsNewTop", "New workspace (Cmd+Shift+T)", NEWWS) : "";
   const top = ui.rail
     ? `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${viewer}${button("sbNew", "New tab", "+")}</div>`
-    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}<span class="grow"></span>${viewer}${button("wsNewTop", "New workspace (Cmd+Shift+T)", NEWWS)}${button("sbNew", "New tab", "+")}</div>`;
+    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${newWs}<span class="grow"></span>${viewer}${button("sbNew", "New tab", "+")}</div>`;
   const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
-    sb.innerHTML = top + s.wss.map((w) => w.tabs.map((id) => {
+    sb.innerHTML = top + (grouped ? s.wss : [{ tabs: order }]).map((w) => w.tabs.map((id) => {
       const t = s.tabs[id];
       return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.title)}">${icon(t)}${dot(tabStatus(t, reg))}</div>`;
-    }).join("")).join('<div class="sep"></div>');
+    }).join("")).join(grouped ? '<div class="sep"></div>' : "");
     return;
   }
   const key = (id) => { const i = order.indexOf(id); return i < 8 ? `⌘${i + 1}` : i === order.length - 1 ? "⌘9" : ""; };
   const wide = read("config")["tab-rows"] === "wide";
-  const row = (id) => {
+  const row = (w) => (id) => {
     const t = s.tabs[id], status = tabStatus(t, reg);
-    const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
+    const out = isAgentTab(t, reg) && outsideFolder(w, t.cwd);
+    const mark = out && !wide ? `<span class="out" title="Outside the ${esc(w.name)} folder">!</span>` : "";
+    const line = `<span class="t">${esc(t.title)}</span>${mark}${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
     const attrs = `role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
     if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
-    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div><div class="l2">${esc(detail(t, reg))}</div></div></div>`;
+    const l2 = out
+      ? `<div class="l2 out" title="Outside the ${esc(w.name)} folder">! ${esc(detail(t, reg))}</div>`
+      : `<div class="l2">${esc(detail(t, reg))}</div>`;
+    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
-  sb.innerHTML = top + s.wss.map((w) => {
+  // Flat list: one hidden header and every tab in list order, whatever its frozen group.
+  const lists = grouped ? s.wss : [{ id: s.wss[0]?.id, name: "", tabs: order }];
+  sb.innerHTML = top + lists.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
-    const head = `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
-    return head + (w.collapsed ? "" : w.tabs.map(row).join(""));
-  }).join("") + '<button class="tab add" id="wsNew">+ New workspace</button>';
+    // Flat list: the header stays hidden so the drag code finds the owner of a row.
+    const head = !grouped ? `<div class="wsh flat" data-wsh="${w.id}" aria-hidden="true"></div>` : `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? `${esc(w.folder)} · ` : ""}${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
+    return head + (w.collapsed && grouped ? "" : w.tabs.map(row(w)).join(""));
+  }).join("") + (grouped ? '<button class="tab add" id="wsNew">+ New workspace</button>' : '<div class="flatend" id="wsNew" aria-hidden="true"></div>');
+}
+
+// An agent outside the folder of its workspace (docs/specs/workspace-folder.md D21). A workspace
+// with no folder never marks.
+function outsideFolder(ws, cwd) {
+  return Boolean(ws.folder) && cwd !== ws.folder && !cwd.startsWith(`${ws.folder}/`);
 }
 
 // The second line of a wide row: the folder and how long the agent is in its state. The icon
@@ -106,15 +125,22 @@ function onClick(e) {
   bus.cmd("tab.go", { id: dataset.tabid });
 }
 
+// The app shows the macOS folder panel; the browser has none, so the demo asks for a path.
+// A folder another workspace already has selects that workspace (docs/specs/workspace-folder.md Q1).
 function newWorkspace() {
-  const name = prompt("Workspace name")?.trim();
-  if (name) bus.cmd("ws.new", { name });
+  if (!isOn("workspaces")) return;
+  const folder = prompt("Folder for the new workspace", "~/code")?.trim().replace(/\/+$/, "");
+  if (!folder) return;
+  const { wss } = read("workspaces"), open = wss.find((w) => w.folder === folder && w.tabs.length);
+  if (open) return bus.cmd("tab.go", { id: open.tabs[0] });
+  bus.cmd("ws.new", { name: folder.slice(folder.lastIndexOf("/") + 1) || folder, folder });
 }
 
 function renameWorkspace(id) {
   const ws = read("workspaces").wss.find((w) => w.id === id), name = prompt("Workspace name", ws.name)?.trim();
   if (name) bus.cmd("ws.rename", { id, name });
 }
+
 
 function deleteWorkspace(id) {
   const { wss } = read("workspaces"), at = wss.findIndex((w) => w.id === id), into = wss[at > 0 ? at - 1 : 1];
@@ -128,7 +154,7 @@ function onContextMenu(e) {
   const { wss } = read("workspaces");
   if (row) {
     const id = row.dataset.tabid, here = wss.find((w) => w.tabs.includes(id));
-    const moves = wss.filter((w) => w !== here).map((w) => ({ label: `Move to ${w.name}`, attrs: `data-mmove="${id}" data-to="${w.id}"`, run: () => bus.cmd("tab.move", { id, ws: w.id }) }));
+    const moves = !isOn("workspaces") ? [] : wss.filter((w) => w !== here).map((w) => ({ label: `Move to ${w.name}`, attrs: `data-mmove="${id}" data-to="${w.id}"`, run: () => bus.cmd("tab.move", { id, ws: w.id }) }));
     showMenu([...moves, { label: "Close tab", attrs: `data-tabclose="${id}"`, run: () => bus.cmd("tab.close", { id }) }], e);
   } else {
     const id = head.dataset.wsh;

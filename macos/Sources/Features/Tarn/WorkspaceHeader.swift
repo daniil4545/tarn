@@ -66,12 +66,19 @@ struct WorkspaceHeader: View {
                     model.drop(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
                 },
                 dragEnded: { _, _ in model.dragExit() },
-                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0
+                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0,
+                toolTip: Self.tip(group)
             )
         )
         .accessibilityAddTraits(.isButton)
         .accessibilityLabel(group.workspace.collapsed ? "Expand \(group.workspace.name)" : "Collapse \(group.workspace.name)")
         .accessibilityAction { model.toggleFold(group) }
+    }
+
+    /// The folder with `~` for home, and the number of tabs (the demo's tooltip).
+    static func tip(_ group: SidebarModel.Group) -> String {
+        let count = "\(group.tabs.count) tab\(group.tabs.count == 1 ? "" : "s")"
+        return group.workspace.folder.map { "\(WorkspaceFolder.display($0)) \u{B7} \(count)" } ?? count
     }
 
     /// A workspace dropped after every workspace draws its line under a folded last header.
@@ -89,7 +96,7 @@ func dropLine(_ isShown: Bool) -> some View {
         .allowsHitTesting(false)
 }
 
-/// The sheets of the workspace commands: a name, and a delete confirmation.
+/// The sheets of the workspace commands: a folder, a name, and a delete confirmation.
 @MainActor
 enum WorkspacePrompt {
     /// Asks for a name; `done` gets the trimmed text of an OK, never a blank one.
@@ -119,11 +126,31 @@ enum WorkspacePrompt {
         }
     }
 
-    /// Asks for a name and creates the workspace with one new tab in `window`.
+    /// Asks for a folder in a sheet and opens a workspace for it (D19). Cancel does nothing.
     static func newWorkspace(in window: NSWindow) {
-        askName(title: "New Workspace", message: "The workspace opens with one new tab.", initial: "", in: window) { [weak window] name in
+        guard TarnModules.isOn(.workspaces) else { return }
+        chooseFolder(title: "New Workspace", message: "Choose the project folder. The workspace opens with one new tab there.", in: window) { [weak window] folder in
             guard let window else { return }
-            WorkspaceRegistry.shared.createWorkspace(named: name, from: window)
+            WorkspaceRegistry.shared.createWorkspace(folder: folder, from: window)
+        }
+    }
+
+    /// The folder panel as a sheet; it starts in the folder of the current tab.
+    private static func chooseFolder(title: String, message: String, in window: NSWindow, done: @escaping (String) -> Void) {
+        let panel = NSOpenPanel()
+        panel.title = title
+        panel.message = message
+        panel.prompt = "Choose"
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        if let start = (window.windowController as? TerminalController)?.focusedSurface?.workingDirectory {
+            panel.directoryURL = URL(fileURLWithPath: start, isDirectory: true)
+        }
+        panel.beginSheetModal(for: window) { response in
+            guard response == .OK, let url = panel.url else { return }
+            done(url.path)
         }
     }
 

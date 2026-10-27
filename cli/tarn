@@ -1,9 +1,13 @@
 #!/bin/sh
 # tarn: client of the running tarn app (docs/spec.md 2.2, 11). One JSON line to the control
-# socket, one back. Errors: stderr "tarn: <text>", exit 1, nothing on stdout.
+# socket, one back. Errors: stderr "tarn: <text>", nothing on stdout, exit 1 or the "code" of the
+# reply (4: no pane matched, docs/specs/agent-cli.md 4).
 #   tarn open <path>        open a text file in the viewer; never moves focus
-#   tarn ls [--json]        list sessions
+#   tarn ls [--json]        list the terminal panes of this workspace
 #   tarn notify <text>      mark this session and notify the user; never moves focus
+#   tarn new [--right] [--cwd D] -- <cmd...>
+#                           a split below this pane (right with --right) running the command;
+#                           prints its pane id; never moves focus
 # TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer.
 LC_ALL=C
 export LC_ALL
@@ -13,8 +17,17 @@ fail() {
   exit 1
 }
 
+# Prints the error of the reply in $reply and exits with its "code", 1 when it has none.
+refused() {
+  text=$(json_field error)
+  # Keys are sorted, so "code" is the first one; a later match could sit inside the text.
+  code=$(printf '%s' "$reply" | sed -n 's/^{"code":\([0-9][0-9]*\),.*/\1/p')
+  printf 'tarn: %s\n' "$text" >&2
+  exit "${code:-1}"
+}
+
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text>"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new [--right] [--cwd D] -- <cmd...>"
 }
 
 # Prints $1 as a JSON string.
@@ -84,13 +97,13 @@ ask() {
   [ -n "$reply" ] || fail "no answer from tarn"
   case $reply in
     *'"ok":true'*) return 0 ;;
-    *'"error":"'*) fail "$(json_field error)" ;;
+    *'"error":"'*) refused ;;
     *) fail "bad answer from tarn" ;;
   esac
 }
 
 need_surface() {
-  [ -n "$TARN_SURFACE" ] || fail "TARN_SURFACE is not set (run inside a tarn surface)"
+  [ -n "$TARN_SURFACE" ] || fail "not in a tarn tab"
 }
 
 [ $# -gt 0 ] || usage
@@ -107,15 +120,54 @@ case $cmd in
     ask "{\"version\":1,\"cmd\":\"open\",\"surface\":$(json_str "$TARN_SURFACE"),\"path\":$(json_str "$path")}"
     ;;
   ls)
+    need_surface
     if [ $# -eq 0 ]; then
-      ask '{"version":1,"cmd":"ls","json":false}'
+      ask "{\"version\":1,\"cmd\":\"ls\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":false}"
       json_field text
     elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
-      ask '{"version":1,"cmd":"ls","json":true}'
+      ask "{\"version\":1,\"cmd\":\"ls\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":true}"
       printf '%s\n' "$reply"
     else
       usage
     fi
+    ;;
+  new)
+    need_surface
+    right=false
+    cwd=
+    while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+      case $1 in
+        --right) right=true ;;
+        --cwd)
+          [ $# -gt 1 ] || usage
+          shift
+          case $1 in
+            /*) cwd=$1 ;;
+            *) cwd=${PWD%/}/$1 ;;
+          esac
+          ;;
+        *) usage ;;
+      esac
+      shift
+    done
+    [ $# -gt 1 ] || usage
+    shift
+    # A newline or a carriage return in the command would press Enter (docs/specs/agent-cli.md B2).
+    nl='
+'
+    cr=$(printf '\r')
+    argv=
+    for arg in "$@"; do
+      case $arg in
+        *"$nl"* | *"$cr"*) fail "command must be one line" ;;
+      esac
+      argv="${argv:+$argv,}$(json_str "$arg")"
+    done
+    dir=
+    [ -z "$cwd" ] || dir=",\"cwd\":$(json_str "$cwd")"
+    ask "{\"version\":1,\"cmd\":\"new\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$dir,\"argv\":[$argv]}"
+    json_field pane
+    printf '\n'
     ;;
   notify)
     [ $# -gt 0 ] || usage

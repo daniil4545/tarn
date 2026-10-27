@@ -125,12 +125,16 @@ def main() -> int:
             req,
         )
 
-        # ls: text rows are decoded, --json prints the reply line.
-        rows = '1  tarn  main  permission  2m\n2  a"b  -  idle  3s\n'
-        (code, out, _), req = with_server(home, reply(text=rows), ["ls"], surface=None)
+        # ls: names the caller, text rows are decoded, --json prints the reply line.
+        rows = 'PANE  TITLE\n1     a"b\n'
+        (code, out, _), req = with_server(home, reply(text=rows), ["ls"])
         check("ls text", code == 0 and out == rows, (code, out))
-        check("ls request", req == [{"version": 1, "cmd": "ls", "json": False}], req)
-        line = reply(sessions=[{"project": "tarn", "note": "x\\ny"}])
+        check(
+            "ls request",
+            req == [{"version": 1, "cmd": "ls", "surface": SURFACE, "json": False}],
+            req,
+        )
+        line = reply(panes=[{"pane": SURFACE, "title": "x\\ny"}])
         (code, out, _), req = with_server(home, line, ["ls", "--json"])
         check(
             "ls json",
@@ -139,6 +143,42 @@ def main() -> int:
         )
         (code, out, _), _ = with_server(home, reply(text=""), ["ls"])
         check("ls empty", code == 0 and out == "", out)
+
+        # new: options, the command as argv, the pane id printed.
+        (code, out, err), req = with_server(
+            home, reply(pane=SURFACE), ["new", "--", "sh", "-c", 'a "b" && c']
+        )
+        check("new prints the pane", (code, out, err) == (0, SURFACE + "\n", ""), out)
+        check(
+            "new request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "new",
+                    "surface": SURFACE,
+                    "right": False,
+                    "argv": ["sh", "-c", 'a "b" && c'],
+                }
+            ],
+            req,
+        )
+        (code, _, _), req = with_server(
+            home, reply(pane=SURFACE), ["new", "--right", "--cwd", "w", "--", "ls"]
+        )
+        check(
+            "new right cwd",
+            code == 0 and req[0]["right"] is True and req[0]["cwd"] == f"{home}/w",
+            req,
+        )
+        # spec: agent-cli B2 - a newline or a carriage return is refused before the socket.
+        for arg in ["a\nb", "a\rb"]:
+            code, out, err = run(home, ["new", "--", "echo", arg])
+            check(
+                f"new one line {arg!r}",
+                (code, out, err) == (1, "", "tarn: command must be one line\n"),
+                err,
+            )
 
         # error replies: decoded text, stderr only, exit 1.
         err_text = 'no such file: /x "y" \\ z\nline'
@@ -150,16 +190,26 @@ def main() -> int:
         )
         (code, out, err), _ = with_server(home, reply(error="é\x01"), ["notify", "x"])
         check("error unicode", code == 1 and err == "tarn: é\x01\n", err)
+        # spec: agent-cli B5 - the reply's code is the exit code.
+        no_pane = reply(error='no pane matched: "code":5', code=4)
+        (code, out, err), _ = with_server(home, no_pane, ["ls"])
+        check(
+            "error code",
+            (code, out, err) == (4, "", 'tarn: no pane matched: "code":5\n'),
+            (code, out, err),
+        )
 
         # client-side errors.
         for name, args, surface in [
             ("open", ["open", "/x"], None),
             ("notify", ["notify", "x"], None),
+            ("ls", ["ls"], None),
+            ("new", ["new", "--", "ls"], None),
         ]:
             code, out, err = run(home, args, surface=surface)
             check(
                 f"{name} without surface",
-                (code, out) == (1, "") and err.startswith("tarn: TARN_SURFACE"),
+                (code, out, err) == (1, "", "tarn: not in a tarn tab\n"),
                 err,
             )
         code, out, err = run(home, ["ls"])
@@ -200,6 +250,11 @@ def main() -> int:
             ["open"],
             ["open", "a", "b"],
             ["notify"],
+            ["new"],
+            ["new", "ls"],
+            ["new", "--"],
+            ["new", "--tab", "--", "ls"],
+            ["new", "--cwd"],
         ]:
             code, out, err = run(home, args)
             check(

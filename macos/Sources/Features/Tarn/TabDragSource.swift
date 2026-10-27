@@ -133,6 +133,7 @@ struct SidebarInteraction: NSViewRepresentable {
     /// Strips at the sides that stay clickable for SwiftUI buttons below.
     var excludedLeading: CGFloat = 0
     var excludedTrailing: CGFloat = 0
+    var toolTip: String?
 
     func makeNSView(context: Context) -> InteractionView {
         let view = InteractionView()
@@ -155,6 +156,7 @@ struct SidebarInteraction: NSViewRepresentable {
         view.dragEnded = dragEnded
         view.excludedLeading = excludedLeading
         view.excludedTrailing = excludedTrailing
+        view.toolTip = toolTip
     }
 
     final class InteractionView: NSView, NSDraggingSource {

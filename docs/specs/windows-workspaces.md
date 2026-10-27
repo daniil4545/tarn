@@ -25,25 +25,25 @@ Every tab sits in exactly one workspace; a tab never exists outside one.
 
 ## 2. Decided by the user
 
-- D1 (2026-10-25). On launch there is a workspace `Default`, shown in the sidebar with its header, with one tab open.
+- D1 (2026-10-25). On launch there is a workspace `No project` (named `Default` before `docs/specs/workspace-folder.md` D24; restored sets keep their old name), shown in the sidebar with its header, with one tab open.
 - D2. A new tab opens in the current workspace, the one that holds the selected tab.
-- D3. Creating a workspace asks for a name only.
+- D3. Creating a workspace asks for a folder; its name is the folder's last component (`docs/specs/workspace-folder.md` D19). A folder another workspace of the window already holds selects that workspace.
 - D4. There is always at least one workspace; without one no terminal tab opens.
 - D5. The header is shown always, even with one workspace (the "hide the only workspace" rule is cancelled).
 - D6. Workspaces are collapsible groups, several open at once, reordered by drag; collapsed shows the tab count and the most urgent agent state.
 - D7. Cmd+W closes the focused pane; on the last pane of a tab it closes the tab; on the last tab it closes the window, as in Ghostty (D12). Cmd+Z within 5 s brings it back (Ghostty `undo-timeout`).
 - D8. Panes: terminals form one Ghostty split tree; viewers sit beside it; Ghostty's split keys move across both. The terminal grab handle is Ghostty's three dots on hover.
 - D9. Ghostty first: windows, tabs, splits, undo, restore and menus come from Ghostty; tarn adds the workspace layer and the viewer.
-- D10. Each window has its own workspaces; cmd+N opens a window with `Default`. Matches Ghostty, where tabs and restore are per window. The same name may appear in two windows.
+- D10. Each window has its own workspaces; cmd+N opens a window with `No project`. Matches Ghostty, where tabs and restore are per window. The same name may appear in two windows.
 - D11. No folder rule: a tab goes where it was opened (D2); an agent's tab goes to the workspace of the agent's own tab (S12).
-- D12. Closing the last tab of a workspace closes the workspace; if it was the last one, the window closes as in Ghostty, and the next window starts with `Default`. Cmd+Z within 5 s brings back the tab and its workspace.
-- D13. `Default` is an ordinary workspace: rename, delete, reorder. Deleting a workspace moves its tabs to the one above, or below if it is first. D4 holds by having no delete on the last workspace.
+- D12. Closing the last tab of a workspace closes the workspace; if it was the last one, the window closes as in Ghostty, and the next window starts with `No project`. Cmd+Z within 5 s brings back the tab and its workspace.
+- D13. `No project` is an ordinary workspace: rename, delete, reorder. Deleting a workspace moves its tabs to the one above, or below if it is first. D4 holds by having no delete on the last workspace.
 
 ## 3. Workspace lifecycle
 
 ```mermaid
 stateDiagram-v2
-  [*] --> open: launch creates Default / user creates
+  [*] --> open: launch creates No project / user creates
   open --> collapsed: header click
   collapsed --> open: header click / new tab in it
   open --> open: rename / drag / tab in or out
@@ -72,10 +72,10 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 
 | # | Start and steps | Result |
 | --- | --- | --- |
-| S1 | first launch | one window; sidebar shows `Default` with one tab; focus in its terminal |
+| S1 | first launch | one window; sidebar shows `No project` with one tab; focus in its terminal |
 | S2 | cmd+T or + at the sidebar top | a tab in the current workspace, after its last tab, focused |
 | S3 | + on a workspace header | a tab in that workspace; the workspace unfolds |
-| S4 | New workspace (sidebar button or Shift+Cmd+T), type a name | a workspace at the end of the list with one new tab in it, focused, so no workspace is ever empty |
+| S4 | New workspace (sidebar button or Shift+Cmd+T), choose a folder in the panel | a workspace named after the folder at the end of the list with one new tab in it, started in the folder and focused, so no workspace is ever empty; Cancel creates nothing |
 | S5 | rename from the header menu | name changes in the sidebar and the window title |
 | S6 | delete a workspace with tabs | confirmation names the count; tabs move to the workspace above, or below if it is first (D13) |
 | S7 | drag a tab onto a header or between rows | the tab moves there; order is kept after a restart |
@@ -90,10 +90,10 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S15 | cmd+W on a pane | the pane closes; cmd+Z within 5 s brings it back |
 | S16 | cmd+W on the last pane of a tab | the tab closes with its viewers; cmd+Z within 5 s brings it back |
 | S17 | close the last tab of a workspace | the workspace closes; cmd+Z within 5 s brings both back (D12) |
-| S18 | close the last tab of the last workspace (cmd+W on its last pane included) | the window closes as in Ghostty; the next window starts with `Default` (D12) |
+| S18 | close the last tab of the last workspace (cmd+W on its last pane included) | the window closes as in Ghostty; the next window starts with `No project` (D12) |
 | S19 | quit and launch again | windows, tabs, splits and cwd come back (Ghostty `window-save-state`); workspaces, their order, folding and tab membership come back with them; scrollback does not |
-| S20 | cmd+N, a second window | a window with its own `Default` and one tab (D10) |
-| S21 | drag a tab out to another window | Ghostty moves it; it joins that window's current workspace; dropped outside every window it opens a new window with `Default` (D10) |
+| S20 | cmd+N, a second window | a window with its own `No project` and one tab (D10) |
+| S21 | drag a tab out to another window | Ghostty moves it; it joins that window's current workspace; dropped outside every window it opens a new window with `No project` (D10) |
 | S22 | settings: tabs at the top | a flat tab bar, no workspaces or agent state; back to the sidebar style shows the workspaces as they were (D14) |
 | S23 | an agent in a collapsed workspace asks for permission | the header dot turns orange; one notification names the workspace and the tab |
 

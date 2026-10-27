@@ -6,6 +6,7 @@ import { clock } from "./clock.js";
 import { AGENT, dot } from "./sidebar.js";
 import { tabStatus, isAgentTab } from "./tab-status.js";
 import { esc } from "./esc.js";
+import { isOn } from "./modules.js";
 
 const OPEN_AFTER = 500, CLOSE_AFTER = 200;
 let shown = null;
@@ -27,7 +28,8 @@ function show(id) {
   const s = read("workspaces"), tab = s.tabs[id], row = document.querySelector(`#sidebar .tab[data-tabid="${id}"]`);
   if (!tab || !row) return hide();
   const status = tabStatus(tab, read("registry")), session = status?.session;
-  const asking = status?.kind === "permission" && session.answerable && session.request;
+  // Permission card off: title, folder and state stay, the buttons and answers go (Claude Code asks in its own dialog).
+  const asking = isOn("permissionCard") && status?.kind === "permission" && session.answerable && session.request;
   const ask = !asking ? "" : session.request.questions ? questionStep(status.pane, session.request)
     : `<div class="req"><code>${esc(requestText(session.request))}</code><div class="btns"><button data-answer="${status.pane}" data-allow="true">Allow</button><button data-answer="${status.pane}" data-allow="false">Deny</button></div></div>`;
   let card = document.getElementById("tabcard");

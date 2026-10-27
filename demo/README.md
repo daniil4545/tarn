@@ -14,10 +14,14 @@ No backend, no build step, no network: ES modules and vendored files only.
 | Sidebar and agent states | built |
 | Viewer (markdown, mermaid, code, save) | built |
 | Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built: Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
-| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off, an open pane keeps working |
+| File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, open panes are hidden (their tabs and unsaved text stay) and come back when it is on again; Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off; the Toggle File Viewer button hides |
 | Workspaces, splits, layout | built |
 | Find in the viewer (Cmd+F, Cmd+G, Shift+Cmd+G while the viewer has the keyboard): a bar at the top right like Ghostty's terminal search, n/m count, Enter and Shift+Enter step, Esc gives the keyboard back or closes an empty bar; view and source mode | built: Ghostty's Find menu items reach the page |
 | Settings | built |
+| Settings > Modules (first section): five switches Sidebar, File viewer, Workspaces, Permission card, Notifications, each applies at once; Permission card is greyed with "needs Sidebar" while Sidebar is off; Agents line with Claude Code version and three checks (sample data); the tab style picker moves into the Sidebar row; a Settings button at the top right of the window (demo only, the app keeps Cmd+, and the menu) | built (T-205, #34; the Settings button at the top right is demo only) |
+| Workspaces off: flat list without headers, new tabs go to the workspace with folder ~ (named "~"), drag only reorders; frozen workspaces return on again. With Sidebar off the top tabs carry the workspace name | built (T-205, #34) |
+| Permission card off: the hover card keeps title and state and drops Allow, Deny and answers | built (T-205, #34) |
+| Notifications off: no banner for an agent that needs you, Cmd+U does nothing (the demo draws the banner and Cmd+U, built in the app as R4) | built (T-205, #34) |
 | Drop feedback: a 3 px system accent line where the dragged window will stand (at the cut), a gray chip with the reason on a refusal; a workspace dragged in the sidebar shows an accent line where it lands | built in 1.0.1; a terminal dropped on a terminal keeps Ghostty's own half highlight |
 | Sidebar tab drag as in Warp: the row lifts out solid and follows the pointer, the rows slide apart to a gap where it lands (above a row in its upper half, below it in its lower half, at the end of a workspace over its header) | built: the app keeps the macOS drag copy, which is translucent; a header with rows that stands below the gap keeps the gap where it is |
 | Easy-to-catch grab zones: 14 px grab zones centred on split dividers and on the sidebar edge, resize cursor; the pane handle stays Ghostty's (80x12, dots in the top 20% of the pane) | built in 1.0.1; the app's sidebar zone leans into the sidebar so the first terminal column stays clickable |
@@ -25,7 +29,8 @@ No backend, no build step, no network: ES modules and vendored files only.
 | Theme picker: base themes on top (three light and dark pairs and Dracula), all 771 themes below with a filter, one theme chosen; sidebar, title bar, menus and viewer take their colors from the terminal theme; the demo starts dark | built in 1.0.1 |
 | Wide sidebar rows (task title, then folder and time in its state; the icon names the agent) with a Settings switch Row size, wide by default; header buttons Toggle File Viewer and New Workspace; Shift+Cmd+T for a new workspace | built in the app (#18, #21, #22) |
 | Card answers AskUserQuestion with several questions one at a time ("Question 1 of 2"), then sends all answers in one reply; a multi-select question still goes to the terminal. Try it: ask `claude` something with a question mark | planned: drawn here for approval |
-| `tarn` CLI | built in the app: `tarn open`, `tarn ls`, `tarn notify`. The demo has `open` and `ls`; `tarn new` (R15, second wave) is planned and prints "planned: not in the app yet" on its first run |
+| Workspace by folder (`docs/specs/workspace-folder.md`): a new workspace asks for a folder and is named after it (a folder already open selects its workspace); new tabs and splits start in the workspace folder, or in the current folder when it lies inside; the folder is fixed at creation and shown in the header tooltip; `claude` started in a project folder moves its tab to that workspace unless the tab was moved by hand; an agent outside its workspace's folder gets an orange "!" ("Claude · review" in tarn); with tabs at the top and two or more workspaces each title starts with its workspace, dimmed; the folderless workspace is "No project" | stage 1 built in the app (#51); the folder panel, a fixed folder in the header tooltip, No project; the app shows the macOS folder panel where the demo asks for a path. stage 2 built in the app: new tabs and splits start in the workspace folder, or in the current folder when it lies inside. Agent tabs joining, the mark and the top tab prefix are planned |
+| `tarn` CLI | built in the app: `tarn open`, `tarn ls`, `tarn notify`, `tarn new` (a split below the caller, or right with `--right`, focus unchanged). The demo has `open`, `ls` and `new`; its new pane is a shell and does not run the command |
 
 ## Run
 
@@ -46,6 +51,7 @@ uv run --with playwright python -I demo/test/check_b.py     # layout, workspaces
 uv run --with playwright python -I demo/test/check_c.py     # viewer, settings, Help
 uv run --with playwright python -I demo/test/check_e2e.py   # the whole user story
 uv run --with playwright python -I demo/test/check_review.py # regressions found in code review, privacy scan
+uv run --with playwright python -I demo/test/check_modules.py  # Settings > Modules and its switches
 node --test demo/test/unit                                  # the shell without a browser
 ```
 

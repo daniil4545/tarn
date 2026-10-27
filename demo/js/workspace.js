@@ -8,6 +8,7 @@ import { clock } from "./clock.js";
 import { WORKSPACES } from "./seed.js";
 import { ask } from "./ask-dialog.js";
 import * as tree from "./layout.js";
+import { isOn } from "./modules.js";
 
 const CAP = 8; // panes per tab
 const cfg = (key) => read("config")[key];
@@ -22,8 +23,14 @@ let write;
 
 export const paneOf = (id) => panes.get(id);
 // Ids of every pane of a tab, shown or hidden (a viewer hidden with Toggle Pane stays alive).
-export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node))];
-export const flatTabs = (s) => s.wss.flatMap((w) => w.tabs);
+// `stashed` holds the viewers of a tab while File viewer is off; `hidden` is the user's Cmd+B hide.
+export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node)), ...(tab.stashed ?? []).map((h) => tree.leafId(h.node))];
+// The tab order down the list. Workspaces off: `s.order` (set by a drag) wins over the frozen groups; membership never changes.
+export const flatTabs = (s) => {
+  const grouped = s.wss.flatMap((w) => w.tabs);
+  if (isOn("workspaces") || !s.order) return grouped;
+  return [...s.order.filter((id) => grouped.includes(id)), ...grouped.filter((id) => !s.order.includes(id))];
+};
 export const currentTab = (s = read("workspaces")) => s.tabs[s.cur] ?? null;
 const wsOf = (s, tabId) => s.wss.find((w) => w.tabs.includes(tabId));
 const tabOfLeaf = (s, id) => Object.values(s.tabs).find((t) => tree.pathOf(t.layout, id) !== null);
@@ -74,6 +81,7 @@ export function startWorkspaces({ createPane, createViewer }) {
     // A viewer's files are not stored, so after a reload its leaf would be empty: drop it.
     for (const v of tree.viewers(tab.layout)) tab.layout = tree.remove(tab.layout, v.viewer);
     tab.hidden = [];
+    tab.stashed = [];
     if (!tree.pathOf(tab.layout, tab.focus)) tab.focus = null;
     tab.focus ??= tree.terminals(tab.layout)[0].pane;
     tab.zoom ??= null;
@@ -97,7 +105,52 @@ export function startWorkspaces({ createPane, createViewer }) {
     const pane = bus.cmd("pane.place", { viewer: true, zone: "right", target: "block", focus: false });
     if (pane) bus.cmd("viewer.open", { ...request, pane });
   });
+  // File viewer off: the panes leave the layout but stay alive with their tabs and unsaved text;
+  // on again they return to their seats. Cmd+B's own hide (`hidden`) is a separate list.
+  bus.on("config:changed", ({ key }) => {
+    if (key === "file-viewer") update(syncViewers);
+    if (key === "module-workspaces" && isOn("workspaces")) update((s) => { delete s.order; }); // regroup into the frozen groups
+  });
+  if (!isOn("viewer")) update(syncViewers);
+  bus.on("state:changed", ({ part }) => { if (part === "registry") arrive(); });
   Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => (NEEDS_TAB.test(name) && !currentTab() ? undefined : fn(payload))));
+}
+
+function syncViewers(s) {
+  const on = isOn("viewer");
+  for (const tab of Object.values(s.tabs)) {
+    if (!on) {
+      for (const v of tree.viewers(tab.layout)) {
+        (tab.stashed ??= []).push({ node: tree.at(tab.layout, tree.pathOf(tab.layout, v.viewer)), seat: tree.seatOf(tab.layout, v.viewer) });
+        dropLeaf(tab, v.viewer);
+      }
+    } else {
+      for (const { node, seat } of tab.stashed ?? []) tab.layout = tree.reseat(tab.layout, node, seat);
+      tab.stashed = [];
+    }
+  }
+}
+
+// Tab id -> pane of the agent that decided the tab's place; while that session lives, no other
+// agent in the tab moves it (docs/specs/workspace-folder.md D26).
+const decided = new Map();
+
+// An agent that starts in a tab not placed by hand moves the tab to the workspace whose folder
+// holds the agent's folder, the deepest one first (D21). No such workspace: the tab stays.
+function arrive() {
+  const s = read("workspaces"), registry = read("registry");
+  for (const [tabId, pane] of decided) if (!s.tabs[tabId] || !registry[pane]) decided.delete(tabId);
+  for (const tab of Object.values(s.tabs)) {
+    if (decided.has(tab.id)) continue;
+    const agent = tree.terminals(tab.layout).find((t) => registry[t.pane] && registry[t.pane].state !== "idle");
+    if (!agent) continue;
+    decided.set(tab.id, agent.pane);
+    if (tab.manual) continue;
+    const cwd = panes.get(agent.pane)?.cwd ?? tab.cwd, here = wsOf(s, tab.id);
+    const home = s.wss.filter((w) => w.folder && inside(w.folder, cwd))
+      .sort((a, b) => b.folder.length - a.folder.length)[0];
+    if (home && here.folder !== home.folder) bus.cmd("tab.move", { id: tab.id, ws: home.id, arrival: true });
+  }
 }
 
 function update(fn) {
@@ -114,9 +167,26 @@ function ensurePane(id, cwd) {
 }
 
 const short = (cwd) => cwd.replace("~/code/", "~/c/");
+// Workspaces off (or Sidebar off): the registry stops grouping. New tabs join the workspace with the folder ~ (named "~"), created
+// at the end of the list when missing; the frozen workspaces stay untouched.
+const flat = () => !isOn("workspaces");
+// One folder, one workspace: a workspace whose folder is ~ takes the new tabs, else "~" is made.
+const homeWs = (s) => {
+  let ws = s.wss.find((w) => w.folder === "~");
+  if (!ws) { ws = { id: nextId("w"), name: "~", folder: "~", tabs: [] }; s.wss.push(ws); }
+  return ws;
+};
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
-function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
+// A new tab or split in a workspace with a folder starts in the inherited folder when it lies
+// inside, else in the workspace folder (docs/specs/workspace-folder.md D20).
+const inside = (folder, cwd) => cwd === folder || cwd.startsWith(`${folder}/`);
+const startCwd = (s, ws) => {
+  const inherited = inheritedCwd(s);
+  return ws?.folder && !inside(ws.folder, inherited) ? ws.folder : inherited;
+};
+
+function addTab(s, ws, { cwd = startCwd(s, ws), title = `zsh · ${short(cwd)}` } = {}) {
   const id = nextId("t"), pane = nextId("p");
   s.tabs[id] = { id, title, cwd, layout: { pane }, focus: pane, zoom: null };
   ws.tabs.push(id);
@@ -124,9 +194,9 @@ function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` }
   return id;
 }
 
-// A new window starts with Default and one tab.
+// A new window starts with "No project" (no folder) and one tab.
 function openWindow(s) {
-  const ws = { id: nextId("w"), name: "Default", tabs: [] };
+  const ws = { id: nextId("w"), name: flat() ? "~" : "No project", ...(flat() ? { folder: "~" } : {}), tabs: [] };
   s.wss = [ws];
   s.cur = addTab(s, ws, { cwd: "~" });
 }
@@ -228,8 +298,8 @@ const NEEDS_TAB = /^(pane\.(?!undo)|tab\.(close|step)|viewer\.(hide|show))/;
 
 const COMMANDS = {
   "tab.new": ({ ws, pane, cwd, title, select = true }) => update((s) => {
-    const target = (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || s.wss[0];
-    if (!target) return openWindow(s);
+    if (!s.wss.length) return openWindow(s);
+    const target = flat() ? homeWs(s) : (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || s.wss[0];
     const id = addTab(s, target, { cwd, title });
     if (select) { s.cur = id; target.collapsed = false; }
   }),
@@ -250,30 +320,44 @@ const COMMANDS = {
   }),
 
   // Before another tab or at the end of a workspace.
-  "tab.move": ({ id, ws, before = null }) => update((s) => {
+  // A user move to another workspace marks the tab manual: the folder never moves it again
+  // (docs/specs/workspace-folder.md D22). An arrival move does not.
+  "tab.move": ({ id, ws, before = null, arrival = false }) => update((s) => {
+    if (flat()) { // a drag only changes the order of the flat list; the frozen groups stay
+      const rest = flatTabs(s).filter((x) => x !== id), at = before ? rest.indexOf(before) : -1;
+      rest.splice(at >= 0 ? at : rest.length, 0, id);
+      s.order = rest;
+      return;
+    }
     const to = s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
     from.tabs = from.tabs.filter((x) => x !== id);
     const at = before ? to.tabs.indexOf(before) : -1;
     if (at >= 0) to.tabs.splice(at, 0, id); else to.tabs.push(id);
-    if (from !== to) { to.collapsed = false; toast(`Moved to ${to.name}`); }
+    if (from !== to) {
+      to.collapsed = false;
+      if (!arrival) s.tabs[id].manual = true;
+      toast(arrival ? `Moved to ${to.name}: the agent works in its folder` : `Moved to ${to.name}`);
+    }
     if (!from.tabs.length) s.wss = s.wss.filter((w) => w !== from);
   }),
 
   // A terminal splits into a terminal; a viewer into another viewer that opens `path`.
-  "pane.split": ({ id, dir, kind = "terminal", path }) => {
+  // `focus: false` (`tarn new`) leaves the focus where it was. Returns the new id.
+  "pane.split": ({ id, dir, kind = "terminal", path, focus = true }) => {
     const created = update((s) => {
-      const tab = currentTab(s), target = id ?? tab.focus;
+      const tab = (id && tabOfLeaf(s, id)) || currentTab(s), target = id ?? tab.focus;
       if (leafCount(tab) >= CAP) return toast(`At most ${CAP} panes in a tab`);
       const at = tree.pathOf(tab.layout, target), viewer = kind === "viewer";
       const fresh = nextId(viewer ? "v" : "p");
       tab.layout = tree.setAt(tab.layout, at, tree.join(tree.at(tab.layout, at), viewer ? { viewer: fresh } : { pane: fresh }, ZONE[dir]));
-      tab.focus = fresh;
+      if (focus) tab.focus = fresh;
       tab.zoom = null;
-      ensurePane(fresh, inheritedCwd(s));
+      ensurePane(fresh, startCwd(s, wsOf(s, tab.id)));
       return fresh;
     });
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
+    return created;
   },
 
   "pane.close": ({ id, exited = false }) => {
@@ -345,17 +429,25 @@ const COMMANDS = {
     toast(`Restored: ${rec.what}`);
   },
 
-  "ws.new": ({ name }) => update((s) => {
-    const ws = { id: nextId("w"), name, tabs: [] };
+  // A workspace by folder: named after it, its first tab starts in it.
+  "ws.new": ({ name, folder }) => update((s) => {
+    if (flat()) return;
+    const ws = { id: nextId("w"), name, tabs: [], ...(folder ? { folder } : {}) };
     s.wss.push(ws);
-    s.cur = addTab(s, ws, { cwd: "~" });
+    s.cur = addTab(s, ws, { cwd: folder ?? "~" });
   }),
 
-  "ws.rename": ({ id, name }) => update((s) => { s.wss.find((w) => w.id === id).name = name; }),
-  "ws.fold": ({ id }) => update((s) => { const w = s.wss.find((x) => x.id === id); w.collapsed = !w.collapsed; }),
+  "ws.rename": ({ id, name }) => update((s) => {
+    if (!flat()) s.wss.find((w) => w.id === id).name = name;
+  }),
+  "ws.fold": ({ id }) => update((s) => {
+    const w = s.wss.find((x) => x.id === id);
+    if (!flat()) w.collapsed = !w.collapsed;
+  }),
 
   // Its tabs go to the workspace above, or below if it is the first (D13). The last one cannot go.
   "ws.delete": ({ id }) => update((s) => {
+    if (flat()) return;
     const at = s.wss.findIndex((w) => w.id === id);
     if (s.wss.length < 2) return;
     const into = s.wss[at > 0 ? at - 1 : 1];
@@ -366,6 +458,7 @@ const COMMANDS = {
 
   // Before another workspace, or at the end.
   "ws.move": ({ id, before = null }) => update((s) => {
+    if (flat()) return;
     const ws = s.wss.find((w) => w.id === id);
     s.wss = s.wss.filter((w) => w !== ws);
     const at = before ? s.wss.findIndex((w) => w.id === before) : -1;
@@ -373,7 +466,7 @@ const COMMANDS = {
   }),
 
   "window.new": () => {
-    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own Default");
+    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own No project");
     update(openWindow);
   },
 

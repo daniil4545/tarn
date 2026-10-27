@@ -2,49 +2,10 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The socket commands `ls` and `notify`, their reply format and the helpers behind them.
+/// The socket command `notify`, the reply format and the helpers behind them.
 @Suite
 struct AttentionCommandsTests {
-    private let now = Date(timeIntervalSince1970: 2_000_000)
-
-    private func row(
-        _ state: AgentState, project: String = "tarn", branch: String = "main", failed: Bool = false,
-        age: TimeInterval = 120, note: String = ""
-    ) -> SessionRow {
-        var session = AgentSession(surfaceID: UUID())
-        session.state = state
-        session.failed = failed
-        session.since = now.addingTimeInterval(-age)
-        session.note = note
-        return SessionRow(session, cwd: "/work/\(project)", project: project, branch: branch)
-    }
-
     private func line(_ data: Data) -> String { String(bytes: data, encoding: .utf8) ?? "" }
-
-    @Test func rowsFollowSpecSample() {
-        let rows = [row(.permission), row(.waiting, project: "api", branch: "", failed: true, age: 45)]
-        #expect(AttentionCommands.text(rows, now: now) == "1  tarn  main  permission  2m\n2  api  -  failed  45s\n")
-        #expect(AttentionCommands.text([], now: now).isEmpty)
-    }
-
-    @Test func agesUseTheLargestUnit() {
-        #expect(AttentionCommands.age(0) == "0s")
-        #expect(AttentionCommands.age(59) == "59s")
-        #expect(AttentionCommands.age(60) == "1m")
-        #expect(AttentionCommands.age(3 * 3600 + 5) == "3h")
-        #expect(AttentionCommands.age(2 * 86400) == "2d")
-        #expect(AttentionCommands.age(-5) == "0s")
-    }
-
-    @Test func jsonCarriesTheSessionFields() throws {
-        let entry = try #require(AttentionCommands.json([row(.waiting, failed: true, note: "x")]).first)
-        for key in ["surface", "agentSessionID", "cwd", "project", "branch", "state", "since", "seen", "failed", "note"] {
-            #expect(entry[key] != nil, "missing \(key)")
-        }
-        #expect(entry["state"] as? String == "waiting")
-        #expect(entry["failed"] as? Bool == true)
-        #expect(entry["note"] as? String == "x")
-    }
 
     @Test func repliesHaveSortedKeysAndVersion() {
         #expect(line(AttentionCommands.reply()) == "{\"ok\":true,\"version\":1}\n")
@@ -54,7 +15,7 @@ struct AttentionCommandsTests {
 
     @Test @MainActor func refusalsAreErrorRepliesWithoutAPrefix() {
         let cases: [([String: Any], String)] = [
-            (["version": 2, "cmd": "ls"], "unsupported version"),
+            (["version": 2, "cmd": "notify"], "unsupported version"),
             (["version": 1, "cmd": "bogus"], "unknown command: bogus"),
             (["version": 1, "cmd": "notify", "text": "x"], "unknown surface"),
             (["version": 1, "cmd": "notify", "surface": UUID().uuidString, "text": "x"], "unknown surface"),
@@ -63,13 +24,6 @@ struct AttentionCommandsTests {
             let answer = AttentionCommands.answer(command: message["cmd"] as? String ?? "", message: message)
             #expect(line(answer) == "{\"error\":\"\(error)\",\"ok\":false,\"version\":1}\n", "\(message)")
         }
-    }
-
-    @Test @MainActor func lsOfNothingIsAnEmptyList() {
-        let text = AttentionCommands.answer(command: "ls", message: ["version": 1, "cmd": "ls"])
-        #expect(line(text) == "{\"ok\":true,\"text\":\"\",\"version\":1}\n")
-        let json = AttentionCommands.answer(command: "ls", message: ["version": 1, "cmd": "ls", "json": true])
-        #expect(line(json) == "{\"ok\":true,\"sessions\":[],\"version\":1}\n")
     }
 }
 

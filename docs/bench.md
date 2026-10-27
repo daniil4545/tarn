@@ -25,3 +25,7 @@ Not a `make -f tarn.mk bench` result: the table above is the 1.0.0 run and the n
 
 Next step: run `make -f tarn.mk release` and `bench` from a clean checkout on an idle, unlocked machine, with more than 10 startup rounds.
 
+
+## Modules off against all on (T-205)
+
+Not run yet. `make -f tarn.mk bench` measures tarn with every module on. `TARN_BENCH_MODULES=off make -f tarn.mk bench` starts tarn with `-TarnTabStyle top -TarnFileViewer NO -TarnModule.workspaces NO -TarnModule.permissionCard NO -TarnModule.notifications NO`; launch arguments live in the `UserDefaults` argument domain, so the user's settings are not written. Run both on an idle, unlocked machine and put the two tables here; there is no threshold.

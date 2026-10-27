@@ -41,13 +41,13 @@ function intoPane(host, entry) {
 }
 
 export function viewerKey(name, host) {
+  if (!bus.cmd("viewer.available")) return toast("File viewer is off (Settings)");
   const entry = host.target();
   if (!entry && hiddenCount()) {
     bus.cmd("viewer.show");
     return whenShown(host, (shown) => whenReady(shown, () => intoPane(host, shown)));
   }
   if (!entry) {
-    if (!bus.cmd("viewer.available")) return toast("File viewer is off (Settings)");
     bus.emit("viewer:needed", { tree: true });
     const opened = host.target();
     if (opened) whenReady(opened, (page) => { intoPane(host, opened); page.focusTree(); });

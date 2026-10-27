@@ -7,7 +7,7 @@ import { hooks } from "./test-contract.js";
 import { createTerm } from "./term-adapter.js";
 import { createShell } from "./shell/shell.js";
 import { buildPrompt, tilde } from "./shell/prompt.js";
-import { sessionRows } from "./session-rows.js";
+import { paneRows } from "./pane-rows.js";
 import { seedScreen } from "./seed-screens.js";
 import { addPaneLinks } from "./pane-links.js";
 import { guardPaste } from "./paste-guard.js";
@@ -96,7 +96,7 @@ export function createPane(id, { cwd }) {
       case "cwd": bus.emit("pane:cwd", { pane: id, cwd: data.cwd }); break;
       case "exit": bus.cmd("pane.close", { id, exited: true }); break;
       case "viewer.open": bus.cmd("viewer.open", { ...data, pane: id }); break;
-      case "tab.new": bus.cmd("tab.new", { pane: id, cwd: pane.cwd, select: false }); break;
+      case "pane.new": return bus.cmd("pane.split", { id, dir: data.right ? "right" : "down", focus: false });
       case "hook": bus.cmd("hook", { pane: id, ...data }); break;
       case "command": notifyWhenDone(data); break;
       default: throw new Error(`unknown shell event: ${name}`);
@@ -178,12 +178,12 @@ export function createPane(id, { cwd }) {
       emit: onShellEvent,
       viewerOn: () => bus.cmd("viewer.available") === true,
       cols: () => term.cols,
-      sessions: () => sessionRows({
+      panes: () => paneRows({
         workspaces: read("workspaces"),
         registry: read("registry"),
         vfs,
         home: HOME,
-        now: clock.now,
+        caller: id,
       }),
       paneId: id,
     });
