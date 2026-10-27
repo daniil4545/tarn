@@ -25,7 +25,12 @@ export const paneOf = (id) => panes.get(id);
 // Ids of every pane of a tab, shown or hidden (a viewer hidden with Toggle Pane stays alive).
 // `stashed` holds the viewers of a tab while File viewer is off; `hidden` is the user's Cmd+B hide.
 export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node)), ...(tab.stashed ?? []).map((h) => tree.leafId(h.node))];
-export const flatTabs = (s) => s.wss.flatMap((w) => w.tabs);
+// The tab order down the list. Workspaces off: `s.order` (set by a drag) wins over the frozen groups; membership never changes.
+export const flatTabs = (s) => {
+  const grouped = s.wss.flatMap((w) => w.tabs);
+  if (isOn("workspaces") || !s.order) return grouped;
+  return [...s.order.filter((id) => grouped.includes(id)), ...grouped.filter((id) => !s.order.includes(id))];
+};
 export const currentTab = (s = read("workspaces")) => s.tabs[s.cur] ?? null;
 const wsOf = (s, tabId) => s.wss.find((w) => w.tabs.includes(tabId));
 const tabOfLeaf = (s, id) => Object.values(s.tabs).find((t) => tree.pathOf(t.layout, id) !== null);
@@ -102,7 +107,10 @@ export function startWorkspaces({ createPane, createViewer }) {
   });
   // File viewer off: the panes leave the layout but stay alive with their tabs and unsaved text;
   // on again they return to their seats. Cmd+B's own hide (`hidden`) is a separate list.
-  bus.on("config:changed", ({ key }) => { if (key === "file-viewer") update(syncViewers); });
+  bus.on("config:changed", ({ key }) => {
+    if (key === "file-viewer") update(syncViewers);
+    if (key === "module-workspaces" && isOn("workspaces")) update((s) => { delete s.order; }); // regroup into the frozen groups
+  });
   if (!isOn("viewer")) update(syncViewers);
   Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => (NEEDS_TAB.test(name) && !currentTab() ? undefined : fn(payload))));
 }
@@ -281,7 +289,13 @@ const COMMANDS = {
 
   // Before another tab or at the end of a workspace.
   "tab.move": ({ id, ws, before = null }) => update((s) => {
-    const from = wsOf(s, id), to = flat() ? from : s.wss.find((w) => w.id === ws); // flat: a drag only reorders inside the tab's own group
+    if (flat()) { // a drag only changes the order of the flat list; the frozen groups stay
+      const rest = flatTabs(s).filter((x) => x !== id), at = before ? rest.indexOf(before) : -1;
+      rest.splice(at >= 0 ? at : rest.length, 0, id);
+      s.order = rest;
+      return;
+    }
+    const to = s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
     from.tabs = from.tabs.filter((x) => x !== id);
     const at = before ? to.tabs.indexOf(before) : -1;

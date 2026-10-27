@@ -58,7 +58,7 @@ function render() {
     : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}<span class="grow"></span>${viewer}${newWs}${button("sbNew", "New tab", "+")}</div>`;
   const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
-    sb.innerHTML = top + s.wss.map((w) => w.tabs.map((id) => {
+    sb.innerHTML = top + (grouped ? s.wss : [{ tabs: order }]).map((w) => w.tabs.map((id) => {
       const t = s.tabs[id];
       return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.title)}">${icon(t)}${dot(tabStatus(t, reg))}</div>`;
     }).join("")).join(grouped ? '<div class="sep"></div>' : "");
@@ -73,7 +73,9 @@ function render() {
     if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
     return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div><div class="l2">${esc(detail(t, reg))}</div></div></div>`;
   };
-  sb.innerHTML = top + s.wss.map((w) => {
+  // Flat list: one hidden header and every tab in list order, whatever its frozen group.
+  const lists = grouped ? s.wss : [{ id: s.wss[0]?.id, name: "", tabs: order }];
+  sb.innerHTML = top + lists.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
     // Flat list: the header stays hidden so the drag code finds the owner of a row.

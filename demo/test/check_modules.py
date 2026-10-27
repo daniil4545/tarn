@@ -242,12 +242,17 @@ def workspace_checks(pg):
     pg.keyboard.press("Meta+Shift+t")
     check("M25 Shift+Cmd+T does nothing", groups(pg) == snap)
     cmd(pg, "tab.move", {"id": "t4", "ws": "w2", "before": "t5"})
+    ids = pg.locator("#sidebar .tab[data-tabid]").evaluate_all(
+        "els => els.map((e) => e.dataset.tabid)"
+    )
     check(
-        "M26 a drag only reorders: the tab keeps its group",
-        pg.evaluate(
+        "M26 a drag reorders across groups and keeps membership",
+        ids.index("t4") == ids.index("t5") - 1
+        and pg.evaluate(
             "__tarn.snapshot().workspaces.wss.find((w) => w.tabs.includes('t4')).name"
         )
         == "tarn",
+        repr(ids),
     )
     pg.keyboard.press("Meta+Comma")
     pg.click("#setNav [data-sec='modules']")
@@ -257,6 +262,7 @@ def workspace_checks(pg):
     check(
         "M27 Workspaces on again: frozen groups return with '~' holding the new tab",
         names[:3] == ["tarn", "website", "Default"]
+        and pg.evaluate("__tarn.snapshot().workspaces.wss[0].tabs.includes('t4')")
         and names[-1] == "~"
         and headers(pg) == len(names),
         repr(names),
