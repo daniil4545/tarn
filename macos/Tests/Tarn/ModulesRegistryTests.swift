@@ -7,7 +7,15 @@ import Testing
 @Suite
 struct ModulesRegistryTests {
     private final class Banners { var list: [String] = [] }
-    private final class SocketBox { var list: [ControlSocket] = [] }
+    private final class SocketBox {
+        var list: [ControlSocket] = []
+        var paths: [String] = []
+        var clients: [Int32] = []
+        deinit {
+            clients.forEach { close($0) }
+            paths.forEach { unlink($0) }
+        }
+    }
 
     private let id = UUID()
     private let registry = SessionRegistry()
@@ -61,11 +69,13 @@ struct ModulesRegistryTests {
     private func connection() async throws -> (reply: ControlSocket.Reply, client: Int32) {
         final class Box: @unchecked Sendable { var reply: ControlSocket.Reply? }
         let box = Box()
-        let path = "/tmp/tarn-test-\(UUID().uuidString.prefix(8)).sock"
+        let path = "/tmp/t-\(UUID().uuidString.prefix(8)).sock"  // short: sun_path holds 104 bytes; removed in SocketBox.deinit
+        sockets.paths.append(path)
         let socket = ControlSocket { _, reply in box.reply = reply }
         socket.start(path: path)
         sockets.list.append(socket)
         let client = connectClient(path)
+        sockets.clients.append(client)
         let line = Array("{\"x\":1}\n".utf8)
         _ = write(client, line, line.count)
         for _ in 0..<100 where box.reply == nil { try await Task.sleep(for: .milliseconds(20)) }
@@ -103,7 +113,6 @@ struct ModulesRegistryTests {
         hook("PermissionRequest", reply: reply, extra: permission)
         #expect(registry.sessions[id]?.answerable == true)
         #expect(try await isClosed(client) == false)
-        close(client)
     }
 
     @Test func permissionCardOffAnswersAtOnceWithAnEmptyReply() async throws {
@@ -113,7 +122,6 @@ struct ModulesRegistryTests {
         #expect(try await isClosed(client))
         #expect(registry.sessions[id]?.answerable == false)
         #expect(registry.sessions[id]?.state == .permission)
-        close(client)
     }
 
     @Test func switchingTheCardOffReleasesAWaitingHook() async throws {
@@ -124,6 +132,5 @@ struct ModulesRegistryTests {
         registry.permissionCardChanged()
         #expect(try await isClosed(client))
         #expect(registry.sessions[id]?.answerable == false)
-        close(client)
     }
 }

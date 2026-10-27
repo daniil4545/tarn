@@ -49,6 +49,7 @@ enum TarnModules {
     private static let logger = Logger(subsystem: "tarn", category: "settings")
 
     /// Keys whose bad value was already logged, so a hot path logs it once.
+    private static let reportedLock = NSLock()
     nonisolated(unsafe) private static var reported = Set<String>()
 
     /// A switch as the user left it, whatever the needed module says. A missing key is on; a value
@@ -72,15 +73,21 @@ enum TarnModules {
     /// the words YES and NO count as well.
     static func flag(_ key: String, in defaults: UserDefaults = .standard) -> Bool {
         guard let value = defaults.object(forKey: key) else { return true }
-        if let parsed = parse(value) { return parsed }
-        if reported.insert(key).inserted {
+        // Words and 0/1 count only from the launch arguments; stored elsewhere they are a wrong type.
+        let fromArguments = defaults.volatileDomain(forName: UserDefaults.argumentDomain)[key] != nil
+        if let parsed = parse(value, strict: !fromArguments) { return parsed }
+        reportedLock.lock()
+        let first = reported.insert(key).inserted
+        reportedLock.unlock()
+        if first {
             logger.error("\(key, privacy: .public) has a value of the wrong type; counted as on")
         }
         return true
     }
 
-    static func parse(_ value: Any) -> Bool? {
+    static func parse(_ value: Any, strict: Bool = false) -> Bool? {
         if let number = value as? NSNumber, CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue }
+        if strict { return nil }
         if let number = value as? NSNumber, number == 0 || number == 1 { return number.boolValue }
         guard let text = value as? String else { return nil }
         switch text.lowercased() {
@@ -118,14 +125,33 @@ extension Notification.Name {
     static let tarnModulesDidChange = Notification.Name("com.daniil4545.tarn.modulesDidChange")
 }
 
+/// What each owner does when its module flips. Tests replace the closures with spies.
+struct ModuleOwners {
+    var tabStyle: @MainActor () -> Void = { TabStyle.applyToOpenWindows() }
+    var freezeWorkspaces: @MainActor (Bool) -> Void = { WorkspaceRegistry.shared.setFrozen($0) }
+    var releasePermissions: @MainActor () -> Void = { SessionRegistry.shared.permissionCardChanged() }
+    var viewerChanged: @MainActor () -> Void = {
+        for controller in TerminalController.all { controller.viewerHost.moduleChanged() }
+    }
+    var menus: @MainActor () -> Void = { TarnModules.applyMenus() }
+}
+
 /// Watches UserDefaults for any writer (the pane, `defaults write`) and acts on the difference
 /// between the effective set and the last one.
 @MainActor
 final class TarnModuleWatcher {
     static let shared = TarnModuleWatcher()
 
-    private var last = TarnModules.effective()
+    private let defaults: UserDefaults
+    private let owners: ModuleOwners
+    private var last: Set<TarnModule>
     private var observer: NSObjectProtocol?
+
+    init(defaults: UserDefaults = .standard, owners: ModuleOwners = ModuleOwners()) {
+        self.defaults = defaults
+        self.owners = owners
+        last = TarnModules.effective(in: defaults)
+    }
 
     /// Starts watching; the first sidebar of the app calls it. Safe to call again.
     func start() {
@@ -135,26 +161,23 @@ final class TarnModuleWatcher {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.check() }
         }
-        TarnModules.applyMenus()
+        owners.menus()
     }
 
     func check() {
-        let now = TarnModules.effective()
+        let now = TarnModules.effective(in: defaults)
         let changed = now.symmetricDifference(last)
         guard !changed.isEmpty else { return }
         last = now
         apply(changed, now: now)
     }
 
-    /// What each owner does when its module flips.
     func apply(_ changed: Set<TarnModule>, now: Set<TarnModule>) {
-        if changed.contains(.sidebar) { TabStyle.applyToOpenWindows() }
-        if changed.contains(.workspaces) { WorkspaceRegistry.shared.setFrozen(!now.contains(.workspaces)) }
-        if changed.contains(.permissionCard) { SessionRegistry.shared.permissionCardChanged() }
-        if changed.contains(.viewer) {
-            for controller in TerminalController.all { controller.viewerHost.moduleChanged() }
-        }
-        TarnModules.applyMenus()
+        if changed.contains(.sidebar) { owners.tabStyle() }
+        if changed.contains(.workspaces) { owners.freezeWorkspaces(!now.contains(.workspaces)) }
+        if changed.contains(.permissionCard) { owners.releasePermissions() }
+        if changed.contains(.viewer) { owners.viewerChanged() }
+        owners.menus()
         NotificationCenter.default.post(name: .tarnModulesDidChange, object: nil, userInfo: ["changed": changed])
         NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
     }

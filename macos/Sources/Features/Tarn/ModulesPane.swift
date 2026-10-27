@@ -8,6 +8,8 @@ struct ModulesSettingsPane: View {
     @AppStorage(TarnModule.notifications.key) private var notifications = true
     @AppStorage(FileViewerSetting.key) private var viewer = true
     @State private var checks: AgentChecks?
+    @State private var eventsSeen = SessionRegistry.shared.eventsSeen
+    private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
     var body: some View {
         Form {
@@ -26,6 +28,7 @@ struct ModulesSettingsPane: View {
         .formStyle(.grouped)
         .navigationTitle("Modules")
         .task { await runChecks() }
+        .onReceive(tick) { _ in eventsSeen = SessionRegistry.shared.eventsSeen }
     }
 
     @ViewBuilder
@@ -55,11 +58,11 @@ struct ModulesSettingsPane: View {
                     Spacer()
                     check("found", checks.version != nil)
                     check("plugin", checks.pluginInstalled)
-                    check("events", checks.eventsSeen)
+                    check("events", eventsSeen)
                 }
                 if checks.version == nil { hint(AgentChecks.notFoundHint) }
                 if !checks.pluginInstalled { hint(AgentChecks.pluginHint) }
-                if !checks.eventsSeen { hint(AgentChecks.eventsHint) }
+                if !eventsSeen { hint(AgentChecks.eventsHint) }
             }
         } else {
             HStack {
