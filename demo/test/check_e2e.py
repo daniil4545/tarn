@@ -68,6 +68,15 @@ def folder_story(pg):
         and snap(pg)["workspaces"]["wss"][0]["tabs"] == ["t1", "t2", "t3", "t4"],
     )
     cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code/tarn"})
+    cmd(pg, "tab.go", {"id": "t2"})
+    cmd(pg, "tab.new", {"ws": "w1"})
+    fresh = snap(pg)["workspaces"]["cur"]
+    check(
+        "F6 a new tab from a tab outside the folder starts in the workspace folder",
+        snap(pg)["workspaces"]["tabs"][fresh]["cwd"] == "~/code/tarn",
+    )
+    cmd(pg, "tab.close", {"id": fresh})
+    cmd(pg, "tab.go", {"id": "t1"})
     cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
     check(
         "F5 with two or more workspaces a top tab starts with its workspace",

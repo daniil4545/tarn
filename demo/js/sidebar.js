@@ -117,9 +117,14 @@ function onClick(e) {
   bus.cmd("tab.go", { id: dataset.tabid });
 }
 
+// The app shows the macOS folder panel; the browser has none, so the demo asks for a path.
+// A folder another workspace already has selects that workspace (docs/specs/workspace-folder.md Q1).
 function newWorkspace() {
-  const name = prompt("Workspace name")?.trim();
-  if (name) bus.cmd("ws.new", { name });
+  const folder = prompt("Folder for the new workspace", "~/code")?.trim().replace(/\/+$/, "");
+  if (!folder) return;
+  const { wss } = read("workspaces"), open = wss.find((w) => w.folder === folder && w.tabs.length);
+  if (open) return bus.cmd("tab.go", { id: open.tabs[0] });
+  bus.cmd("ws.new", { name: folder.slice(folder.lastIndexOf("/") + 1) || folder, folder });
 }
 
 function renameWorkspace(id) {
@@ -129,7 +134,7 @@ function renameWorkspace(id) {
 
 // The app shows the macOS folder panel here; the browser has none, so the demo asks for a path.
 function setFolder(id) {
-  const ws = read("workspaces").wss.find((w) => w.id === id), folder = prompt("Folder", ws.folder ?? "~/code")?.trim();
+  const ws = read("workspaces").wss.find((w) => w.id === id), folder = prompt("Folder for the workspace", ws.folder ?? "~/code")?.trim();
   if (folder) bus.cmd("ws.folder", { id, folder: folder.replace(/\/+$/, "") });
 }
 

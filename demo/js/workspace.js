@@ -116,7 +116,15 @@ function ensurePane(id, cwd) {
 const short = (cwd) => cwd.replace("~/code/", "~/c/");
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
-function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
+// A new tab or split in a workspace with a folder starts in the inherited folder when it lies
+// inside, else in the workspace folder (docs/specs/workspace-folder.md D20).
+const inside = (folder, cwd) => cwd === folder || cwd.startsWith(`${folder}/`);
+const startCwd = (s, ws) => {
+  const inherited = inheritedCwd(s);
+  return ws?.folder && !inside(ws.folder, inherited) ? ws.folder : inherited;
+};
+
+function addTab(s, ws, { cwd = startCwd(s, ws), title = `zsh · ${short(cwd)}` } = {}) {
   const id = nextId("t"), pane = nextId("p");
   s.tabs[id] = { id, title, cwd, layout: { pane }, focus: pane, zoom: null };
   ws.tabs.push(id);
@@ -270,7 +278,7 @@ const COMMANDS = {
       tab.layout = tree.setAt(tab.layout, at, tree.join(tree.at(tab.layout, at), viewer ? { viewer: fresh } : { pane: fresh }, ZONE[dir]));
       tab.focus = fresh;
       tab.zoom = null;
-      ensurePane(fresh, inheritedCwd(s));
+      ensurePane(fresh, startCwd(s, wsOf(s, tab.id)));
       return fresh;
     });
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
@@ -345,10 +353,11 @@ const COMMANDS = {
     toast(`Restored: ${rec.what}`);
   },
 
-  "ws.new": ({ name }) => update((s) => {
-    const ws = { id: nextId("w"), name, tabs: [] };
+  // A workspace by folder: named after it, its first tab starts in it.
+  "ws.new": ({ name, folder }) => update((s) => {
+    const ws = { id: nextId("w"), name, tabs: [], ...(folder ? { folder } : {}) };
     s.wss.push(ws);
-    s.cur = addTab(s, ws, { cwd: "~" });
+    s.cur = addTab(s, ws, { cwd: folder ?? "~" });
   }),
 
   "ws.rename": ({ id, name }) => update((s) => { s.wss.find((w) => w.id === id).name = name; }),
