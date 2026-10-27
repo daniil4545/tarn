@@ -67,7 +67,7 @@ enum NewPane {
     /// (`SurfaceView.swift:1067-1070`); it is given back to whoever had it: a surface as Ghostty does
     /// after a split, any other view (viewer, sidebar field) twice, as `ViewerHost.keepFocus` does.
     @MainActor
-    private static func keep(_ responder: NSResponder?, in window: NSWindow?) {
+    static func keep(_ responder: NSResponder?, in window: NSWindow?) {
         guard let window, let responder else { return }
         if let surface = responder as? Ghostty.SurfaceView {
             Ghostty.moveFocus(to: surface)

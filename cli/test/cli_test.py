@@ -297,6 +297,60 @@ def main() -> int:
         code, out, err = run(home, ["wait", SURFACE], surface=None)
         check("wait without surface", (code, err) == (1, "tarn: not in a tarn tab\n"))
 
+        # read: the text as is, the lines request field, a bad --lines sends nothing.
+        screen = reply(text='b\n\t"c" \\ é\n')
+        (code, out, err), req = with_server(
+            home, screen, ["read", SURFACE, "--lines", "2"]
+        )
+        check("read text", (code, out, err) == (0, 'b\n\t"c" \\ é\n', ""), out)
+        check(
+            "read request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "read",
+                    "surface": SURFACE,
+                    "pane": SURFACE,
+                    "lines": 2,
+                }
+            ],
+            req,
+        )
+        (code, _, _), req = with_server(home, screen, ["read", "--lines", "3", SURFACE])
+        check("read lines first", code == 0 and req[0]["lines"] == 3, req)
+        (code, _, _), req = with_server(home, screen, ["read", SURFACE])
+        check("read default", code == 0 and "lines" not in req[0], req)
+        (code, out, _), _ = with_server(home, reply(text=""), ["read", SURFACE])
+        check("read empty", (code, out) == (0, ""), out)
+        for bad in ["0", "-1", "x", "", "1.5", "007", "1e3"]:
+            (code, out, err), req = with_server(
+                home, screen, ["read", SURFACE, "--lines", bad]
+            )
+            check(
+                f"bad lines {bad!r}",
+                (code, out, err) == (1, "", "tarn: bad lines\n") and req == [],
+                (code, err, req),
+            )
+        (code, out, err), _ = with_server(
+            home, reply(error=f"no pane matched: {SURFACE}", code=4), ["read", SURFACE]
+        )
+        check("read no pane", (code, out) == (4, "") and "no pane matched" in err, err)
+
+        # close: the request, nothing on stdout, exit 4 for a foreign pane.
+        (code, out, err), req = with_server(home, OK, ["close", SURFACE])
+        check("close", (code, out, err) == (0, "", ""), (code, out, err))
+        check(
+            "close request",
+            req
+            == [{"version": 1, "cmd": "close", "surface": SURFACE, "pane": SURFACE}],
+            req,
+        )
+        (code, out, err), _ = with_server(
+            home, reply(error=f"no pane matched: {SURFACE}", code=4), ["close", SURFACE]
+        )
+        check("close no pane", (code, out) == (4, "") and "no pane matched" in err, err)
+
         # client-side errors.
         for name, args, surface in [
             ("open", ["open", "/x"], None),
@@ -304,6 +358,8 @@ def main() -> int:
             ("ls", ["ls"], None),
             ("new", ["new", "--", "ls"], None),
             ("run", ["run", "--", "ls"], None),
+            ("read", ["read", SURFACE], None),
+            ("close", ["close", SURFACE], None),
         ]:
             code, out, err = run(home, args, surface=surface)
             check(
@@ -362,6 +418,12 @@ def main() -> int:
             ["wait", "a", "b"],
             ["wait", "a", "--timeout"],
             ["wait", "a", "--bogus"],
+            ["read"],
+            ["read", "a", "b"],
+            ["read", "a", "--lines"],
+            ["read", "a", "--bogus"],
+            ["close"],
+            ["close", "a", "b"],
         ]:
             code, out, err = run(home, args)
             check(

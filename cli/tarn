@@ -15,6 +15,10 @@
 #                           blocks until the command in the pane ends; prints
 #                           "<state>  exit <code>  <duration>"; exit 6: the pane cannot report the
 #                           code, 9: timeout
+#   tarn read <pane> [--lines N]
+#                           prints the last N lines (default 80) of the pane's screen and
+#                           scrollback as plain text
+#   tarn close <pane>       closes the pane at once, without confirmation; never moves focus
 # TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer; `wait` ignores it.
 LC_ALL=C
 export LC_ALL
@@ -34,7 +38,7 @@ refused() {
 }
 
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json]"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane>"
 }
 
 # Prints $1 as a JSON string.
@@ -213,6 +217,37 @@ case $cmd in
       json_field text
       printf '\n'
     fi
+    ;;
+  read)
+    need_surface
+    lines=
+    pane=
+    while [ $# -gt 0 ]; do
+      case $1 in
+        --lines)
+          [ $# -gt 1 ] || usage
+          shift
+          # A positive integer without leading zeros: valid JSON number text.
+          case $1 in
+            '' | *[!0-9]* | 0*) fail "bad lines" ;;
+          esac
+          lines=$1
+          ;;
+        -*) usage ;;
+        *) [ -z "$pane" ] || usage; pane=$1 ;;
+      esac
+      shift
+    done
+    [ -n "$pane" ] || usage
+    count=
+    [ -z "$lines" ] || count=",\"lines\":$lines"
+    ask "{\"version\":1,\"cmd\":\"read\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$pane")$count}"
+    json_field text
+    ;;
+  close)
+    [ $# -eq 1 ] || usage
+    need_surface
+    ask "{\"version\":1,\"cmd\":\"close\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$1")}"
     ;;
   notify)
     [ $# -gt 0 ] || usage
