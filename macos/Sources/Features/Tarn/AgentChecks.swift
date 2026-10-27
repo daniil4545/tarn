@@ -44,16 +44,23 @@ struct AgentChecks: Equatable {
         return AgentChecks(version: findVersion(home: home), pluginInstalled: plugin, eventsSeen: eventsSeen)
     }
 
-    private static func findVersion(home: String) -> String? {
+    /// Candidates and the login shell share one budget, so the pane never waits longer than `budget`.
+    private static func findVersion(home: String, budget: TimeInterval = 5) -> String? {
+        let deadline = Date().addingTimeInterval(budget)
+        func remaining() -> TimeInterval { max(0.1, deadline.timeIntervalSinceNow) }
         for path in candidates(home: home) where FileManager.default.isExecutableFile(atPath: path) {
-            if let output = capture(path, ["--version"]), let version = version(from: output) { return version }
+            if let output = capture(path, ["--version"], timeout: remaining()), let version = version(from: output) { return version }
         }
+        guard deadline.timeIntervalSinceNow > 0 else { return nil }
         let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
-        return capture(shell, ["-l", "-i", "-c", "claude --version"]).flatMap(version(from:))
+        return capture(shell, ["-l", "-i", "-c", "claude --version"], timeout: remaining()).flatMap(version(from:))
     }
 
-    /// Standard output of a command, or nil when it fails or runs over five seconds.
-    private static func capture(_ path: String, _ arguments: [String], timeout: TimeInterval = 5) -> String? {
+    /// Standard output of a command, or nil when it fails or runs over `timeout`. A child that
+    /// outlives the limit gets SIGTERM, then SIGKILL (an interactive shell ignores SIGTERM).
+    static func capture(
+        _ path: String, _ arguments: [String], timeout: TimeInterval = 5, onStart: (pid_t) -> Void = { _ in }
+    ) -> String? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: path)
         process.arguments = arguments
@@ -64,8 +71,13 @@ struct AgentChecks: Equatable {
         let done = DispatchSemaphore(value: 0)
         process.terminationHandler = { _ in done.signal() }
         do { try process.run() } catch { return nil }
+        onStart(process.processIdentifier)
         if done.wait(timeout: .now() + timeout) == .timedOut {
             process.terminate()
+            if done.wait(timeout: .now() + 0.2) == .timedOut {
+                kill(process.processIdentifier, SIGKILL)
+                _ = done.wait(timeout: .now() + 2)
+            }
             return nil
         }
         return String(data: pipe.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)

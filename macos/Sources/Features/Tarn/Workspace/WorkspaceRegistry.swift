@@ -89,11 +89,17 @@ final class WorkspaceRegistry {
 
     /// Workspaces off freezes the workspaces as they are; on again regroups the tabs. The pass
     /// runs now and tells the sidebars.
+    var isFrozen: Bool { book.frozen }
+
     func setFrozen(_ frozen: Bool) {
         guard book.frozen != frozen else { return }
         book.frozen = frozen
         book.regroupPending = !frozen
+        // The switch is clicked in another window (Settings); the native moves raise the tabs they
+        // move, so the window that had the keyboard gets it back.
+        let keyWindow = NSApp.keyWindow
         sync()
+        if let keyWindow, NSApp.keyWindow !== keyWindow { keyWindow.makeKeyAndOrderFront(nil) }
         NotificationCenter.default.post(name: .terminalTabsDidChange, object: self)
     }
 
