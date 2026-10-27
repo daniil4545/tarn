@@ -404,13 +404,14 @@ final class WorkspaceRegistry {
     }
 
     /// Puts `window` in `workspace`, before `neighbour` or at the end of the workspace:
-    /// membership first, then one native move.
-    func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil) {
+    /// membership first, then one native move. A change of workspace marks the tab manual
+    /// (D22); `byUser: false` is the seam for the arrival move of D21.
+    func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil, byUser: Bool = true) {
         let tab = key(for: window)
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
         isBusy = true
-        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace) }
+        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace, byUser: byUser) }
         let destination = Self.destination(
             of: tab,
             in: order,

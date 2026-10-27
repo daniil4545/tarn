@@ -50,17 +50,21 @@ struct WorkspaceSet: Equatable {
     /// Unordered. Use `runs(order:)` for the order on screen.
     private(set) var workspaces: [Workspace]
     private(set) var members: [TabKey: Workspace.ID]
+    /// Tabs the user placed by hand (D22). Only members; a tab never moves by folder once in it.
+    private(set) var manual: Set<TabKey>
     private(set) var revision: Int
 
     init(
         id: UUID = UUID(),
         workspaces: [Workspace] = [],
         members: [TabKey: Workspace.ID] = [:],
+        manual: Set<TabKey> = [],
         revision: Int = 0
     ) {
         self.id = id
         self.workspaces = workspaces
         self.members = members
+        self.manual = manual.filter { members[$0] != nil }
         self.revision = revision
     }
 
@@ -85,6 +89,10 @@ struct WorkspaceSet: Equatable {
 
     func tabs(in workspace: Workspace.ID) -> [TabKey] {
         members.filter { $0.value == workspace }.map(\.key)
+    }
+
+    func isManual(_ tab: TabKey) -> Bool {
+        manual.contains(tab)
     }
 
     /// The workspaces of `order` from top to bottom, each with its tabs in tab order.
@@ -162,10 +170,20 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Puts `tab` in `workspace`, leaving the one it was in.
-    mutating func join(_ tab: TabKey, to workspace: Workspace.ID) {
+    /// Puts `tab` in `workspace`, leaving the one it was in. `byUser` marks the tab manual
+    /// (D22); the mark is set only because the workspace changed. The arrival move of D21
+    /// passes false.
+    mutating func join(_ tab: TabKey, to workspace: Workspace.ID, byUser: Bool = false) {
         guard self.workspace(workspace) != nil, members[tab] != workspace else { return }
+        let placed = members[tab] != nil
         members[tab] = workspace
+        if byUser && placed { manual.insert(tab) }
+        revision += 1
+    }
+
+    /// Marks a member as placed by hand (D22). Not a member: nothing happens.
+    mutating func markManual(_ tab: TabKey) {
+        guard members[tab] != nil, manual.insert(tab).inserted else { return }
         revision += 1
     }
 
@@ -174,6 +192,7 @@ struct WorkspaceSet: Equatable {
     @discardableResult
     mutating func remove(_ tab: TabKey) -> Removal {
         guard let id = members.removeValue(forKey: tab) else { return .notMember }
+        manual.remove(tab)
         revision += 1
         guard !members.values.contains(id), let index = workspaces.firstIndex(where: { $0.id == id })
         else { return .stayed }
@@ -206,6 +225,7 @@ struct WorkspaceSet: Equatable {
     mutating func absorb(_ other: WorkspaceSet) {
         workspaces.append(contentsOf: other.workspaces)
         members.merge(other.members) { current, _ in current }
+        manual.formUnion(other.manual.filter { members[$0] != nil })
         revision += 1
     }
 
@@ -252,7 +272,7 @@ struct WorkspaceSet: Equatable {
             if destination != index { reorders.append(Reorder(tab: tab, delta: destination - index)) }
         }
 
-        if members != before.members || workspaces != before.workspaces { revision = before.revision + 1 }
+        if members != before.members || workspaces != before.workspaces || manual != before.manual { revision = before.revision + 1 }
         return reorders
     }
 
@@ -296,13 +316,17 @@ struct WorkspaceSet: Equatable {
     /// not heal the order, every tab outside the first run of its workspace joins the
     /// workspace above it.
     private mutating func repair(_ known: [TabKey], previous: [TabKey]) {
-        if previous.count == known.count {
+        if previous.count == known.count, previous != known {
             let mover = known.first { tab in
                 known.filter { $0 != tab } == previous.filter { $0 != tab }
             }
             if let mover, let index = known.firstIndex(of: mover) {
                 let neighbour = index > 0 ? known[index - 1] : known[safe: index + 1]
-                if let id = neighbour.flatMap({ members[$0] }) { members[mover] = id }
+                if let id = neighbour.flatMap({ members[$0] }) {
+                    // The one native reorder of the user (D22): a changed workspace is a hand placement.
+                    if members[mover] != id { manual.insert(mover) }
+                    members[mover] = id
+                }
                 if isContiguous(known) { return }
             }
         }
