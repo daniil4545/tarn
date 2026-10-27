@@ -7,7 +7,7 @@ import Testing
 struct FailureTests {
     private let t = (0..<4).map { _ in TabKey() }
 
-    @Test func aBrokenSnapshotGivesDefaultWithAllTabs() {
+    @Test func aBrokenSnapshotGivesHomeWithAllTabs() {
         #expect(WorkspaceRestore.snapshot(from: Data("{\"version\":1,".utf8)) == nil)
         #expect(WorkspaceRestore.snapshot(from: Data("[]".utf8)) == nil)
         #expect(WorkspaceRestore.snapshot(from: nil) == nil)
@@ -15,7 +15,8 @@ struct FailureTests {
         // The windows restore without a table: they are new tabs of one group.
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
-        #expect(book.names([t[0], t[1], t[2]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[0], t[1], t[2]]) == [WorkspaceSet.homeName])
+        #expect(book.workspace(of: t[0])?.folder == WorkspaceBook.expectedHome)
         #expect(book.runs(for: [t[0], t[1], t[2]])[0].tabs.count == 3)
     }
 

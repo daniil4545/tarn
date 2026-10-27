@@ -11,7 +11,8 @@ struct TargetTests {
     @Test func firstLaunchHasDefaultWithTheTab() {
         var book = WorkspaceBook()
         let outcome = book.pass([[t[0]]])
-        #expect(book.names([t[0]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[0]]) == [WorkspaceSet.homeName])
+        #expect(book.workspace(of: t[0])?.folder == WorkspaceBook.expectedHome)
         #expect(outcome.reorders.isEmpty)
         #expect(outcome.changed.count == 1)
     }
@@ -21,17 +22,18 @@ struct TargetTests {
         _ = book.pass([[t[0]]])
         _ = book.pass([[t[0]], [t[1]]])
         #expect(book.set(of: t[0])?.id != book.set(of: t[1])?.id)
-        #expect(book.names([t[1]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[1]]) == [WorkspaceSet.homeName])
+        #expect(book.workspace(of: t[1])?.folder == WorkspaceBook.expectedHome)
     }
 
     @Test func aNewTabJoinsTheWorkspaceOfTheSelectedTab() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])
         _ = book.newWorkspace("Work", in: t[0])
-        // Select t0 (Default), then a new tab appears: it goes to Default.
+        // Select t0 ("~"), then a new tab appears: it goes to Default.
         _ = book.selected(t[0])
         _ = book.pass([[t[0], t[1]]], selected: [t[1]])
-        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.defaultName)
+        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.homeName)
     }
 
     @Test func aPendingTargetWinsOverTheSelection() {
@@ -56,7 +58,7 @@ struct TargetTests {
         book.setPendingTarget(work, for: t[0])
         _ = book.pass([[t[0], t[1], t[2]]], selected: [t[0]])
         _ = book.pass([[t[0], t[1], t[2], t[3]]], selected: [t[0]])
-        #expect(book.workspace(of: t[3])?.name == WorkspaceSet.defaultName)
+        #expect(book.workspace(of: t[3])?.name == WorkspaceSet.homeName)
     }
 
     @Test func aNewWorkspaceHoldsItsFirstTabAndOpensAtTheEnd() {
@@ -69,7 +71,7 @@ struct TargetTests {
         #expect(book.set(of: t[0])?.workspace(fresh) != nil)
 
         let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["No project", "Notes"])
+        #expect(book.names([t[0], t[1], t[2]]) == ["~", "Notes"])
         #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
     }
 
@@ -103,8 +105,10 @@ struct TargetTests {
         // t2 leaves for its own window; t0 and t1 stay.
         _ = book.pass([[t[0], t[1]], [t[2]]])
         #expect(book.set(of: t[2])?.id != book.set(of: t[0])?.id)
-        #expect(book.names([t[2]]) == [WorkspaceSet.defaultName])
-        #expect(book.names([t[0], t[1]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[2]]) == [WorkspaceSet.homeName])
+        #expect(book.names([t[0], t[1]]) == [WorkspaceSet.homeName])
+        // The set the tab dragged out of a window starts gets the home folder too.
+        #expect(book.workspace(of: t[2])?.folder == WorkspaceBook.expectedHome)
     }
 
     @Test func aTabDraggedToAnotherWindowJoinsItsCurrentWorkspace() {
@@ -116,7 +120,7 @@ struct TargetTests {
         // t1 moves to the second window, after t3.
         _ = book.pass([[t[0]], [t[2], t[3], t[1]]], selected: [t[0], t[2]])
         #expect(book.workspace(of: t[1])?.id == other)
-        #expect(book.names([t[0]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[0]]) == [WorkspaceSet.homeName])
     }
 
     @Test func repeatedPassesChangeNothing() {
@@ -142,7 +146,7 @@ struct TargetExpiryTests {
         #expect(first)
         #expect(!second)
         _ = book.pass([[t[0], t[1]]], selected: [t[0]])
-        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.defaultName)
+        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.homeName)
     }
 
     @Test func anEmptyWorkspaceMadeForATabThatNeverCameIsRemoved() {

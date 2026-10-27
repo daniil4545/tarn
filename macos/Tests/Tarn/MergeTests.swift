@@ -15,7 +15,7 @@ struct MergeTests {
         let first = book.set(of: t[0])?.id
 
         _ = book.pass([[t[0], t[1], t[2], t[3]]])
-        #expect(book.names(Array(t[0...3])) == ["No project", "No project", "Other"])
+        #expect(book.names(Array(t[0...3])) == ["~", "~", "Other"])
         #expect(book.set(of: t[3])?.id == first)
         #expect(book.sets.count == 1)
     }
@@ -33,7 +33,7 @@ struct MergeTests {
         #expect(book.workspace(of: t[3])?.id == work)
         let outcome = book.pass([[t[0], t[1], t[3]]])
         #expect(outcome.reorders.isEmpty)
-        #expect(book.names([t[0], t[1], t[3]]) == ["No project", "Work"])
+        #expect(book.names([t[0], t[1], t[3]]) == ["~", "Work"])
     }
 
     @Test func aReopenedWindowRecreatesItsSetAndWorkspaceWithoutAnEmptyDefault() {
@@ -57,7 +57,7 @@ struct MergeTests {
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.closing(t[1])
         _ = book.pass([[t[0]]])
-        #expect(book.names([t[0]]) == ["No project"])
+        #expect(book.names([t[0]]) == ["~"])
         #expect(book.set(of: t[0])?.workspaces.count == 1)
     }
 
@@ -121,8 +121,8 @@ struct MergeTests {
     @Test func aTabTakenOutOfANamedWorkspaceGivesTheSameResultInAnyGroupOrder() {
         for groups in [[[t[0], t[1]], [t[2]]], [[t[2]], [t[0], t[1]]]] {
             let book = workWindowSplit(groups)
-            #expect(book.names([t[0], t[1]]) == ["No project", "Work"])
-            #expect(book.names([t[2]]) == ["No project"])
+            #expect(book.names([t[0], t[1]]) == ["~", "Work"])
+            #expect(book.names([t[2]]) == ["~"])
             #expect(book.set(of: t[2])?.id != book.set(of: t[0])?.id)
         }
     }
@@ -156,7 +156,7 @@ struct MergeTests {
         let docs = book.newWorkspace("Docs", in: t[2])
         _ = book.edit(t[2]) { $0.join(t[2], to: docs) }
         _ = book.pass([[t[0], t[1], t[2]]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["No project", "Docs"])
+        #expect(book.names([t[0], t[1], t[2]]) == ["~", "Docs"])
         #expect(book.sets.count == 1)
     }
 
@@ -164,6 +164,6 @@ struct MergeTests {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]], [t[2]]])
         _ = book.pass([[t[0], t[1], t[2]]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["No project"])
+        #expect(book.names([t[0], t[1], t[2]]) == ["~"])
     }
 }

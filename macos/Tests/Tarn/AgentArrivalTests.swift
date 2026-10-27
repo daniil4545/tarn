@@ -9,9 +9,10 @@ struct AgentArrivalTests {
     private let alive: (pid_t) -> Bool = { _ in true }
     private let dead: (pid_t) -> Bool = { _ in false }
 
-    /// "No project" holds t0 and t2, "tarn" (`/p/F`) holds t1, "dev" (`/p`) holds t3.
+    /// A restored folderless "No project" holds t0 and t2, "tarn" (`/p/F`) holds t1, "dev" (`/p`) holds t3.
     private func makeBook() -> (book: WorkspaceBook, tarn: Workspace.ID, dev: Workspace.ID) {
         var book = WorkspaceBook()
+        book.restoreLegacy([t[0], t[1], t[3], t[2]])
         _ = book.pass([[t[0], t[1], t[3], t[2]]])
         var tarn: Workspace.ID?
         var dev: Workspace.ID?
