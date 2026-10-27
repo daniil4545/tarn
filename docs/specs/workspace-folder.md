@@ -241,6 +241,9 @@ extension WorkspaceSet {
     mutating func create(name: String, folder: String?) -> Workspace.ID?
     mutating func markManual(_ tab: TabKey)     // D22
     func isManual(_ tab: TabKey) -> Bool
+    /// `byUser: true` marks the tab manual, only when its workspace changes (D22). The arrival
+    /// move of D21 passes false; `WorkspaceRegistry.moveTab` has the same `byUser` seam.
+    mutating func join(_ tab: TabKey, to workspace: Workspace.ID, byUser: Bool = false)
 }
 
 extension WorkspaceBook {
@@ -317,6 +320,10 @@ Top tab bar (D25):
 | 2. Start directory | new tabs and splits start per D20 | 1 | arrival | unit S4-S10, S34 |
 | 3. Agent arrival | probe of D26 first; agent tabs join by folder; manual marks saved and restored, manual wins; sidebar mark | 1 | top tab prefix | unit S11-S21 (marks), S27-S33 |
 | 4. Tab prefix | native titles with the prefix when tabs are at the top | 1 | | unit S23, S25, S35; live S24 |
+
+Stage 3 is two PRs: 3a = manual marks (D22: `manual`, `moveTab` and rule 4 mover marks,
+snapshot field, undo; S16 mark part, S21 marks, S30 mark part, S31); 3b = the D26 probe, agent
+arrival (D21, D27) and the sidebar mark (S11-S15, S16 no-move part, S17-S20, S27-S29, S32, S33).
 
 Each stage is one PR to `dev` under 400 lines of code; docs (`docs/modules/workspaces.md`,
 `docs/specs/windows-workspaces.md` decisions, `docs/architecture.md` insertion points) go with

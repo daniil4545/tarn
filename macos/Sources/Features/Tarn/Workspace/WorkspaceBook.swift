@@ -28,6 +28,8 @@ struct WorkspaceBook {
         /// The set as it was just before the tab left.
         let set: WorkspaceSet
         let workspace: Workspace
+        /// The tab was placed by hand (D22); an undo keeps the mark.
+        let manual: Bool
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
@@ -207,7 +209,7 @@ struct WorkspaceBook {
     /// Notes a tab that is about to close. Returns what is needed to put it back.
     mutating func closing(_ tab: TabKey) -> ClosedTab? {
         guard let id = setOf[tab], let set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
-        let closed = ClosedTab(tab: tab, set: set, workspace: workspace)
+        let closed = ClosedTab(tab: tab, set: set, workspace: workspace, manual: set.isManual(tab))
         var outcome = Outcome()
         closeQuietly(tab, into: &outcome)
         live.remove(tab)
@@ -223,6 +225,7 @@ struct WorkspaceBook {
             set.add(closed.workspace)
         }
         set.join(tab, to: closed.workspace.id)
+        if closed.manual { set.markManual(tab) }
         sets[id] = set
         setOf[tab] = id
         settled.insert(tab)
