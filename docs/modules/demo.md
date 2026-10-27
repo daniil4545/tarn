@@ -88,7 +88,7 @@ The viewer page is the same code in both; the rest is a second implementation of
 | `demo/viewer/` | copy of the app viewer bundle (generated, do not edit) |
 | `demo/vendor/` | ghostty-web (JS and WASM), fonts; entries in `THIRD_PARTY.md` |
 | `demo/tools/gen-themes.py` | regenerates `js/themes-data.js` from a Ghostty themes folder |
-| `demo/test/` | `check_0.py`, `check_a.py`, `check_b.py`, `check_c.py`, `check_e2e.py`, `check_review.py`, `lib.py`, `unit/`, `keys.html` (manual page for reserved browser keys) |
+| `demo/test/` | `check_0.py`, `check_a.py`, `check_b.py`, `check_c.py`, `check_e2e.py`, `check_review.py`, `check_modules.py`, `lib.py`, `unit/`, `keys.html` (manual page for reserved browser keys) |
 | `tools/sync-viewer.sh` | copies and patches the app viewer bundle |
 | `demo/README.md` | run, test, built vs planned |
 
@@ -129,6 +129,7 @@ Failures: bad stored JSON gives the seed and a toast; blocked storage is tolerat
 | `check_c.py` | viewer, settings, theme picker and window colors, Help |
 | `check_e2e.py` | the whole user story, README lists built and planned |
 | `check_review.py` | regressions from the code reviews (undo, drag, keys, storage, settings), no personal data in the demo |
+| `check_modules.py` | Settings > Modules: five switches, greyed Permission card, Workspaces off and on |
 | `node --test demo/test/unit` | the shell and the theme data and color rule, without a browser |
 
 Run (Chrome installed; under load put `nice -n 10` in front):
