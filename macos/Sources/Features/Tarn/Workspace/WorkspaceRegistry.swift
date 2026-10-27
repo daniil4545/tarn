@@ -274,6 +274,22 @@ final class WorkspaceRegistry {
         expirePendingTarget(of: tab)
     }
 
+    /// D20: the config of a new tab or split, with the working directory of the workspace folder.
+    /// Called from the insertion points of Ghostty's new tab and new split handlers. Unchanged:
+    /// no config, a window that is not a terminal tab (quick terminal), a tab that opens a window
+    /// (S34), a workspace without a folder (S8), a folder gone from disk (S9).
+    func prepare(_ config: Ghostty.SurfaceConfiguration?, from window: NSWindow?, split: Bool) -> Ghostty.SurfaceConfiguration? {
+        guard var config, let window, window.windowController is TerminalController, let tab = tabKey(of: window),
+              split || window.tabbingMode != .disallowed,
+              let folder = book.folderForNewSurface(from: tab, split: split)
+        else { return config }
+        var isDirectory: ObjCBool = false
+        let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && isDirectory.boolValue }
+        if !exists(folder) { Self.logger.error("workspace: folder gone value=\(folder, privacy: .public)") }
+        config.workingDirectory = WorkspaceFolder.startDirectory(inherited: config.workingDirectory, folder: folder, exists: exists)
+        return config
+    }
+
     /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for
     /// a name any more (Q2); the model keeps the entry point.
     @discardableResult
