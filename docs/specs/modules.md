@@ -57,7 +57,7 @@ Tellurion has no dependencies between features; "needs X" is ours. Upstream Ghos
 
 All keys default to on. While Sidebar is off, Permission card keeps its stored state, its switch is greyed out with "needs Sidebar" and it behaves as off.
 
-Workspaces with Sidebar off: each native tab reads the tab title (Ghostty's), then the workspace name, then the agent state dot (user decision 2026-10-27). The name sits in our tab mark `NativeTabMark` (`Sidebar.swift:1131`) after the title; there is no insertion point and Ghostty's title logic is not edited. The window subtitle shows the workspace as with the sidebar, and New Workspace works.
+Workspaces with Sidebar off: each native tab reads the tab title (Ghostty's), then the workspace name, then the agent state dot (user decision 2026-10-27); the name shows only when the window set has two or more workspaces (D25's condition, `docs/specs/workspace-folder.md`). The name sits in our tab mark `NativeTabMark` (`Sidebar.swift:1131`) after the title; there is no insertion point and Ghostty's title logic is not edited. The window subtitle shows the workspace as with the sidebar, and New Workspace works.
 
 The tab style picker moves from Settings > Tabs to the Sidebar row; Tabs keeps the row size. The session registry and the control socket run whatever the switches are; they hold no UI.
 

@@ -1155,7 +1155,7 @@ struct NativeTabMark: View {
 
     var body: some View {
         if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }) {
-            let name = Self.workspaceName(tab.workspace, workspacesOn: model.modules.contains(.workspaces))
+            let name = Self.workspaceName(tab.workspace, workspacesOn: model.modules.contains(.workspaces), workspaces: model.groups.count)
             if name != nil || tab.agentProcess != nil {
                 HStack(spacing: 6) {
                     if let name {
@@ -1178,9 +1178,9 @@ struct NativeTabMark: View {
         }
     }
 
-    /// The workspace name a native tab shows, or nil while Workspaces is off or the name is empty.
-    nonisolated static func workspaceName(_ name: String, workspacesOn: Bool) -> String? {
-        workspacesOn && !name.isEmpty ? name : nil
+    /// The workspace name a native tab shows, or nil while Workspaces is off, the window set has one workspace, or the name is empty.
+    nonisolated static func workspaceName(_ name: String, workspacesOn: Bool, workspaces: Int) -> String? {
+        workspacesOn && workspaces >= 2 && !name.isEmpty ? name : nil
     }
 
     /// Puts the mark first in the accessory stack Ghostty gives every native tab.

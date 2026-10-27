@@ -20,8 +20,9 @@ struct WorkspaceTitleTests {
 
     // Tabs at the top: the tab mark carries the workspace name while Workspaces is on.
     @Test func theNativeTabMarkNamesTheWorkspace() {
-        #expect(NativeTabMark.workspaceName("Work", workspacesOn: true) == "Work")
-        #expect(NativeTabMark.workspaceName("Work", workspacesOn: false) == nil)
-        #expect(NativeTabMark.workspaceName("", workspacesOn: true) == nil)
+        #expect(NativeTabMark.workspaceName("Work", workspacesOn: true, workspaces: 2) == "Work")
+        #expect(NativeTabMark.workspaceName("Work", workspacesOn: true, workspaces: 1) == nil)
+        #expect(NativeTabMark.workspaceName("Work", workspacesOn: false, workspaces: 3) == nil)
+        #expect(NativeTabMark.workspaceName("", workspacesOn: true, workspaces: 2) == nil)
     }
 }

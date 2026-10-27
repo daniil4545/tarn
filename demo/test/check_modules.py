@@ -94,7 +94,7 @@ def sidebar_checks(pg):
         and not pg.locator("[data-module=workspaces] input").is_disabled(),
     )
     check(
-        "M8 Sidebar off: each top tab carries its workspace name",
+        "M8 Sidebar off: with several workspaces each top tab carries its workspace name",
         pg.locator("#topTabs .ttab .tw").first.inner_text() == "tarn"
         and pg.locator("#topTabs .ttab .tw").count() == 6,
     )
