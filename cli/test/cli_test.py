@@ -199,6 +199,76 @@ def main() -> int:
             (code, out, err),
         )
 
+        # wait: the text line, --json, the timeout request field, the app's exit codes (6, 9, 4).
+        done = reply(
+            text="error  exit 2  1.5s", state="error", exit_code=2, duration_ms=1500
+        )
+        (code, out, err), req = with_server(
+            home, done, ["wait", SURFACE, "--timeout", "30"]
+        )
+        check("wait text", (code, out, err) == (0, "error  exit 2  1.5s\n", ""), out)
+        check(
+            "wait request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "wait",
+                    "surface": SURFACE,
+                    "pane": SURFACE,
+                    "timeout": 30,
+                }
+            ],
+            req,
+        )
+        (code, out, _), _ = with_server(home, done, ["wait", "--json", SURFACE])
+        check("wait json", code == 0 and json.loads(out)["exit_code"] == 2, out)
+        for text, status in [
+            ("exit code unknown", 6),
+            ("no shell integration", 6),
+            ("timeout", 9),
+        ]:
+            (code, out, err), _ = with_server(
+                home, reply(error=text, code=status), ["wait", SURFACE]
+            )
+            check(
+                f"wait {text}", (code, out, err) == (status, "", f"tarn: {text}\n"), err
+            )
+        # the wait outlives TARN_TIMEOUT: the answer comes later than the 1 s bound.
+        (code, out, _), _ = with_server(
+            home, done, ["wait", SURFACE], delay=2, TARN_TIMEOUT="1"
+        )
+        check("wait ignores TARN_TIMEOUT", code == 0 and out.startswith("error"), out)
+        # --timeout takes ^[0-9]+(\.[0-9]+)?$ only; a bad one sends nothing.
+        for bad in [
+            ".5",
+            "5.",
+            ".",
+            "-1",
+            "1e99",
+            "",
+            "1.2.3",
+            "abc",
+            "007",
+            "00",
+            "01.5",
+        ]:
+            (code, out, err), req = with_server(
+                home, done, ["wait", SURFACE, "--timeout", bad]
+            )
+            check(
+                f"bad timeout {bad!r}",
+                (code, out, err) == (1, "", "tarn: bad timeout\n") and req == [],
+                (code, err, req),
+            )
+        for good in ["0", "0.5", "10", "1.5", "99999999999999999999"]:
+            (code, _, _), req = with_server(
+                home, done, ["wait", SURFACE, "--timeout", good]
+            )
+            check(f"timeout {good}", code == 0 and len(req) == 1, (code, req))
+        code, out, err = run(home, ["wait", SURFACE], surface=None)
+        check("wait without surface", (code, err) == (1, "tarn: not in a tarn tab\n"))
+
         # client-side errors.
         for name, args, surface in [
             ("open", ["open", "/x"], None),
@@ -255,6 +325,10 @@ def main() -> int:
             ["new", "--"],
             ["new", "--tab", "--", "ls"],
             ["new", "--cwd"],
+            ["wait"],
+            ["wait", "a", "b"],
+            ["wait", "a", "--timeout"],
+            ["wait", "a", "--bogus"],
         ]:
             code, out, err = run(home, args)
             check(

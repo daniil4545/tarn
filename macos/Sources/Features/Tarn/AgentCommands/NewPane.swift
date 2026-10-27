@@ -21,6 +21,7 @@ enum NewPane {
         guard let pane = split(controller, at: caller, direction: direction, config: config) else {
             return .failure(AgentRefusal(text: "split failed"))
         }
+        PaneWaits.shared.marks[pane.id] = RunMark(kind: .new, command: command)
         return .success(["pane": pane.id.uuidString])
     }
 

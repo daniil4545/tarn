@@ -8,7 +8,11 @@
 #   tarn new [--right] [--cwd D] -- <cmd...>
 #                           a split below this pane (right with --right) running the command;
 #                           prints its pane id; never moves focus
-# TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer.
+#   tarn wait <pane> [--timeout S] [--json]
+#                           blocks until the command in the pane ends; prints
+#                           "<state>  exit <code>  <duration>"; exit 6: the pane cannot report the
+#                           code, 9: timeout
+# TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer; `wait` ignores it.
 LC_ALL=C
 export LC_ALL
 
@@ -27,7 +31,7 @@ refused() {
 }
 
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text> | new [--right] [--cwd D] -- <cmd...>"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json]"
 }
 
 # Prints $1 as a JSON string.
@@ -93,7 +97,11 @@ json_field() {
 ask() {
   sock="$HOME/Library/Application Support/tarn/tarn.sock"
   [ -S "$sock" ] || fail "tarn is not running"
-  reply=$(printf '%s\n' "$1" | nc -U -w "${TARN_TIMEOUT:-5}" "$sock" 2>/dev/null) || fail "tarn is not running"
+  if [ -n "$hold" ]; then
+    reply=$(printf '%s\n' "$1" | nc -U "$sock" 2>/dev/null) || fail "tarn is not running"
+  else
+    reply=$(printf '%s\n' "$1" | nc -U -w "${TARN_TIMEOUT:-5}" "$sock" 2>/dev/null) || fail "tarn is not running"
+  fi
   [ -n "$reply" ] || fail "no answer from tarn"
   case $reply in
     *'"ok":true'*) return 0 ;;
@@ -168,6 +176,40 @@ case $cmd in
     ask "{\"version\":1,\"cmd\":\"new\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$dir,\"argv\":[$argv]}"
     json_field pane
     printf '\n'
+    ;;
+  wait)
+    need_surface
+    timeout=
+    as_json=false
+    pane=
+    while [ $# -gt 0 ]; do
+      case $1 in
+        --json) as_json=true ;;
+        --timeout)
+          [ $# -gt 1 ] || usage
+          shift
+          # ^(0|[1-9][0-9]*)(\.[0-9]+)?$: valid JSON number text
+          case $1 in
+            '' | *[!0-9.]* | .* | *. | *.*.* | 0[0-9]*) fail "bad timeout" ;;
+          esac
+          timeout=$1
+          ;;
+        -*) usage ;;
+        *) [ -z "$pane" ] || usage; pane=$1 ;;
+      esac
+      shift
+    done
+    [ -n "$pane" ] || usage
+    limit=
+    [ -z "$timeout" ] || limit=",\"timeout\":$timeout"
+    hold=1
+    ask "{\"version\":1,\"cmd\":\"wait\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$pane")$limit}"
+    if $as_json; then
+      printf '%s\n' "$reply"
+    else
+      json_field text
+      printf '\n'
+    fi
     ;;
   notify)
     [ $# -gt 0 ] || usage
