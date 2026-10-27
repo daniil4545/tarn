@@ -250,18 +250,17 @@ final class SidebarModel: ObservableObject {
         let pane = Self.textPane(views.map(\.id), agents: agents, sessions: SessionRegistry.shared.sessions)
         let agent = pane.flatMap { agents[$0] } ?? agents.lazy.compactMap { $0 }.first
         let textView = pane.map { views[$0] } ?? controller?.focusedSurface
-        let pwd = textView?.workingDirectory
-        // Under ssh a path title is the remote shell's: the local folder must not replace it.
         let isSSH = agent == nil && textView?.surfaceModel?.foregroundPID
             .flatMap { pid_t(exactly: $0) }
             .map(AgentProcessCache.isSSH) == true
+        let pwd = Self.shownFolder(textView?.workingDirectory, isSSH: isSSH)
         // The window title is the focused pane's; a split tab names the pane of its dot.
         let paneTitle = views.count > 1 ? pane.map { views[$0].title }.flatMap { $0.isEmpty ? nil : $0 } : nil
         return Tab(
             id: ObjectIdentifier(tabWindow),
             key: key,
             index: index,
-            title: Self.displayTitle(paneTitle ?? tabWindow.title, pwd: isSSH ? nil : pwd, agent: agent),
+            title: Self.displayTitle(paneTitle ?? tabWindow.title, pwd: pwd, agent: agent),
             agentProcess: agent,
             keyEquivalent: shortcut,
             color: (tabWindow as? TerminalWindow)?.tabColor ?? .none,
@@ -318,6 +317,12 @@ final class SidebarModel: ObservableObject {
         guard let controller else { return nil }
         let sessions = SessionRegistry.shared.sessions
         return mostUrgent(controller.surfaceTree.compactMap { sessions[$0.id] })
+    }
+
+    /// The folder the row and its card speak of. Under ssh there is none: Ghostty drops the
+    /// remote OSC 7, so the folder is the local one and a path title is the remote shell's.
+    nonisolated static func shownFolder(_ pwd: String?, isSSH: Bool) -> String? {
+        isSSH ? nil : pwd
     }
 
     /// The tab title to show: a shell's path title becomes the full working directory with "~";

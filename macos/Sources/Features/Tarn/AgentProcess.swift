@@ -153,6 +153,7 @@ enum AgentProcess {
 enum AgentProcessCache {
     /// How a pid is read. Tests replace it to count the reads.
     static var reader: (pid_t) -> String? = { AgentProcess.agent(pid: $0) }
+    static var sshReader: (pid_t) -> Bool = { AgentProcess.isSSH(pid: $0) }
 
     /// The reads that missed the cache since the last `reset`.
     private(set) static var misses = 0
@@ -172,7 +173,7 @@ enum AgentProcessCache {
 
     static func isSSH(pid: pid_t) -> Bool {
         if let hit = sshEntries[pid] { return hit }
-        let isSSH = AgentProcess.isSSH(pid: pid)
+        let isSSH = sshReader(pid)
         sshEntries[pid] = isSSH
         scheduleClear()
         return isSSH
