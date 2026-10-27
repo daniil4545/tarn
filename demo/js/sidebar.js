@@ -68,14 +68,10 @@ function render() {
   const wide = read("config")["tab-rows"] === "wide";
   const row = (w) => (id) => {
     const t = s.tabs[id], status = tabStatus(t, reg);
-    const out = isAgentTab(t, reg) && outsideFolder(w, t.cwd);
-    const mark = out && !wide ? `<span class="out" title="Outside the ${esc(w.name)} folder">!</span>` : "";
-    const line = `<span class="t">${esc(t.title)}</span>${mark}${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
+    const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
     const attrs = `role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
     if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
-    const l2 = out
-      ? `<div class="l2 out" title="Outside the ${esc(w.name)} folder">! ${esc(detail(t, reg))}</div>`
-      : `<div class="l2">${esc(detail(t, reg))}</div>`;
+    const l2 = `<div class="l2">${esc(detail(t, reg))}</div>`;
     return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
   // Flat list: one hidden header and every tab in list order, whatever its frozen group.
@@ -87,12 +83,6 @@ function render() {
     const head = !grouped ? `<div class="wsh flat" data-wsh="${w.id}" aria-hidden="true"></div>` : `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? `${esc(w.folder)} · ` : ""}${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
     return head + (w.collapsed && grouped ? "" : w.tabs.map(row(w)).join(""));
   }).join("") + (grouped ? '<button class="tab add" id="wsNew">+ New workspace</button>' : '<div class="flatend" id="wsNew" aria-hidden="true"></div>');
-}
-
-// An agent outside the folder of its workspace (docs/specs/workspace-folder.md D21). A workspace
-// with no folder never marks.
-function outsideFolder(ws, cwd) {
-  return Boolean(ws.folder) && cwd !== ws.folder && !cwd.startsWith(`${ws.folder}/`);
 }
 
 // The second line of a wide row: the folder and how long the agent is in its state. The icon

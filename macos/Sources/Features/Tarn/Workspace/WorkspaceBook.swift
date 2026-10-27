@@ -28,10 +28,6 @@ struct WorkspaceBook {
         /// The set as it was just before the tab left.
         let set: WorkspaceSet
         let workspace: Workspace
-        /// The tab was placed by hand (D22); an undo keeps the mark.
-        let manual: Bool
-        /// The agent process that decided the tab (D26); an undo is not an arrival (S30).
-        var deciding: pid_t?
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
@@ -49,10 +45,6 @@ struct WorkspaceBook {
     private var pendingTarget: [UUID: Workspace.ID] = [:]
     private var lastSelected: [UUID: Workspace.ID] = [:]
     private var lastSelectedTab: [UUID: TabKey] = [:]
-    /// D26, runtime: the agent process that decided a tab. Kept while it lives, in any pane.
-    private var deciding: [TabKey: pid_t] = [:]
-    /// D27, runtime: agent tabs waiting for their move, with the path the agent started at.
-    private var pending: [TabKey: String] = [:]
 
     // MARK: Queries
 
@@ -221,76 +213,12 @@ struct WorkspaceBook {
         return tabs.contains(selected) ? selected : tabs.last
     }
 
-    // MARK: Agent arrival (D21, D26, D27)
-
-    /// D21: the workspace `tab` must join because its agent started at `path`; nil to stay: a
-    /// tab placed by hand, a tab already at home, no folder holds the path.
-    func arrival(of tab: TabKey, at path: String) -> Workspace.ID? {
-        guard let set = set(of: tab), let current = set.workspace(of: tab), !set.isManual(tab) else { return nil }
-        let runs = set.runs(order: seenOrder[set.id] ?? [])
-        guard let home = WorkspaceFolder.home(for: path, in: runs, current: current.id), home != current.id else { return nil }
-        return home
-    }
-
-    /// D21 mark: the agent of `tab` works outside the folder of its own workspace.
-    func isOutsideFolder(_ tab: TabKey, at path: String) -> Bool {
-        guard let folder = workspace(of: tab)?.folder else { return false }
-        return !WorkspaceFolder.contains(folder, path)
-    }
-
-    /// D26: looks for an agent in `tab` only when no deciding process lives. `found` gives the first
-    /// agent process and its working directory, read lazily; the pid is kept so no other agent of
-    /// the tab starts a check. A path is queued for the move (D27). Returns a note for input no
-    /// rule covers (S27).
-    mutating func checkArrival(_ tab: TabKey, alive: (pid_t) -> Bool, found: () -> (pid: pid_t, path: String?)?) -> String? {
-        if let kept = deciding[tab] {
-            if alive(kept) { return nil }
-            deciding[tab] = nil
-        }
-        guard let (pid, path) = found() else { return nil }
-        guard setOf[tab] != nil else { return note("agent tab without a set", tab: tab, set: nil) }
-        deciding[tab] = pid
-        guard let path, path.hasPrefix("/") else {
-            return note("agent without a usable path value=\(path ?? "nil")", tab: tab, set: setOf[tab])
-        }
-        if !frozen { pending[tab] = path }
-        return nil
-    }
-
-    var pendingTabs: [TabKey] { pending.keys.sorted { $0.uuidString < $1.uuidString } }
-
-    /// D27: the queued tabs that may move now, those of the key window group. The rest wait.
-    func runnable(in keyGroup: [TabKey]) -> [TabKey] {
-        pendingTabs.filter(keyGroup.contains)
-    }
-
-    /// Takes the queued entry of `tab` and gives its destination now, so a deleted workspace or a
-    /// changed folder is never a stale target.
-    mutating func takeArrival(_ tab: TabKey) -> Workspace.ID? {
-        pending.removeValue(forKey: tab).flatMap { arrival(of: tab, at: $0) }
-    }
-
-    /// An arrival move happened: a selected tab becomes the target of the next new tab, and a
-    /// collapsed destination unfolds, both only when the arriving tab is selected (S32); a
-    /// background arrival changes neither. Returns the set when its table changed.
-    mutating func arrived(_ tab: TabKey, selected: Bool) -> UUID? {
-        guard let id = setOf[tab], var set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
-        if selected {
-            lastSelected[id] = workspace.id
-            lastSelectedTab[id] = tab
-        }
-        guard selected, workspace.collapsed else { return nil }
-        set.setCollapsed(workspace.id, false)
-        sets[id] = set
-        return id
-    }
-
     // MARK: Closing and coming back
 
     /// Notes a tab that is about to close. Returns what is needed to put it back.
     mutating func closing(_ tab: TabKey) -> ClosedTab? {
         guard let id = setOf[tab], let set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
-        let closed = ClosedTab(tab: tab, set: set, workspace: workspace, manual: set.isManual(tab), deciding: deciding[tab])
+        let closed = ClosedTab(tab: tab, set: set, workspace: workspace)
         var outcome = Outcome()
         closeQuietly(tab, into: &outcome)
         live.remove(tab)
@@ -306,8 +234,6 @@ struct WorkspaceBook {
             set.add(closed.workspace)
         }
         set.join(tab, to: closed.workspace.id)
-        if closed.manual { set.markManual(tab) }
-        deciding[tab] = closed.deciding
         sets[id] = set
         setOf[tab] = id
         settled.insert(tab)
@@ -315,7 +241,6 @@ struct WorkspaceBook {
 
     private mutating func closeQuietly(_ tab: TabKey, into outcome: inout Outcome) {
         guard let id = setOf[tab] else { return }
-        deciding[tab] = nil
         remove(tab, from: id)
         outcome.changed.insert(id)
         outcome.changed = outcome.changed.filter { sets[$0] != nil }
@@ -323,7 +248,6 @@ struct WorkspaceBook {
 
     private mutating func remove(_ tab: TabKey, from id: UUID) {
         setOf[tab] = nil
-        pending[tab] = nil
         settled.remove(tab)
         seenOrder[id] = seenOrder[id]?.filter { $0 != tab }
         guard var set = sets[id] else { return }
