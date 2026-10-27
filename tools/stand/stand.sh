@@ -47,7 +47,8 @@ ditto "$src" "$app"
 plutil -replace CFBundleIdentifier -string "$id" "$app/Contents/Info.plist"
 codesign --force --deep --sign - "$app"
 
-FAKE_PW_DIR="$stand/home" DYLD_INSERT_LIBRARIES="$lib" HOME="$stand/home" \
+# A Debug build counts coverage and writes default.profraw into the cwd on exit: keep it in the stand.
+FAKE_PW_DIR="$stand/home" DYLD_INSERT_LIBRARIES="$lib" HOME="$stand/home" LLVM_PROFILE_FILE="$stand/default.profraw" \
   "$app/Contents/MacOS/ghostty" "$@" > "$stand/app.log" 2>&1 &
 pid=$!
 
