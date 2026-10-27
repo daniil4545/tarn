@@ -120,10 +120,10 @@ line = "S"
 wave = 2
 build = true
 title = "Sidebar row: a slot for marks from separate providers"
-body = "Git, ssh and radar provide marks; the row draws them. After #35 stage 3."
+body = "Git and radar provide marks; the row draws them. After #35 stage 3."
 files = ["macos/Sources/Features/Tarn/Sidebar.swift", "macos/Sources/Features/Tarn/TarnSettings.swift", "demo/js/sidebar.js"]
 owns = ["sidebar"]
-needs = ["T-203"]
+needs = ["T-203", "S3"]
 lines = 200
 
 [[item]]
@@ -143,14 +143,13 @@ lines = 300
 key = "S3"
 epic = 39
 line = "S"
-wave = 2
+wave = 1
 build = true
-title = "SSH: host of an ssh tab in the sidebar row"
-body = "The row shows the host that C8 reads from the ssh argv."
-files = ["macos/Sources/Features/Tarn/Sidebar.swift", "demo/js/sidebar.js"]
+title = "SSH: an ssh tab keeps the remote shell's title"
+body = "T-250: the host is Ghostty's title, as in every terminal; no path title swap while ssh runs."
+files = ["macos/Sources/Features/Tarn/Sidebar.swift", "macos/Sources/Features/Tarn/AgentProcess.swift"]
 owns = ["sidebar"]
-needs = ["S2", "C8"]
-lines = 100
+lines = 30
 
 [[item]]
 key = "W1"
@@ -161,7 +160,7 @@ title = "Workspace hub: look in the demo, vertical and horizontal"
 body = "Demo first: a click on the workspace header opens the hub; folding moves elsewhere (decided in the demo)."
 files = ["demo/js/sidebar.js", "demo/js/workspace.js", "new:demo/js/hub.js", "new:demo/css/hub.css"]
 owns = ["sidebar"]
-needs = ["S3"]
+needs = ["S2"]
 lines = 0
 
 [[item]]
@@ -196,7 +195,7 @@ epic = 33
 line = "S"
 wave = 3
 build = true
-title = "Hub header: branch, ssh host and radar marks"
+title = "Hub header: branch and radar marks"
 body = "The hub header shows what the row providers already know."
 files = ["macos/Sources/Features/Tarn/WorkspaceHeader.swift", "new:macos/Sources/Features/Tarn/Hub/HubView.swift"]
 owns = ["sidebar"]
@@ -437,12 +436,12 @@ epic = 39
 line = "C"
 wave = 2
 build = true
-title = "SSH: host of an ssh tab from its argv, in tarn ls"
-body = "Ghostty drops OSC 7 with a remote host. Probe in a live tab first."
-files = ["macos/Sources/Features/Tarn/AgentCommands/AgentCommands.swift", "macos/Sources/Features/Tarn/AgentProcess.swift"]
+title = "tarn ls: drop the HOST column"
+body = "T-250: the title and PROCESS show an ssh tab."
+files = ["macos/Sources/Features/Tarn/AgentCommands/ListPanes.swift", "cli/test/cli_test.py", "demo/js/commands/tarn.js"]
 owns = ["commands"]
 needs = ["C5"]
-lines = 200
+lines = 20
 
 [[item]]
 key = "C6"

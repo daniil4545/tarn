@@ -33,7 +33,7 @@ struct AgentProcessTests {
         #expect(!AgentProcess.looksLikeVersion("python3.12"))
     }
 
-    /// Runs `program` from a link named `file` with `argv`, so the kernel name is `file`.
+    /// Runs `program` from a link named `file` with `argv`; the kernel name stays `program`'s.
     private func withProcess(
         file: String,
         program: String = "/bin/sleep",
@@ -145,6 +145,61 @@ struct AgentProcessTests {
             try #require(members() == 2, "sleep never joined the group")
             #expect(AgentProcess.foreground(group: shell) == shell)
         }
+    }
+
+    /// spec: T-250 - an ssh tab keeps the remote shell's title.
+    @Test func anSSHClientIsNamedByItsKernelName() throws {
+        // The real client, as a link keeps its target's kernel name: the proxy command keeps it
+        // waiting with no network and no user config, and the group kill takes the proxy too.
+        let ssh = ["/usr/bin/ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ProxyCommand=sleep 30", "tarn-test"]
+        try withGroup(ssh) { pid in
+            #expect(execed(pid, comm: "ssh"), "the kernel name never became ssh")
+            #expect(AgentProcess.isSSH(pid: pid))
+            #expect(AgentProcess.agent(pid: pid) == nil)
+        }
+        try withProcess(file: "sleep", argv: ["sleep", "30"]) { pid in
+            #expect(execed(pid, comm: "sleep"), "the kernel name never became sleep")
+            #expect(!AgentProcess.isSSH(pid: pid))
+        }
+    }
+
+    /// spec: T-250 - under ssh the row keeps the remote title and the card shows no local folder.
+    @Test(arguments: [
+        (false, "/u/Galera", "/u/Galera"),
+        (true, "~/app", nil),
+    ] as [(Bool, String, String?)])
+    func anSSHTabShowsNoLocalFolder(isSSH: Bool, title: String, folder: String?) {
+        let pwd = SidebarModel.shownFolder("/u/Galera", isSSH: isSSH)
+        #expect(SidebarModel.displayTitle("~/app", pwd: pwd) == title)
+        #expect(pwd == folder)
+    }
+
+    /// spec: T-250 - one ssh read per pid in a turn; a reset forgets it, so `exec ssh` is seen.
+    @MainActor @Test func theSSHCheckIsReadOncePerTurn() {
+        let saved = AgentProcessCache.sshReader
+        var reads = 0
+        AgentProcessCache.sshReader = { _ in reads += 1; return true }
+        AgentProcessCache.reset()
+        defer {
+            AgentProcessCache.sshReader = saved
+            AgentProcessCache.reset()
+        }
+        #expect(AgentProcessCache.isSSH(pid: 10))
+        #expect(AgentProcessCache.isSSH(pid: 10))
+        #expect(reads == 1)
+        AgentProcessCache.reset()
+        _ = AgentProcessCache.isSSH(pid: 10)
+        #expect(reads == 2)
+    }
+
+    /// Whether `pid` took the kernel name `comm` within 5 s: posix_spawn returns before exec.
+    private func execed(_ pid: pid_t, comm: String) -> Bool {
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if AgentProcess.comm(pid: pid) == comm { return true }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        return false
     }
 
     @Test func unreadablePidIsNotAnAgent() {

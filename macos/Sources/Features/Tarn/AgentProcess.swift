@@ -71,6 +71,10 @@ enum AgentProcess {
     private static let interpreters: Set<String> = ["node", "bun", "deno", "python", "python3"]
     private static let scriptExtensions: Set<String> = ["js", "mjs", "cjs", "ts", "py"]
 
+    /// Whether `pid` is an ssh client. Ghostty drops OSC 7 with a remote host, so the tab's
+    /// folder stays the local one ssh started in while the title is the remote shell's.
+    static func isSSH(pid: pid_t) -> Bool { comm(pid: pid) == "ssh" }
+
     /// The kernel name of `pid`: the executable's basename cut to 15 characters.
     static func comm(pid: pid_t) -> String? {
         var info = proc_bsdshortinfo()
@@ -149,11 +153,13 @@ enum AgentProcess {
 enum AgentProcessCache {
     /// How a pid is read. Tests replace it to count the reads.
     static var reader: (pid_t) -> String? = { AgentProcess.agent(pid: $0) }
+    static var sshReader: (pid_t) -> Bool = { AgentProcess.isSSH(pid: $0) }
 
     /// The reads that missed the cache since the last `reset`.
     private(set) static var misses = 0
 
     private static var entries: [pid_t: String?] = [:]
+    private static var sshEntries: [pid_t: Bool] = [:]
     private static var isClearScheduled = false
 
     static func agent(pid: pid_t) -> String? {
@@ -165,9 +171,18 @@ enum AgentProcessCache {
         return agent
     }
 
+    static func isSSH(pid: pid_t) -> Bool {
+        if let hit = sshEntries[pid] { return hit }
+        let isSSH = sshReader(pid)
+        sshEntries[pid] = isSSH
+        scheduleClear()
+        return isSSH
+    }
+
     /// Forgets every answer and the miss count.
     static func reset() {
         entries.removeAll()
+        sshEntries.removeAll()
         misses = 0
     }
 
@@ -178,6 +193,7 @@ enum AgentProcessCache {
             MainActor.assumeIsolated {
                 isClearScheduled = false
                 entries.removeAll()
+                sshEntries.removeAll()
             }
         }
     }
