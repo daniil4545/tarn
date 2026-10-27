@@ -274,6 +274,28 @@ final class WorkspaceRegistry {
         expirePendingTarget(of: tab)
     }
 
+    /// D20: the config of a new tab or split, with the working directory of the workspace folder.
+    /// Called from the insertion points of Ghostty's new tab and new split handlers. Unchanged:
+    /// no config, a window that is not a terminal tab (quick terminal), a tab that opens a window
+    /// (S34), a workspace without a folder (S8), a folder gone from disk (S9).
+    func prepare(_ config: Ghostty.SurfaceConfiguration?, from window: NSWindow?, split: Bool) -> Ghostty.SurfaceConfiguration? {
+        guard var config, let window, window.windowController is TerminalController, let tab = tabKey(of: window),
+              Self.landsInWorkspace(split: split, tabbingMode: window.tabbingMode),
+              let folder = book.folderForNewSurface(from: tab, order: group(of: window).map(key(for:)), split: split)
+        else { return config }
+        var isDirectory: ObjCBool = false
+        let present = FileManager.default.fileExists(atPath: folder, isDirectory: &isDirectory) && isDirectory.boolValue
+        if !present { Self.logger.error("workspace: folder gone value=\(folder, privacy: .public)") }
+        config.workingDirectory = WorkspaceFolder.startDirectory(inherited: config.workingDirectory, folder: folder, exists: { _ in present })
+        return config
+    }
+
+    /// A split stays in its tab; a new tab joins the window's workspaces only when the window
+    /// takes tabs. With `.disallowed` (hidden titlebar) Ghostty opens a new window instead (S34).
+    nonisolated static func landsInWorkspace(split: Bool, tabbingMode: NSWindow.TabbingMode) -> Bool {
+        split || tabbingMode != .disallowed
+    }
+
     /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for
     /// a name any more (Q2); the model keeps the entry point.
     @discardableResult
