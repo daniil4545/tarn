@@ -11,7 +11,7 @@ enum NewPane {
         guard let argv = message["argv"] as? [String], !argv.isEmpty else { return .failure(AgentRefusal(text: "no command")) }
         guard let command = ShellQuote.join(argv) else { return .failure(notOneLine) }
         guard let caller = SessionRegistry.surfaceView(scope.caller.pane),
-              let controller = controller(of: caller)
+              let controller = BaseTerminalController.controller(owning: caller)
         else { return .failure(.notInTab) }
 
         var config = Ghostty.SurfaceConfiguration()
@@ -44,7 +44,8 @@ enum NewPane {
     }
 
     /// A tree change drops the first responder once SwiftUI rebuilds the split view
-    /// (`SurfaceView.swift:1067-1070`); it is given back to whoever had it, as Ghostty does after a split.
+    /// (`SurfaceView.swift:1067-1070`); it is given back to whoever had it: a surface as Ghostty does
+    /// after a split, any other view (viewer, sidebar field) twice, as `ViewerHost.keepFocus` does.
     @MainActor
     private static func keep(_ responder: NSResponder?, in window: NSWindow?) {
         guard let window, let responder else { return }
@@ -52,15 +53,12 @@ enum NewPane {
             Ghostty.moveFocus(to: surface)
             return
         }
-        DispatchQueue.main.async {
-            if window.firstResponder !== responder { window.makeFirstResponder(responder) }
+        for delay in [0.0, 0.15] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak window] in
+                guard let window, window.firstResponder !== responder else { return }
+                window.makeFirstResponder(responder)
+            }
         }
-    }
-
-    @MainActor
-    private static func controller(of view: Ghostty.SurfaceView) -> BaseTerminalController? {
-        NSApp.windows.lazy.compactMap { $0.windowController as? BaseTerminalController }
-            .first { $0.surfaceTree.contains { $0 === view } }
     }
 }
 

@@ -31,7 +31,8 @@ struct NewPaneTests {
         #expect(throws: NewPane.notOneLine) { try refusal.get() }
     }
 
-    /// spec: agent-cli B1 - the split goes below the caller and the first responder stays.
+    /// spec: agent-cli B1 - the split goes below the caller and the first responder stays. A focused view
+    /// outside the tree keeps its focus in a hidden window either way, so only a pane is tested here.
     @Test @MainActor func theSplitGoesBelowAndKeepsTheFocus() async throws {
         let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
         // Not shown: the window tests that count visible windows are not disturbed.
@@ -56,7 +57,7 @@ struct NewPaneTests {
             return
         }
         #expect(split.direction == .vertical)
-        for _ in 0..<4 { try await Task.sleep(for: .milliseconds(50)) }
+        try await Task.sleep(for: .milliseconds(400))
         #expect(window.firstResponder === caller)
         #expect(NSApp.isActive == active)
         #expect(NSApp.keyWindow === key)
