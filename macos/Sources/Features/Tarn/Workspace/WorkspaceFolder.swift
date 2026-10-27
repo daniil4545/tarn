@@ -28,10 +28,15 @@ enum WorkspaceFolder {
 
     /// D21, S14, S15: the workspace an agent at `path` belongs to among `runs`. The deepest folder
     /// wins; on a tie the `current` workspace, then the upper one. Nil: no folder holds `path`.
-    static func home(for path: String, in runs: [WorkspaceSet.Run], current: Workspace.ID?) -> Workspace.ID? {
+    /// The start workspace "~" (T-245) holds only its own tabs: it never pulls one from a project.
+    static func home(
+        for path: String, in runs: [WorkspaceSet.Run], current: Workspace.ID?, home: String = NSHomeDirectory()
+    ) -> Workspace.ID? {
         guard path.hasPrefix("/") else { return nil }
+        let homeFolder = standardized(home) ?? home
         let matches = runs.compactMap { run -> (depth: Int, id: Workspace.ID)? in
             guard let folder = run.workspace.folder, contains(folder, path) else { return nil }
+            if folder == homeFolder && run.workspace.id != current { return nil }
             return (URL(fileURLWithPath: folder).resolvingSymlinksInPath().standardized.pathComponents.count, run.workspace.id)
         }
         guard let deepest = matches.map(\.depth).max() else { return nil }

@@ -104,7 +104,7 @@ def folder_story(pg):
     check(
         "F5 with tabs at the top a tab reads title, then its workspace (user decision 2026-10-27)",
         pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn"
-        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "No project",
+        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "~",
     )
     cmd(pg, "config.reset", {"key": "tab-style"})
 
@@ -118,7 +118,7 @@ def story(base):
         )
         folder_story(pg)
 
-        # type in the shell (No project workspace, tab 6)
+        # type in the shell (workspace ~, tab 6)
         show_pane(pg, "p6")
         pg.locator("[data-pane='p6'] canvas").first.click()
         until(pg, "p6", "%")

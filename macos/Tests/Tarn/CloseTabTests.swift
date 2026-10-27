@@ -83,7 +83,7 @@ struct CloseTabTests {
         try await wait { firstWindow.isVisible }
         registry.sync()
 
-        // Tabs in tab order: No project, No project, B, B. Each new tab lands after its own workspace, so
+        // Tabs in tab order: "~", "~", B, B. Each new tab lands after its own workspace, so
         // Ghostty's native `move_tab` never runs (it asserts inside AppKit in a hidden test host).
         let defaultID = try #require(registry.workspace(of: firstWindow)?.id)
         registry.newTab(in: defaultID, from: firstWindow)

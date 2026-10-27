@@ -9,9 +9,10 @@ struct StartDirectoryTests {
     private let folder = "/p/F"
     private let always: (String) -> Bool = { _ in true }
 
-    /// A book with "No project" holding t0 and "tarn" (folder `F`) holding t1.
+    /// A book with a restored folderless "No project" holding t0 and "tarn" (folder `F`) holding t1.
     private func makeBook() -> (book: WorkspaceBook, tarn: Workspace.ID) {
         var book = WorkspaceBook()
+        book.restoreLegacy([t[0], t[1]])
         _ = book.pass([[t[0], t[1]]])
         var tarn: Workspace.ID?
         _ = book.edit(t[0]) { tarn = $0.create(name: "tarn", folder: "/p/F") }
@@ -99,6 +100,7 @@ struct StartDirectoryTests {
     /// the window, so the folder does too, not the workspace the tab moved into.
     @Test func aDeletedLastSelectedWorkspaceGivesTheTopFolderAsMembershipDoes() throws {
         var book = WorkspaceBook()
+        book.restoreLegacy(t)
         _ = book.pass([t])
         var tarn: Workspace.ID?
         var notes: Workspace.ID?
@@ -125,6 +127,15 @@ struct StartDirectoryTests {
         #expect(WorkspaceRegistry.landsInWorkspace(split: true, tabbingMode: .disallowed))
         #expect(WorkspaceRegistry.landsInWorkspace(split: false, tabbingMode: .preferred))
         #expect(WorkspaceRegistry.landsInWorkspace(split: false, tabbingMode: .automatic))
+    }
+
+    // spec: docs/specs/workspace-folder.md D20, D24 (T-245)
+    @Test func aTabInTheStartWorkspaceStartsInTheHomeFolder() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        #expect(book.folderForNewSurface(from: t[0], order: [t[0]], split: false) == WorkspaceBook.expectedHome)
+        #expect(book.folderForNewSurface(from: t[0], order: [t[0]], split: true) == WorkspaceBook.expectedHome)
+        #expect(WorkspaceBook.expectedHome != nil)
     }
 
     @Test func anUnknownTabHasNoFolder() {

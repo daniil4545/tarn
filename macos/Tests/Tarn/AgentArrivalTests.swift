@@ -9,9 +9,10 @@ struct AgentArrivalTests {
     private let alive: (pid_t) -> Bool = { _ in true }
     private let dead: (pid_t) -> Bool = { _ in false }
 
-    /// "No project" holds t0 and t2, "tarn" (`/p/F`) holds t1, "dev" (`/p`) holds t3.
+    /// A restored folderless "No project" holds t0 and t2, "tarn" (`/p/F`) holds t1, "dev" (`/p`) holds t3.
     private func makeBook() -> (book: WorkspaceBook, tarn: Workspace.ID, dev: Workspace.ID) {
         var book = WorkspaceBook()
+        book.restoreLegacy([t[0], t[1], t[3], t[2]])
         _ = book.pass([[t[0], t[1], t[3], t[2]]])
         var tarn: Workspace.ID?
         var dev: Workspace.ID?
@@ -74,6 +75,16 @@ struct AgentArrivalTests {
         #expect(WorkspaceFolder.home(for: "/p/F/x", in: runs, current: nil) == a.id)
         #expect(WorkspaceFolder.home(for: "/q", in: runs, current: a.id) == nil)
         #expect(WorkspaceFolder.home(for: "relative", in: runs, current: a.id) == nil)
+    }
+
+    // spec: T-245 - the start workspace "~" keeps its own tabs and pulls none from a project
+    @Test func theHomeWorkspaceNeverPullsATab() {
+        let home = Workspace(name: "~", folder: "/h")
+        let tarn = Workspace(name: "tarn", folder: "/h/tarn")
+        let runs = [WorkspaceSet.Run(workspace: home, tabs: []), WorkspaceSet.Run(workspace: tarn, tabs: [])]
+        #expect(WorkspaceFolder.home(for: "/h/code", in: runs, current: tarn.id, home: "/h") == nil)
+        #expect(WorkspaceFolder.home(for: "/h/code", in: runs, current: home.id, home: "/h") == home.id)
+        #expect(WorkspaceFolder.home(for: "/h/tarn/src", in: runs, current: home.id, home: "/h") == tarn.id)
     }
 
     // spec: docs/specs/workspace-folder.md S16

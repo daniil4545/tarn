@@ -13,6 +13,7 @@ struct WorkspaceFreezeTests {
     /// Two workspaces: A holds t0 and t1, B holds t2.
     private func seeded() -> WorkspaceBook {
         var book = WorkspaceBook()
+        book.restoreLegacy([t[0], t[1], t[2]])
         _ = book.pass([[t[0], t[1], t[2]]])
         let b = book.newWorkspace("B", in: t[0])
         _ = book.edit(t[2]) { $0.join(t[2], to: b) }

@@ -94,7 +94,7 @@ struct TombstoneTests {
     }
 
     /// Closing a window closes its tabs one by one; the undo makes new tabs. The set, the
-    /// names and the places come back, and no empty `Default` appears.
+    /// names and the places come back, and no empty "~" appears.
     @Test func aWindowUndoRestoresEveryWorkspaceWithoutAnEmptyDefault() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2], t[3]]])
@@ -116,7 +116,7 @@ struct TombstoneTests {
         #expect(outcome.reorders.isEmpty)
         #expect(book.sets.count == 1)
         #expect(book.set(of: t[4])?.id == original)
-        #expect(book.names(Array(t[4...7])) == ["No project", "Work"])
+        #expect(book.names(Array(t[4...7])) == ["~", "Work"])
         #expect(book.set(of: t[4])?.workspaces.count == 2)
     }
 
@@ -128,12 +128,12 @@ struct TombstoneTests {
         _ = book.edit(t[2]) { $0.join(t[2], to: work) }
         let closed = book.closing(t[2])!
         _ = book.pass([[t[0], t[1]]])
-        #expect(book.names([t[0], t[1]]) == ["No project"])
+        #expect(book.names([t[0], t[1]]) == ["~"])
 
         book.reinsert(t[3], from: closed)
         let outcome = book.pass([[t[0], t[1], t[3]]])
         #expect(outcome.reorders.isEmpty)
-        #expect(book.names([t[0], t[1], t[3]]) == ["No project", "Work"])
+        #expect(book.names([t[0], t[1], t[3]]) == ["~", "Work"])
         #expect(book.workspace(of: t[3])?.id == work)
     }
 }

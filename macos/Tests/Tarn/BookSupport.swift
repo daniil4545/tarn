@@ -17,6 +17,18 @@ extension WorkspaceBook {
         return created!
     }
 
+    /// Restores one window as a saved set of a single folderless workspace (a set saved before
+    /// "~" was the start workspace): `tabs` are its members, the first is the window's tab.
+    mutating func restoreLegacy(_ tabs: [TabKey], name: String = WorkspaceSet.defaultName) {
+        adopt(WorkspaceSnapshot(
+            version: 1, setID: UUID(), revision: 1, tabKey: tabs[0],
+            workspaces: [.init(id: UUID(), name: name, collapsed: false, tabKeys: tabs)]
+        ))
+    }
+
+    /// The folder of the start workspace "~": the home folder, standardized.
+    static var expectedHome: String? { WorkspaceFolder.standardized(NSHomeDirectory()) }
+
     func names(_ group: [TabKey]) -> [String] {
         runs(for: group).map(\.workspace.name)
     }

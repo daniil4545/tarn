@@ -599,7 +599,7 @@ def run(base):
         for tab_id in ws_tabs("w0"):
             pg.click(f"{TAB}[data-tabid='{tab_id}'] .x")
         check(
-            "W13 closing the last tab of No project closes it like any workspace",
+            "W13 closing the last tab of ~ closes it like any workspace",
             count(".wsh") == 2 and count(".wsh[data-wsh='w0']") == 0,
         )
         drag(n(".wsh[data-wsh='w2']"), n(".wsh[data-wsh='w1']"), 0.5, 0.5)
@@ -838,9 +838,9 @@ def run(base):
         )
         pg.keyboard.press("Meta+n")
         check(
-            "O5 a new window starts with No project and one tab",
+            "O5 a new window starts with ~ and one tab",
             [w["name"] + ":" + str(len(w["tabs"])) for w in snap()["wss"]]
-            == ["No project:1"]
+            == ["~:1"]
             and count(".wsh") == 1,
         )
 

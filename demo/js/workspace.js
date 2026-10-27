@@ -137,6 +137,7 @@ const decided = new Map();
 
 // An agent that starts in a tab not placed by hand moves the tab to the workspace whose folder
 // holds the agent's folder, the deepest one first (D21). No such workspace: the tab stays.
+// The start workspace "~" (T-245) never pulls a tab from another workspace.
 function arrive() {
   const s = read("workspaces"), registry = read("registry");
   for (const [tabId, pane] of decided) if (!s.tabs[tabId] || !registry[pane]) decided.delete(tabId);
@@ -147,7 +148,7 @@ function arrive() {
     decided.set(tab.id, agent.pane);
     if (tab.manual) continue;
     const cwd = panes.get(agent.pane)?.cwd ?? tab.cwd, here = wsOf(s, tab.id);
-    const home = s.wss.filter((w) => w.folder && inside(w.folder, cwd))
+    const home = s.wss.filter((w) => w.folder && inside(w.folder, cwd) && (w.folder !== "~" || w === here))
       .sort((a, b) => b.folder.length - a.folder.length)[0];
     if (home && here.folder !== home.folder) bus.cmd("tab.move", { id: tab.id, ws: home.id, arrival: true });
   }
@@ -194,9 +195,9 @@ function addTab(s, ws, { cwd = startCwd(s, ws), title = `zsh · ${short(cwd)}` }
   return id;
 }
 
-// A new window starts with "No project" (no folder) and one tab.
+// A new window starts with the workspace "~" (folder ~, T-245) and one tab.
 function openWindow(s) {
-  const ws = { id: nextId("w"), name: flat() ? "~" : "No project", ...(flat() ? { folder: "~" } : {}), tabs: [] };
+  const ws = { id: nextId("w"), name: "~", folder: "~", tabs: [] };
   s.wss = [ws];
   s.cur = addTab(s, ws, { cwd: "~" });
 }
@@ -466,7 +467,7 @@ const COMMANDS = {
   }),
 
   "window.new": () => {
-    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own No project");
+    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own ~");
     update(openWindow);
   },
 

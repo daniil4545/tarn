@@ -228,8 +228,9 @@ def workspace_checks(pg):
     pg.wait_for_function("n => document.querySelectorAll('#sidebar .tab[data-tabid]').length === n + 1", arg=n)
     after = groups(pg)
     check(
-        "M23 a new tab lands in a workspace '~' at the end of the list",
-        after[-1][0] == "~" and after[-1][1] >= 1 and after[:-1] == before,
+        "M23 a new tab joins the seeded workspace '~' (one '~', no duplicate)",
+        after[-1][0] == "~" and after[-1][1] == before[-1][1] + 1 and after[:-1] == before[:-1]
+        and [g[0] for g in after].count("~") == 1,
         repr(after),
     )
     check(
@@ -261,7 +262,7 @@ def workspace_checks(pg):
     names = [g[0] for g in groups(pg)]
     check(
         "M27 Workspaces on again: frozen groups return with '~' holding the new tab",
-        names[:4] == ["tarn", "website", "No project", "~"]
+        names[:4] == ["tarn", "website", "~"]
         and pg.evaluate("__tarn.snapshot().workspaces.wss[0].tabs.includes('t4')")
         and pg.evaluate("__tarn.snapshot().workspaces.wss.find((w) => w.name === '~').folder") == "~"
         and headers(pg) == len(names),

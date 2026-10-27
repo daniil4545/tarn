@@ -7,7 +7,7 @@ const digits = Array.from({ length: 8 }, (_, i) => row(`tab.go.${i + 1}`, [`Cmd+
 export const TAB_KEYS = [
   row("tab.new", ["Cmd+T"], ["Ctrl+Alt+T"], "New tab in the current workspace", "tab.new"),
   row("ws.new", ["Cmd+Shift+T"], ["Ctrl+Alt+Shift+T"], "New workspace with one new tab", "ws.prompt"),
-  row("window.new", ["Cmd+N"], ["Ctrl+Alt+N"], "New window with No project", "window.new"),
+  row("window.new", ["Cmd+N"], ["Ctrl+Alt+N"], "New window with ~", "window.new"),
   row("pane.close", ["Cmd+W"], ["Ctrl+Alt+W"], "Close the pane; the last one closes the tab", "pane.close", undefined, "terminal"),
   // Ctrl+Alt+W is taken by pane.close, so this chord (it has Alt already) has no fallback.
   row("tab.close", ["Cmd+Alt+W"], [], "Close the tab", "tab.close"),
