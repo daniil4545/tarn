@@ -101,24 +101,6 @@ struct WorkspaceFolderTests {
         #expect(set.revision == before + 2)
     }
 
-    // spec: docs/specs/workspace-folder.md S22. The name follows the folder unless typed by hand.
-    @Test func setFolderRenamesOnlyAnAutomaticName() throws {
-        var set = WorkspaceSet.makeDefault(tabs: [t[0]])
-        let plain = set.workspaces[0].id
-        set.setFolder(plain, "/p/tarn")
-        #expect(set.workspace(plain)?.name == "tarn", "No project takes the folder's name")
-        set.setFolder(plain, "/p/website")
-        #expect(set.workspace(plain)?.name == "website", "the old folder's name follows the new one")
-        set.setFolder(plain, "/p/real", name: "link")
-        #expect(set.workspace(plain)?.name == "link", "the name is the folder as picked")
-        set.setFolder(plain, nil)
-        #expect(set.workspace(plain)?.name == "link", "Remove Folder keeps the name (Q3)")
-        let renamed = set.rename(plain, to: "Work")
-        #expect(renamed)
-        set.setFolder(plain, "/p/tarn")
-        #expect(set.workspace(plain)?.name == "Work", "a typed name stays")
-    }
-
     @Test func createWithARelativeFolderIsRefused() {
         var set = WorkspaceSet()
         let created = set.create(name: "x", folder: "relative")

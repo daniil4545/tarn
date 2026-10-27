@@ -167,7 +167,7 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S19 | Split tab with agents | agent in pane 2 at `F` starts first; a second agent in pane 1 at `P` starts later | the first decides; the second start does not move the tab | | fast |
 | S20 | Folder in another window | only window B has "tarn"; agent starts at `F` in window A | no move | | fast |
 | S21 | Restore | relaunch with folders and manual marks; also a snapshot saved before this task | folders and marks come back; an old snapshot decodes with no folder and no marks | | fast |
-| S22 | Set Folder... | header menu on "notes", pick `F` | folder set; no tab moves; new tabs start at `F`; a name not typed by hand ("No project", "Default", the old folder's) becomes `F`'s, as a VS Code window title follows its folder | | fast |
+| S22 | Set Folder... | header menu on "notes", pick `F` | folder set; no tab moves; new tabs start at `F` | | fast |
 | S23 | Tab prefix | tabs at the top, set with "No project" and "tarn" | "tarn · zsh"; with one workspace the plain title; switching to the sidebar style drops the prefix | | fast |
 | S24 | Prefix survives | tabs at the top, title font change or fullscreen | prefix kept | | live |
 | S25 | Rename | rename "tarn" to "core" with tabs at the top | titles read "core · ..." | | fast |

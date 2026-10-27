@@ -141,10 +141,8 @@ struct WorkspaceSet: Equatable {
     }
 
     /// Sets the folder of a workspace, or removes it with nil. Tabs do not move (S22). A path
-    /// that is not absolute changes nothing. A name the user did not type (the old folder's,
-    /// "No project", "Default") follows the new folder, as a VS Code window title does; `name`
-    /// is the folder's name as picked, before symlinks resolve.
-    mutating func setFolder(_ id: Workspace.ID, _ folder: String?, name: String? = nil) {
+    /// that is not absolute changes nothing.
+    mutating func setFolder(_ id: Workspace.ID, _ folder: String?) {
         guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
         let path: String?
         if let folder {
@@ -154,12 +152,6 @@ struct WorkspaceSet: Equatable {
             path = nil
         }
         guard workspaces[index].folder != path else { return }
-        let old = workspaces[index]
-        var automatic = [Self.defaultName, Self.legacyDefaultName]
-        if let folder = old.folder { automatic.append(WorkspaceFolder.name(of: folder)) }
-        if let path, automatic.contains(old.name), let newName = Self.cleaned(name ?? WorkspaceFolder.name(of: path)) {
-            workspaces[index].name = newName
-        }
         workspaces[index].folder = path
         revision += 1
     }
