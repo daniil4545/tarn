@@ -353,7 +353,7 @@ const COMMANDS = {
       tab.layout = tree.setAt(tab.layout, at, tree.join(tree.at(tab.layout, at), viewer ? { viewer: fresh } : { pane: fresh }, ZONE[dir]));
       if (focus) tab.focus = fresh;
       tab.zoom = null;
-      ensurePane(fresh, startCwd(s, wsOf(s, tab.id)));
+      ensurePane(fresh, cfg("window-inherit-working-directory") ? tab.cwd : "~");
       return fresh;
     });
     if (created && path) bus.cmd("viewer.open", { pane: created, path });

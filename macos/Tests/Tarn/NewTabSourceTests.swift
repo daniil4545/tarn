@@ -25,20 +25,20 @@ struct NewTabSourceTests {
         return (book, tarn!, notes!)
     }
 
-    // spec: docs/plans/workspace-thin-layer.md Q1 - the selected tab of that workspace
+    // spec: docs/specs/workspace-folder.md S6 - the selected tab of that workspace
     @Test func theSelectedTabOfTheWorkspaceIsTheSource() {
         let (book, tarn, _) = makeBook()
         #expect(book.sourceTab(for: tarn, order: Array(t.prefix(3)), selected: t[1]) == t[1])
     }
 
-    // spec: docs/plans/workspace-thin-layer.md Q1 - the focus is in another workspace
+    // spec: docs/specs/workspace-folder.md S6 - the focus is in another workspace
     @Test func aSelectedTabElsewhereGivesTheLastTabOfTheWorkspace() {
         let (book, tarn, _) = makeBook()
         #expect(book.sourceTab(for: tarn, order: Array(t.prefix(3)), selected: t[0]) == t[2])
         #expect(book.sourceTab(for: tarn, order: [t[2], t[1], t[0]], selected: t[0]) == t[1])
     }
 
-    // spec: docs/plans/workspace-thin-layer.md Q1 - an empty workspace falls back to Cmd+T
+    // spec: docs/specs/workspace-folder.md S6 - an empty workspace falls back to Cmd+T
     @Test func anEmptyOrUnknownWorkspaceHasNoSource() {
         let (book, _, notes) = makeBook()
         #expect(book.sourceTab(for: notes, order: Array(t.prefix(3)), selected: t[0]) == nil)

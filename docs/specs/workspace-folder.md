@@ -155,8 +155,8 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S1 | New workspace by folder | Shift+Cmd+T, pick `F` | workspace "tarn" with folder `F`, one new tab; the tab's surface config has `workingDirectory == F` | | fast |
 | S2 | Panel cancelled | Shift+Cmd+T, Cancel | no workspace, no tab | | fast |
 | S3 | Folder already bound | pick `F` while "tarn" has `F` in this window | Q1: no new workspace, the first tab of "tarn" is selected | | fast |
-| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `P` or `F/macos` | the new tab or pane starts at the same folder, Ghostty's inheritance (D20 dropped) | | fast |
-| S6 | + on another workspace | selected tab in "~" at `P`, "tarn" has tabs, last at `F/docs`, + on "tarn" | new tab in "tarn" starts at `F/docs`; + on an empty workspace behaves as Cmd+T | | fast |
+| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `P` or `F/macos` | the new tab or pane starts at the same folder, Ghostty's inheritance (D20 dropped) | stand: Cmd+T and Cmd+D through Ghostty actions | live |
+| S6 | + on another workspace | selected tab in "~" at `P`, "tarn" has tabs, last at `F/docs`, + on "tarn" | new tab in "tarn" starts at `F/docs`; + on an empty workspace behaves as Cmd+T | NewTabSourceTests | fast |
 | S5, S7-S10 | | | dropped with D20 (T-249) | | |
 | S11 | Agent joins | tab in "No project" at `F/macos`, `claude` starts | tab moves to the end of "tarn" with one native move; not marked manual | | fast |
 | S12 | Agent at home | tab in "tarn" at `F`, agent starts | no move | | fast |
@@ -183,7 +183,7 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S33 | Job control | Ctrl+Z on `claude`, `cd ~/notes`, `fg` | same pid: no check, no move | | fast |
 | S34 | Tabs give a window | `macos-titlebar-style = hidden` (`tabbingMode = .disallowed`), Cmd+T in "tarn" | dropped with D20: tarn no longer touches the config of a new tab (T-249) | | |
 | S35 | Prefix writers | tabs at the top: rename, a second workspace appears, an arrival move, style switch | every native title of the set is rewritten at once | | fast |
-| - | Acceptance by hand | the user creates "tarn" by folder, opens Cmd+T from `P`, starts `claude`, tries tabs at the top | as S1, S5, S11, S23 on the built app | | live |
+| - | Acceptance by hand | the user creates "tarn" by folder, opens Cmd+T from `P`, starts `claude`, tries tabs at the top | as S1, S4, S11, S23 on the built app | | live |
 
 Limits (what the code never does):
 
@@ -191,7 +191,8 @@ Limits (what the code never does):
 - R2: never moves a tab marked manual.
 - R3: never changes the membership of a tab that is not an agent tab because of a folder.
 - R4: never moves a tab because its working directory changed after the agent started.
-- R5: never changes the start directory of a surface in a workspace without a folder.
+- R5: never changes the start directory Ghostty gives Cmd+T or Cmd+D; only the first tab of a
+  workspace created from a folder and the "+" of a header pass their own config (D19, D20).
 - R6: never writes the user's Ghostty config.
 
 ## 4. Data and states
