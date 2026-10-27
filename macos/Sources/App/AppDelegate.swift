@@ -804,7 +804,8 @@ class AppDelegate: NSObject,
         guard window.windowController is TerminalController else { return }
 
         let configAny = notification.userInfo?[Ghostty.Notification.NewSurfaceConfigKey]
-        let config = configAny as? Ghostty.SurfaceConfiguration
+        var config = configAny as? Ghostty.SurfaceConfiguration
+        config = MainActor.assumeIsolated { WorkspaceRegistry.shared.prepare(config, from: window, split: false) }
 
         _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
     }
