@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The socket commands an agent calls on terminal panes: `ls`, `new` and `wait`. Every command names its caller by `TARN_SURFACE` and reaches only the panes of the caller's workspace. Spec: `docs/specs/agent-cli.md`.
+The socket commands an agent calls on terminal panes: `ls`, `new`, `run` and `wait`. Every command names its caller by `TARN_SURFACE` and reaches only the panes of the caller's workspace. Spec: `docs/specs/agent-cli.md`.
 
 ## Place in the system
 
@@ -12,7 +12,7 @@ flowchart LR
   sock --> reg["SessionRegistry.start"]
   reg -->|"cmd in handlers"| cmds["AgentCommands"]
   cmds -->|"caller workspace"| ws["WorkspaceRegistry"]
-  cmds -->|"scope"| handler["ListPanes, NewPane"]
+  cmds -->|"scope"| handler["ListPanes, NewPane, RunPane"]
   handler -->|"split, no focus"| tree["Ghostty split tree"]
   cmds -->|"reply line"| sock
 ```
@@ -25,8 +25,8 @@ Reading: `AgentCommands` builds the rows of every pane, resolves the caller and 
 |---|---|---|
 | In | `{"version":1,"cmd":"ls","surface":<uuid>,"json":bool}` | `AgentCommands.handle` |
 | Out | `{"ok":true,"text":...}` or `{"ok":true,"panes":[...]}` | `ListPanes.run` |
-| In | `{"version":1,"cmd":"new","surface":<uuid>,"right":bool,"cwd":<absolute, optional>,"argv":[...]}` | `AgentCommands.handle` |
-| Out | `{"ok":true,"pane":<uuid>}` | `NewPane.run` |
+| In | `{"version":1,"cmd":"new"\|"run","surface":<uuid>,"right":bool,"cwd":<absolute, optional>,"argv":[...]}` | `AgentCommands.handle` |
+| Out | `{"ok":true,"pane":<uuid>}` | `NewPane.open` |
 | Out | `{"ok":false,"code":<n>,"error":...}`; the CLI prints `tarn: <error>` and exits with `code` | `AgentCommands.answer` |
 
 ## How it works
@@ -39,6 +39,8 @@ Scope (`AgentScope.resolve`): an unknown caller is `not in a tarn tab`, a caller
 
 `new` (`NewPane`): the arguments become one shell string by the rules of Python `shlex.join` (`ShellQuote`); an argument with a newline or a carriage return is refused, `command must be one line`, in the CLI and in the app (B2). The surface gets the command and the cwd (`--cwd`, else the caller's `workingDirectory`); Ghostty turns on `wait-after-command` for it, so the last screen stays after exit. `NewPane.split` inserts it below the caller (`--right`: to the right) with `SplitTree.inserting`, which clears a zoom, and assigns `surfaceTree` directly: Ghostty's `newSplit` would focus the new pane and register an undo. The window's first responder is given back after the tree change (`Ghostty.moveFocus` for a surface), so the key window, the active app and the focus stay (B1). `--tab` and `--title` come with the tab placement (`docs/specs/agent-cli.md` 11, PR 7).
 
+`run` (`RunPane`): the same path, `NewPane.open` with kind `run`. The surface gets no command, so Ghostty starts the user's login shell, and the line as `initialInput` with no newline: Ghostty writes it to the pty before any other input, the shell reads it as typeahead and shows it at the first prompt, unsubmitted. Typed text reaches the line editor as keys, so any C0 control character or DEL is refused in the app: a newline or a carriage return as `command must be one line`, any other (Ctrl+O submits in zsh and bash, Tab completes) as `command has a control character`. The pane gets a `run` mark, so `wait` waits for the command the user submits. A slow rc file does not lose the line (O2, checked on the stand).
+
 A new command is one handler file in `AgentCommands/`, one row in `AgentCommands.handlers`, one case in `cli/tarn`, one test and one section of the skill (`docs/specs/agent-cli.md` 10).
 
-`wait` (`WaitPane`, `PaneWaits`): `{"version":1,"cmd":"wait","surface":<uuid>,"pane":<uuid>,"timeout":<seconds, optional>}`. It is not a `Handler`: the reply is held until the pane reports an end. `WaitRule.start` decides at once: a `new` pane (run mark) whose process exited is exit 6 `exit code unknown`, a live one waits for `show_child_exited` (U4, U8); a pane at a prompt (`!needsConfirmQuit`, read only when `confirm-close-surface` is `true`, otherwise the wait never answers early) answers `succeed` with `exit_code` null, even after an earlier finish; a pane with the shell in the foreground and no OSC 133 seen is exit 6 `no shell integration`; any other waits for `command_finished`. A pane with a `run` mark waits for the next `command_finished` even at a prompt. The ends arrive through three insertion points (`docs/architecture.md` 9): `command_finished`, `show_child_exited`, `surfaceTreeDidChange`; the last one sweeps on the next tick and answers `closed` for panes that left every tree; a closing window (`NSWindow.willCloseNotification`) answers `closed` for all its panes. A parked wait on a pane with no run mark and no OSC 133 seen is checked every 0.5 s: the shell back in the foreground on two ticks in a row, with no prompt mark, answers exit 6 `no shell integration` instead of hanging. The `run` mark is spent by the finish it waited for. Reply fields: `state` (`succeed`, `error`, `closed`), `exit_code` (null when none), `command`, `duration_ms`, `text`. `--timeout` (`^[0-9]+(\.[0-9]+)?$`, else `bad timeout`) is kept by the app, capped at one year (exit 9). A cancelled CLI is found by `ControlSocket.Reply.watchPeer` (POLLHUP polled every 0.5 s: `nc` half-closes after the request) and its wait is dropped. Limit: the run mark of kind `run` is set by `run` (PR 4).
+`wait` (`WaitPane`, `PaneWaits`): `{"version":1,"cmd":"wait","surface":<uuid>,"pane":<uuid>,"timeout":<seconds, optional>}`. It is not a `Handler`: the reply is held until the pane reports an end. `WaitRule.start` decides at once: a `new` pane (run mark) whose process exited is exit 6 `exit code unknown`, a live one waits for `show_child_exited` (U4, U8); a pane at a prompt (`!needsConfirmQuit`, read only when `confirm-close-surface` is `true`, otherwise the wait never answers early) answers `succeed` with `exit_code` null, even after an earlier finish; a pane with the shell in the foreground and no OSC 133 seen is exit 6 `no shell integration`; any other waits for `command_finished`. A pane with a `run` mark waits for the next `command_finished` even at a prompt. The ends arrive through three insertion points (`docs/architecture.md` 9): `command_finished`, `show_child_exited`, `surfaceTreeDidChange`; the last one sweeps on the next tick and answers `closed` for panes that left every tree; a closing window (`NSWindow.willCloseNotification`) answers `closed` for all its panes. A parked wait on a pane with no run mark and no OSC 133 seen is checked every 0.5 s: the shell back in the foreground on two ticks in a row, with no prompt mark, answers exit 6 `no shell integration` instead of hanging. The `run` mark is spent by the finish it waited for. Reply fields: `state` (`succeed`, `error`, `closed`), `exit_code` (null when none), `command`, `duration_ms`, `text`. `--timeout` (`^[0-9]+(\.[0-9]+)?$`, else `bad timeout`) is kept by the app, capped at one year (exit 9). A cancelled CLI is found by `ControlSocket.Reply.watchPeer` (POLLHUP polled every 0.5 s: `nc` half-closes after the request) and its wait is dropped.

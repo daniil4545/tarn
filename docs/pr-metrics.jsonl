@@ -1,2 +1,3 @@
+{"pr": 100, "date": "2026-10-27", "lines": 399, "rounds": 3, "must_fix": 1, "green_first": false}
 {"pr": 99, "date": "2026-10-27", "lines": 163, "rounds": 1, "must_fix": 0, "green_first": true}
 {"pr": 102, "date": "2026-10-27", "lines": 297, "rounds": 1, "must_fix": 0, "green_first": true}

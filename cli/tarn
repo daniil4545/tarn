@@ -8,6 +8,9 @@
 #   tarn new [--right] [--cwd D] -- <cmd...>
 #                           a split below this pane (right with --right) running the command;
 #                           prints its pane id; never moves focus
+#   tarn run [--right] [--cwd D] -- <cmd...>
+#                           as new, but a shell with the command typed, not submitted: the user
+#                           presses Enter; never presses it
 #   tarn wait <pane> [--timeout S] [--json]
 #                           blocks until the command in the pane ends; prints
 #                           "<state>  exit <code>  <duration>"; exit 6: the pane cannot report the
@@ -31,7 +34,7 @@ refused() {
 }
 
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text> | new [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json]"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json]"
 }
 
 # Prints $1 as a JSON string.
@@ -139,7 +142,7 @@ case $cmd in
       usage
     fi
     ;;
-  new)
+  new | run)
     need_surface
     right=false
     cwd=
@@ -173,7 +176,7 @@ case $cmd in
     done
     dir=
     [ -z "$cwd" ] || dir=",\"cwd\":$(json_str "$cwd")"
-    ask "{\"version\":1,\"cmd\":\"new\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$dir,\"argv\":[$argv]}"
+    ask "{\"version\":1,\"cmd\":\"$cmd\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$dir,\"argv\":[$argv]}"
     json_field pane
     printf '\n'
     ;;

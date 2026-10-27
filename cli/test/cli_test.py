@@ -180,6 +180,34 @@ def main() -> int:
                 err,
             )
 
+        # run: the options and the command line rule of new, cmd "run" (agent-cli 4.5).
+        (code, out, err), req = with_server(
+            home, reply(pane=SURFACE), ["run", "--right", "--cwd", "w", "--", "echo", "hi"]
+        )
+        check("run prints the pane", (code, out, err) == (0, SURFACE + "\n", ""), out)
+        check(
+            "run request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "run",
+                    "surface": SURFACE,
+                    "right": True,
+                    "cwd": f"{home}/w",
+                    "argv": ["echo", "hi"],
+                }
+            ],
+            req,
+        )
+        for arg in ["a\nb", "a\rb"]:
+            code, out, err = run(home, ["run", "--", "echo", arg])
+            check(
+                f"run one line {arg!r}",
+                (code, out, err) == (1, "", "tarn: command must be one line\n"),
+                err,
+            )
+
         # error replies: decoded text, stderr only, exit 1.
         err_text = 'no such file: /x "y" \\ z\nline'
         (code, out, err), _ = with_server(home, reply(error=err_text), ["open", "/x"])
@@ -275,6 +303,7 @@ def main() -> int:
             ("notify", ["notify", "x"], None),
             ("ls", ["ls"], None),
             ("new", ["new", "--", "ls"], None),
+            ("run", ["run", "--", "ls"], None),
         ]:
             code, out, err = run(home, args, surface=surface)
             check(
@@ -325,6 +354,10 @@ def main() -> int:
             ["new", "--"],
             ["new", "--tab", "--", "ls"],
             ["new", "--cwd"],
+            ["run"],
+            ["run", "--"],
+            ["run", "--tab", "--", "ls"],
+            ["run", "--title", "t", "--", "ls"],
             ["wait"],
             ["wait", "a", "b"],
             ["wait", "a", "--timeout"],

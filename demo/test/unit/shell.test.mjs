@@ -213,6 +213,12 @@ test("tarn new asks for a split below, or right, and needs a command", () => {
   assert.equal(events.filter(([n]) => n === "pane.new").length, 2);
 });
 
+test("tarn run asks for a split with the command typed, not submitted", () => {
+  const { run, events } = setup();
+  run("tarn run --right -- make install");
+  assert.deepEqual(events.filter(([n]) => n === "pane.new").map(([, d]) => d), [{ right: true, typed: "make install" }]);
+});
+
 test("sleep runs on the clock and ctrl-C stops it", () => {
   const { screen, run, clock, shell, type } = setup();
   run("sleep 3");
