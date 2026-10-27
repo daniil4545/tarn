@@ -111,8 +111,9 @@ One environment: the local macOS app. One config file of ours: `~/.config/tarn/g
 | `TARN_SURFACE` | tells hooks which surface they run in | the app, for each surface shell |
 | socket path | `~/Library/Application Support/tarn/tarn.sock` | constant in `ControlSocket.path` |
 | sidebar width, collapsed | layout | `UserDefaults` (`TarnSidebarWidth`, `TarnSidebarCollapsed`) |
-| tab style `TarnTabStyle`: `sidebar` (default) or `top` | sidebar or native tab bar | settings window, `UserDefaults` |
-| `TarnFileViewer` | the file viewer on or off, default on | settings window, `UserDefaults` |
+| module Sidebar, key `TarnTabStyle`: `sidebar` (default, on) or `top` (off) | sidebar or native tab bar | Settings > Modules, `UserDefaults` |
+| module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules and File Viewer, `UserDefaults` |
+| modules Workspaces, Permission card, Notifications, keys `TarnModule.workspaces`, `TarnModule.permissionCard`, `TarnModule.notifications` | default on; Permission card needs Sidebar; a wrong type counts as on and is logged (category `settings`) | Settings > Modules, `UserDefaults`; launch arguments such as `-TarnModule.workspaces NO` win without writing (the bench uses them) |
 | plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.2.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
 
 Logs: `os_log`, subsystem `tarn`, categories `registry`, `socket`, `viewer`, `attention`, `settings`, `workspace`; view in Console.app. Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (3600 s).

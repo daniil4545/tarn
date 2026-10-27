@@ -28,7 +28,7 @@ tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. I
 
 Principles:
 
-1. **Simplicity.** A part stays only if something breaks without it; the rest is cut, not hidden behind a setting. The tarn settings window holds only settings of tarn's own features; terminal settings stay in the Ghostty config file.
+1. **Simplicity.** A part stays only if something breaks without it; the rest is cut, not hidden behind a setting. One exception (user decision 2026-10-27, T-205): the features of section 1 (sidebar, file viewer, workspaces, permission card, notifications) may be switched off in Settings > Modules; features outside section 1 are still cut. The tarn settings window holds only settings of tarn's own features; terminal settings stay in the Ghostty config file.
 2. **Speed.** Startup, input latency, idle CPU and memory stay at the level of upstream Ghostty built from the same commit. Numbers come from a benchmark, not from impressions.
 3. **Reliability.** The Ghostty core is not modified. Our code lives in its own files; upstream files change only at insertion points listed in `docs/architecture.md`.
 4. **Lightweight and local.** No account, cloud, telemetry, subscription, built-in AI model or network requests from our code.
@@ -48,7 +48,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R19 | Pins | removed 2026-10-25 (D17): workspaces group tabs | user request 2026-10-23 |
 | R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
 | R21 | Custom groups | built as workspaces, first wave | user request 2026-10-23 |
-| R24 | Settings window (cmd+,); tab style: sidebar or native tabs at the top, where an agent tab shows its state dot and logo at the right edge | first | user request 2026-10-25 |
+| R24 | Settings window (cmd+,); tab style is the Sidebar switch in Settings > Modules (on: sidebar, off: native tabs at the top, where an agent tab shows the workspace name, its state dot and logo at the right edge) | first | user request 2026-10-25 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
 | R10 | Several agents per project shown as separate sessions | first | - |
 | R4 | One notification per need; jump to the next session that needs the user by a click | first | 13.5% of replies come after more than 10 min |
