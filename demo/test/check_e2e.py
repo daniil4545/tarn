@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import DEMO, Checks, app_page, server, show_pane
+from lib import DEMO, Checks, app_page, cmd, server, show_pane
 
 check = Checks()
 TERM = '.tabview:not([hidden]) .leaf[data-kind="term"]'
@@ -46,6 +46,37 @@ def ready(pg):
     pg.wait_for_selector("html[data-ready=true]")
 
 
+def folder_story(pg):
+    """docs/specs/workspace-folder.md: the outside-folder mark, Set and Remove Folder, top tab prefix."""
+    out = pg.locator(f"{TAB}[data-tabid='t2'] .l2.out")
+    check(
+        "F1 an agent outside its workspace folder is marked; one inside is not",
+        out.count() == 1
+        and "Outside the tarn folder" in (out.get_attribute("title") or "")
+        and pg.locator(f"{TAB}[data-tabid='t1'] .out").count() == 0,
+    )
+    check(
+        "F2 a workspace without a folder never marks",
+        pg.locator(f"{TAB}[data-tabid='t6'] .out").count() == 0,
+    )
+    cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code"})
+    check("F3 Set Folder over the agent's folder clears the mark", out.count() == 0)
+    cmd(pg, "ws.folder", {"id": "w1"})
+    check(
+        "F4 Remove Folder drops the folder and keeps the tabs",
+        "folder" not in snap(pg)["workspaces"]["wss"][0]
+        and snap(pg)["workspaces"]["wss"][0]["tabs"] == ["t1", "t2", "t3", "t4"],
+    )
+    cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code/tarn"})
+    cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
+    check(
+        "F5 with two or more workspaces a top tab starts with its workspace",
+        pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn ·"
+        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "Default ·",
+    )
+    cmd(pg, "config.reset", {"key": "tab-style"})
+
+
 def story(base):
     with app_page(base) as (pg, errors, requests):
         s = snap(pg)
@@ -53,6 +84,7 @@ def story(base):
             "E1 the demo opens on the seed: six tabs, three workspaces",
             len(s["workspaces"]["tabs"]) == 6 and len(s["workspaces"]["wss"]) == 3,
         )
+        folder_story(pg)
 
         # type in the shell (Default workspace, tab 6)
         show_pane(pg, "p6")

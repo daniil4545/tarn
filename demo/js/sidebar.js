@@ -76,7 +76,7 @@ function render() {
   sb.innerHTML = top + s.wss.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
-    const head = `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
+    const head = `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? `${esc(w.folder)} · ` : ""}${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span><span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
     return head + (w.collapsed ? "" : w.tabs.map(row(w)).join(""));
   }).join("") + '<button class="tab add" id="wsNew">+ New workspace</button>';
 }
@@ -127,6 +127,12 @@ function renameWorkspace(id) {
   if (name) bus.cmd("ws.rename", { id, name });
 }
 
+// The app shows the macOS folder panel here; the browser has none, so the demo asks for a path.
+function setFolder(id) {
+  const ws = read("workspaces").wss.find((w) => w.id === id), folder = prompt("Folder", ws.folder ?? "~/code")?.trim();
+  if (folder) bus.cmd("ws.folder", { id, folder: folder.replace(/\/+$/, "") });
+}
+
 function deleteWorkspace(id) {
   const { wss } = read("workspaces"), at = wss.findIndex((w) => w.id === id), into = wss[at > 0 ? at - 1 : 1];
   if (confirm(`Delete workspace ${wss[at].name}? Its ${wss[at].tabs.length} tab(s) move to ${into.name}.`)) bus.cmd("ws.delete", { id });
@@ -146,6 +152,8 @@ function onContextMenu(e) {
     showMenu([
       { label: "New tab", attrs: `data-wsnewtab="${id}"`, run: () => bus.cmd("tab.new", { ws: id }) },
       { label: "Rename…", attrs: `data-wsren="${id}"`, run: () => renameWorkspace(id) },
+      { label: "Set Folder…", attrs: `data-wsfolder="${id}"`, run: () => setFolder(id) },
+      ...(wss.find((w) => w.id === id).folder ? [{ label: "Remove Folder", attrs: `data-wsunfolder="${id}"`, run: () => bus.cmd("ws.folder", { id }) }] : []),
       ...(wss.length < 2 ? [] : [{ label: "Delete workspace", attrs: `data-wsdel="${id}"`, run: () => deleteWorkspace(id) }]),
     ], e);
   }

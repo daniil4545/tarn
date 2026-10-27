@@ -1,6 +1,6 @@
 # Spec: workspace by project folder
 
-Status: draft
+Status: agreed (mockups approved by the user 2026-10-27; a workspace header's tooltip names its folder)
 Task: T-203, issue #35
 Canon: `docs/specs/windows-workspaces.md` (D1-D18, S1-S23), `docs/modules/workspaces.md`,
 `docs/modules/sidebar.md`, research `~/Dev/knowledge/inbox/tarn-workspace-membership-2026-10-27-1134.md`
