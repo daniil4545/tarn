@@ -26,9 +26,6 @@ extension WorkspaceBook {
         ))
     }
 
-    /// The folder of the start workspace "~": the home folder, standardized.
-    static var expectedHome: String? { WorkspaceFolder.standardized(NSHomeDirectory()) }
-
     func names(_ group: [TabKey]) -> [String] {
         runs(for: group).map(\.workspace.name)
     }

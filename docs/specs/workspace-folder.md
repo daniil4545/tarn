@@ -27,8 +27,7 @@ Canon: `docs/specs/windows-workspaces.md` (D1-D18, S1-S23), `docs/modules/worksp
 flowchart LR
   user["Shift+Cmd+T"] --> panel["Folder panel"]
   panel --> reg["WorkspaceRegistry"]
-  newsurf["Ghostty new tab, new split"] -->|"inherited config"| cfg["WorkspaceRegistry.prepare"]
-  cfg -->|"workingDirectory"| ghostty["Ghostty surface"]
+  reg -->|"first tab: folder; +: source tab config"| ghostty["Ghostty newTab"]
   tabs["terminalTabsDidChange"] --> reg
   reg --> arrive["agent arrival check"]
   arrive --> book["WorkspaceBook"]
@@ -68,14 +67,10 @@ What Ghostty already has (Ghostty first), at `origin/dev` 449a20547:
 Our code fills only the rule of which directory and which workspace. Insertion points (one call,
 no logic), all listed in `docs/architecture.md` by the stage that adds them:
 
-- `AppDelegate.ghosttyNewTab` (`AppDelegate.swift:806-809`): the config goes through `WorkspaceRegistry.prepare`.
-- `BaseTerminalController.ghosttyDidNewSplit` (`BaseTerminalController.swift:672-687`): the same.
 - Every Ghostty write of `tab.attributedTitle` (`TerminalWindow.swift:402`, `:414`,
   `TitlebarTabsVenturaTerminalWindow.swift:60`, `:67`) becomes `WorkspaceTabLabel.apply(to: self)`.
 
-`QuickTerminalController` also listens to new tab and split (`:87`, `:314`); `prepare` returns
-its config unchanged. `AppDelegate.newTab` with no window (`:1027-1031`) bypasses the insertion
-point: accepted limit, it opens a new window that has no folder anyway.
+Cmd+T and Cmd+D go through Ghostty untouched since D20 was dropped (T-249).
 
 Prior art: research `tarn-workspace-membership-2026-10-27` (cmux, herdr, aya, WezTerm). cmux and
 herdr give a workspace a folder at creation (`--cwd`) and new panes inherit it; behaviour only,
@@ -89,15 +84,16 @@ Decisions:
   workspace, and the name is the folder's last component (user, 1A: "as Claude and VS Code do").
   Dropped: name first, folder later (forgotten like `cd`). Affects: every new-workspace path.
   Model change: yes.
-- D20. A new tab or split in a workspace with a folder starts in the inherited working directory
-  when it lies inside the folder, else in the folder (user, 2B). Dropped: always the folder root
-  (loses the subfolder). Affects: Ghostty's `window-inherit-working-directory` is overridden only
-  in workspaces with a folder. Model change: yes.
+- D20. Dropped 2026-10-27 (T-249, user decision: workspaces are a thin layer over Ghostty,
+  `docs/plans/workspace-thin-layer.md`). A new tab or split starts where Ghostty starts it, in
+  the inherited working directory, in every workspace; no analog overrides the focused pane for a
+  split, and cmux and WezTerm inherit for a tab. The "+" of a workspace header inherits from the
+  selected tab of that workspace, else its last tab; an empty workspace gets Cmd+T's config
+  (cmux, `Sources/TabManager.swift:2014-2048`). The folder is used only for the first tab of a
+  workspace created from it. Model change: yes.
 - D21. When a tab becomes an agent tab, it joins the workspace of this window whose folder holds
   the agent's working directory, deepest folder first. No such workspace: the tab stays and its
   row carries an "outside folder" mark, only when its own workspace has a folder (agent, 3B).
-  The start workspace "~" (home folder) never pulls a tab from another workspace; a tab in "~"
-  under home stays unmarked (T-245, keeps the behavior before "~" became the start).
   Dropped: create a workspace per unknown folder (junk workspaces such as "self-projects").
   Model change: yes.
 - D22. A tab the user placed by hand never moves by folder. The mark is set only when the
@@ -110,10 +106,10 @@ Decisions:
   (T-142 has no decision on tab order writers). Model change: no.
 - D24. The folderless workspace of a new set is named "No project" instead of "Default"; there
   every Ghostty behaviour is kept (cwd inheritance, titles, no mark). Model change: yes.
-  Replaced 2026-10-27 (T-245, user decision): a new set starts with the workspace "~" whose
-  folder is the home directory, the "~" of Workspaces off (`docs/modules/workspaces.md`), so D20
-  applies to it and the first tab starts in the home folder. Restored sets keep their saved
-  names ("No project", "Default"); those stay folderless.
+  Renamed 2026-10-27 (T-245, user decision): a new set starts with the workspace "~", the "~" of
+  Workspaces off (`docs/modules/workspaces.md`). "~" has no folder (T-249, user decision
+  2026-10-27): its tabs and splits open where Ghostty opens them; a "~" saved with the home
+  folder loads without it. Restored sets keep their saved names ("No project", "Default").
 - D25. With tabs at the top and two or more workspaces in the set, a native tab title is
   "<workspace> · <Ghostty title>", the workspace part dimmed (user, 2026-10-27). One workspace:
   Ghostty's title alone. This makes D21 moves visible in both tab styles. Model change: yes.
@@ -145,8 +141,8 @@ Canon decisions this spec replaces (the stage named edits `docs/specs/windows-wo
 | Canon | Now | New text | Stage |
 |---|---|---|---|
 | D3 and S4: a new workspace asks for a name | D19 | a new workspace asks for a folder; the name is the folder's last component | 1 |
-| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set starts with "~" (home folder; T-245, was "No project"); restored names are kept | 1 |
-| D15: new tabs inherit the working directory | D20 | inherit, except in a workspace with a folder (D20) | 2 |
+| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set starts with "~" (no folder; T-245, T-249, was "No project"); restored names are kept | 1 |
+| D15: new tabs inherit the working directory | D20 | restored: D20 dropped (T-249) | 2 |
 | D11: no folder rule | D21, D22 | an agent tab joins by folder unless placed by hand | 3 |
 | D14 and S22: no workspaces with tabs at the top | D25 | with two or more workspaces, native titles carry the workspace prefix | 4 |
 
@@ -159,16 +155,12 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S1 | New workspace by folder | Shift+Cmd+T, pick `F` | workspace "tarn" with folder `F`, one new tab; the tab's surface config has `workingDirectory == F` | | fast |
 | S2 | Panel cancelled | Shift+Cmd+T, Cancel | no workspace, no tab | | fast |
 | S3 | Folder already bound | pick `F` while "tarn" has `F` in this window | Q1: no new workspace, the first tab of "tarn" is selected | | fast |
-| S4 | Cmd+T inside the folder | selected tab in "tarn" at `F/macos`, Cmd+T | new tab starts at `F/macos` | | fast |
-| S5 | Cmd+T outside the folder | selected tab in "tarn" at `P`, Cmd+T | new tab starts at `F` (the user's case) | | fast |
-| S6 | + on another workspace | selected tab in "No project" at `P`, + on "tarn" | new tab in "tarn" starts at `F` | | fast |
-| S7 | Split | Cmd+D in a "tarn" tab at `P` | new pane starts at `F`; at `F/docs` it starts at `F/docs` | | fast |
-| S8 | No folder | Cmd+T, split in "No project" or an old workspace | inherited config untouched | | fast |
-| S9 | Folder gone | `F` deleted, Cmd+T in "tarn" | inherited config untouched, one log line | | fast |
-| S10 | No inheritance | `window-inherit-working-directory = false`, Cmd+T in "tarn" | new tab starts at `F` | | fast |
+| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `P` or `F/macos` | the new tab or pane starts at the same folder, Ghostty's inheritance (D20 dropped) | stand: Cmd+T and Cmd+D through Ghostty actions | live |
+| S6 | + on another workspace | selected tab in "~" at `P`, "tarn" has tabs, last at `F/docs`, + on "tarn" | new tab in "tarn" starts at `F/docs`; + on an empty workspace behaves as Cmd+T | NewTabSourceTests | fast |
+| S5, S7-S10 | | | dropped with D20 (T-249) | | |
 | S11 | Agent joins | tab in "No project" at `F/macos`, `claude` starts | tab moves to the end of "tarn" with one native move; not marked manual | | fast |
 | S12 | Agent at home | tab in "tarn" at `F`, agent starts | no move | | fast |
-| S13 | Agent outside any folder | tab in "tarn" at `P`, agent starts | no move; the row shows the mark; in a restored "No project" no mark; in "~" no mark under home | | fast |
+| S13 | Agent outside any folder | tab in "tarn" at `P`, agent starts | no move; the row shows the mark; in "~" and a restored "No project" (no folder) no mark | | fast |
 | S14 | Nested folders | "dev" at `~/Dev`, "tarn" at `~/Dev/self-projects/tarn`, agent at `F/macos` | tab joins "tarn" | | fast |
 | S15 | Same folder twice | after Merge All Windows two workspaces hold `F` | a tab already in one of them stays; else it joins the upper one | | fast |
 | S16 | Manual wins | user drags the tab from "tarn" to "notes", later an agent starts at `F` | no move; after relaunch still no move | | fast |
@@ -184,14 +176,14 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S26 | Path forms | folder picked through a symlink, a trailing slash, `F-old` next to `F` | matched by standardized resolved path on component boundaries; `F-old` is not inside `F` | | fast |
 | S27 | Unexpected | agent tab with no working directory, a folder that is not absolute, a tab key not in the set | no move, one log line with tab and value, no crash | | fast |
 | S28 | Background window | agent starts at `F` in window A while window B is key | no move and no focus change; the move runs when A becomes key | | fast |
-| S29 | Cmd+T after a move | selected tab moved from "No project" to "tarn" by arrival, Cmd+T | new tab joins "tarn" and starts per D20 from `F` | | fast |
+| S29 | Cmd+T after a move | selected tab moved from "No project" to "tarn" by arrival, Cmd+T | new tab joins "tarn" | | fast |
 | S30 | Undo of a close | manual tab with `claude` at `F` in "notes" closed, Cmd+Z | back in "notes", still manual, no arrival | | fast |
 | S31 | Marks only on workspace change | reorder inside "No project"; fallback repair after restore; delete; merge | no tab marked manual | | fast |
 | S32 | Collapsed destination | "tarn" collapsed, selected tab arrives there | "tarn" unfolds, the row stays selected | | fast |
 | S33 | Job control | Ctrl+Z on `claude`, `cd ~/notes`, `fg` | same pid: no check, no move | | fast |
-| S34 | Tabs give a window | `macos-titlebar-style = hidden` (`tabbingMode = .disallowed`), Cmd+T in "tarn" | the new window gets the inherited config unchanged | | fast |
+| S34 | Tabs give a window | `macos-titlebar-style = hidden` (`tabbingMode = .disallowed`), Cmd+T in "tarn" | dropped with D20: tarn no longer touches the config of a new tab (T-249) | | |
 | S35 | Prefix writers | tabs at the top: rename, a second workspace appears, an arrival move, style switch | every native title of the set is rewritten at once | | fast |
-| - | Acceptance by hand | the user creates "tarn" by folder, opens Cmd+T from `P`, starts `claude`, tries tabs at the top | as S1, S5, S11, S23 on the built app | | live |
+| - | Acceptance by hand | the user creates "tarn" by folder, opens Cmd+T from `P`, starts `claude`, tries tabs at the top | as S1, S4, S11, S23 on the built app | | live |
 
 Limits (what the code never does):
 
@@ -199,16 +191,17 @@ Limits (what the code never does):
 - R2: never moves a tab marked manual.
 - R3: never changes the membership of a tab that is not an agent tab because of a folder.
 - R4: never moves a tab because its working directory changed after the agent started.
-- R5: never changes the start directory of a surface in a workspace without a folder.
+- R5: never changes the start directory Ghostty gives Cmd+T or Cmd+D; only the first tab of a
+  workspace created from a folder and the "+" of a header pass their own config (D19, D20).
 - R6: never writes the user's Ghostty config.
 
 ## 4. Data and states
 
 | Entity | Change | Owner | Key or invariant |
 |---|---|---|---|
-| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for a restored "No project" and old workspaces; the home folder for "~" (T-245) |
+| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for "~", a restored "No project" and old workspaces |
 | `WorkspaceSet.manual` | new, `Set<TabKey>` | `WorkspaceSet` | only members (`makeSet` drops keys not in `members`); removed with the tab; `absorb` unites both sets' marks; `ClosedTab` carries it and `reinsert` puts it on the new key |
-| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one unrenamed "~" with the home folder, or one "No project" or "Default" with no folder (T-245) |
+| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one unrenamed "~", "No project" or "Default" with no folder |
 | `WorkspaceSnapshot.Entry.folder` | new optional field | `WorkspaceRestore` | missing in old snapshots decodes as nil; version stays 1 |
 | `WorkspaceSnapshot.manual` | new optional field `[TabKey]` | `WorkspaceRestore` | missing decodes as empty |
 | deciding agent pid per tab | new, runtime | `WorkspaceBook` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |
@@ -229,15 +222,12 @@ Limits (what the code never does):
 ## 5. Code model
 
 ```swift
-/// Pure path rules of D20, D21 and S26.
+/// Pure path rules of D21 and S26.
 enum WorkspaceFolder {
     /// Absolute, standardized, symlinks resolved; nil for a relative or empty path.
     static func standardized(_ path: String) -> String?
     /// True when `path` is `folder` or lies below it, on path component boundaries.
     static func contains(_ folder: String, _ path: String) -> Bool
-    /// D20: where a new surface starts. `inherited` inside `folder` stays; anything else, or nil,
-    /// gives `folder`. `folder == nil` or a missing folder returns `inherited` unchanged.
-    static func startDirectory(inherited: String?, folder: String?, exists: (String) -> Bool) -> String?
     /// D21, S14, S15: the workspace for an agent at `path`; the deepest folder wins, then the
     /// current workspace, then the upper one. Nil: stay.
     static func home(for path: String, in runs: [WorkspaceSet.Run], current: Workspace.ID?) -> Workspace.ID?
@@ -257,12 +247,9 @@ extension WorkspaceSet {
 }
 
 extension WorkspaceBook {
-    /// The folder of the workspace a new surface lands in. A tab: the same `targetWorkspace` the
-    /// membership rule uses (pending target, last selected, ...) for the window's `order`, with
-    /// no selected tab as the membership pass sees the new one, so they agree. A split: the
-    /// workspace of `tab`; the pending target is not read. S29 needs `lastSelected` updated by
-    /// the arrival move (D27), so its test goes with stage 3.
-    func folderForNewSurface(from tab: TabKey, order: [TabKey], split: Bool) -> String?
+    /// The tab a "+" tab of `workspace` inherits from: `selected` when it is in `workspace`, else
+    /// its last tab in `order`; nil for an empty workspace (D20, cmux).
+    func sourceTab(for workspace: Workspace.ID, order: [TabKey], selected: TabKey) -> TabKey?
     /// D21: the workspace `tab` must join because its agent started at `path`; nil to stay.
     func arrival(of tab: TabKey, at path: String) -> Workspace.ID?
     /// D21 mark: the agent of `tab` is outside its workspace's folder.
@@ -273,9 +260,8 @@ extension WorkspaceBook {
 }
 
 extension WorkspaceRegistry {
-    /// Insertion points: `AppDelegate.ghosttyNewTab` and the `ghosttyNewSplit` handler of
-    /// `BaseTerminalController` pass the inherited config through here.
-    func prepare(_ config: Ghostty.SurfaceConfiguration?, from window: NSWindow, split: Bool) -> Ghostty.SurfaceConfiguration?
+    /// "+": Ghostty's tab config inherited from `sourceTab`, else Cmd+T.
+    func newTab(in workspace: Workspace.ID, from window: NSWindow)
     func createWorkspace(folder: String, from window: NSWindow) -> Bool
     // moveTab and the mover branch of sync rule 4 mark the tab manual, only on a workspace
     // change (D22); the arrival move, fallback repair, delete and absorb do not.
@@ -293,10 +279,6 @@ enum WorkspaceTabLabel {
 }
 ```
 
-- `prepare`: reads the target workspace through the book, calls `startDirectory`, writes
-  `config.workingDirectory`. Unchanged: a nil config (app target), a window that is not a
-  `TerminalController`, and a new tab that will open a new window (the parent's `tabbingMode`
-  is `.disallowed`, as with `macos-titlebar-style = hidden`), since that window has no folder (R5).
 - Arrival check in `sync`: for each tab with no live deciding pid, the agent pids of its panes
   from `AgentProcessCache`; the first one found decides: read that pane's working directory and
   queue the path. A pass on the main queue (also from `windowDidBecomeKey`) runs the queued
@@ -330,7 +312,7 @@ Top tab bar (D25):
 |---|---|---|---|---|
 | 0. Demo | the mark (section 5 sketch) and the top tab prefix drawn in `demo/`; the user approves the look | none | app code | demo checks |
 | 1. Folder on a workspace | Shift+Cmd+T opens a folder panel; the folder in the header tooltip; folders saved and restored; "No project"; the first tab of a new workspace starts in its folder | none | start directory of other tabs, arrival, manual marks (stage 3, their only writer) | unit S1-S3, S21 (folders), S22, S26 |
-| 2. Start directory | new tabs and splits start per D20 | 1 | arrival | unit S4-S10, S34 |
+| 2. Start directory | built, then dropped with D20 (T-249): Ghostty inherits; "+" inherits from a tab of its workspace | 1 | arrival | unit S6 (`NewTabSourceTests`) |
 | 3. Agent arrival | probe of D26 first; agent tabs join by folder; manual marks saved and restored, manual wins; sidebar mark | 1 | top tab prefix | unit S11-S21 (marks), S27-S33 |
 | 4. Tab prefix | native titles with the prefix when tabs are at the top | 1 | | unit S23, S25, S35; live S24 |
 

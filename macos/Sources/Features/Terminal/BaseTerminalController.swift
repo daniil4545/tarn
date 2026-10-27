@@ -671,8 +671,7 @@ class BaseTerminalController: NSWindowController,
 
         // Notification must contain our base config
         let configAny = notification.userInfo?[Ghostty.Notification.NewSurfaceConfigKey]
-        var config = configAny as? Ghostty.SurfaceConfiguration
-        config = WorkspaceRegistry.shared.prepare(config, from: window, split: true)
+        let config = configAny as? Ghostty.SurfaceConfiguration
 
         // Determine our desired direction
         guard let directionAny = notification.userInfo?["direction"] else { return }

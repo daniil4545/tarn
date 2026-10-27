@@ -66,14 +66,22 @@ def folder_story(pg):
         and pg.locator("[data-wsfolder], [data-wsunfolder]").count() == 0,
     )
     pg.keyboard.press("Escape")
+    tabs = snap(pg)["workspaces"]["tabs"]
     cmd(pg, "tab.go", {"id": "t2"})
     cmd(pg, "tab.new", {"ws": "w1"})
     fresh = snap(pg)["workspaces"]["cur"]
-    check(
-        "F6 a new tab from a tab outside the folder starts in the workspace folder",
-        snap(pg)["workspaces"]["tabs"][fresh]["cwd"] == "~/code/tarn",
-    )
+    fresh_cwd = snap(pg)["workspaces"]["tabs"][fresh]["cwd"]
     cmd(pg, "tab.close", {"id": fresh})
+    last = next(w for w in snap(pg)["workspaces"]["wss"] if w["id"] == "w1")["tabs"][-1]
+    cmd(pg, "tab.go", {"id": "t6"})
+    cmd(pg, "tab.new", {"ws": "w1"})
+    other = snap(pg)["workspaces"]["cur"]
+    check(
+        "F6 + inherits the folder of the selected tab of its workspace, else of its last tab (cmux)",
+        fresh_cwd == tabs["t2"]["cwd"] != "~/code/tarn"
+        and snap(pg)["workspaces"]["tabs"][other]["cwd"] == tabs[last]["cwd"],
+    )
+    cmd(pg, "tab.close", {"id": other})
 
     def agent_tab(cwd):
         cmd(pg, "tab.new", {"ws": "w0", "cwd": cwd})

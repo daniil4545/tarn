@@ -77,14 +77,15 @@ struct AgentArrivalTests {
         #expect(WorkspaceFolder.home(for: "relative", in: runs, current: a.id) == nil)
     }
 
-    // spec: T-245 - the start workspace "~" keeps its own tabs and pulls none from a project
-    @Test func theHomeWorkspaceNeverPullsATab() {
-        let home = Workspace(name: "~", folder: "/h")
-        let tarn = Workspace(name: "tarn", folder: "/h/tarn")
-        let runs = [WorkspaceSet.Run(workspace: home, tabs: []), WorkspaceSet.Run(workspace: tarn, tabs: [])]
-        #expect(WorkspaceFolder.home(for: "/h/code", in: runs, current: tarn.id, home: "/h") == nil)
-        #expect(WorkspaceFolder.home(for: "/h/code", in: runs, current: home.id, home: "/h") == home.id)
-        #expect(WorkspaceFolder.home(for: "/h/tarn/src", in: runs, current: home.id, home: "/h") == tarn.id)
+    // spec: docs/specs/workspace-folder.md D21, S13 - "~" has no folder: it pulls no tab and marks none
+    @Test func theStartWorkspaceNeverPullsATabAndNeverMarks() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1]]])
+        _ = book.edit(t[1]) { set in set.create(name: "tarn", folder: "/p/F").map { set.join(t[1], to: $0) } }
+        #expect(book.arrival(of: t[1], at: NSHomeDirectory() + "/code") == nil)
+        #expect(!book.isOutsideFolder(t[0], at: "/tmp"))
+        #expect(book.isOutsideFolder(t[1], at: "/tmp"))
+        #expect(book.arrival(of: t[0], at: "/p/F/src") != nil)
     }
 
     // spec: docs/specs/workspace-folder.md S16
@@ -156,7 +157,9 @@ struct AgentArrivalTests {
         _ = book.selected(t[2])
         _ = book.edit(t[0]) { $0.join(t[0], to: tarn) }
         _ = book.arrived(t[0], selected: true)
-        #expect(book.folderForNewSurface(from: t[0], order: [t[2], t[1], t[0], t[3]], split: false) == "/p/F")
+        let fresh = TabKey()
+        _ = book.pass([[t[2], t[1], t[0], t[3], fresh]], selected: [fresh])
+        #expect(book.workspace(of: fresh)?.id == tarn)
     }
 
     // spec: docs/specs/workspace-folder.md S30
