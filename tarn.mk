@@ -2,7 +2,7 @@
 #
 # check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
-# bench    the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
+# bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
 #
 # Builds run under nice and with 4 jobs: the machine is shared with other work.
 # Deviation from macos/build.nu: it passes no -jobs limit, so xcodebuild is called directly.

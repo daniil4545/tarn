@@ -52,6 +52,8 @@ Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`,
 
 Sidebar commands: new tab and new workspace set the pending target and call Ghostty's `newTab`; a new workspace is empty until its tab joins. Rename refuses a blank name. Delete moves tabs to the workspace above (below for the first); the last workspace is never deleted. Move tab changes membership (a changed workspace marks the tab manual), then makes one `move_tab`; move workspace makes one `move_tab` per tab. `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace or change the target.
 
+Workspaces off (T-205, Settings > Modules): `WorkspaceBook.frozen`. The workspaces stay exactly as they are. A tab with no workspace joins the workspace whose folder is the home folder (a regular workspace of the folder model: folder = home directory, name "~", created at the end when missing; a workspace the set already has for that folder takes the tabs, whatever its name; also the first workspace of a new window instead of "No project"); step 4 (repair) and step 5 (native moves) do not run, so a new tab lands where Ghostty puts it and a drag changes only the order. New Workspace (button, menu item, Shift+Cmd+T) is hidden or does nothing; the sidebar is one flat list in native order, and no workspace name shows in the window subtitle or the native tabs. A tab that closes leaves its frozen workspace as usual. On again (`regroupPending`): the next pass skips the repair and makes one native move per misplaced tab so that every workspace is one run, workspaces in the order of first appearance, tabs in native order; membership does not change, "~" stays with the tabs opened while off.
+
 Selecting a tab in a folded workspace unfolds it (once). A new tab unfolds its workspace.
 
 Windows: a tab dragged to another window joins that window's target; a tab dropped outside every window starts a new set with "No project". Merge All Windows: the set of the first window wins and the other's workspaces are appended whole with their names; a window that holds only its unrenamed "No project" (or the older "Default") with no folder joins the target instead.
@@ -121,7 +123,8 @@ All in `macos/Tests/Tarn/`; `BookSupport.swift` holds helpers.
 | `MergeTests` | Merge All Windows, reopened tab and window, higher revision wins, restore in any group order |
 | `FailureTests` | broken or foreign-version snapshot, missing workspace, vanished window |
 | `TombstoneTests` | match by surface ids only after undo, most shared surfaces wins, unclaimed dropped, runs inside Ghostty's undo group, expiry, window and tab undo |
-| `WorkspaceTitleTests` | subtitle with the sidebar, none with the top bar, settings text |
+| `WorkspaceTitleTests` | subtitle while Workspaces is on, whatever the tab style; none while off; the name in the native tab mark; settings text |
+| `WorkspaceFreezeTests` | frozen: new tab joins the workspace with the home folder (an existing one is reused), a drag changes no membership, closing keeps the rest; on again: regroup in order of first appearance, "~" stays |
 
 ## Extending it
 

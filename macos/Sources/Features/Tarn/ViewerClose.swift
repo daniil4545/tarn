@@ -112,7 +112,9 @@ enum ViewerClose {
             ? "Cannot save \((failed[0] as NSString).lastPathComponent)"
             : "Cannot save \(failed.count) files"
         alert.informativeText = "The file changed on disk or cannot be written. Nothing was closed. "
-            + "Open the file in the viewer to take the disk version, keep yours or fix the error.\n"
+            + (FileViewerSetting.isOn
+                ? "Open the file in the viewer to take the disk version, keep yours or fix the error.\n"
+                : "Switch File viewer on in Settings > Modules to take the disk version, keep yours or fix the error.\n")
             + failed.prefix(8).map { "  \(($0 as NSString).lastPathComponent)" }.joined(separator: "\n")
         alert.alertStyle = .warning
         alert.addButton(withTitle: "OK")

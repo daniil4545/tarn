@@ -165,3 +165,15 @@ body.dragging iframe { pointer-events: none; }
 .ask-dialog { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); z-index: 40; padding: 14px 16px; border-radius: 10px; background: var(--menu); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .4); }
 .ask-dialog p { margin: 0 0 12px; max-width: 360px; }
 .ask-dialog button { margin-right: 8px; padding: 3px 12px; font: inherit; }
+
+/* Workspaces off: the list is flat. Headers stay in the DOM for the drag code and take no room;
+   the end spacer stands where "+ New workspace" was, so a tab can still be dropped at the end. */
+.sidebar .wsh.flat { display: none; }
+.sidebar .flatend { flex: none; height: 28px; }
+
+/* Notifications: the demo's banner for an agent that needs you */
+.banner { position: fixed; top: 44px; right: 16px; z-index: 40; width: 280px; padding: 9px 12px; border-radius: 10px; background: var(--menu); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .45); font-size: 12.5px; pointer-events: none; }
+.banner b { display: block; font-size: 12.5px; }
+.banner span { color: var(--muted); }
+.sidebar.flatlist:not(.rail) .tab[data-tabid] { margin-left: 0; width: 100%; }
+.ttab .tw { flex: none; padding: 0 5px; border-radius: 4px; background: rgba(127, 127, 127, .2); color: var(--muted); font-size: 10.5px; }

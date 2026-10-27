@@ -2,6 +2,7 @@
 // applies. Types, values and defaults come from OPTIONS in config.js. Order is the order of rows
 // and of lines in the config file (GhosttyOption.swift in macos/Sources/Features/Tarn/).
 export const SECTIONS = [
+  ["modules", "Modules"],
   ["tabs", "Tabs"],
   ["viewer", "File Viewer"],
   ["appearance", "Appearance"],
@@ -50,7 +51,8 @@ export const TAB_ROWS = [
   ["narrow", "Narrow", "One line per tab: icon, title, state dot and key."],
 ];
 
-export const TAB_STYLES = [
-  ["sidebar", "Sidebar", "Tabs grouped in workspaces with agent state, on the left of the window."],
-  ["top", "Tabs at the top", "The native tab bar, as in Ghostty. Workspaces and agent state are not shown."],
+// Static sample data: the app runs `claude --version` and reads the plugin list and the session
+// registry when the pane opens; the demo has no Claude Code to ask.
+export const AGENTS = [
+  { name: "Claude Code", version: "2.1.311", checks: [["found", true], ["plugin", true], ["events", true]] },
 ];

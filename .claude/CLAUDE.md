@@ -51,7 +51,7 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | acceptance | `make -f tarn.mk check` |
 | release build | `make -f tarn.mk release` (ad-hoc signed `dist/tarn-<version>-macos.zip` with `.sha256`) |
 | benchmark | `make -f tarn.mk bench` (report `docs/bench.md`) |
-| demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e,review}.py` and `node --test demo/test/unit` (installed Chrome; how to run: `demo/README.md`) |
+| demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e,review,modules}.py` and `node --test demo/test/unit` (installed Chrome; how to run: `demo/README.md`) |
 
 ## Workflow
 

@@ -366,7 +366,14 @@ def model1_workspace_rules(base):
         cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
         sub = pg.text_content(".titlebar .sub")
         check(
-            "M4 the title bar subtitle is empty in the top style",
+            "M4 the title bar subtitle names the workspace in the top style",
+            sub == "tarn",
+            repr(sub),
+        )
+        cmd(pg, "config.set", {"key": "module-workspaces", "value": False})
+        sub = pg.text_content(".titlebar .sub")
+        check(
+            "M4a Workspaces off: the subtitle is empty",
             sub == "" and pg.title() == pg.text_content(".titlebar .ttl"),
             repr(sub),
         )
@@ -844,20 +851,22 @@ def viewer_switch(base):
         cmd(pg, "viewer.open", {"path": "README.md"})
         pg.wait_for_selector(VIEWER)
         pg.evaluate("window.bus.cmd('config.set', {key: 'file-viewer', value: false})")
-        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
         settle(pg)
         check(
-            "V4 an open pane keeps working with the switch off",
-            f"{REPO}/docs/spec.md" in file_tabs(pg) and n_panes(pg) == 1,
-            str(file_tabs(pg)),
+            "V4 an open pane is hidden with the switch off and keeps its tab",
+            n_panes(pg) == 0
+            and pg.evaluate("Object.keys(__tarn.viewer().state().panes).length") == 1,
         )
         press(pg, CMD_B)
-        press(pg, CMD_B, False)
+        settle(pg)
+        check("V5 Cmd+B does nothing with the switch off", n_panes(pg) == 0)
+        pg.evaluate("window.bus.cmd('config.set', {key: 'file-viewer', value: true})")
         pg.wait_for_function(LOADED)
         settle(pg)
         check(
-            "V5 Cmd+B hides and shows an existing pane with the switch off",
-            n_panes(pg) == 1,
+            "V6 the pane comes back with its file tab when the switch is on",
+            n_panes(pg) == 1 and f"{REPO}/README.md" in file_tabs(pg),
+            str(file_tabs(pg)),
         )
 
 
