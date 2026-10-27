@@ -77,10 +77,9 @@ enum AgentProcess {
         isSSH(comm: comm(pid: pid)) { argv(pid: pid) }
     }
 
-    /// ssh itself, or the wrapper Ghostty's shell integration runs in its place
-    /// (`ghostty +ssh [flags] -- host`, src/shell-integration/zsh/ghostty-integration:322 and
-    /// the fish and elvish ones), which leads the group with ssh as a
-    /// child. Only a `ghostty` process costs an argv read.
+    /// ssh itself, or the wrapper every shell integration of Ghostty runs in its place
+    /// (`ghostty +ssh [flags] -- host`, src/shell-integration/zsh/ghostty-integration:322),
+    /// which leads the group with ssh as a child. Only a `ghostty` process costs an argv read.
     static func isSSH(comm: String?, argv: () -> [String]?) -> Bool {
         if comm == "ssh" { return true }
         guard comm == "ghostty" else { return false }
