@@ -6,6 +6,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ### Added
 
+- `tarn wait <pane>` waits until the command in a pane ends: `succeed`, `error` or `closed`, exit 0, 4, 6 or 9 (#59).
 - Settings > Modules: switch Sidebar, File viewer, Workspaces, Permission card and Notifications on or off at once; a Claude Code line with its version and checks (#34).
 
 ### Changed
