@@ -2,6 +2,12 @@
 
 Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.Z` tags in this repository belong to upstream Ghostty.
 
+## [Unreleased]
+
+### Added
+
+- Settings > Modules: switch Sidebar, File viewer, Workspaces, Permission card and Notifications on or off at once; a Claude Code line with its version and checks (#34).
+
 ## [tarn-v1.2.0] - 2026-10-26
 
 ### Added
