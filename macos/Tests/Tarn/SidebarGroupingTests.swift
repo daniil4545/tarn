@@ -119,6 +119,35 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: []) == nil)
     }
 
+    // The slot before the lifted row and the slot after it are one slot: the row's own.
+    @Test func theSlotBeforeTheLiftedRowIsTheSlotAfterIt() {
+        let (groups, tabs) = layout()
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[2].key), lifted: tabs[2].key, in: groups) == .beforeTab(tabs[3].key))
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[4].key), lifted: tabs[4].key, in: groups) == .endOfWorkspace(groups[1].id))
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[0].key), lifted: tabs[2].key, in: groups) == .beforeTab(tabs[0].key))
+        #expect(SidebarModel.gapSlot(nil, lifted: tabs[2].key, in: groups) == nil)
+    }
+
+    // A gap above a header with rows below it stays put: moved to the end of that workspace it
+    // would pull the header up and put a row under the pointer.
+    @Test func aHeaderBelowTheGapKeepsTheGapOnlyWhileRowsStandUnderIt() {
+        let (groups, tabs) = layout()
+        let a = groups[0].id, b = groups[1].id
+        #expect(SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[1].key), in: groups))
+        #expect(SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(a), in: groups))
+        // From below, or with no gap open, the header stays under the pointer.
+        #expect(!SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[3].key), in: groups))
+        #expect(!SidebarModel.gapPullsUp(b, gap: nil, in: groups))
+        // A folded or empty workspace shows nothing below its header: the new gap comes under the pointer.
+        var workspace = groups[1].workspace
+        workspace.collapsed = true
+        var folded = groups
+        folded[1] = SidebarModel.Group(workspace: workspace, tabs: groups[1].tabs)
+        #expect(!SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(a), in: folded))
+        let empty = group("D", [])
+        #expect(!SidebarModel.gapPullsUp(empty.id, gap: .endOfWorkspace(a), in: groups + [empty]))
+    }
+
     @Test func unknownTargetsGiveNoSlot() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(TabKey()), lowerHalf: false, in: groups) == nil)

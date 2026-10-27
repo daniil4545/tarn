@@ -90,6 +90,29 @@ extension SidebarModel {
     private nonisolated static func slot(after index: Int, in groups: [Group]) -> SidebarDropSlot {
         groups[safe: index + 1].map { .beforeWorkspace($0.workspace.id) } ?? .end
     }
+
+    /// The slot while `lifted` is dragged. The slot before the lifted row and the slot after it
+    /// both leave the tab where it is: they are one slot, the row's own, which opens no gap.
+    nonisolated static func gapSlot(_ slot: SidebarDropSlot?, lifted: TabKey, in groups: [Group]) -> SidebarDropSlot? {
+        guard slot == .beforeTab(lifted) else { return slot }
+        return dropSlot(dragging: .tab, over: .tab(lifted), lowerHalf: true, in: groups)
+    }
+
+    /// Moving the gap from above the header of workspace `id` to its end would pull the header
+    /// up a row and leave its first row under the pointer, which then takes the gap. So the gap
+    /// stays; the header takes it only when its workspace is folded or empty.
+    nonisolated static func gapPullsUp(_ id: Workspace.ID, gap: SidebarDropSlot?, in groups: [Group]) -> Bool {
+        guard let header = groups.firstIndex(where: { $0.workspace.id == id }),
+              !groups[header].workspace.collapsed, !groups[header].tabs.isEmpty
+        else { return false }
+        let owner: Workspace.ID?
+        switch gap {
+        case .beforeTab(let key): owner = groups.first { $0.tabs.contains { $0.key == key } }?.workspace.id
+        case .endOfWorkspace(let workspace): owner = workspace
+        default: owner = nil
+        }
+        return groups.firstIndex { $0.workspace.id == owner }.map { $0 < header } ?? false
+    }
 }
 
 /// The AppKit layer over a sidebar row or header: it owns left clicks, drags out of the row,
@@ -103,6 +126,8 @@ struct SidebarInteraction: NSViewRepresentable {
     var dragOver: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
     var dragExit: () -> Void
     var drop: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
+    /// A drag out of this view began; the height is the view's own.
+    var dragBegan: (_ height: CGFloat) -> Void = { _ in }
     /// The drag ended at a screen point; true when somebody took it.
     var dragEnded: (_ screenPoint: NSPoint, _ accepted: Bool) -> Void = { _, _ in }
     /// Strips at the sides that stay clickable for SwiftUI buttons below.
@@ -127,6 +152,7 @@ struct SidebarInteraction: NSViewRepresentable {
         view.dragOver = dragOver
         view.dragExit = dragExit
         view.drop = drop
+        view.dragBegan = dragBegan
         view.dragEnded = dragEnded
         view.excludedLeading = excludedLeading
         view.excludedTrailing = excludedTrailing
@@ -140,6 +166,7 @@ struct SidebarInteraction: NSViewRepresentable {
         var dragOver: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
         var dragExit: () -> Void = {}
         var drop: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
+        var dragBegan: (CGFloat) -> Void = { _ in }
         var dragEnded: (NSPoint, Bool) -> Void = { _, _ in }
         var excludedLeading: CGFloat = 0
         var excludedTrailing: CGFloat = 0
@@ -209,9 +236,10 @@ struct SidebarInteraction: NSViewRepresentable {
             menuProvider?()
         }
 
-        /// The row as drawn, for the drag image.
+        /// The row as drawn, for the drag image. SwiftUI draws the row in its hosting view: the
+        /// representable's own host draws nothing, and its snapshot is blank.
         private func snapshot() -> NSImage {
-            let host = superview ?? self
+            let host = window?.contentView ?? self
             let rect = host.convert(bounds, from: self)
             guard let rep = host.bitmapImageRepForCachingDisplay(in: rect) else {
                 return NSImage(size: bounds.size)
@@ -224,6 +252,10 @@ struct SidebarInteraction: NSViewRepresentable {
 
         func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
             .move
+        }
+
+        func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+            dragBegan(bounds.height)
         }
 
         func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
