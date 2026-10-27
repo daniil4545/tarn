@@ -26,6 +26,19 @@ enum WorkspaceFolder {
         return folder
     }
 
+    /// D21, S14, S15: the workspace an agent at `path` belongs to among `runs`. The deepest folder
+    /// wins; on a tie the `current` workspace, then the upper one. Nil: no folder holds `path`.
+    static func home(for path: String, in runs: [WorkspaceSet.Run], current: Workspace.ID?) -> Workspace.ID? {
+        guard path.hasPrefix("/") else { return nil }
+        let matches = runs.compactMap { run -> (depth: Int, id: Workspace.ID)? in
+            guard let folder = run.workspace.folder, contains(folder, path) else { return nil }
+            return (URL(fileURLWithPath: folder).resolvingSymlinksInPath().standardized.pathComponents.count, run.workspace.id)
+        }
+        guard let deepest = matches.map(\.depth).max() else { return nil }
+        let tied = matches.filter { $0.depth == deepest }.map(\.id)
+        return tied.first { $0 == current } ?? tied.first
+    }
+
     /// The workspace name for a folder: its last path component.
     static func name(of folder: String) -> String {
         URL(fileURLWithPath: folder).lastPathComponent

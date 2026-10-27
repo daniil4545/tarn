@@ -33,6 +33,8 @@ final class SidebarModel: ObservableObject {
         let workspace: String
         /// The working directory of the focused surface, with the home folder as "~".
         let folder: String?
+        /// D21: the agent works outside the folder of the tab's workspace.
+        var outsideFolder = false
     }
 
     /// A workspace and its tabs in tab order. A folded workspace still lists its tabs here;
@@ -214,7 +216,7 @@ final class SidebarModel: ObservableObject {
                 guard let index = positions[ObjectIdentifier(tabWindow)], let key = registry.tabKey(of: tabWindow)
                 else { return nil }
                 let shortcut = index <= 9 ? config?.keyboardShortcut(for: "goto_tab:\(index)") : nil
-                return makeTab(tabWindow, key: key, index: index, workspace: flat ? "" : run.workspace.name, shortcut: shortcut.map { "\($0)" })
+                return makeTab(tabWindow, key: key, index: index, workspace: flat ? "" : run.workspace.name, flat: flat, shortcut: shortcut.map { "\($0)" })
             })
         }
         guard newGroups != groups else { return }
@@ -222,7 +224,7 @@ final class SidebarModel: ObservableObject {
         if cardTab != nil { updateCard() }
     }
 
-    private func makeTab(_ tabWindow: NSWindow, key: TabKey, index: Int, workspace: String, shortcut: String?) -> Tab {
+    private func makeTab(_ tabWindow: NSWindow, key: TabKey, index: Int, workspace: String, flat: Bool, shortcut: String?) -> Tab {
         let controller = tabWindow.windowController as? BaseTerminalController
         let views = controller.map { Array($0.surfaceTree) } ?? []
         let agents = views.map { view in
@@ -247,7 +249,8 @@ final class SidebarModel: ObservableObject {
             isSelected: tabWindow === window,
             agent: Self.agent(in: controller),
             workspace: workspace,
-            folder: pwd.map { Self.displayTitle("/", pwd: $0) }
+            folder: pwd.map { Self.displayTitle("/", pwd: $0) },
+            outsideFolder: !flat && agent != nil && pwd.map { registry.isOutsideFolder(tabWindow, at: $0) } == true
         )
     }
 
@@ -1082,6 +1085,13 @@ private struct SidebarRow: View {
 
             Spacer(minLength: 4)
 
+            if tab.outsideFolder && rows != .wide {
+                Text("!")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(.orange)
+                    .help("Outside the \(tab.workspace) folder")
+            }
+
             if let agent = tab.agent {
                 AgentBadge(agent: agent)
             }
@@ -1105,7 +1115,7 @@ private struct SidebarRow: View {
     /// A plain shell often has its folder as the title, which the line then leaves out.
     private var folder: String {
         guard let folder = tab.folder, tab.agent != nil || folder != tab.title else { return "" }
-        return folder
+        return tab.outsideFolder ? "! " + folder : folder
     }
 
     @ViewBuilder
@@ -1120,9 +1130,10 @@ private struct SidebarRow: View {
             }
         }
         .font(.system(size: 11))
-        .foregroundStyle(ink.faint)
+        .foregroundStyle(tab.outsideFolder ? AnyShapeStyle(Color.orange) : AnyShapeStyle(ink.faint))
         .lineLimit(1)
         .truncationMode(.middle)
+        .help(tab.outsideFolder ? "Outside the \(tab.workspace) folder" : "")
     }
 }
 
