@@ -245,9 +245,11 @@ extension WorkspaceSet {
 
 extension WorkspaceBook {
     /// The folder of the workspace a new surface lands in. A tab: the same `targetWorkspace` the
-    /// membership rule uses (pending target, last selected, ...), so folder and membership never
-    /// disagree. A split: the workspace of `tab`; the pending target is not read.
-    func folderForNewSurface(from tab: TabKey, split: Bool) -> String?
+    /// membership rule uses (pending target, last selected, ...) for the window's `order`, with
+    /// no selected tab as the membership pass sees the new one, so they agree. A split: the
+    /// workspace of `tab`; the pending target is not read. S29 needs `lastSelected` updated by
+    /// the arrival move (D27), so its test goes with stage 3.
+    func folderForNewSurface(from tab: TabKey, order: [TabKey], split: Bool) -> String?
     /// D21: the workspace `tab` must join because its agent started at `path`; nil to stay.
     func arrival(of tab: TabKey, at path: String) -> Workspace.ID?
     /// D21 mark: the agent of `tab` is outside its workspace's folder.

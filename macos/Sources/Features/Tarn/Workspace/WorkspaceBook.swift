@@ -192,12 +192,13 @@ struct WorkspaceBook {
     }
 
     /// The folder of the workspace a new surface lands in (D20). A tab: the workspace
-    /// `targetWorkspace` picks, as for membership, so folder and membership never disagree. A split:
+    /// `targetWorkspace` picks for the window's `order`, as the membership pass will see it (the
+    /// selected tab is then the new one, unknown here), so folder and membership agree. A split:
     /// the workspace of `tab`; the pending target is not read.
-    func folderForNewSurface(from tab: TabKey, split: Bool) -> String? {
+    func folderForNewSurface(from tab: TabKey, order: [TabKey], split: Bool) -> String? {
         guard let id = setOf[tab], let set = sets[id] else { return nil }
         if split { return set.workspace(of: tab)?.folder }
-        let target = targetWorkspace(in: set, group: Group(tabs: [tab], selected: tab), winner: id)
+        let target = targetWorkspace(in: set, group: Group(tabs: order, selected: nil), winner: id)
         return set.workspace(target)?.folder
     }
 

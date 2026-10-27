@@ -280,14 +280,20 @@ final class WorkspaceRegistry {
     /// (S34), a workspace without a folder (S8), a folder gone from disk (S9).
     func prepare(_ config: Ghostty.SurfaceConfiguration?, from window: NSWindow?, split: Bool) -> Ghostty.SurfaceConfiguration? {
         guard var config, let window, window.windowController is TerminalController, let tab = tabKey(of: window),
-              split || window.tabbingMode != .disallowed,
-              let folder = book.folderForNewSurface(from: tab, split: split)
+              Self.landsInWorkspace(split: split, tabbingMode: window.tabbingMode),
+              let folder = book.folderForNewSurface(from: tab, order: group(of: window).map(key(for:)), split: split)
         else { return config }
         var isDirectory: ObjCBool = false
-        let exists: (String) -> Bool = { FileManager.default.fileExists(atPath: $0, isDirectory: &isDirectory) && isDirectory.boolValue }
-        if !exists(folder) { Self.logger.error("workspace: folder gone value=\(folder, privacy: .public)") }
-        config.workingDirectory = WorkspaceFolder.startDirectory(inherited: config.workingDirectory, folder: folder, exists: exists)
+        let present = FileManager.default.fileExists(atPath: folder, isDirectory: &isDirectory) && isDirectory.boolValue
+        if !present { Self.logger.error("workspace: folder gone value=\(folder, privacy: .public)") }
+        config.workingDirectory = WorkspaceFolder.startDirectory(inherited: config.workingDirectory, folder: folder, exists: { _ in present })
         return config
+    }
+
+    /// A split stays in its tab; a new tab joins the window's workspaces only when the window
+    /// takes tabs. With `.disallowed` (hidden titlebar) Ghostty opens a new window instead (S34).
+    nonisolated static func landsInWorkspace(split: Bool, tabbingMode: NSWindow.TabbingMode) -> Bool {
+        split || tabbingMode != .disallowed
     }
 
     /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for

@@ -1,4 +1,4 @@
-import Foundation
+import AppKit
 import Testing
 @testable import Ghostty
 
@@ -64,15 +64,15 @@ struct StartDirectoryTests {
     // spec: docs/specs/workspace-folder.md S8
     @Test func aTabInAFolderlessWorkspaceHasNoFolder() {
         let (book, _) = makeBook()
-        #expect(book.folderForNewSurface(from: t[0], split: false) == nil)
-        #expect(book.folderForNewSurface(from: t[0], split: true) == nil)
+        #expect(book.folderForNewSurface(from: t[0], order: t, split: false) == nil)
+        #expect(book.folderForNewSurface(from: t[0], order: t, split: true) == nil)
     }
 
     // spec: docs/specs/workspace-folder.md S4
     @Test func aNewTabLandsInTheWorkspaceOfTheSelectedTab() {
         var (book, _) = makeBook()
         _ = book.selected(t[1])
-        #expect(book.folderForNewSurface(from: t[1], split: false) == folder)
+        #expect(book.folderForNewSurface(from: t[1], order: t, split: false) == folder)
     }
 
     // spec: docs/specs/workspace-folder.md S6
@@ -80,10 +80,10 @@ struct StartDirectoryTests {
         var (book, tarn) = makeBook()
         _ = book.selected(t[0])
         book.setPendingTarget(tarn, for: t[0])
-        #expect(book.folderForNewSurface(from: t[0], split: false) == folder)
+        #expect(book.folderForNewSurface(from: t[0], order: t, split: false) == folder)
         let cleared = book.clearPendingTarget(for: t[0])
         #expect(cleared)
-        #expect(book.folderForNewSurface(from: t[0], split: false) == nil)
+        #expect(book.folderForNewSurface(from: t[0], order: t, split: false) == nil)
     }
 
     // spec: docs/specs/workspace-folder.md S7
@@ -91,21 +91,43 @@ struct StartDirectoryTests {
         var (book, tarn) = makeBook()
         _ = book.selected(t[0])
         book.setPendingTarget(tarn, for: t[0])
-        #expect(book.folderForNewSurface(from: t[0], split: true) == nil)
-        #expect(book.folderForNewSurface(from: t[1], split: true) == folder)
+        #expect(book.folderForNewSurface(from: t[0], order: t, split: true) == nil)
+        #expect(book.folderForNewSurface(from: t[1], order: t, split: true) == folder)
     }
 
-    // spec: docs/specs/workspace-folder.md S29
-    @Test func aNewTabAfterAMoveStartsInTheNewWorkspace() {
-        var (book, tarn) = makeBook()
-        _ = book.selected(t[0])
-        #expect(book.folderForNewSurface(from: t[0], split: false) == nil)
-        _ = book.edit(t[0]) { $0.join(t[0], to: tarn) }
-        _ = book.selected(t[0])
-        #expect(book.folderForNewSurface(from: t[0], split: false) == folder)
+    /// The selected tab's workspace was deleted: membership falls back to the top workspace of
+    /// the window, so the folder does too, not the workspace the tab moved into.
+    @Test func aDeletedLastSelectedWorkspaceGivesTheTopFolderAsMembershipDoes() throws {
+        var book = WorkspaceBook()
+        _ = book.pass([t])
+        var tarn: Workspace.ID?
+        var notes: Workspace.ID?
+        _ = book.edit(t[0]) {
+            tarn = $0.create(name: "tarn", folder: folder)
+            notes = $0.create(name: "notes", folder: "/p/N")
+        }
+        let tarnID = try #require(tarn)
+        let notesID = try #require(notes)
+        _ = book.edit(t[0]) {
+            $0.join(t[1], to: tarnID)
+            $0.join(t[2], to: notesID)
+        }
+        _ = book.selected(t[2])
+        _ = book.edit(t[0]) { _ = $0.delete(notesID, order: t) }
+        #expect(book.folderForNewSurface(from: t[2], order: t, split: true) == folder, "t2 moved into tarn")
+        #expect(book.folderForNewSurface(from: t[2], order: t, split: false) == nil, "top is No project, not tarn")
+        #expect(book.folderForNewSurface(from: t[2], order: [t[1], t[2], t[0]], split: false) == folder, "top is tarn")
+    }
+
+    // spec: docs/specs/workspace-folder.md S34
+    @Test func aTabThatOpensAWindowKeepsItsConfig() {
+        #expect(!WorkspaceRegistry.landsInWorkspace(split: false, tabbingMode: .disallowed))
+        #expect(WorkspaceRegistry.landsInWorkspace(split: true, tabbingMode: .disallowed))
+        #expect(WorkspaceRegistry.landsInWorkspace(split: false, tabbingMode: .preferred))
+        #expect(WorkspaceRegistry.landsInWorkspace(split: false, tabbingMode: .automatic))
     }
 
     @Test func anUnknownTabHasNoFolder() {
-        #expect(WorkspaceBook().folderForNewSurface(from: t[2], split: false) == nil)
+        #expect(WorkspaceBook().folderForNewSurface(from: t[2], order: t, split: false) == nil)
     }
 }
