@@ -97,7 +97,30 @@ export function startWorkspaces({ createPane, createViewer }) {
     const pane = bus.cmd("pane.place", { viewer: true, zone: "right", target: "block", focus: false });
     if (pane) bus.cmd("viewer.open", { ...request, pane });
   });
+  bus.on("state:changed", ({ part }) => { if (part === "registry") arrive(); });
   Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => (NEEDS_TAB.test(name) && !currentTab() ? undefined : fn(payload))));
+}
+
+// Tab id -> pane of the agent that decided the tab's place; while that session lives, no other
+// agent in the tab moves it (docs/specs/workspace-folder.md D26).
+const decided = new Map();
+
+// An agent that starts in a tab not placed by hand moves the tab to the workspace whose folder
+// holds the agent's folder, the deepest one first (D21). No such workspace: the tab stays.
+function arrive() {
+  const s = read("workspaces"), registry = read("registry");
+  for (const [tabId, pane] of decided) if (!s.tabs[tabId] || !registry[pane]) decided.delete(tabId);
+  for (const tab of Object.values(s.tabs)) {
+    if (decided.has(tab.id)) continue;
+    const agent = tree.terminals(tab.layout).find((t) => registry[t.pane] && registry[t.pane].state !== "idle");
+    if (!agent) continue;
+    decided.set(tab.id, agent.pane);
+    if (tab.manual) continue;
+    const cwd = panes.get(agent.pane)?.cwd ?? tab.cwd, here = wsOf(s, tab.id);
+    const home = s.wss.filter((w) => w.folder && inside(w.folder, cwd))
+      .sort((a, b) => b.folder.length - a.folder.length)[0];
+    if (home && here.folder !== home.folder) bus.cmd("tab.move", { id: tab.id, ws: home.id, arrival: true });
+  }
 }
 
 function update(fn) {
@@ -132,9 +155,9 @@ function addTab(s, ws, { cwd = startCwd(s, ws), title = `zsh · ${short(cwd)}` }
   return id;
 }
 
-// A new window starts with Default and one tab.
+// A new window starts with "No project" (no folder) and one tab.
 function openWindow(s) {
-  const ws = { id: nextId("w"), name: "Default", tabs: [] };
+  const ws = { id: nextId("w"), name: "No project", tabs: [] };
   s.wss = [ws];
   s.cur = addTab(s, ws, { cwd: "~" });
 }
@@ -258,13 +281,19 @@ const COMMANDS = {
   }),
 
   // Before another tab or at the end of a workspace.
-  "tab.move": ({ id, ws, before = null }) => update((s) => {
+  // A user move to another workspace marks the tab manual: the folder never moves it again
+  // (docs/specs/workspace-folder.md D22). An arrival move does not.
+  "tab.move": ({ id, ws, before = null, arrival = false }) => update((s) => {
     const to = s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
     from.tabs = from.tabs.filter((x) => x !== id);
     const at = before ? to.tabs.indexOf(before) : -1;
     if (at >= 0) to.tabs.splice(at, 0, id); else to.tabs.push(id);
-    if (from !== to) { to.collapsed = false; toast(`Moved to ${to.name}`); }
+    if (from !== to) {
+      to.collapsed = false;
+      if (!arrival) s.tabs[id].manual = true;
+      toast(arrival ? `Moved to ${to.name}: the agent works in its folder` : `Moved to ${to.name}`);
+    }
     if (!from.tabs.length) s.wss = s.wss.filter((w) => w !== from);
   }),
 
@@ -387,7 +416,7 @@ const COMMANDS = {
   }),
 
   "window.new": () => {
-    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own Default");
+    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own No project");
     update(openWindow);
   },
 

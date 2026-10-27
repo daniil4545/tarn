@@ -76,12 +76,37 @@ def folder_story(pg):
         snap(pg)["workspaces"]["tabs"][fresh]["cwd"] == "~/code/tarn",
     )
     cmd(pg, "tab.close", {"id": fresh})
+
+    def agent_tab(cwd):
+        cmd(pg, "tab.new", {"ws": "w0", "cwd": cwd})
+        tab = snap(pg)["workspaces"]["cur"]
+        return tab, snap(pg)["workspaces"]["tabs"][tab]["layout"]["pane"]
+
+    def ws_of(tab):
+        return next(w["id"] for w in snap(pg)["workspaces"]["wss"] if tab in w["tabs"])
+
+    arrived, pane = agent_tab("~/code/tarn/docs")
+    cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
+    check(
+        "F7 an agent started in a project folder moves its tab to the end of that workspace, not marked manual",
+        snap(pg)["workspaces"]["wss"][0]["tabs"][-1] == arrived
+        and not snap(pg)["workspaces"]["tabs"][arrived].get("manual"),
+    )
+    placed, pane = agent_tab("~/code/tarn")
+    cmd(pg, "tab.move", {"id": placed, "ws": "w2"})
+    cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
+    check(
+        "F8 a tab moved by hand stays where the user put it when its agent starts",
+        ws_of(placed) == "w2" and snap(pg)["workspaces"]["tabs"][placed].get("manual") is True,
+    )
+    for tab in (arrived, placed):
+        cmd(pg, "tab.close", {"id": tab})
     cmd(pg, "tab.go", {"id": "t1"})
     cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
     check(
         "F5 with two or more workspaces a top tab starts with its workspace",
         pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn ·"
-        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "Default ·",
+        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "No project ·",
     )
     cmd(pg, "config.reset", {"key": "tab-style"})
 
@@ -95,7 +120,7 @@ def story(base):
         )
         folder_story(pg)
 
-        # type in the shell (Default workspace, tab 6)
+        # type in the shell (No project workspace, tab 6)
         show_pane(pg, "p6")
         pg.locator("[data-pane='p6'] canvas").first.click()
         until(pg, "p6", "%")
