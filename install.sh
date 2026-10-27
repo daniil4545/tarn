@@ -5,7 +5,8 @@
 set -eu
 
 repo="${TARN_REPO:-https://github.com/daniil4545/tarn}"
-id="com.daniil4545.tarn"
+# TARN_BUNDLE_ID is for the installer test: a running Tarn would refuse every case of it.
+id="${TARN_BUNDLE_ID:-com.daniil4545.tarn}"
 
 fail() {
   echo "tarn install: $*" >&2
