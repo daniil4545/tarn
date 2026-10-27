@@ -68,7 +68,7 @@ Keys: rows are data in `keys/*.js`; `keymap.js` runs in the capture phase and ma
 | Area | Demo files | App counterpart |
 |---|---|---|
 | Core | `main.js`, `bus.js`, `state.js`, `storage.js`, `clock.js`, `config.js` | `ControlSocket.swift`, `TarnSettings.swift` |
-| Agent state | `registry.js`, `agent-script.js`, `session-rows.js` | `SessionRegistry.swift` |
+| Agent state | `registry.js`, `agent-script.js`, `pane-rows.js` | `SessionRegistry.swift` |
 | Terminal | `term-adapter.js`, `term-pane.js`, `pane-*.js`, `themes.js`, `themes-data.js` | Ghostty surface |
 | Shell | `shell/`, `commands/`, `vfs*.js` | the shell and the disk |
 | Layout | `layout.js`, `workspace.js`, `view.js`, `dnd.js`, `frame.js` | Ghostty `SplitTree`, `SidebarModel` |

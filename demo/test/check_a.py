@@ -315,16 +315,30 @@ def tarn_cli(base):
             and last_prompt_line(pg, "p7").endswith("%"),
         )
 
-        run(pg, "p7", "tarn ls", r"\n\d+\s+tarn\s+main\s+\w+\s+\d+[smh]")
-        check(
-            "tarn ls prints the row format of the spec",
-            has(pg, "p7", r"\n1\s+tarn\s+main\s+waiting\s+\d+[smh]"),
-            screen(pg, "p7")[:300],
+        run(
+            pg,
+            "p7",
+            "tarn ls",
+            r"\nPANE\s+TAB\s+TITLE\s+CWD\s+PROCESS\s+BRANCH\s+HOST\s+STATE",
         )
-        run(pg, "p7", "tarn ls --json", r'"state": "waiting"')
         check(
-            "tarn ls --json carries Session fields",
-            has(pg, "p7", r'"seen": false') and has(pg, "p7", r'"pane": "p1"'),
+            "tarn ls lists the panes of the caller's workspace",
+            has(
+                pg,
+                "p7",
+                r"\np1\s+t1\s+Claude · spec\s+\S+\s+claude\s+main\s+-\s+waiting",
+            )
+            and has(pg, "p7", r"\np7\s+")
+            and not has(pg, "p7", r"\np5\s+"),
+            screen(pg, "p7")[:600],
+        )
+        run(pg, "p7", "tarn ls --json", r'"panes"')
+        check(
+            "tarn ls --json carries the pane fields",
+            # the screen keeps the tail of the reply: the caller's own pane comes last
+            has(pg, "p7", r'"pane": "p7"')
+            and has(pg, "p7", r'"workspace": "w1"')
+            and has(pg, "p7", r'"host": ""'),
             screen(pg, "p7"),
         )
 

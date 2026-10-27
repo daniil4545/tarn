@@ -43,7 +43,7 @@ function setup({ cols = 100, cwd = REPO, history = [] } = {}) {
     write: (d) => screen.write(d),
     emit: (name, data) => events.push([name, data]),
     identity: { user: "you", host: "mac", home: HOME, start: cwd },
-    sessions: () => [],
+    panes: () => [],
     paneId: "p1",
   });
   shell.start();
