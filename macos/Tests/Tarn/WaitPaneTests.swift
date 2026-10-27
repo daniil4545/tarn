@@ -18,6 +18,8 @@ struct WaitPaneTests {
     private let shell = PaneFacts(atPrompt: false, shellInForeground: true)
     private let busy = PaneFacts()
     private let idle = PaneFacts(atPrompt: true, shellInForeground: true)
+    /// `confirm-close-surface` false or always: `needsConfirmQuit` says nothing about the prompt.
+    private let blind = PaneFacts(promptReadable: false, atPrompt: true, shellInForeground: true)
 
     private func tick() async { try? await Task.sleep(for: .milliseconds(50)) }
 
@@ -31,16 +33,18 @@ struct WaitPaneTests {
             var expected: WaitStart
         }
         let cases = [
-            Case(mark: nil, facts: idle, integrated: true, expected: .answer(.finished(code: 0, durationMs: 0))),
+            Case(mark: nil, facts: idle, integrated: true, expected: .answer(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))),
             Case(mark: nil, facts: shell, integrated: false, expected: .refuse(.noShellIntegration)),
             Case(mark: nil, facts: shell, integrated: true, expected: .park),
             Case(mark: nil, facts: busy, integrated: false, expected: .park),
             Case(mark: new, facts: busy, integrated: false, expected: .park),
             Case(mark: new, facts: PaneFacts(processExited: true), integrated: false, expected: .refuse(.exitCodeUnknown)),
             Case(mark: run, facts: idle, integrated: true, expected: .park),
+            Case(mark: nil, facts: blind, integrated: true, expected: .park),
+            Case(mark: nil, facts: blind, integrated: false, expected: .park),
         ]
         for item in cases {
-            let got = WaitRule.start(mark: item.mark, facts: item.facts, integrated: item.integrated, lastExit: nil)
+            let got = WaitRule.start(mark: item.mark, facts: item.facts, integrated: item.integrated)
             #expect(got == item.expected, "\(String(describing: item.mark)) \(item.facts)")
         }
     }
@@ -50,6 +54,7 @@ struct WaitPaneTests {
         #expect(WaitOutcome.finished(code: 0, durationMs: 1234).text == "succeed  exit 0  1.2s")
         #expect(WaitOutcome.finished(code: 2, durationMs: 50).state == "error")
         #expect(WaitOutcome(state: "closed", exitCode: nil, durationMs: 3000).text == "closed  exit -  3.0s")
+        #expect(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0).fields["exit_code"] is NSNull)
     }
 
     @MainActor @Test func shellCommandFinishAnswersEveryWaitOfThePane() {
@@ -66,12 +71,38 @@ struct WaitPaneTests {
         #expect(waits.pendingCount == 0)
     }
 
-    /// A pane that has finished a command is idle and known to report: the next wait answers at once.
-    @MainActor @Test func finishedPaneAnswersAtOnceWithItsLastCode() throws {
+    /// An idle pane answers at once with no code, even after an earlier finish: that code is not this wait's.
+    @MainActor @Test func idlePaneAnswersAtOnceWithoutACode() throws {
         let waits = PaneWaits()
         waits.commandFinished(pane: pane, exitCode: 1, durationNs: 0)
         let result = try #require(waits.begin(pane: pane, facts: idle, timeout: nil, reply: Sink()))
-        #expect(try result.get()["exit_code"] as? Int == 1)
+        let fields = try result.get()
+        #expect(fields["state"] as? String == "succeed")
+        #expect(fields["exit_code"] is NSNull)
+        #expect(fields["text"] as? String == "succeed  exit -  0.0s")
+    }
+
+    /// With `confirm-close-surface` not `true` the prompt cannot be read: wait for the next finish.
+    @MainActor @Test func unreadablePromptWaitsForTheNextFinish() {
+        let waits = PaneWaits()
+        let sink = Sink()
+        #expect(waits.begin(pane: pane, facts: blind, timeout: nil, reply: sink) == nil)
+        #expect(sink.lines.isEmpty)
+        waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
+        #expect(sink.lines.first?["state"] as? String == "succeed")
+    }
+
+    /// A closing window answers `closed` for its panes only, though its surface tree does not change.
+    @MainActor @Test func closingAWindowAnswersItsPanes() {
+        let waits = PaneWaits()
+        let mine = Sink(), other = Sink()
+        let elsewhere = UUID()
+        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: mine)
+        _ = waits.begin(pane: elsewhere, facts: busy, timeout: nil, reply: other)
+        waits.closed(panes: [pane])
+        #expect(mine.lines.first?["state"] as? String == "closed")
+        #expect(other.lines.isEmpty)
+        #expect(waits.pendingCount == 1)
     }
 
     /// U4, U8: a `new` pane ends with its process and the code is unknown.
