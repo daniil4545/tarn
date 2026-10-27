@@ -129,7 +129,9 @@ Decisions:
   the moment of the move, so a deleted workspace or a changed folder is never a stale target.
   Accepted: moving a tab that is not selected in the key window selects it for an instant
   (`moveNatively`) and gives the selection back. A moved selected tab updates the target of
-  the next new tab (`lastSelected`), and a collapsed destination unfolds as for a new tab.
+  the next new tab (`lastSelected`), and a collapsed destination unfolds as for a new tab; a tab
+  that arrives in the background does neither (a VS Code explorer reveals only the active editor).
+  While Workspaces is off the deciding pid is still kept, so an agent started then is no arrival later (R4).
   Model change: no.
 
 Canon decisions this spec replaces (the stage named edits `docs/specs/windows-workspaces.md`):
@@ -203,8 +205,8 @@ Limits (what the code never does):
 | `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one workspace named "No project" or "Default" with no folder |
 | `WorkspaceSnapshot.Entry.folder` | new optional field | `WorkspaceRestore` | missing in old snapshots decodes as nil; version stays 1 |
 | `WorkspaceSnapshot.manual` | new optional field `[TabKey]` | `WorkspaceRestore` | missing decodes as empty |
-| deciding agent pid per tab | new, runtime | `WorkspaceRegistry` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |
-| pending arrivals | new, runtime | `WorkspaceRegistry` | tab key and the agent's path; destination computed at move time; dropped when the tab closes or is marked manual |
+| deciding agent pid per tab | new, runtime | `WorkspaceBook` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |
+| pending arrivals | new, runtime | `WorkspaceBook` | tab key and the agent's path; destination computed at move time; dropped when the tab closes or is marked manual |
 
 - Input: the folder panel; Ghostty's inherited `SurfaceConfiguration`; `SurfaceView.workingDirectory`
   and `AgentProcessCache` per pane.
@@ -259,6 +261,9 @@ extension WorkspaceBook {
     func arrival(of tab: TabKey, at path: String) -> Workspace.ID?
     /// D21 mark: the agent of `tab` is outside its workspace's folder.
     func isOutsideFolder(_ tab: TabKey, at path: String) -> Bool
+    /// D26, D27: `checkArrival` keeps the deciding pid and queues the path (note for S27);
+    /// `takeArrival` dequeues and gives the destination; `arrived` sets `lastSelected` and unfolds.
+    mutating func checkArrival(_ tab: TabKey, alive: (pid_t) -> Bool, found: () -> (pid: pid_t, path: String?)?) -> String?
 }
 
 extension WorkspaceRegistry {
