@@ -69,6 +69,16 @@ struct ManualMarkTests {
     }
 
     // spec: docs/specs/workspace-folder.md S31
+    @Test func anUnchangedOrderWithBrokenRunsMarksNothing() {
+        var set = twoWorkspaces()
+        // Membership changed but the native order did not (the move was late or lost).
+        set.join(t[0], to: b.id)
+        let order = Array(t[0...3])
+        _ = set.reconcile(previous: order, current: order, target: a.id)
+        #expect(set.manual.isEmpty)
+    }
+
+    // spec: docs/specs/workspace-folder.md S31
     @Test func aNewTabOpenedWithPlusLeavesNoMark() {
         var set = twoWorkspaces()
         _ = set.reconcile(previous: Array(t[0...3]), current: Array(t[0...4]), target: b.id)

@@ -280,7 +280,7 @@ struct WorkspaceSet: Equatable {
     /// not heal the order, every tab outside the first run of its workspace joins the
     /// workspace above it.
     private mutating func repair(_ known: [TabKey], previous: [TabKey]) {
-        if previous.count == known.count {
+        if previous.count == known.count, previous != known {
             let mover = known.first { tab in
                 known.filter { $0 != tab } == previous.filter { $0 != tab }
             }
