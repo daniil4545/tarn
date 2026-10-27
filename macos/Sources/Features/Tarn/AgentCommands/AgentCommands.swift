@@ -97,10 +97,8 @@ enum AgentCommands {
             let tab = WorkspaceRegistry.shared.tabKey(of: window)
             let workspace = WorkspaceRegistry.shared.workspace(of: window)?.id
             return controller.surfaceTree.map { view in
-                // A pane `tarn new` opened has no shell to report its cwd (OSC 7): the cwd of its
-                // process, as WezTerm `divine_current_working_dir` reads it.
                 let pid = view.surfaceModel?.foregroundPID.map { AgentProcess.foreground(group: pid_t($0)) }
-                let cwd = view.workingDirectory ?? pid.flatMap(AgentProcess.cwd) ?? ""
+                let cwd = view.workingDirectory ?? ""
                 return PaneRow(
                     pane: view.id,
                     tab: tab,

@@ -128,7 +128,7 @@ struct AgentProcessTests {
         try withGroup(["/usr/bin/login", "-flp", user, "/bin/sh", "-c", "cd /tmp && exec sleep 30"]) { login in
             #expect(AgentProcess.comm(pid: login) == "login")
             let command = try #require(settled(login, comm: "sleep"), "login's child never appeared")
-            #expect(AgentProcess.cwd(pid: command) == "/private/tmp")
+            #expect(ViewerPaths.cwd(ofPid: command) == "/private/tmp")
         }
     }
 

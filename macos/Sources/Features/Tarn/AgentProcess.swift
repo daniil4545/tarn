@@ -104,18 +104,6 @@ enum AgentProcess {
         return pid_t(info.pbsi_ppid)
     }
 
-    /// The current directory of `pid`, as WezTerm reads it on macOS (`procinfo/src/macos.rs`,
-    /// `PROC_PIDVNODEPATHINFO`); nil for a pid of another user or one that has exited.
-    static func cwd(pid: pid_t) -> String? {
-        var info = proc_vnodepathinfo()
-        let size = Int32(MemoryLayout<proc_vnodepathinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDVNODEPATHINFO, 0, &info, size) == size else { return nil }
-        let path = withUnsafeBytes(of: &info.pvi_cdir.vip_path) { raw in
-            raw.bindMemory(to: CChar.self).baseAddress.map { String(cString: $0) }
-        }
-        return path?.isEmpty == false ? path : nil
-    }
-
     /// The arguments of `pid` from `KERN_PROCARGS2`:
     /// `[int32 argc][exec_path\0][\0 padding][argv0\0 argv1\0 …][env…]`.
     static func argv(pid: pid_t) -> [String]? {
