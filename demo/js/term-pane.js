@@ -96,7 +96,7 @@ export function createPane(id, { cwd }) {
       case "cwd": bus.emit("pane:cwd", { pane: id, cwd: data.cwd }); break;
       case "exit": bus.cmd("pane.close", { id, exited: true }); break;
       case "viewer.open": bus.cmd("viewer.open", { ...data, pane: id }); break;
-      case "tab.new": bus.cmd("tab.new", { pane: id, cwd: pane.cwd, select: false }); break;
+      case "pane.new": return bus.cmd("pane.split", { id, dir: data.right ? "right" : "down", focus: false });
       case "hook": bus.cmd("hook", { pane: id, ...data }); break;
       case "command": notifyWhenDone(data); break;
       default: throw new Error(`unknown shell event: ${name}`);
