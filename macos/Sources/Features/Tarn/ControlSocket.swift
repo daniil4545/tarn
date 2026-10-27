@@ -138,10 +138,8 @@ extension ControlSocket {
             if !isClosed { close(fd) }
         }
 
-        /// Calls `handler` once when the other end hangs up before an answer, and closes the
-        /// connection. A held reply (`tarn wait`) uses it to release a cancelled request. `nc` shuts
-        /// down its writing side after the request, so a read of zero bytes is no hang-up; POLLHUP
-        /// is set only once both directions are down.
+        /// Calls `handler` once when the other end hangs up before an answer, and closes the connection.
+        /// `nc` half-closes after the request, so EOF is no hang-up; POLLHUP needs both directions down.
         func watchPeer(_ handler: @escaping @Sendable () -> Void) {
             queue.async { [self] in
                 guard !isClosed else { return }

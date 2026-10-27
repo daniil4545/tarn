@@ -30,18 +30,18 @@ struct WaitPaneTests {
             var mark: RunMark?
             var facts: PaneFacts
             var integrated: Bool
-            var expected: WaitStart
+            var expected: Result<WaitOutcome, AgentRefusal>?
         }
         let cases = [
-            Case(mark: nil, facts: idle, integrated: true, expected: .answer(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))),
-            Case(mark: nil, facts: shell, integrated: false, expected: .refuse(.noShellIntegration)),
-            Case(mark: nil, facts: shell, integrated: true, expected: .park),
-            Case(mark: nil, facts: busy, integrated: false, expected: .park),
-            Case(mark: new, facts: busy, integrated: false, expected: .park),
-            Case(mark: new, facts: PaneFacts(processExited: true), integrated: false, expected: .refuse(.exitCodeUnknown)),
-            Case(mark: run, facts: idle, integrated: true, expected: .park),
-            Case(mark: nil, facts: blind, integrated: true, expected: .park),
-            Case(mark: nil, facts: blind, integrated: false, expected: .park),
+            Case(mark: nil, facts: idle, integrated: true, expected: .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))),
+            Case(mark: nil, facts: shell, integrated: false, expected: .failure(.noShellIntegration)),
+            Case(mark: nil, facts: shell, integrated: true, expected: nil),
+            Case(mark: nil, facts: busy, integrated: false, expected: nil),
+            Case(mark: new, facts: busy, integrated: false, expected: nil),
+            Case(mark: new, facts: PaneFacts(processExited: true), integrated: false, expected: .failure(.exitCodeUnknown)),
+            Case(mark: run, facts: idle, integrated: true, expected: nil),
+            Case(mark: nil, facts: blind, integrated: true, expected: nil),
+            Case(mark: nil, facts: blind, integrated: false, expected: nil),
         ]
         for item in cases {
             let got = WaitRule.start(mark: item.mark, facts: item.facts, integrated: item.integrated)
@@ -108,7 +108,7 @@ struct WaitPaneTests {
     /// U4, U8: a `new` pane ends with its process and the code is unknown.
     @MainActor @Test func newPaneEndsWithItsProcessWithoutACode() {
         let waits = PaneWaits()
-        waits.mark(pane, RunMark(kind: .new, command: "sleep 2"))
+        waits.marks[pane] = RunMark(kind: .new, command: "sleep 2")
         let sink = Sink()
         #expect(waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink) == nil)
         waits.commandFinished(pane: UUID(), exitCode: 0, durationNs: 0)
@@ -121,7 +121,7 @@ struct WaitPaneTests {
     /// The `run` rule: an idle pane with a typed line waits for the next finish, not for idle.
     @MainActor @Test func runPaneWaitsForTheNextFinish() {
         let waits = PaneWaits()
-        waits.mark(pane, RunMark(kind: .run, command: "make"))
+        waits.marks[pane] = RunMark(kind: .run, command: "make")
         let sink = Sink()
         #expect(waits.begin(pane: pane, facts: idle, timeout: nil, reply: sink) == nil)
         waits.commandFinished(pane: pane, exitCode: 0, durationNs: 1_000_000_000)
@@ -204,7 +204,7 @@ struct WaitPaneTests {
     /// The `run` mark is spent by the finish it waited for: the next wait on the idle pane answers at once.
     @MainActor @Test func aRunMarkIsConsumedByItsFinish() throws {
         let waits = PaneWaits()
-        waits.mark(pane, RunMark(kind: .run, command: "make"))
+        waits.marks[pane] = RunMark(kind: .run, command: "make")
         _ = waits.begin(pane: pane, facts: idle, timeout: nil, reply: Sink())
         waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
         #expect(waits.marks[pane] == nil)

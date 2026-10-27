@@ -11,8 +11,7 @@ struct RunMark: Equatable {
 /// What a pane looked like when `wait` asked, read from the surface by `WaitPane`.
 struct PaneFacts: Equatable {
     var processExited = false
-    /// `confirm-close-surface = true`: only then `needsConfirmQuit` means "the cursor is not at a
-    /// prompt" (`src/Surface.zig:995-1012`); `false` and `always` answer without looking.
+    /// Only `confirm-close-surface = true` makes `needsConfirmQuit` mean "not at a prompt" (`src/Surface.zig:995`).
     var promptReadable = true
     /// The cursor sits at a prompt: only OSC 133 marks can say so (`Terminal.cursorIsAtPrompt`).
     var atPrompt = false
@@ -42,13 +41,6 @@ struct WaitOutcome: Equatable {
     }
 }
 
-/// What `wait` does with a pane at the moment it is asked.
-enum WaitStart: Equatable {
-    case answer(WaitOutcome)
-    case refuse(AgentRefusal)
-    case park
-}
-
 extension AgentRefusal {
     /// Otty `pane wait` exit 6: the pane cannot report the code.
     static let exitCodeUnknown = AgentRefusal(text: "exit code unknown", code: 6)
@@ -58,25 +50,21 @@ extension AgentRefusal {
 
 /// The rules of `docs/specs/agent-cli.md` 3 "What ends a wait", free of windows so a test can drive them.
 enum WaitRule {
-    static func start(mark: RunMark?, facts: PaneFacts, integrated: Bool) -> WaitStart {
+    /// The answer at once, or nil to park the wait until an end arrives.
+    static func start(mark: RunMark?, facts: PaneFacts, integrated: Bool) -> Result<WaitOutcome, AgentRefusal>? {
         if mark?.kind == .new {
             // U8: Ghostty reports no exit code of a configured command on macOS.
-            return facts.processExited ? .refuse(.exitCodeUnknown) : .park
+            return facts.processExited ? .failure(.exitCodeUnknown) : nil
         }
         // Never answer idle early: without a readable prompt the next finish is the only sign.
-        guard facts.promptReadable else { return .park }
+        guard facts.promptReadable else { return nil }
         if facts.atPrompt {
-            // A `run` pane looks idle before the user presses Enter: it waits for the next finish.
-            if mark?.kind == .run { return .park }
-            // An old command's code is not this wait's: idle reports none.
-            return .answer(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))
+            // A `run` pane looks idle before Enter; an old command's code is not this wait's.
+            return mark?.kind == .run ? nil : .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))
         }
-        if !integrated, facts.shellInForeground { return .refuse(.noShellIntegration) }
-        return .park
+        return !integrated && facts.shellInForeground ? .failure(.noShellIntegration) : nil
     }
-}
 
-extension WaitRule {
     /// A parked wait on a pane that shows no prompt mark while the shell is back in the foreground:
     /// the command ended and no OSC 133 finish will come (`docs/specs/agent-cli.md` 4.6).
     static func stalled(mark: RunMark?, facts: PaneFacts, integrated: Bool) -> Bool {
@@ -112,10 +100,9 @@ final class PaneWaits {
         var shellSeen = 0
     }
 
-    /// One year: `Task.sleep` never gets a huge value.
     static let longestTimeout = 365.0 * 86400
 
-    private(set) var marks: [UUID: RunMark] = [:]
+    var marks: [UUID: RunMark] = [:]
     private var integrated = Set<UUID>()
     private var waits: [Wait] = []
 
@@ -126,7 +113,6 @@ final class PaneWaits {
     var factsOf: (UUID) -> PaneFacts? = { id in SessionRegistry.surfaceView(id).map(WaitPane.facts(of:)) }
 
     private var ticker: Task<Void, Never>?
-
     var pendingCount: Int { waits.count }
 
     /// The calls Ghostty's callbacks make; they run on the main thread.
@@ -142,16 +128,10 @@ final class PaneWaits {
         MainActor.assumeIsolated { shared.surfaceTreeChanged() }
     }
 
-    func mark(_ pane: UUID, _ mark: RunMark) {
-        marks[pane] = mark
-    }
-
     /// Starts a wait: the answer at once, or nil while the reply is held.
     func begin(pane: UUID, facts: PaneFacts, timeout: Double?, reply: any WaitSink) -> Result<[String: Any], AgentRefusal>? {
-        switch WaitRule.start(mark: marks[pane], facts: facts, integrated: integrated.contains(pane)) {
-        case .answer(let outcome): return .success(outcome.fields)
-        case .refuse(let refusal): return .failure(refusal)
-        case .park: break
+        if let now = WaitRule.start(mark: marks[pane], facts: facts, integrated: integrated.contains(pane)) {
+            return now.map(\.fields)
         }
         var wait = Wait(pane: pane, reply: reply)
         let id = wait.id
@@ -166,7 +146,7 @@ final class PaneWaits {
         startTicker()
         // A cancelled wait (its CLI killed) is released when its connection closes.
         reply.watchPeer { [weak self] in
-            DispatchQueue.main.async { MainActor.assumeIsolated { self?.release(id) } }
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.finish(id, nil) } }
         }
         return nil
     }
@@ -258,16 +238,12 @@ final class PaneWaits {
         for wait in waits where wait.pane == pane { finish(wait.id, result) }
     }
 
-    private func finish(_ id: UUID, _ result: Result<[String: Any], AgentRefusal>) {
+    /// Ends a wait with an answer, or with none (nil) when its connection is already gone.
+    private func finish(_ id: UUID, _ result: Result<[String: Any], AgentRefusal>?) {
         guard let index = waits.firstIndex(where: { $0.id == id }) else { return }
         let wait = waits.remove(at: index)
         wait.timer?.cancel()
-        wait.reply.send(AgentCommands.encode("wait", result, surface: wait.pane.uuidString))
-    }
-
-    private func release(_ id: UUID) {
-        guard let index = waits.firstIndex(where: { $0.id == id }) else { return }
-        waits.remove(at: index).timer?.cancel()
+        if let result { wait.reply.send(AgentCommands.encode("wait", result, surface: wait.pane.uuidString)) }
     }
 }
 

@@ -80,26 +80,23 @@ enum AgentCommands {
     @MainActor
     private static func waitCommand(_ message: [String: Any], reply sink: ControlSocket.Reply) {
         let result: Result<[String: Any], AgentRefusal>?
-        if message["version"] as? Int != 1 {
-            result = .failure(AgentRefusal(text: "unsupported version"))
-        } else {
-            switch AgentScope.resolve(caller: message["surface"] as? String, in: livePanes()) {
-            case .success(let scope): result = WaitPane.start(message, scope: scope, reply: sink)
-            case .failure(let refusal): result = .failure(refusal)
-            }
+        switch scope(of: message, in: livePanes()) {
+        case .success(let scope): result = WaitPane.start(message, scope: scope, reply: sink)
+        case .failure(let refusal): result = .failure(refusal)
         }
         if let result { sink.send(encode("wait", result, surface: message["surface"] as? String)) }
+    }
+
+    private static func scope(of message: [String: Any], in panes: [PaneRow]) -> Result<AgentScope, AgentRefusal> {
+        message["version"] as? Int != 1
+            ? .failure(AgentRefusal(text: "unsupported version"))
+            : AgentScope.resolve(caller: message["surface"] as? String, in: panes)
     }
 
     /// The reply line of `handler` for `message`, with the panes of every window given; logs a refusal.
     @MainActor
     static func answer(_ command: String, _ handler: Handler, message: [String: Any], panes: [PaneRow]) -> Data {
-        let result: Result<[String: Any], AgentRefusal>
-        if message["version"] as? Int != 1 {
-            result = .failure(AgentRefusal(text: "unsupported version"))
-        } else {
-            result = AgentScope.resolve(caller: message["surface"] as? String, in: panes).flatMap { handler(message, $0) }
-        }
+        let result = scope(of: message, in: panes).flatMap { handler(message, $0) }
         return encode(command, result, surface: message["surface"] as? String)
     }
 
