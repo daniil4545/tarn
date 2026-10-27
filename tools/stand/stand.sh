@@ -9,14 +9,25 @@ set -eu
 stand="${TARN_STAND:-/tmp/tarn-stand}"
 id=com.daniil4545.tarn.stand
 app="$stand/Tarn.app"
+sock="$stand/home/Library/Application Support/tarn/tarn.sock"
+lsreg=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 here=$(cd "$(dirname "$0")" && pwd)
 
+# Waits for the old process to exit, so a restart never reports the dying one as up.
 stop() {
   pkill -f "$app/Contents/MacOS/ghostty" 2>/dev/null || true
+  i=0
+  while pgrep -f "$app/Contents/MacOS/ghostty" >/dev/null 2>&1; do
+    i=$((i + 1))
+    [ "$i" -lt 20 ] || { echo "stand: the old stand did not exit" >&2; exit 1; }
+    sleep 0.5
+  done
+  rm -f "$sock"
 }
 
 if [ "${1:-}" = stop ]; then
   stop
+  [ ! -d "$app" ] || "$lsreg" -u "$app" 2>/dev/null || true
   echo "stand stopped"
   exit 0
 fi
@@ -34,19 +45,24 @@ fi
 rm -rf "$app"
 ditto "$src" "$app"
 plutil -replace CFBundleIdentifier -string "$id" "$app/Contents/Info.plist"
-codesign --force --deep --sign - "$app" 2>/dev/null
+codesign --force --deep --sign - "$app"
 
 FAKE_PW_DIR="$stand/home" DYLD_INSERT_LIBRARIES="$lib" HOME="$stand/home" \
   "$app/Contents/MacOS/ghostty" "$@" > "$stand/app.log" 2>&1 &
+pid=$!
 
-sock="$stand/home/Library/Application Support/tarn/tarn.sock"
+# AppleScript by bundle id would launch a fresh copy with the real home if the stand were gone,
+# so it is asked only while the stand process lives and its socket exists.
 i=0
 while [ "$i" -lt 30 ]; do
-  surface=$(osascript -e "tell application id \"$id\" to get id of focused terminal of selected tab of front window" 2>/dev/null || true)
-  if [ -n "$surface" ] && [ -S "$sock" ]; then
-    echo "stand up, log $stand/app.log"
-    echo "export HOME='$stand/home' TARN_SURFACE='$surface'"
-    exit 0
+  kill -0 "$pid" 2>/dev/null || { echo "stand: the app exited, log $stand/app.log" >&2; exit 1; }
+  if [ -S "$sock" ]; then
+    surface=$(osascript -e "tell application id \"$id\" to get id of focused terminal of selected tab of front window" 2>/dev/null || true)
+    if [ -n "$surface" ]; then
+      echo "stand up (pid $pid), log $stand/app.log"
+      echo "export HOME='$stand/home' TARN_SURFACE='$surface'"
+      exit 0
+    fi
   fi
   i=$((i + 1))
   sleep 1

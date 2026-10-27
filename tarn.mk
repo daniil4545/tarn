@@ -33,7 +33,8 @@ STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
 # The core (GhosttyKit.xcframework, zig-out) is untracked and slow to build: every worktree links this one.
 worktree:
 	@test -n "$(NAME)" || { echo "worktree: NAME=<branch> is required"; exit 1; }
-	@test -d macos/GhosttyKit.xcframework -a ! -L macos/GhosttyKit.xcframework || { echo "worktree: run it in the main checkout, where the core is built"; exit 1; }
+	@test "$$(git rev-parse --git-dir)" = "$$(git rev-parse --git-common-dir)" || { echo "worktree: run it in the main checkout, not in a worktree"; exit 1; }
+	@test -d macos/GhosttyKit.xcframework -a ! -L macos/GhosttyKit.xcframework || { echo "worktree: build the core in the main checkout first"; exit 1; }
 	git fetch -q origin dev
 	git worktree add -b $(NAME) .worktrees/$(NAME) origin/dev
 	ln -s $(CURDIR)/macos/GhosttyKit.xcframework .worktrees/$(NAME)/macos/GhosttyKit.xcframework
@@ -51,7 +52,7 @@ check:
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
-	shellcheck install.sh cli/tarn cli/test/install_test.sh
+	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh
 	sh cli/test/install_test.sh
 
 release:
