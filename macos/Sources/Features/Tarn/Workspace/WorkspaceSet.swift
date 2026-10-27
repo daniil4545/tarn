@@ -282,15 +282,13 @@ struct WorkspaceSet: Equatable {
     mutating func reconcileFrozen(current: [TabKey], home: String = NSHomeDirectory()) {
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         guard !fresh.isEmpty else { return }
-        let folder = WorkspaceFolder.standardized(home) ?? home
+        let homeWorkspace = Self.makeHome(at: home)
         let target: Workspace.ID
-        if let existing = workspaces.first(where: { $0.folder == folder }) {
+        if let existing = workspaces.first(where: { $0.folder == homeWorkspace.folder }) {
             target = existing.id
         } else {
-            var created = Workspace(name: Self.homeName)
-            created.folder = folder
-            workspaces.append(created)
-            target = created.id
+            workspaces.append(homeWorkspace)
+            target = homeWorkspace.id
         }
         for tab in fresh { members[tab] = target }
         revision += 1
@@ -345,11 +343,19 @@ struct WorkspaceSet: Equatable {
         }
     }
 
-    /// `target` when it exists, else the first workspace, else a new `No project`.
+    /// A new "~" workspace with the standardized home folder: the start workspace of a fresh set
+    /// and the target of Workspaces off.
+    static func makeHome(at home: String = NSHomeDirectory()) -> Workspace {
+        var workspace = Workspace(name: homeName)
+        workspace.folder = WorkspaceFolder.standardized(home) ?? home
+        return workspace
+    }
+
+    /// `target` when it exists, else the first workspace, else a new "~".
     private mutating func ensureWorkspace(_ target: Workspace.ID) -> Workspace.ID {
         if workspace(target) != nil { return target }
         if let first = workspaces.first { return first.id }
-        let created = Workspace(name: Self.defaultName)
+        let created = Self.makeHome()
         workspaces.append(created)
         return created.id
     }

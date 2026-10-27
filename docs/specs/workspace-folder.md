@@ -96,6 +96,8 @@ Decisions:
 - D21. When a tab becomes an agent tab, it joins the workspace of this window whose folder holds
   the agent's working directory, deepest folder first. No such workspace: the tab stays and its
   row carries an "outside folder" mark, only when its own workspace has a folder (agent, 3B).
+  The start workspace "~" (home folder) never pulls a tab from another workspace; a tab in "~"
+  under home stays unmarked (T-245, keeps the behavior before "~" became the start).
   Dropped: create a workspace per unknown folder (junk workspaces such as "self-projects").
   Model change: yes.
 - D22. A tab the user placed by hand never moves by folder. The mark is set only when the
@@ -108,6 +110,10 @@ Decisions:
   (T-142 has no decision on tab order writers). Model change: no.
 - D24. The folderless workspace of a new set is named "No project" instead of "Default"; there
   every Ghostty behaviour is kept (cwd inheritance, titles, no mark). Model change: yes.
+  Replaced 2026-10-27 (T-245, user decision): a new set starts with the workspace "~" whose
+  folder is the home directory, the "~" of Workspaces off (`docs/modules/workspaces.md`), so D20
+  applies to it and the first tab starts in the home folder. Restored sets keep their saved
+  names ("No project", "Default"); those stay folderless.
 - D25. With tabs at the top and two or more workspaces in the set, a native tab title is
   "<workspace> · <Ghostty title>", the workspace part dimmed (user, 2026-10-27). One workspace:
   Ghostty's title alone. This makes D21 moves visible in both tab styles. Model change: yes.
@@ -139,7 +145,7 @@ Canon decisions this spec replaces (the stage named edits `docs/specs/windows-wo
 | Canon | Now | New text | Stage |
 |---|---|---|---|
 | D3 and S4: a new workspace asks for a name | D19 | a new workspace asks for a folder; the name is the folder's last component | 1 |
-| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set's folderless workspace is "No project"; restored names are kept | 1 |
+| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set starts with "~" (home folder; T-245, was "No project"); restored names are kept | 1 |
 | D15: new tabs inherit the working directory | D20 | inherit, except in a workspace with a folder (D20) | 2 |
 | D11: no folder rule | D21, D22 | an agent tab joins by folder unless placed by hand | 3 |
 | D14 and S22: no workspaces with tabs at the top | D25 | with two or more workspaces, native titles carry the workspace prefix | 4 |
@@ -350,11 +356,11 @@ Answered by the user's rule (2026-10-27): take the behaviour of VS Code and Clau
 
 - Q1. Picking a folder a workspace of this window already has selects that workspace (VS Code
   brings the window of an open folder forward). Scenario S3.
-- Q2. No new folderless workspace: "No project" is the folderless one, as VS Code's empty
+- Q2. No new folderless workspace: "No project" was the folderless one (since T-245 a new set starts with "~", D24), as VS Code's empty
   window; Claude desktop always runs a session in a folder. Cancel in the panel creates nothing
   (S2); old workspaces without a folder stay as they are.
 - Q3 (user decision 2026-10-27, replaces Set Folder... and Remove Folder): the folder is fixed at
   creation, as a Claude desktop session's. A running shell cannot be moved without typing into
   it, so a changed folder would leave open tabs in the old one; VS Code reloads the window and
   closes its terminals instead. Another folder: Shift+Cmd+T and drag the tabs. A workspace without
-  a folder ("No project", restored "Default") stays without one.
+  a folder (a restored "No project" or "Default") stays without one.

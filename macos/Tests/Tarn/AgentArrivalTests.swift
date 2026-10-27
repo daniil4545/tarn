@@ -77,6 +77,16 @@ struct AgentArrivalTests {
         #expect(WorkspaceFolder.home(for: "relative", in: runs, current: a.id) == nil)
     }
 
+    // spec: T-245 - the start workspace "~" keeps its own tabs and pulls none from a project
+    @Test func theHomeWorkspaceNeverPullsATab() {
+        let home = Workspace(name: "~", folder: "/h")
+        let tarn = Workspace(name: "tarn", folder: "/h/tarn")
+        let runs = [WorkspaceSet.Run(workspace: home, tabs: []), WorkspaceSet.Run(workspace: tarn, tabs: [])]
+        #expect(WorkspaceFolder.home(for: "/h/code", in: runs, current: tarn.id, home: "/h") == nil)
+        #expect(WorkspaceFolder.home(for: "/h/code", in: runs, current: home.id, home: "/h") == home.id)
+        #expect(WorkspaceFolder.home(for: "/h/tarn/src", in: runs, current: home.id, home: "/h") == tarn.id)
+    }
+
     // spec: docs/specs/workspace-folder.md S16
     @Test func aManualTabNeverArrives() {
         var (book, _, _) = makeBook()
