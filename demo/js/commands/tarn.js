@@ -1,6 +1,6 @@
 // The tarn CLI as agents and people use it: open, ls, new (docs/spec.md section 11).
-// None of these moves focus or presses Enter. `open` and `ls` are in the app; `new` is second wave
-// (R15), so its first run prints PLANNED.
+// None of these moves focus or presses Enter. `open` and `ls` (panes of this workspace) are in the app;
+// `new` is second wave (R15), so its first run prints PLANNED.
 const PLANNED = "planned: not in the app yet";
 const USAGE = "usage: tarn <open path[:line] | ls [--json] | new (planned)>";
 
@@ -16,21 +16,16 @@ function open(ctx) {
   return undefined;
 }
 
+const COLUMNS = ["pane", "tab", "title", "cwd", "process", "branch", "host", "state"];
+
+// The form of WezTerm `cli list`: a header, columns padded to the widest cell, `-` for empty.
 function list(ctx) {
-  const rows = ctx.sessions();
-  if (ctx.args.includes("--json")) {
-    return ctx.out(JSON.stringify(rows.map(({ age, ...row }) => row), null, 2));
-  }
-  if (!rows.length) return ctx.out("no agent sessions");
-  const wide = (key) => Math.max(...rows.map((r) => String(r[key]).length));
-  const [project, branch, state] = [wide("project"), wide("branch"), wide("state")];
-  return ctx.out(rows.map((r) => [
-    String(r.tab).padEnd(2),
-    r.project.padEnd(project),
-    r.branch.padEnd(branch),
-    r.state.padEnd(state),
-    r.age,
-  ].join("  ")).join("\n"));
+  const rows = ctx.panes();
+  if (ctx.args.includes("--json")) return ctx.out(JSON.stringify({ ok: true, panes: rows }, null, 2));
+  const table = [COLUMNS.map((c) => c.toUpperCase()), ...rows.map((r) => COLUMNS.map((c) => r[c] || "-"))];
+  const wide = COLUMNS.map((_, i) => Math.max(...table.map((cells) => cells[i].length)));
+  const line = (cells) => cells.map((c, i) => (i < cells.length - 1 ? c.padEnd(wide[i]) : c)).join("  ");
+  return ctx.out(table.map(line).join("\n"));
 }
 
 export function tarn(ctx) {
