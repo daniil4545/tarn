@@ -16,7 +16,7 @@ struct FailureTests {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
         #expect(book.names([t[0], t[1], t[2]]) == [WorkspaceSet.homeName])
-        #expect(book.workspace(of: t[0])?.folder == WorkspaceBook.expectedHome)
+        #expect(book.workspace(of: t[0])?.folder == nil)
         #expect(book.runs(for: [t[0], t[1], t[2]])[0].tabs.count == 3)
     }
 

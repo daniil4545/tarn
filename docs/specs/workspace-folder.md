@@ -96,8 +96,6 @@ Decisions:
 - D21. When a tab becomes an agent tab, it joins the workspace of this window whose folder holds
   the agent's working directory, deepest folder first. No such workspace: the tab stays and its
   row carries an "outside folder" mark, only when its own workspace has a folder (agent, 3B).
-  The start workspace "~" (home folder) never pulls a tab from another workspace; a tab in "~"
-  under home stays unmarked (T-245, keeps the behavior before "~" became the start).
   Dropped: create a workspace per unknown folder (junk workspaces such as "self-projects").
   Model change: yes.
 - D22. A tab the user placed by hand never moves by folder. The mark is set only when the
@@ -110,10 +108,10 @@ Decisions:
   (T-142 has no decision on tab order writers). Model change: no.
 - D24. The folderless workspace of a new set is named "No project" instead of "Default"; there
   every Ghostty behaviour is kept (cwd inheritance, titles, no mark). Model change: yes.
-  Replaced 2026-10-27 (T-245, user decision): a new set starts with the workspace "~" whose
-  folder is the home directory, the "~" of Workspaces off (`docs/modules/workspaces.md`), so D20
-  applies to it and the first tab starts in the home folder. Restored sets keep their saved
-  names ("No project", "Default"); those stay folderless.
+  Renamed 2026-10-27 (T-245, user decision): a new set starts with the workspace "~", the "~" of
+  Workspaces off (`docs/modules/workspaces.md`). "~" has no folder (T-249, user decision
+  2026-10-27): its tabs and splits open where Ghostty opens them; a "~" saved with the home
+  folder loads without it. Restored sets keep their saved names ("No project", "Default").
 - D25. With tabs at the top and two or more workspaces in the set, a native tab title is
   "<workspace> · <Ghostty title>", the workspace part dimmed (user, 2026-10-27). One workspace:
   Ghostty's title alone. This makes D21 moves visible in both tab styles. Model change: yes.
@@ -145,7 +143,7 @@ Canon decisions this spec replaces (the stage named edits `docs/specs/windows-wo
 | Canon | Now | New text | Stage |
 |---|---|---|---|
 | D3 and S4: a new workspace asks for a name | D19 | a new workspace asks for a folder; the name is the folder's last component | 1 |
-| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set starts with "~" (home folder; T-245, was "No project"); restored names are kept | 1 |
+| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set starts with "~" (no folder; T-245, T-249, was "No project"); restored names are kept | 1 |
 | D15: new tabs inherit the working directory | D20 | inherit, except in a workspace with a folder (D20) | 2 |
 | D11: no folder rule | D21, D22 | an agent tab joins by folder unless placed by hand | 3 |
 | D14 and S22: no workspaces with tabs at the top | D25 | with two or more workspaces, native titles carry the workspace prefix | 4 |
@@ -168,7 +166,7 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S10 | No inheritance | `window-inherit-working-directory = false`, Cmd+T in "tarn" | new tab starts at `F` | | fast |
 | S11 | Agent joins | tab in "No project" at `F/macos`, `claude` starts | tab moves to the end of "tarn" with one native move; not marked manual | | fast |
 | S12 | Agent at home | tab in "tarn" at `F`, agent starts | no move | | fast |
-| S13 | Agent outside any folder | tab in "tarn" at `P`, agent starts | no move; the row shows the mark; in a restored "No project" no mark; in "~" no mark under home | | fast |
+| S13 | Agent outside any folder | tab in "tarn" at `P`, agent starts | no move; the row shows the mark; in "~" and a restored "No project" (no folder) no mark | | fast |
 | S14 | Nested folders | "dev" at `~/Dev`, "tarn" at `~/Dev/self-projects/tarn`, agent at `F/macos` | tab joins "tarn" | | fast |
 | S15 | Same folder twice | after Merge All Windows two workspaces hold `F` | a tab already in one of them stays; else it joins the upper one | | fast |
 | S16 | Manual wins | user drags the tab from "tarn" to "notes", later an agent starts at `F` | no move; after relaunch still no move | | fast |
@@ -206,9 +204,9 @@ Limits (what the code never does):
 
 | Entity | Change | Owner | Key or invariant |
 |---|---|---|---|
-| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for a restored "No project" and old workspaces; the home folder for "~" (T-245) |
+| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for "~", a restored "No project" and old workspaces |
 | `WorkspaceSet.manual` | new, `Set<TabKey>` | `WorkspaceSet` | only members (`makeSet` drops keys not in `members`); removed with the tab; `absorb` unites both sets' marks; `ClosedTab` carries it and `reinsert` puts it on the new key |
-| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one unrenamed "~" with the home folder, or one "No project" or "Default" with no folder (T-245) |
+| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one unrenamed "~", "No project" or "Default" with no folder |
 | `WorkspaceSnapshot.Entry.folder` | new optional field | `WorkspaceRestore` | missing in old snapshots decodes as nil; version stays 1 |
 | `WorkspaceSnapshot.manual` | new optional field `[TabKey]` | `WorkspaceRestore` | missing decodes as empty |
 | deciding agent pid per tab | new, runtime | `WorkspaceBook` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |

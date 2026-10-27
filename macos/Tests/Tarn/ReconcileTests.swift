@@ -114,7 +114,7 @@ struct ReconcileTests {
         var set = WorkspaceSet()
         _ = set.reconcile(previous: [], current: [t[0], t[1]], target: UUID())
         #expect(set.runs(order: [t[0], t[1]]).map(\.workspace.name) == [WorkspaceSet.homeName])
-        #expect(set.runs(order: [t[0], t[1]]).first?.workspace.folder == WorkspaceBook.expectedHome)
+        #expect(set.runs(order: [t[0], t[1]]).first?.workspace.folder == nil)
     }
 
     @Test func nothingChangedChangesNothing() {

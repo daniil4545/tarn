@@ -25,7 +25,7 @@ Every tab sits in exactly one workspace; a tab never exists outside one.
 
 ## 2. Decided by the user
 
-- D1 (2026-10-25; changed 2026-10-27, T-245, user decision). On launch there is a workspace `~` whose folder is the home directory, the same `~` that Workspaces off creates (`docs/modules/workspaces.md`). Before T-245 it was `No project` (and `Default` before `docs/specs/workspace-folder.md` D24); restored sets keep their saved name. It is shown in the sidebar with its header, with one tab open.
+- D1 (2026-10-25; changed 2026-10-27, T-245, user decision). On launch there is a workspace `~` with no folder, the same `~` that Workspaces off creates; its tabs and splits open where Ghostty opens them (T-249, user decision 2026-10-27, `docs/plans/workspace-thin-layer.md`) (`docs/modules/workspaces.md`). Before T-245 it was `No project` (and `Default` before `docs/specs/workspace-folder.md` D24); restored sets keep their saved name. It is shown in the sidebar with its header, with one tab open.
 - D2. A new tab opens in the current workspace, the one that holds the selected tab.
 - D3. Creating a workspace asks for a folder; its name is the folder's last component (`docs/specs/workspace-folder.md` D19). A folder another workspace of the window already holds selects that workspace.
 - D4. There is always at least one workspace; without one no terminal tab opens.
@@ -72,7 +72,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 
 | # | Start and steps | Result |
 | --- | --- | --- |
-| S1 | first launch | one window; sidebar shows `~` with one tab; focus in its terminal; the tab starts in the home folder |
+| S1 | first launch | one window; sidebar shows `~` with one tab; focus in its terminal; the tab starts in the home folder (Ghostty `working-directory`) |
 | S2 | cmd+T or + at the sidebar top | a tab in the current workspace, after its last tab, focused |
 | S3 | + on a workspace header | a tab in that workspace; the workspace unfolds |
 | S4 | New workspace (sidebar button or Shift+Cmd+T), choose a folder in the panel | a workspace named after the folder at the end of the list with one new tab in it, started in the folder and focused, so no workspace is ever empty; Cancel creates nothing |

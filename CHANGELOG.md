@@ -10,7 +10,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ### Changed
 
-- A new window starts in the workspace "~" with the home folder instead of "No project", and its first tab starts there; saved workspaces keep their names.
+- A new window starts in the workspace "~" instead of "No project", its first tab in the home folder; saved workspaces keep their names. Tabs and splits in "~" open where Ghostty opens them, in the folder of the current pane.
 - A tab dragged in the sidebar leaves the list, and the rows slide apart to a gap where it will land, as in Warp; no accent line for tabs.
 
 ## [tarn-v1.2.0] - 2026-10-26

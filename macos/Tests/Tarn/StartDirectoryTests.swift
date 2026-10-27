@@ -129,13 +129,12 @@ struct StartDirectoryTests {
         #expect(WorkspaceRegistry.landsInWorkspace(split: false, tabbingMode: .automatic))
     }
 
-    // spec: docs/specs/workspace-folder.md D20, D24 (T-245)
-    @Test func aTabInTheStartWorkspaceStartsInTheHomeFolder() {
+    // spec: docs/specs/workspace-folder.md D20, D24 - "~" has no folder, Ghostty's inheritance applies
+    @Test func aTabOrSplitInTheStartWorkspaceKeepsTheInheritedDirectory() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])
-        #expect(book.folderForNewSurface(from: t[0], order: [t[0]], split: false) == WorkspaceBook.expectedHome)
-        #expect(book.folderForNewSurface(from: t[0], order: [t[0]], split: true) == WorkspaceBook.expectedHome)
-        #expect(WorkspaceBook.expectedHome != nil)
+        #expect(book.folderForNewSurface(from: t[0], order: [t[0]], split: false) == nil)
+        #expect(book.folderForNewSurface(from: t[0], order: [t[0]], split: true) == nil)
     }
 
     @Test func anUnknownTabHasNoFolder() {
