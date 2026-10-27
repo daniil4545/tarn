@@ -15,7 +15,8 @@ Rule of this spec (`.claude/CLAUDE.md`, behavior comes from analogs): every beha
 7. Boundaries and their tests
 8. Scenarios
 9. Open questions
-10. Slicing and dependents
+10. Extending and correcting
+11. Slicing and dependents
 
 ## 1. Goal and limits
 
@@ -105,7 +106,7 @@ Common rules, for every command except `skill`:
 
 Details:
 
-1. `ls`. A table with a header, one row per terminal pane of the caller's workspace: `PANE  TAB  TITLE  CWD  PROCESS  BRANCH  HOST  STATE`. `--json`: `{"ok":true,"panes":[{"pane","tab","workspace","title","cwd","process","branch","host","state"}]}`. Form from WezTerm `cli list`: header `WINID TABID PANEID WORKSPACE SIZE TITLE CWD`, `--format json` with `window_id, tab_id, pane_id, workspace, size, title, cwd`. Fields from issue #40 ("folder, process, branch, host, state"); `host` is empty until #39, `state` is the agent state of `docs/spec.md` 8 or `-`. The caller knows its own pane from `TARN_SURFACE`, no mark in the table (no analog has one). The current `ls` lists agent sessions of all windows without `TARN_SURFACE` (`AttentionCommands.swift:151`); it becomes the caller's workspace and the key `sessions` becomes `panes`. Dependents: section 10.
+1. `ls`. A table with a header, one row per terminal pane of the caller's workspace: `PANE  TAB  TITLE  CWD  PROCESS  BRANCH  HOST  STATE`. `--json`: `{"ok":true,"panes":[{"pane","tab","workspace","title","cwd","process","branch","host","state"}]}`. Form from WezTerm `cli list`: header `WINID TABID PANEID WORKSPACE SIZE TITLE CWD`, `--format json` with `window_id, tab_id, pane_id, workspace, size, title, cwd`. Fields from issue #40 ("folder, process, branch, host, state"); `host` is empty until #39, `state` is the agent state of `docs/spec.md` 8 or `-`. The caller knows its own pane from `TARN_SURFACE`, no mark in the table (no analog has one). The current `ls` lists agent sessions of all windows without `TARN_SURFACE` (`AttentionCommands.swift:151`); it becomes the caller's workspace and the key `sessions` becomes `panes`. Dependents: section 11.
 2. Placement of `new` and `run`. Default: a split below the caller's pane, `--right` to the right, focus unchanged. Sources: WezTerm `split-pane`, "the default is equivalent to `--bottom`"; herdr "pane splitting, leave focus unchanged by default"; kitty `--keep-focus`; Otty "Every pane it opens is opened without stealing focus". Built from Ghostty's split tree without its undo (section 5). A zoomed pane in the caller's tab is unzoomed (U6). `--tab`: a tab right below the caller's row, not selected (U5), after T-206; a minimized window or non-native fullscreen of the caller: `tarn: window not available`. Sources for `--tab`: WezTerm `spawn`, herdr `tab create`, Otty `tab new`.
 3. Command. The arguments after `--` are the command line: the program and its arguments, as kitty does ("Any command line arguments are assumed to be the command line used to run in the new window"; several commands need an explicit `sh -c "a && b"`) and WezTerm (`--` ends the options). Ghostty takes one shell string, so the app joins the arguments with POSIX quoting by the rules of Python `shlex.join`: an argument is quoted only when it has a character outside the safe set. A newline or a carriage return in an argument is refused, `tarn: command must be one line`: it would press Enter (B2). `--cwd` defaults to the cwd of the caller's pane, relative paths resolve against the CLI's current directory. Source: herdr "new terminals follow ... the source pane", "the CLI expands relative --cwd"; Luvus "Relative paths resolve against the CLI caller's current directory".
 4. `new`. The pane runs the command as its process. After exit the last screen stays until a key press: Ghostty turns on `wait-after-command` for any configured command (`src/apprt/embedded.zig:568-573`). Source: kitty `--hold`, WezTerm `exit_behavior = "Hold"`. `--title` names the tab and needs `--tab`, as Otty `tab new --title` (Otty splits take no title); kitty `--title`. Prints the pane id. Source: kitty "Prints out the id of the newly opened window", WezTerm "Outputs the pane-id".
@@ -185,7 +186,16 @@ What the CLI never does, for any input. App tests live in `macos/Tests/Tarn`, ru
 - O1. `--tab` without selection. Ghostty `newTab` changes focus on several paths: `parent.deminiaturize` (`TerminalController.swift:456`), an alert sheet in non-native fullscreen (`438-446`), `tabGroup.selectedWindow` (`493`), `showWindowSafely` (`502`), `NSApp.activate` on the next tick (`510-520`); placement under the caller needs T-206. The `--tab` PR first runs a spike with tarn inactive and with the caller's window minimized. If B1 cannot hold without editing Ghostty logic, the user decides.
 - O2. `initialInput` and a slow zsh rc file: whether the typed line survives until the prompt is not checked; the `run` PR tests it with the user's zsh.
 
-## 10. Slicing and dependents
+## 10. Extending and correcting
+
+The user watches what agents do in use and corrects it (user decision 2026-10-27). Two levers:
+
+- When and how the agent uses a command lives in one file, `cli/SKILL.md`. A correction of the agent's behavior is an edit of that file, no code; it ships with the next build (U2).
+- What a command does lives in one handler file per command, as kitty keeps one file per remote command (`kitty/rc/launch.py`, `close_window.py`, `get_text.py`, commit 02dd29a). A new command is one handler file in `macos/Sources/Features/Tarn/AgentCommands/`, one row in the dispatch table of `AgentCommands`, one case in `cli/tarn`, one test and one section of the skill.
+
+What an agent did is visible without new logging: every call is a Bash tool call in the agent's transcript; refusals go to `os_log` by the error rule of `docs/spec.md` 2.2.
+
+## 11. Slicing and dependents
 
 Each PR into `dev`, under 400 lines of code, in this order:
 
