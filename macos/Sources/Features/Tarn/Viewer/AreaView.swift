@@ -8,6 +8,8 @@ struct ViewerLayout<Content: View>: View {
     @ObservedObject var ghostty: Ghostty.App
     let content: Content
 
+    @AppStorage(FileViewerSetting.key) private var viewerOn = true
+
     init(host: ViewerHost, ghostty: Ghostty.App, @ViewBuilder content: () -> Content) {
         self.host = host
         self.ghostty = ghostty
@@ -15,7 +17,7 @@ struct ViewerLayout<Content: View>: View {
     }
 
     var body: some View {
-        if let root = host.tree.root, host.tree.isSplit, !host.hidden {
+        if let root = host.tree.root, host.tree.isSplit, ViewerHost.isShown(hidden: host.hidden, moduleOn: viewerOn && FileViewerSetting.isOn) {
             AreaSubtree(host: host, ghostty: ghostty, node: root, block: content)
                 .overlay(AreaDropOverlay(host: host))
                 // Ghostty's grab handle publishes which terminal is dragged.

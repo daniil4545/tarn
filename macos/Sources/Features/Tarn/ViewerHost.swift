@@ -59,6 +59,16 @@ final class ViewerHost: ObservableObject {
         lastViewer.flatMap { panes[$0] } ?? tree.viewers.first.flatMap { panes[$0.id] }
     }
 
+    /// Whether the layout draws the viewers: not hidden by the user and the module is on. The
+    /// panes themselves stay in `panes` either way.
+    nonisolated static func isShown(hidden: Bool, moduleOn: Bool) -> Bool { !hidden && moduleOn }
+
+    /// The File viewer switch flipped: the keyboard leaves a pane that is no longer drawn.
+    func moduleChanged() {
+        if !FileViewerSetting.isOn, focusedPane != nil { returnFocusToTerminal() }
+        objectWillChange.send()
+    }
+
     private func noteFocus() {
         if let pane = focusedPane { lastViewer = pane.leaf.id }
     }
@@ -109,6 +119,7 @@ final class ViewerHost: ObservableObject {
     /// with the keyboard in them; shown viewers (with files or not) hide whole, tabs, unsaved edits and
     /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
+        guard FileViewerSetting.isOn else { return }
         guard activeModel != nil else {
             if FileViewerSetting.isOn { openTreeOnly(root: root) }
             return
@@ -282,7 +293,7 @@ final class ViewerHost: ObservableObject {
 
     /// Moves the keyboard from the terminal block to the neighbour viewer. False when there is none.
     func focusFromBlock(_ direction: AreaTree.FocusDirection) -> Bool {
-        focus(from: blockLeaf, direction)
+        FileViewerSetting.isOn && focus(from: blockLeaf, direction)
     }
 
     private func focus(from leaf: AreaLeaf, _ direction: AreaTree.FocusDirection) -> Bool {

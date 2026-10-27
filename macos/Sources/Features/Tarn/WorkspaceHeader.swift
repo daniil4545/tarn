@@ -123,6 +123,7 @@ enum WorkspacePrompt {
 
     /// Asks for a name and creates the workspace with one new tab in `window`.
     static func newWorkspace(in window: NSWindow) {
+        guard TarnModules.isOn(.workspaces) else { return }
         askName(title: "New Workspace", message: "The workspace opens with one new tab.", initial: "", in: window) { [weak window] name in
             guard let window else { return }
             WorkspaceRegistry.shared.createWorkspace(named: name, from: window)

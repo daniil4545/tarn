@@ -10,8 +10,10 @@ enum TabStyle: String, CaseIterable, Identifiable {
 
     static let key = "TarnTabStyle"
 
-    static var current: TabStyle {
-        UserDefaults.standard.string(forKey: key).flatMap(TabStyle.init(rawValue:)) ?? .sidebar
+    static var current: TabStyle { current(in: .standard) }
+
+    static func current(in defaults: UserDefaults) -> TabStyle {
+        defaults.string(forKey: key).flatMap(TabStyle.init(rawValue:)) ?? .sidebar
     }
 
     var id: String { rawValue }
@@ -25,8 +27,8 @@ enum TabStyle: String, CaseIterable, Identifiable {
 
     var detail: String {
         switch self {
-        case .sidebar: "Tabs grouped in workspaces with agent state, on the left of the window."
-        case .top: "The native tab bar, as in Ghostty. Workspaces and agent state are not shown."
+        case .sidebar: "Tabs with agent state, on the left of the window."
+        case .top: "The native tab bar, as in Ghostty, with agent marks and the workspace name in the tabs."
         }
     }
 
@@ -79,14 +81,12 @@ enum TabRows: String, CaseIterable, Identifiable {
     }
 }
 
-/// Whether the file viewer opens new panes. Off: Cmd+B opens nothing, path clicks go to
-/// Ghostty's opener, agents get an error; a pane already open stays until it is closed.
+/// The File viewer switch. Off: panes are not drawn (their tabs and edits stay), Cmd+B does
+/// nothing, path clicks go to Ghostty's opener, agents get an error.
 enum FileViewerSetting {
     static let key = "TarnFileViewer"
 
-    static var isOn: Bool {
-        UserDefaults.standard.object(forKey: key) as? Bool ?? true
-    }
+    static var isOn: Bool { TarnModules.isOn(.viewer) }
 }
 
 /// The tarn settings window: tarn's own features, a short list of Ghostty options (written to
@@ -145,12 +145,13 @@ extension AppDelegate {
 
 struct TarnSettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case tabs, viewer, appearance, terminal, windows, help
+        case modules, tabs, viewer, appearance, terminal, windows, help
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
+            case .modules: "Modules"
             case .tabs: "Tabs"
             case .viewer: "File Viewer"
             case .appearance: "Appearance"
@@ -162,6 +163,7 @@ struct TarnSettingsView: View {
 
         var icon: String {
             switch self {
+            case .modules: "switch.2"
             case .tabs: "sidebar.left"
             case .viewer: "doc.richtext"
             case .appearance: "paintpalette"
@@ -172,7 +174,7 @@ struct TarnSettingsView: View {
         }
     }
 
-    @State private var section: Section? = .tabs
+    @State private var section: Section? = .modules
     @StateObject private var store = GhosttyOptionStore.shared
 
     var body: some View {
@@ -183,7 +185,8 @@ struct TarnSettingsView: View {
             .navigationSplitViewColumnWidth(170)
             .safeAreaInset(edge: .bottom) { ghosttyConfigButton }
         } detail: {
-            switch section ?? .tabs {
+            switch section ?? .modules {
+            case .modules: ModulesSettingsPane()
             case .tabs: TabsSettingsPane()
             case .viewer: ViewerSettingsPane()
             case .appearance: GhosttyOptionsPane(section: .appearance, title: "Appearance", store: store)
@@ -209,24 +212,10 @@ struct TarnSettingsView: View {
 }
 
 private struct TabsSettingsPane: View {
-    @AppStorage(TabStyle.key) private var style: TabStyle = .sidebar
     @AppStorage(TabRows.key) private var rows: TabRows = .wide
 
     var body: some View {
         Form {
-            Picker("Tab style", selection: $style) {
-                ForEach(TabStyle.allCases) { style in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(style.title)
-                        Text(style.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .tag(style)
-                }
-            }
-            .pickerStyle(.radioGroup)
-
             Picker("Row size", selection: $rows) {
                 ForEach(TabRows.allCases) { rows in
                     VStack(alignment: .leading, spacing: 2) {
@@ -239,12 +228,13 @@ private struct TabsSettingsPane: View {
                 }
             }
             .pickerStyle(.radioGroup)
+
+            Text("Tabs at the top: switch Sidebar off in Modules.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .formStyle(.grouped)
         .navigationTitle("Tabs")
-        .onChange(of: style) { _ in
-            TabStyle.applyToOpenWindows()
-        }
     }
 }
 
@@ -257,7 +247,7 @@ private struct ViewerSettingsPane: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("File viewer")
                     Text("Cmd+B, path clicks and agents open files in a pane beside the terminal. "
-                        + "When off, path clicks open files in their default app; an open pane stays until you close it.")
+                        + "When off, path clicks open files in their default app; open panes are hidden and come back when you switch it on.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
