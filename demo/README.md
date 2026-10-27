@@ -18,7 +18,7 @@ No backend, no build step, no network: ES modules and vendored files only.
 | Workspaces, splits, layout | built |
 | Find in the viewer (Cmd+F, Cmd+G, Shift+Cmd+G while the viewer has the keyboard): a bar at the top right like Ghostty's terminal search, n/m count, Enter and Shift+Enter step, Esc gives the keyboard back or closes an empty bar; view and source mode | built: Ghostty's Find menu items reach the page |
 | Settings | built |
-| Settings > Modules (first section): five switches Sidebar, File viewer, Workspaces, Permission card, Notifications, each applies at once; Permission card is greyed with "needs Sidebar" while Sidebar is off; Agents line with Claude Code version and three checks (sample data); the tab style picker moves into the Sidebar row | demo built (T-205, #34), app planned |
+| Settings > Modules (first section): five switches Sidebar, File viewer, Workspaces, Permission card, Notifications, each applies at once; Permission card is greyed with "needs Sidebar" while Sidebar is off; Agents line with Claude Code version and three checks (sample data); the tab style picker moves into the Sidebar row; a Settings button in the sidebar header | demo built (T-205, #34), app planned |
 | Workspaces off: flat list without headers, new tabs go to "~", drag only reorders; frozen workspaces return on again. With Sidebar off the top tabs carry the workspace name | demo built, app planned |
 | Permission card off: the hover card keeps title and state and drops Allow, Deny and answers | demo built, app planned |
 | Notifications off: no banner for an agent that needs you, Cmd+U does nothing (the demo draws the banner and Cmd+U, built in the app as R4) | demo built, app planned |

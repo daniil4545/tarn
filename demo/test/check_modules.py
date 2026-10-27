@@ -272,8 +272,11 @@ def workspace_checks(pg):
 def main():
     with server() as base:  # noqa: SIM117 (the page needs the server address)
         with app_page(base) as (pg, errors, requests):
-            pg.evaluate("document.activeElement.blur()")
-            pg.keyboard.press("Meta+Comma")
+            pg.click("#sbSettings")
+            check(
+                "M0 the sidebar Settings button opens Settings",
+                pg.locator("#settings .setwin").is_visible(),
+            )
             pg.click("#setNav [data-sec='modules']")
             sidebar_checks(pg)
             viewer_checks(pg)
