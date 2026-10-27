@@ -126,6 +126,16 @@ struct HomeStartTests {
         )
         let set = snapshot.makeSet(home: home)
         #expect(set.workspaces.map(\.folder) == [nil, WorkspaceFolder.standardized(home)])
+        let lone = WorkspaceSnapshot(
+            version: 1, setID: UUID(), revision: 1, tabKey: t[3],
+            workspaces: [.init(id: UUID(), name: "~", collapsed: false, folder: WorkspaceFolder.standardized(home), tabKeys: [t[3]])]
+        )
+        #expect(WorkspaceBook().isPlain(lone.makeSet(home: home)))
+        let elsewhere = WorkspaceSnapshot(
+            version: 1, setID: UUID(), revision: 1, tabKey: t[4],
+            workspaces: [.init(id: UUID(), name: "~", collapsed: false, folder: "/p/F", tabKeys: [t[4]])]
+        )
+        #expect(elsewhere.makeSet(home: home).workspaces.first?.folder == "/p/F")
         var book = WorkspaceBook()
         book.adopt(snapshot)
         book.frozen = true
