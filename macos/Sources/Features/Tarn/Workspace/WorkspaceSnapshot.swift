@@ -27,8 +27,6 @@ struct WorkspaceSnapshot: Codable, Equatable {
     var tabKey: TabKey
     /// In run order.
     var workspaces: [Entry]
-    /// Tabs placed by hand (D22). Missing in snapshots saved before marks; decodes as empty.
-    var manual: [TabKey] = []
 
     /// The set this snapshot describes. A tab listed twice stays in the first workspace;
     /// a workspace without a tab is dropped. A "~" saved with the home folder loads without it,
@@ -46,7 +44,7 @@ struct WorkspaceSnapshot: Codable, Equatable {
             let folder = entry.name == WorkspaceSet.homeName && entry.folder == homeFolder ? nil : entry.folder
             if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: folder)) }
         }
-        return WorkspaceSet(id: setID, workspaces: kept, members: members, manual: Set(manual), revision: revision)
+        return WorkspaceSet(id: setID, workspaces: kept, members: members, revision: revision)
     }
 
     func encoded() throws -> Data {
@@ -62,16 +60,6 @@ struct WorkspaceSnapshot: Codable, Equatable {
 }
 
 extension WorkspaceSnapshot {
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        version = try container.decode(Int.self, forKey: .version)
-        setID = try container.decode(UUID.self, forKey: .setID)
-        revision = try container.decode(Int.self, forKey: .revision)
-        tabKey = try container.decode(TabKey.self, forKey: .tabKey)
-        workspaces = try container.decode([Entry].self, forKey: .workspaces)
-        manual = try container.decodeIfPresent([TabKey].self, forKey: .manual) ?? []
-    }
-
     /// `order` is the native tab order of the window's group. Members that are not in it
     /// (a window still being restored) follow their workspace's live tabs.
     init(set: WorkspaceSet, tabKey: TabKey, order: [TabKey]) {
@@ -100,6 +88,5 @@ extension WorkspaceSnapshot {
             }
         }
         self.workspaces = entries
-        self.manual = set.manual.sorted { $0.uuidString < $1.uuidString }
     }
 }

@@ -27,7 +27,7 @@ struct WorkspaceFolderTests {
         #expect(WorkspaceFolder.standardized(tree.folder + "/../F") == real)
     }
 
-    // spec: docs/specs/workspace-folder.md S26, S27
+    // spec: docs/specs/workspace-folder.md S26
     @Test func anEmptyOrRelativePathHasNoFolder() {
         #expect(WorkspaceFolder.standardized("") == nil)
         #expect(WorkspaceFolder.standardized("relative/dir") == nil)

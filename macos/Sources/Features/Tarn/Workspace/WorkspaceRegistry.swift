@@ -35,8 +35,6 @@ final class WorkspaceRegistry {
     private var isBusy = false
     /// Windows raised by `moveNatively`; their key notifications arrive after `isBusy` is over.
     private var hops = KeyHops()
-    /// A pass over the queued arrivals is already scheduled on the main queue (D27).
-    private var arrivalScheduled = false
 
     /// Closed tabs whose undo is still on Ghostty's stack.
     private let shelf = TombstoneShelf()
@@ -118,7 +116,6 @@ final class WorkspaceRegistry {
 
         var outcome = book.reconcile(bookGroups())
         for note in outcome.notes { Self.logger.error("\(note, privacy: .public)") }
-        checkArrivals()
         if !outcome.reorders.isEmpty {
             for reorder in outcome.reorders {
                 guard let window = window(for: reorder.tab) else { continue }
@@ -128,62 +125,6 @@ final class WorkspaceRegistry {
         }
         isBusy = false
         publish(outcome.changed)
-        scheduleArrivals()
-    }
-
-    // MARK: Agent arrival (D21, D26, D27)
-
-    /// D26: a tab with no live deciding process looks for an agent in its panes. Agent pids come
-    /// from the per-turn cache (T-106); the working directory is read only for the pid found.
-    private func checkArrivals() {
-        for window in NSApp.windows where isTab(window) {
-            guard let tab = entries[ObjectIdentifier(window)]?.key,
-                  let controller = window.windowController as? TerminalController
-            else { continue }
-            let note = book.checkArrival(tab, alive: Self.isAlive) {
-                for view in controller.surfaceTree {
-                    guard let pid = view.surfaceModel?.foregroundPID.flatMap({ pid_t(exactly: $0) }),
-                          AgentProcessCache.agent(pid: pid) != nil
-                    else { continue }
-                    return (pid, view.workingDirectory)
-                }
-                return nil
-            }
-            if let note { Self.logger.error("\(note, privacy: .public)") }
-        }
-    }
-
-    /// A stopped process (Ctrl+Z) still lives, so `fg` is no new start (S33).
-    nonisolated static func isAlive(_ pid: pid_t) -> Bool {
-        kill(pid, 0) == 0 || errno == EPERM
-    }
-
-    private func scheduleArrivals() {
-        guard !arrivalScheduled, !book.pendingTabs.isEmpty else { return }
-        arrivalScheduled = true
-        DispatchQueue.main.async { [self] in
-            arrivalScheduled = false
-            runArrivals()
-        }
-    }
-
-    /// D27: moves the queued tabs whose window group is key; the others wait. Never takes focus,
-    /// never crosses windows (R1: the destination comes from the tab's own set).
-    private func runArrivals() {
-        guard !book.frozen, let keyWindow = NSApp.keyWindow else { return }
-        let keyGroup = group(of: keyWindow)
-        for tab in book.runnable(in: keyGroup.map(key(for:))) {
-            guard let window = window(for: tab) else { continue }
-            guard let destination = book.takeArrival(tab) else { continue }
-            let selected = keyGroup.count < 2 || window.tabGroup?.selectedWindow === window
-            moveTab(window, to: destination, byUser: false)
-            if let id = book.arrived(tab, selected: selected) { publish([id]) }
-        }
-    }
-
-    /// D21 mark: the agent of the tab works at `path`, outside the folder of its workspace.
-    func isOutsideFolder(_ window: NSWindow, at path: String) -> Bool {
-        entries[ObjectIdentifier(window)].map { book.isOutsideFolder($0.key, at: path) } ?? false
     }
 
     private func bookGroups() -> [WorkspaceBook.Group] {
@@ -222,7 +163,6 @@ final class WorkspaceRegistry {
 
     private func windowDidBecomeKey(_ window: NSWindow) {
         claimTombstones()
-        if !hops.contains(window) { scheduleArrivals() }
         guard !isBusy, !hops.contains(window), let entry = entries[ObjectIdentifier(window)], let id = book.selected(entry.key) else { return }
         publish([id])
     }
@@ -453,14 +393,13 @@ final class WorkspaceRegistry {
     }
 
     /// Puts `window` in `workspace`, before `neighbour` or at the end of the workspace:
-    /// membership first, then one native move. A change of workspace marks the tab manual
-    /// (D22); `byUser: false` is the seam for the arrival move of D21.
-    func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil, byUser: Bool = true) {
+    /// membership first, then one native move.
+    func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil) {
         let tab = key(for: window)
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
         isBusy = true
-        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace, byUser: byUser) }
+        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace) }
         let destination = Self.destination(
             of: tab,
             in: order,

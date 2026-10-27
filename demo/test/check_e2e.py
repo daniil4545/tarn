@@ -47,17 +47,11 @@ def ready(pg):
 
 
 def folder_story(pg):
-    """docs/specs/workspace-folder.md: the outside-folder mark, the fixed folder, top tab prefix."""
-    out = pg.locator(f"{TAB}[data-tabid='t2'] .l2.out")
+    """docs/specs/workspace-folder.md: no folder mark, the fixed folder, top tab prefix."""
     check(
-        "F1 an agent outside its workspace folder is marked; one inside is not",
-        out.count() == 1
-        and "Outside the tarn folder" in (out.get_attribute("title") or "")
-        and pg.locator(f"{TAB}[data-tabid='t1'] .out").count() == 0,
-    )
-    check(
-        "F2 a workspace without a folder never marks",
-        pg.locator(f"{TAB}[data-tabid='t6'] .out").count() == 0,
+        "F1 an agent outside its workspace folder carries no mark (D21 dropped)",
+        pg.locator(f"{TAB}[data-tabid='t2'] .l2").count() == 1
+        and "!" not in pg.inner_text(f"{TAB}[data-tabid='t2']"),
     )
     pg.locator("[data-wsh='w1']").first.click(button="right")
     check(
@@ -91,22 +85,13 @@ def folder_story(pg):
     def ws_of(tab):
         return next(w["id"] for w in snap(pg)["workspaces"]["wss"] if tab in w["tabs"])
 
-    arrived, pane = agent_tab("~/code/tarn/docs")
+    started, pane = agent_tab("~/code/tarn/docs")
     cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
     check(
-        "F7 an agent started in a project folder moves its tab to the end of that workspace, not marked manual",
-        snap(pg)["workspaces"]["wss"][0]["tabs"][-1] == arrived
-        and not snap(pg)["workspaces"]["tabs"][arrived].get("manual"),
+        "F7 an agent started in a project folder leaves its tab where it is (D21 dropped)",
+        ws_of(started) == "w0",
     )
-    placed, pane = agent_tab("~/code/tarn")
-    cmd(pg, "tab.move", {"id": placed, "ws": "w2"})
-    cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
-    check(
-        "F8 a tab moved by hand stays where the user put it when its agent starts",
-        ws_of(placed) == "w2" and snap(pg)["workspaces"]["tabs"][placed].get("manual") is True,
-    )
-    for tab in (arrived, placed):
-        cmd(pg, "tab.close", {"id": tab})
+    cmd(pg, "tab.close", {"id": started})
     cmd(pg, "tab.go", {"id": "t1"})
     cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
     check(
