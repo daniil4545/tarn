@@ -73,7 +73,18 @@ enum AgentProcess {
 
     /// Whether `pid` is an ssh client. Ghostty drops OSC 7 with a remote host, so the tab's
     /// folder stays the local one ssh started in while the title is the remote shell's.
-    static func isSSH(pid: pid_t) -> Bool { comm(pid: pid) == "ssh" }
+    static func isSSH(pid: pid_t) -> Bool {
+        isSSH(comm: comm(pid: pid)) { argv(pid: pid) }
+    }
+
+    /// ssh itself, or the wrapper every shell integration of Ghostty runs in its place
+    /// (`ghostty +ssh [flags] -- host`, src/shell-integration/zsh/ghostty-integration:322),
+    /// which leads the group with ssh as a child. Only a `ghostty` process costs an argv read.
+    static func isSSH(comm: String?, argv: () -> [String]?) -> Bool {
+        if comm == "ssh" { return true }
+        guard comm == "ghostty" else { return false }
+        return argv()?.dropFirst().first == "+ssh"
+    }
 
     /// The kernel name of `pid`: the executable's basename cut to 15 characters.
     static func comm(pid: pid_t) -> String? {

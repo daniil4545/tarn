@@ -147,6 +147,21 @@ struct AgentProcessTests {
         }
     }
 
+    /// spec: T-250 - Ghostty's shell integration runs ssh under `ghostty +ssh`, which leads the group.
+    @Test(arguments: [
+        ("ssh", nil, true),
+        ("ghostty", ["/Applications/Tarn.app/Contents/MacOS/ghostty", "+ssh", "--", "pi@10.0.0.2"], true),
+        ("ghostty", ["ghostty", "+ssh", "--forward-env", "--terminfo", "--", "pi"], true),
+        // The app itself and its other actions are not ssh.
+        ("ghostty", ["/Applications/Tarn.app/Contents/MacOS/ghostty"], false),
+        ("ghostty", ["ghostty", "+show-config", "+ssh"], false),
+        ("ghostty", ["ghostty", "+ssh-cache", "--clear"], false),
+        ("zsh", ["zsh", "+ssh"], false),
+    ] as [(String, [String]?, Bool)])
+    func sshOrGhosttysSSHWrapperIsSSH(comm: String, argv: [String]?, isSSH: Bool) {
+        #expect(AgentProcess.isSSH(comm: comm) { argv } == isSSH)
+    }
+
     /// spec: T-250 - an ssh tab keeps the remote shell's title.
     @Test func anSSHClientIsNamedByItsKernelName() throws {
         // The real client, as a link keeps its target's kernel name: the proxy command keeps it
