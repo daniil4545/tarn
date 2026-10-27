@@ -3,7 +3,10 @@
 set -u
 here=$(cd "$(dirname "$0")/../.." && pwd)
 root=$(mktemp -d)
-port=8765
+# A free port: a fixed one may still be held by the server of an interrupted run.
+port=$(python3 -I -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')
+# Not Tarn's real id: the user's running Tarn must not make the installer refuse.
+id=com.daniil4545.tarn.installtest
 rel="$root/srv/releases/download/tarn-v1.0.0"
 fails=0
 mkdir -p "$rel" "$root/apps" "$root/build/Tarn.app/Contents"
@@ -22,14 +25,14 @@ publish() {
 }
 run() {
   TARN_REPO="http://127.0.0.1:$port" TARN_VERSION="${1:-1.0.0}" TARN_DEST="$root/apps" \
-    sh "$here/install.sh" >/dev/null 2>&1
+    TARN_BUNDLE_ID="$id" sh "$here/install.sh" >/dev/null 2>&1
 }
 expect() {
   if [ "$1" = "$2" ]; then echo "ok   $3"; else echo "FAIL $3 (got $1, want $2)"; fails=$((fails + 1)); fi
 }
 installed() { plutil -extract CFBundleShortVersionString raw "$root/apps/Tarn.app/Contents/Info.plist" 2>/dev/null; }
 
-fake_app com.daniil4545.tarn 1.0.0
+fake_app "$id" 1.0.0
 publish
 python3 -m http.server "$port" --bind 127.0.0.1 --directory "$root/srv" >/dev/null 2>&1 &
 server=$!
@@ -38,7 +41,7 @@ sleep 1
 
 run; expect "$?:$(installed)" "0:1.0.0" "fresh install"
 
-fake_app com.daniil4545.tarn 1.0.1
+fake_app "$id" 1.0.1
 publish
 run; expect "$?:$(installed)" "0:1.0.1" "upgrade replaces tarn"
 
