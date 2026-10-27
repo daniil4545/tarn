@@ -50,6 +50,7 @@ enum AttentionJump {
 
     @MainActor
     static func perform() {
+        guard TarnModules.isOn(.notifications) else { return }
         let registry = SessionRegistry.shared
         let live = registry.liveSessions()
         let focusedID = (NSApp.keyWindow?.windowController as? BaseTerminalController)?.focusedSurface?.id
