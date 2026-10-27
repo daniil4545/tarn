@@ -25,7 +25,7 @@ Canon: `docs/specs/windows-workspaces.md` (D1-D18, S1-S23), `docs/modules/worksp
 
 ```mermaid
 flowchart LR
-  user["Shift+Cmd+T, Set Folder..."] --> panel["Folder panel"]
+  user["Shift+Cmd+T"] --> panel["Folder panel"]
   panel --> reg["WorkspaceRegistry"]
   newsurf["Ghostty new tab, new split"] -->|"inherited config"| cfg["WorkspaceRegistry.prepare"]
   cfg -->|"workingDirectory"| ghostty["Ghostty surface"]
@@ -43,7 +43,7 @@ flowchart LR
 | `Workspace`, `WorkspaceSet` | folder per workspace; manual marks per tab | `WorkspaceBook` |
 | `WorkspaceBook` | where a new surface starts; where an arriving agent goes | `WorkspaceSet`, `WorkspaceFolder` |
 | `WorkspaceRegistry` | applies the book to windows: config of new surfaces, agent arrival, native moves | AppKit, Ghostty `move_tab`, `AgentProcessCache` |
-| `WorkspacePrompt` | folder panel for a new workspace and for Set Folder... | `WorkspaceRegistry` |
+| `WorkspacePrompt` | folder panel for a new workspace | `WorkspaceRegistry` |
 | `WorkspaceTabLabel` | native tab title with the workspace prefix | `TerminalWindow.attributedTitle` |
 | Sidebar row | "outside folder" mark | `SidebarModel` |
 
@@ -167,7 +167,7 @@ A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
 | S19 | Split tab with agents | agent in pane 2 at `F` starts first; a second agent in pane 1 at `P` starts later | the first decides; the second start does not move the tab | | fast |
 | S20 | Folder in another window | only window B has "tarn"; agent starts at `F` in window A | no move | | fast |
 | S21 | Restore | relaunch with folders and manual marks; also a snapshot saved before this task | folders and marks come back; an old snapshot decodes with no folder and no marks | | fast |
-| S22 | Set Folder... | header menu on "notes", pick `F` | folder set; no tab moves; new tabs start at `F` | | fast |
+| S22 | No folder change | header menu of any workspace | no Set Folder or Remove Folder: the folder is fixed at creation (Q3) | | fast |
 | S23 | Tab prefix | tabs at the top, set with "No project" and "tarn" | "tarn · zsh"; with one workspace the plain title; switching to the sidebar style drops the prefix | | fast |
 | S24 | Prefix survives | tabs at the top, title font change or fullscreen | prefix kept | | live |
 | S25 | Rename | rename "tarn" to "core" with tabs at the top | titles read "core · ..." | | fast |
@@ -239,7 +239,6 @@ struct Workspace {
 
 extension WorkspaceSet {
     mutating func create(name: String, folder: String?) -> Workspace.ID?
-    mutating func setFolder(_ id: Workspace.ID, _ folder: String?)
     mutating func markManual(_ tab: TabKey)     // D22
     func isManual(_ tab: TabKey) -> Bool
 }
@@ -260,7 +259,6 @@ extension WorkspaceRegistry {
     /// `BaseTerminalController` pass the inherited config through here.
     func prepare(_ config: Ghostty.SurfaceConfiguration?, from window: NSWindow, split: Bool) -> Ghostty.SurfaceConfiguration?
     func createWorkspace(folder: String, from window: NSWindow) -> Bool
-    func setFolder(_ workspace: Workspace.ID, _ folder: String, in window: NSWindow)
     // moveTab and the mover branch of sync rule 4 mark the tab manual, only on a workspace
     // change (D22); the arrival move, fallback repair, delete and absorb do not.
 }
@@ -313,7 +311,7 @@ Top tab bar (D25):
 | Stage | Checkable result | Depends on | Excludes | Check |
 |---|---|---|---|---|
 | 0. Demo | the mark (section 5 sketch) and the top tab prefix drawn in `demo/`; the user approves the look | none | app code | demo checks |
-| 1. Folder on a workspace | Shift+Cmd+T opens a folder panel; header menu Set Folder... and Remove Folder; the folder in the header tooltip; folders saved and restored; "No project"; the first tab of a new workspace starts in its folder | none | start directory of other tabs, arrival, manual marks (stage 3, their only writer) | unit S1-S3, S21 (folders), S22, S26 |
+| 1. Folder on a workspace | Shift+Cmd+T opens a folder panel; the folder in the header tooltip; folders saved and restored; "No project"; the first tab of a new workspace starts in its folder | none | start directory of other tabs, arrival, manual marks (stage 3, their only writer) | unit S1-S3, S21 (folders), S22, S26 |
 | 2. Start directory | new tabs and splits start per D20 | 1 | arrival | unit S4-S10, S34 |
 | 3. Agent arrival | probe of D26 first; agent tabs join by folder; manual marks saved and restored, manual wins; sidebar mark | 1 | top tab prefix | unit S11-S21 (marks), S27-S33 |
 | 4. Tab prefix | native titles with the prefix when tabs are at the top | 1 | | unit S23, S25, S35; live S24 |
@@ -339,7 +337,8 @@ Answered by the user's rule (2026-10-27): take the behaviour of VS Code and Clau
 - Q2. No new folderless workspace: "No project" is the folderless one, as VS Code's empty
   window; Claude desktop always runs a session in a folder. Cancel in the panel creates nothing
   (S2); old workspaces without a folder stay as they are.
-- Q3. Header menu "Remove Folder" (VS Code File > Close Folder): the workspace keeps its name and
-  tabs and loses the folder. Named "Remove" because "Close" in a terminal reads as closing tabs.
-- Q4. Set Folder... on a folder another workspace of this window holds selects that workspace
-  and changes nothing, as Q1.
+- Q3 (user decision 2026-10-27, replaces Set Folder... and Remove Folder): the folder is fixed at
+  creation, as a Claude desktop session's. A running shell cannot be moved without typing into
+  it, so a changed folder would leave open tabs in the old one; VS Code reloads the window and
+  closes its terminals instead. Another folder: Shift+Cmd+T and drag the tabs. A workspace without
+  a folder ("No project", restored "Default") stays without one.

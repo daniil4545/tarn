@@ -140,25 +140,9 @@ struct WorkspaceSet: Equatable {
         return true
     }
 
-    /// Sets the folder of a workspace, or removes it with nil. Tabs do not move (S22). A path
-    /// that is not absolute changes nothing.
-    mutating func setFolder(_ id: Workspace.ID, _ folder: String?) {
-        guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
-        let path: String?
-        if let folder {
-            guard let standard = WorkspaceFolder.standardized(folder) else { return }
-            path = standard
-        } else {
-            path = nil
-        }
-        guard workspaces[index].folder != path else { return }
-        workspaces[index].folder = path
-        revision += 1
-    }
-
-    /// The first tab of the workspace that holds `folder`, skipping `except` (Q1, Q4).
-    func firstTab(inFolder folder: String, order: [TabKey], except: Workspace.ID? = nil) -> TabKey? {
-        runs(order: order).first { $0.workspace.folder == folder && $0.workspace.id != except }?.tabs.first
+    /// The first tab of the workspace that holds `folder` (Q1).
+    func firstTab(inFolder folder: String, order: [TabKey]) -> TabKey? {
+        runs(order: order).first { $0.workspace.folder == folder }?.tabs.first
     }
 
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {

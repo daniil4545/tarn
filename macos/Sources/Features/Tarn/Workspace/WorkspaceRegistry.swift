@@ -290,28 +290,16 @@ final class WorkspaceRegistry {
             Self.logger.error("workspace: folder not absolute value=\(folder, privacy: .public)")
             return false
         }
-        if selectFirstTab(inFolder: path, except: nil, from: window) { return true }
+        if selectFirstTab(inFolder: path, from: window) { return true }
         // The name comes from the folder as picked: a symlink `proj` names the workspace `proj`.
         let name = WorkspaceFolder.name(of: URL(fileURLWithPath: folder).standardized.path)
         return openWorkspace(name: name, folder: path, from: window)
     }
 
-    /// Sets the folder of `workspace`, or removes it with nil. A folder another workspace holds
-    /// selects that workspace and changes nothing (Q4). Tabs never move (S22).
-    func setFolder(_ workspace: Workspace.ID, _ folder: String?, in window: NSWindow) {
-        guard let folder else {
-            edit(window) { $0.setFolder(workspace, nil) }
-            return
-        }
-        guard let path = WorkspaceFolder.standardized(folder) else { return }
-        if selectFirstTab(inFolder: path, except: workspace, from: window) { return }
-        edit(window) { $0.setFolder(workspace, path) }
-    }
-
-    private func selectFirstTab(inFolder folder: String, except: Workspace.ID?, from window: NSWindow) -> Bool {
+    private func selectFirstTab(inFolder folder: String, from window: NSWindow) -> Bool {
         let order = group(of: window).map(key(for:))
         guard let set = book.set(of: key(for: window)),
-              let tab = set.firstTab(inFolder: folder, order: order, except: except),
+              let tab = set.firstTab(inFolder: folder, order: order),
               let target = self.window(for: tab)
         else { return false }
         target.makeKeyAndOrderFront(nil)

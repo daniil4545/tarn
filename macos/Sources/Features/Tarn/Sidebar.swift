@@ -345,16 +345,6 @@ final class SidebarModel: ObservableObject {
         }
     }
 
-    func setFolder(_ group: Group) {
-        guard let window else { return }
-        WorkspacePrompt.setFolder(of: group.workspace.id, in: window)
-    }
-
-    func removeFolder(_ group: Group) {
-        guard let window else { return }
-        registry.setFolder(group.workspace.id, nil, in: window)
-    }
-
     func delete(_ group: Group) {
         guard let window, let index = groups.firstIndex(where: { $0.id == group.id }), groups.count > 1 else { return }
         let heir = groups[index > 0 ? index - 1 : index + 1].workspace.name
@@ -465,14 +455,6 @@ final class SidebarModel: ObservableObject {
         menu.addItem(menuItem("Rename Workspace...") { [weak self] in
             self?.rename(group)
         })
-        menu.addItem(menuItem("Set Folder...") { [weak self] in
-            self?.setFolder(group)
-        })
-        if group.workspace.folder != nil {
-            menu.addItem(menuItem("Remove Folder") { [weak self] in
-                self?.removeFolder(group)
-            })
-        }
         menu.addItem(menuItem("Delete Workspace...", isEnabled: groups.count > 1) { [weak self] in
             self?.delete(group)
         })

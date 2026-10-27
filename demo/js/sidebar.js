@@ -132,11 +132,6 @@ function renameWorkspace(id) {
   if (name) bus.cmd("ws.rename", { id, name });
 }
 
-// The app shows the macOS folder panel here; the browser has none, so the demo asks for a path.
-function setFolder(id) {
-  const ws = read("workspaces").wss.find((w) => w.id === id), folder = prompt("Folder for the workspace", ws.folder ?? "~/code")?.trim();
-  if (folder) bus.cmd("ws.folder", { id, folder: folder.replace(/\/+$/, "") });
-}
 
 function deleteWorkspace(id) {
   const { wss } = read("workspaces"), at = wss.findIndex((w) => w.id === id), into = wss[at > 0 ? at - 1 : 1];
@@ -157,8 +152,6 @@ function onContextMenu(e) {
     showMenu([
       { label: "New tab", attrs: `data-wsnewtab="${id}"`, run: () => bus.cmd("tab.new", { ws: id }) },
       { label: "Rename…", attrs: `data-wsren="${id}"`, run: () => renameWorkspace(id) },
-      { label: "Set Folder…", attrs: `data-wsfolder="${id}"`, run: () => setFolder(id) },
-      ...(wss.find((w) => w.id === id).folder ? [{ label: "Remove Folder", attrs: `data-wsunfolder="${id}"`, run: () => bus.cmd("ws.folder", { id }) }] : []),
       ...(wss.length < 2 ? [] : [{ label: "Delete workspace", attrs: `data-wsdel="${id}"`, run: () => deleteWorkspace(id) }]),
     ], e);
   }

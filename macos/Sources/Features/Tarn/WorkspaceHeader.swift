@@ -136,14 +136,6 @@ enum WorkspacePrompt {
         }
     }
 
-    /// Asks for a folder for an existing workspace (Set Folder...).
-    static func setFolder(of workspace: Workspace.ID, in window: NSWindow) {
-        chooseFolder(title: "Set Folder", message: "Choose the project folder of this workspace.", in: window) { [weak window] folder in
-            guard let window else { return }
-            WorkspaceRegistry.shared.setFolder(workspace, folder, in: window)
-        }
-    }
-
     /// The folder panel as a sheet; it starts in the folder of the current tab.
     private static func chooseFolder(title: String, message: String, in window: NSWindow, done: @escaping (String) -> Void) {
         let panel = NSOpenPanel()

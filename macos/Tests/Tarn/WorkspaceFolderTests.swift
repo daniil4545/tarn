@@ -76,29 +76,6 @@ struct WorkspaceFolderTests {
         #expect(set.firstTab(inFolder: "/p/tarn", order: order) == t[2])
         #expect(set.firstTab(inFolder: "/p/notes", order: order) == t[1])
         #expect(set.firstTab(inFolder: "/p/none", order: order) == nil)
-        // Q4: the workspace being edited is skipped, so its own folder is no clash.
-        #expect(set.firstTab(inFolder: "/p/tarn", order: order, except: tarn) == nil)
-    }
-
-    // spec: docs/specs/workspace-folder.md S22
-    @Test func setFolderChangesOnlyTheFolder() throws {
-        var set = WorkspaceSet.makeDefault(tabs: [t[0], t[1]])
-        let id = set.workspaces[0].id
-        let members = set.members
-        let before = set.revision
-        set.setFolder(id, "/p/tarn/")
-        #expect(set.workspace(id)?.folder == "/p/tarn")
-        #expect(set.members == members)
-        #expect(set.revision == before + 1)
-        set.setFolder(id, "/p/tarn")
-        #expect(set.revision == before + 1, "the same folder is no change")
-        set.setFolder(id, "relative")
-        #expect(set.workspace(id)?.folder == "/p/tarn", "a relative path changes nothing")
-        set.setFolder(id, nil)
-        #expect(set.workspace(id)?.folder == nil)
-        #expect(set.revision == before + 2)
-        set.setFolder(id, nil)
-        #expect(set.revision == before + 2)
     }
 
     @Test func createWithARelativeFolderIsRefused() {
@@ -147,10 +124,13 @@ struct WorkspaceFolderTests {
         #expect(!book.isPlain(set))
         let back = set.rename(id, to: "No project")
         #expect(back)
-        set.setFolder(id, "/p/tarn")
-        #expect(!book.isPlain(set))
-        set.setFolder(id, nil)
         _ = set.create(name: "Second")
         #expect(!book.isPlain(set))
+
+        var withFolder = WorkspaceSet()
+        let created = withFolder.create(name: "No project", folder: "/p/tarn")
+        let tarn = try #require(created)
+        withFolder.join(t[0], to: tarn)
+        #expect(!book.isPlain(withFolder))
     }
 }

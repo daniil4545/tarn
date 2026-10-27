@@ -47,7 +47,7 @@ def ready(pg):
 
 
 def folder_story(pg):
-    """docs/specs/workspace-folder.md: the outside-folder mark, Set and Remove Folder, top tab prefix."""
+    """docs/specs/workspace-folder.md: the outside-folder mark, the fixed folder, top tab prefix."""
     out = pg.locator(f"{TAB}[data-tabid='t2'] .l2.out")
     check(
         "F1 an agent outside its workspace folder is marked; one inside is not",
@@ -59,15 +59,13 @@ def folder_story(pg):
         "F2 a workspace without a folder never marks",
         pg.locator(f"{TAB}[data-tabid='t6'] .out").count() == 0,
     )
-    cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code"})
-    check("F3 Set Folder over the agent's folder clears the mark", out.count() == 0)
-    cmd(pg, "ws.folder", {"id": "w1"})
+    pg.locator("[data-wsh='w1']").first.click(button="right")
     check(
-        "F4 Remove Folder drops the folder and keeps the tabs",
-        "folder" not in snap(pg)["workspaces"]["wss"][0]
-        and snap(pg)["workspaces"]["wss"][0]["tabs"] == ["t1", "t2", "t3", "t4"],
+        "F3 the workspace menu has no Set Folder or Remove Folder: the folder is fixed",
+        pg.locator("[data-wsren='w1']").count() == 1
+        and pg.locator("[data-wsfolder], [data-wsunfolder]").count() == 0,
     )
-    cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code/tarn"})
+    pg.keyboard.press("Escape")
     cmd(pg, "tab.go", {"id": "t2"})
     cmd(pg, "tab.new", {"ws": "w1"})
     fresh = snap(pg)["workspaces"]["cur"]
