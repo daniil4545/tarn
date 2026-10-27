@@ -203,8 +203,8 @@ Limits (what the code never does):
 | `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one workspace named "No project" or "Default" with no folder |
 | `WorkspaceSnapshot.Entry.folder` | new optional field | `WorkspaceRestore` | missing in old snapshots decodes as nil; version stays 1 |
 | `WorkspaceSnapshot.manual` | new optional field `[TabKey]` | `WorkspaceRestore` | missing decodes as empty |
-| deciding agent pid per tab | new, runtime | `WorkspaceRegistry` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |
-| pending arrivals | new, runtime | `WorkspaceRegistry` | tab key and the agent's path; destination computed at move time; dropped when the tab closes or is marked manual |
+| deciding agent pid per tab | new, runtime | `WorkspaceBook` | not saved; set by the first agent pid found when none lives; cleared when that process ends; `ClosedTab` carries it so undo is not an arrival |
+| pending arrivals | new, runtime | `WorkspaceBook` | tab key and the agent's path; destination computed at move time; dropped when the tab closes or is marked manual |
 
 - Input: the folder panel; Ghostty's inherited `SurfaceConfiguration`; `SurfaceView.workingDirectory`
   and `AgentProcessCache` per pane.
@@ -259,6 +259,9 @@ extension WorkspaceBook {
     func arrival(of tab: TabKey, at path: String) -> Workspace.ID?
     /// D21 mark: the agent of `tab` is outside its workspace's folder.
     func isOutsideFolder(_ tab: TabKey, at path: String) -> Bool
+    /// D26, D27: `checkArrival` keeps the deciding pid and queues the path (note for S27);
+    /// `takeArrival` dequeues and gives the destination; `arrived` sets `lastSelected` and unfolds.
+    mutating func checkArrival(_ tab: TabKey, alive: (pid_t) -> Bool, found: () -> (pid: pid_t, path: String?)?) -> String?
 }
 
 extension WorkspaceRegistry {
