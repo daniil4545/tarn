@@ -50,7 +50,9 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | viewer bundle | `node --test viewer-web/licenses.test.mjs`, `uv run --with playwright python -I viewer-web/test-mermaid.py` |
 | acceptance | `make -f tarn.mk check` |
 | task worktree | `make -f tarn.mk worktree NAME=<branch>` in the main checkout: branch from `origin/dev`, links to the built core |
+| dev build | `make -f tarn.mk dev`: Debug `Tarn.app` without coverage, 4 jobs, log `macos/build/dev.log` |
 | stand | `make -f tarn.mk live [STAND_APP=<built Tarn.app>]`: a second Tarn with its own socket; prints `HOME` and `TARN_SURFACE` for `cli/tarn`; `sh tools/stand/stand.sh stop` |
+| drive the stand | `sh tools/stand/drive.sh type\|key\|action\|screen\|shot\|tarn ...`; the path is skill `stand` |
 | release build | `make -f tarn.mk release` (ad-hoc signed `dist/tarn-<version>-macos.zip` with `.sha256`) |
 | benchmark | `make -f tarn.mk bench` (report `docs/bench.md`) |
 | demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e,review,modules}.py` and `node --test demo/test/unit` (installed Chrome; how to run: `demo/README.md`) |
@@ -73,6 +75,7 @@ Project profile for `~/.claude/docs/pipeline.md`:
 - Behavior comes from analogs (user decision 2026-10-27). Before a spec states how a feature behaves (a command's semantics, a wait rule, an exit code, an output format, a refusal), find how analogs do it and take their behavior; each rule in the spec names its source. Own behavior only where no analog has one, with the line "Prior art: searched where - found what", and the user decides. This applies to specs and answers, not only to code.
 - No own mechanism where an analog exists. Before the first line of code of a feature or a fix of a mechanism, the plan names the analog project, file and commit it follows (analog base: OpenViking `agent-terminal/docs/research/landscape*`, then GitHub). No analog found: the plan says "Prior art: searched where - found what" and the user decides. A second fix of our own mechanism stops the work: survey the analogs again before a third.
 - Branches (user decision 2026-10-26): `dev` is the working branch, every task branch starts from `origin/dev` and its PR goes into `dev` (`gh pr create --base dev`); the agent merges it after review without waiting for CI. One small PR at a time.
+- Agent testing (user decision 2026-10-27): the agent builds dev apps and runs the checks itself, live on the stand by skill `stand`: build, drive, read the screen as text and screenshots. After merges into `dev` it runs the dev build check of that skill.
 - Acceptance (user decision 2026-10-27): before a merge the agent checks the change live on the stand (`make -f tarn.mk live`) and posts the result as a `Stand:` line in the PR, next to the `Review:` line; `~/.claude/scripts/merge-gate.py` merges only with both. The user checks by hand once per batch: after several PRs, one `dev` build, everything changed since the last hand check. Parallel windows take items of `docs/plans/<milestone>.toml` from `plan.py ready`. `main` takes only release PRs from `dev`, on the user's command, with the full CI green.
 - Work record is the GitHub PR (user decision 2026-10-25): acceptance and review remarks, blocking questions and their answers go as comments on the PR, not into files or session messages; a peer session is pointed to the comment link.
 - Upstream: `upstream/main` is merged into `main` on a schedule, one merge commit; conflicts at insertion points get their own commit.
