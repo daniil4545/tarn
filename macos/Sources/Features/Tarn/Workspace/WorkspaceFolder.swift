@@ -17,6 +17,15 @@ enum WorkspaceFolder {
         return target.count >= base.count && Array(target.prefix(base.count)) == base
     }
 
+    /// D20: where a new surface starts. The inherited directory stays when it lies inside `folder`;
+    /// anything else, nil included, gives `folder`. No folder, or one that is gone from disk (S9),
+    /// returns `inherited` unchanged.
+    static func startDirectory(inherited: String?, folder: String?, exists: (String) -> Bool) -> String? {
+        guard let folder, exists(folder) else { return inherited }
+        if let inherited, contains(folder, inherited) { return inherited }
+        return folder
+    }
+
     /// The workspace name for a folder: its last path component.
     static func name(of folder: String) -> String {
         URL(fileURLWithPath: folder).lastPathComponent

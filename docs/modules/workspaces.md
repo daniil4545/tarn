@@ -48,7 +48,7 @@ Following Ghostty (`sync`, run on every tab notification):
 5. A new tab that is not at the end of its run gets one native move there.
 6. Sets that changed are published.
 
-Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`, absolute with symlinks resolved. New workspace (Shift+Cmd+T or the sidebar button) opens a folder panel as a sheet; the workspace is named after the folder and its first tab starts there through `TerminalController.newTab(_:from:withBaseConfig:)`. A folder that a workspace of the window already holds selects that workspace's first tab and creates nothing; Cancel creates nothing. The folder is fixed at creation: no menu item changes or removes it. The header tooltip shows the folder (`~` for home) and the tab count. Only the first tab of a new workspace starts in the folder so far.
+Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`, absolute with symlinks resolved. New workspace (Shift+Cmd+T or the sidebar button) opens a folder panel as a sheet; the workspace is named after the folder and its first tab starts there through `TerminalController.newTab(_:from:withBaseConfig:)`. A folder that a workspace of the window already holds selects that workspace's first tab and creates nothing; Cancel creates nothing. The folder is fixed at creation: no menu item changes or removes it. The header tooltip shows the folder (`~` for home) and the tab count. Start directory (D20): a new tab or split in a workspace with a folder starts in the inherited working directory when it lies inside the folder, else in the folder; with inheritance off it starts in the folder. `WorkspaceRegistry.prepare` rewrites the inherited config at two insertion points (architecture.md rows 31 and 32). A tab uses the workspace the new tab will land in (`targetWorkspace`: the pending target of the sidebar's +, else the last selected), so folder and membership agree; a split uses the workspace of its source tab. A workspace without a folder, a folder gone from disk (one log line), the quick terminal and a tab that opens a window (`tabbingMode = .disallowed`) keep the inherited config.
 
 Sidebar commands: new tab and new workspace set the pending target and call Ghostty's `newTab`; a new workspace is empty until its tab joins. Rename refuses a blank name. Delete moves tabs to the workspace above (below for the first); the last workspace is never deleted. Move tab changes membership, then makes one `move_tab`; move workspace makes one `move_tab` per tab. `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace or change the target.
 
@@ -72,7 +72,7 @@ Undo (tombstone): the tombstone joins Ghostty's undo group instead of a second a
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceTombstone.swift` | `WorkspaceTombstone`, `TombstoneToken`, `TombstoneShelf` |
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceTitle.swift` | window subtitle |
 | `macos/Sources/Features/Tarn/Workspace/KeyHops.swift` | marks key changes caused by our own moves |
-| `macos/Sources/Features/Tarn/Workspace/WorkspaceFolder.swift` | pure path rules: standardize, contains, name, display |
+| `macos/Sources/Features/Tarn/Workspace/WorkspaceFolder.swift` | pure path rules: standardize, contains, start directory, name, display |
 | `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view and tooltip, drop line, folder panel, name and delete prompts |
 | `macos/Sources/Features/Tarn/TabDragSource.swift` | drag payloads and drop-slot math, see [sidebar.md](sidebar.md) |
 
@@ -114,6 +114,7 @@ All in `macos/Tests/Tarn/`; `BookSupport.swift` holds helpers.
 | Suite | Pins |
 |---|---|
 | `WorkspaceFolderTests` | folder path rules (symlink, trailing slash, `F-old`), set and remove folder, folder choice by workspace, snapshot with and without the field, plain set with both names |
+| `StartDirectoryTests` | start directory rule (inside, outside, no folder, folder gone, no inheritance, symlink), folder of a new tab (pending target, selected tab, after a move) and of a split |
 | `WorkspaceSetTests` | delete up or down, last workspace kept, last tab closes workspace, blank names, fold, runs follow tab order, snapshot round trip and rejects |
 | `ReconcileTests` | foreign moves, native drag, two changes at once, new tab to the end of its run, idempotence |
 | `TargetTests` | "No project" on launch, target by selection, pending target used once, new workspace, unfold on select, drag out and across windows, target expiry |

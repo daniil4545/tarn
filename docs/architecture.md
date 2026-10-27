@@ -158,6 +158,8 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 28 | `macos/Tests/Update/UpdaterOffTests.swift` | tests: the feed is empty, checking for updates leaves the state idle | the invariant of row 27 stays checked |
 | 29 | `macos/Assets.xcassets/AppIcon.appiconset`, the PNG files of `AppIconImage.imageset` | tarn icon replaces Ghostty's | the app has its own icon |
 | 30 | `macos/Sources/App/MainMenu.xib` | File menu: item "New Workspace", key equivalent `T` (Shift+Cmd+T), action `newWorkspace:` to the first responder, after "New Tab" | Shift+Cmd+T opens a new workspace; `tarn-defaults.conf` unbinds Ghostty's `super+shift+t=undo`, so the key reaches the menu, and undo keeps Cmd+Z; a user `keybind` on the key wins |
+| 31 | `macos/Sources/App/AppDelegate.swift` | in `ghosttyNewTab`: `config` is `var`, then `config = MainActor.assumeIsolated { WorkspaceRegistry.shared.prepare(config, from: window, split: false) }` | a new tab in a workspace with a folder starts per D20 |
+| 32 | `macos/Sources/Features/Terminal/BaseTerminalController.swift` | in `ghosttyDidNewSplit`: `config` is `var`, then `config = WorkspaceRegistry.shared.prepare(config, from: window, split: true)` | a new split starts per D20 |
 Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows are numbered in the order they were added, and the table is sorted by number. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
