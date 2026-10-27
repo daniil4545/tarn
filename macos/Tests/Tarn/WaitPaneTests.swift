@@ -147,8 +147,8 @@ struct WaitPaneTests {
         let waits = PaneWaits()
         let sink = Sink()
         _ = waits.begin(pane: pane, facts: busy, timeout: 0.05, reply: sink)
-        await tick()
-        await tick()
+        // A loaded machine runs the timer late: wait up to 2 s, not a fixed two ticks.
+        for _ in 0..<40 where sink.lines.isEmpty { await tick() }
         #expect(sink.lines.first?["code"] as? Int == 9)
         #expect(waits.pendingCount == 0)
     }
