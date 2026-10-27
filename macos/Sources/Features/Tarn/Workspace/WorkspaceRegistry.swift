@@ -305,7 +305,8 @@ final class WorkspaceRegistry {
         }
         guard let path = WorkspaceFolder.standardized(folder) else { return }
         if selectFirstTab(inFolder: path, except: workspace, from: window) { return }
-        edit(window) { $0.setFolder(workspace, path) }
+        let name = WorkspaceFolder.name(of: URL(fileURLWithPath: folder).standardized.path)
+        edit(window) { $0.setFolder(workspace, path, name: name) }
     }
 
     private func selectFirstTab(inFolder folder: String, except: Workspace.ID?, from window: NSWindow) -> Bool {

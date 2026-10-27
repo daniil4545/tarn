@@ -60,14 +60,23 @@ def folder_story(pg):
         pg.locator(f"{TAB}[data-tabid='t6'] .out").count() == 0,
     )
     cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code"})
-    check("F3 Set Folder over the agent's folder clears the mark", out.count() == 0)
+    check(
+        "F3 Set Folder over the agent's folder clears the mark and the name follows the folder",
+        out.count() == 0 and snap(pg)["workspaces"]["wss"][0]["name"] == "code",
+    )
     cmd(pg, "ws.folder", {"id": "w1"})
     check(
         "F4 Remove Folder drops the folder and keeps the tabs",
         "folder" not in snap(pg)["workspaces"]["wss"][0]
         and snap(pg)["workspaces"]["wss"][0]["tabs"] == ["t1", "t2", "t3", "t4"],
     )
+    cmd(pg, "ws.rename", {"id": "w1", "name": "mine"})
     cmd(pg, "ws.folder", {"id": "w1", "folder": "~/code/tarn"})
+    check(
+        "F4a a name typed by hand stays when the folder changes",
+        snap(pg)["workspaces"]["wss"][0]["name"] == "mine",
+    )
+    cmd(pg, "ws.rename", {"id": "w1", "name": "tarn"})
     cmd(pg, "tab.go", {"id": "t2"})
     cmd(pg, "tab.new", {"ws": "w1"})
     fresh = snap(pg)["workspaces"]["cur"]

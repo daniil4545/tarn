@@ -392,7 +392,9 @@ const COMMANDS = {
   "ws.rename": ({ id, name }) => update((s) => { s.wss.find((w) => w.id === id).name = name; }),
   // Set Folder... and Remove Folder (docs/specs/workspace-folder.md Q3); tabs do not move.
   "ws.folder": ({ id, folder }) => update((s) => {
-    const w = s.wss.find((x) => x.id === id);
+    // A name the user did not type follows the new folder (VS Code window title); Remove keeps it.
+    const w = s.wss.find((x) => x.id === id), base = (p) => p.split("/").pop();
+    if (folder && ["No project", "Default", w.folder && base(w.folder)].includes(w.name)) w.name = base(folder);
     if (folder) w.folder = folder; else delete w.folder;
   }),
   "ws.fold": ({ id }) => update((s) => { const w = s.wss.find((x) => x.id === id); w.collapsed = !w.collapsed; }),
