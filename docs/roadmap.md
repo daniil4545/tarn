@@ -1,168 +1,71 @@
-# Roadmap: tarn 2.0 and the ideas after it
+# Vision and roadmap: tarn 2.0
 
-Status: product decisions of 2026-10-27, not yet sliced into specs. Each idea becomes a spec in
-`docs/specs/` before code. Sources: research of alternatives
-(`~/Dev/knowledge/inbox/tarn-alternatives-features-2026-10-27-1005.md`), Claude Code docs
-(hooks, settings), tix T-201.
+Status: approved direction of 2026-10-27. Each feature is a GitHub issue in milestone
+[2.0](https://github.com/daniil4545/tarn/milestone/1); details come with the issue's survey and spec.
+After the first 2.0 release the principles move into `docs/spec.md` section 1.
 
-## 1. Philosophy: a calm terminal for agents
+## 1. Vision
 
-Agent terminals grow into cockpits: tiles, live output, browsers, agent teams. tarn goes the other
-way: the necessary minimum, each part switchable, so the developer's attention is not scattered.
-Agents are autonomous; tarn moves from controlling them to guarding the developer's focus.
+A calm terminal for agents, built on Ghostty.
+
+Agents are autonomous now. The bottleneck is the developer's attention: with tens of sessions the
+developer keeps switching tabs to look, even when nobody needs them. Agent terminals answer with
+cockpits: tiles, live output, browsers, agent teams. tarn goes the other way: the necessary
+minimum, each part switchable, and a workspace hub that gathers what the agents do and gives the
+developer only what needs them.
+
+2.0 is a prototype: new features are experiments with a clear frame (what it is and is not), kept
+or cut by use.
+
+## 2. Principles
 
 1. **The agent calls you.** Questions and reports come to you; nothing asks you to watch agents
-   work. No tiles, no live output walls, no agent teams.
+   work.
 2. **The result is read.** Reports, specs and markdown with diagrams sit next to the terminal.
 3. **Ghostty at the core.** The core is not modified; a module that is off costs nothing (no UI,
-   no background work); speed is proven by a benchmark.
+   no background work); the benchmark proves it.
 4. **Local only.** No account, cloud, telemetry or built-in model.
-5. **Claude Code's own settings stay untouched.** Everything that acts on agents ships in the tarn
-   Claude Code plugin; tarn keeps its own rules in its own store (section 5).
+5. **One plugin, no settings.** Everything that acts on agents ships in the tarn Claude Code
+   plugin; tarn writes no Claude Code settings file and never passes the user's deny or ask
+   rules. Only Sleep mode answers requests the user would otherwise see, and only while it is on.
 
-Every feature is a module the user can switch off. A module that needs another is greyed out with
-"needs X" when that one is off.
+Every feature is a module the user can switch off; a module that needs another one is greyed out
+with "needs X".
 
-Positioning against the field (research 2026-10-27): cmux is a multitasking cockpit, herdr is
-infrastructure (server, SSH, plugins), Tellurion is "everything for agents" with toggles, Warp is an
-AI platform with an account, Claude Code agent view is a list that cannot answer from the list.
-Free spot: calm, reading-first, agent-calls-you.
-
-## 2. Base modules of the current version
-
-| Module | Decision |
-|---|---|
-| Sidebar | done; no new functions, maybe smoothness |
-| Workspaces | not touched now; becomes the hub of section 3 |
-| Agent status (Claude Code) | done; codex and opencode later |
-| Permission card | make it switchable |
-| Notifications, Cmd+U | done |
-| File viewer | most important: bring convenience, design and stability to the ideal |
-| Layout | functions fine; new look (demo first) |
-| CLI | the agent is a full user: controls modules, creates workspaces and windows, opens the viewer |
-| Git | new required module: branch and changes in the row; survey how terminals show git |
-| Localhost preview | in the viewer (T-104) |
-| SSH | survey and design only in 2.0 (R13) |
-
-Work plan of 25 issues by stage: foundation, CLI, git, viewer, layout, sidebar, localhost, inbox,
-SSH (draft, waits for publishing).
-
-## 3. Workspace as the hub of a project
-
-A workspace stops being a group of tabs. It collects what its agents do, filters it, compresses it
-and gives it to the user. Three layers:
+## 3. Model
 
 ```mermaid
 flowchart LR
-  ag["Agents"] --> hq["Workspace hub"]
-  hq --> rules["Rules"]
-  hq --> aware["Awareness"]
-  hq --> news["News"]
-  rules --> ag2["Agents"]
-  aware --> ag2
-  news --> you["User"]
+  ws["Workspace"] --> folder["Project folder"]
+  ws --> tabs["Tabs"]
+  tabs --> ses["Agent sessions"]
+  ws --> hub["Hub page"]
+  ses -->|"hook events"| hub
 ```
 
-### 3.1 Inbox (issue #33)
+A workspace is a project: a folder, its tabs and the hub page. Tabs join by folder; the user's
+manual choice wins; a tab stays after `cd`. The sidebar navigates, the hub shows state.
 
-One inbox per workspace, opened by a click on the workspace header. Questions with a quick answer,
-reports when an agent finishes, working sessions with state. Two views: vertical feed and
-horizontal columns. Actions: quick answer, go to session.
+## 4. Plan
 
-### 3.2 News instead of walls of text
-
-Each session produces a lot of text; agents are hard to keep short. The workspace gives a news
-digest: who did what, at which stage. tarn has no model of its own, so the sources are:
-
-| Source | Gives |
+| Wave | Issues |
 |---|---|
-| Claude Code task events (`TaskCreated`, `TaskCompleted`) | stage, "3 of 5" |
-| Plugin skill rule: at the end of a turn the agent writes 1-2 lines with `tarn status` | the news line |
-| `last_assistant_message` of `Stop` | fallback text |
-| Option: compression by the user's own `claude -p` | real summary; spends quota; open question against principle 4 |
+| 1. Foundation | #34 modules, #35 tabs join by folder, #40 CLI survey |
+| 2. Base features | #36 git branch, #39 ssh host, #38 localhost, #40 CLI |
+| 3. Hub | #33 workspace hub, #41 neighbours, #42 collision radar, #44 permission card module |
+| 4. Experiments | #43 Sleep mode, #37 commit graph |
+| Any time | #45 viewer polish, #46 layout look, #47 sidebar smoothness |
 
-"While you were away": when the user comes back, the workspace shows the news since the last
-visit. Part of the hub, not a separate feature.
+Estimate: 40-49 PRs.
 
-### 3.3 Rules: trust per workspace and sleep mode
+## 5. Not in 2.0
 
-Each workspace has a trust level: **Consult** (the agent asks), **Autonomous** (the agent decides,
-forbidden list still holds), **Sleep** (a temporary level for all workspaces: nobody may wait for
-the user). Pain it solves: before sleep the user tells every agent "I cannot answer", and a
-forgotten session hangs all night.
-
-Mechanism, all through plugin hooks (checked in the Claude Code hooks docs 2026-10-27):
-
-| Situation | Hook | tarn does |
-|---|---|---|
-| prompt submitted | `UserPromptSubmit` `additionalContext` | adds the level's rule text |
-| agent asks a question | `PreToolUse` on `AskUserQuestion`, `deny` with reason | "the user is asleep, decide by the spec" |
-| permission request | `PermissionRequest` | allow by the level, deny forbidden actions with a reason |
-| agent stops to wait | `Stop`, `decision: block` with reason | sends it back to work; loop guard to verify |
-
-Forbidden in Sleep by default (editable): push to main, deletes outside the repository, paid calls.
-
-### 3.4 Awareness: agents see each other
-
-- Session start: `SessionStart` `additionalContext` gives a short brief of the workspace: who works
-  on what, which files.
-- Collision radar: `PostToolUse` sees every edited path; when two sessions edit one file, the agent
-  gets `additionalContext` "file X is edited by session billing", the user gets one quiet notice.
-- Messages between agents: Claude Code's own cross-session messaging (`SendMessage`,
-  `ListAgents`, one socket per session, no Anthropic servers on one machine). tarn builds no
-  channel of its own; it may name sessions after workspace tabs so agents find each other.
-
-### 3.5 Decision log
-
-Agents decide technical questions themselves; each decision is recorded ("decided X because Y") in
-the workspace and can be reversed. Rules for it are open; tix already keeps a similar log. This
-leads to a wider process concept: modular code, every commit revertible, decisions audited after,
-not approved before. tarn is its window: the log in the workspace, revert through the git module.
-
-## 4. Other ideas
-
-| Idea | Note |
+| Item | Why |
 |---|---|
-| Menu bar mode | tarn state in the macOS menu bar: all fine or someone waits; the window may be closed |
-| Quota weather | one gauge: when the subscription limit runs out at the current pace; data in the status line JSON (section 5) |
-| Focus batching | questions of other workspaces wait and come in a batch; urgent ones pass at once |
-
-## 5. Relation to Claude Code settings
-
-- tarn never writes `~/.claude/settings.json`, `.claude/settings.json` or `.claude/settings.local.json`.
-- Everything that acts on agents (state, card, rules, awareness, news) lives in the tarn plugin.
-  The user turns the plugin on or off per project with Claude Code's own `enabledPlugins`.
-- tarn's levels and lists are stored by tarn, per workspace, and applied by the plugin hooks.
-- Claude Code's own permission rules and modes stay in force; tarn adds a layer, it does not
-  replace them. A `PreToolUse` hook cannot pass a deny or ask rule, while a blocking hook wins
-  over an allow rule (permissions docs, "Precedence among rules, hooks, and mods"): tarn can only
-  be stricter than the user's settings, or answer a prompt Claude Code would show anyway.
-- When the tarn app is not running, the hooks do nothing and Claude Code behaves as configured.
-- Plugin `userConfig` is not used: Claude Code stores it in the user's `settings.json`.
-
-| Feature | Instrument | Claude Code setting it meets |
-|---|---|---|
-| Agent state, inbox, news | plugin hooks: prompt, tool, `Stop`, task events | `enabledPlugins` only; `awaySummaryEnabled` is Claude's own per-session recap |
-| Permission card | `PermissionRequest`; questions by `PreToolUse` on `AskUserQuestion` with `updatedInput` | fires only where Claude would ask; user's deny and ask rules first |
-| Notifications | tarn's own | Claude's `preferredNotifChannel` may duplicate them; the user picks one |
-| `tarn` CLI | plugin `bin/` (on the Bash tool's PATH while the plugin is on) and a plugin skill | Bash permission rules of the user decide whether `tarn` runs without a prompt |
-| Trust levels, Sleep | `UserPromptSubmit` context, `PreToolUse` deny, `PermissionRequest`, `Stop` block; levels stored by tarn | permission mode stays the user's; tarn only tightens |
-| Awareness, radar | `SessionStart` and `PostToolUse` `additionalContext` | none |
-| Messages between agents | Claude Code's own cross-session messaging (`SendMessage`, `ListAgents`, v2.1.224+) | `crossSessionInbound`, deny rules on `SendMessage` |
-| Decision log | plugin skill rule and a `tarn` command | none |
-| Quota weather | status line JSON `rate_limits.five_hour` | `statusLine` is a user setting a plugin cannot set: opt-in, the user points it at a `tarn` command |
-| Git, localhost, menu bar | tarn app | none |
-
-## 6. Not in 2.0
-
-Agent browser (Claude Code has Chrome integration, `claude --chrome`), tiles and live output,
-agent teams, subagent panel (R17), codex and opencode state, tix connector (R18).
-
-## 7. Open questions
-
-1. Sleep: loop guard for a blocked `Stop`; which forbidden list by default.
-2. News: rely on the skill rule or add `claude -p` compression.
-3. Messaging: can tarn name Claude Code sessions after tabs without typing `/rename`.
-4. Decision log: rules, storage, link to tix.
-5. Quota: the status line has it, but only through a user setting; is opt-in acceptable.
-6. Does `PermissionRequest` fire in auto mode, and does a skill's `allowed-tools` cover `tarn`.
+| Tiles, live output walls, agent teams, subagent panel | against principle 1 |
+| Agent browser | Claude Code has `claude --chrome` |
+| Own messaging between agents | Claude Code has `SendMessage` |
+| Git commit, push, diff and PR actions | out of the minimal git |
+| Remote agent state over ssh | needs a network channel; host only in 2.0 |
+| Per-workspace trust levels, decision log, menu bar | cut to keep the prototype small |
+| Codex and opencode state | 2.0 is Claude Code first |
