@@ -108,9 +108,9 @@ Forbidden in Sleep by default (editable): push to main, deletes outside the repo
   on what, which files.
 - Collision radar: `PostToolUse` sees every edited path; when two sessions edit one file, the agent
   gets `additionalContext` "file X is edited by session billing", the user gets one quiet notice.
-- Messages between agents arrive as hook context on the next call, so no text is typed into
-  another terminal. Claude Code has its own cross-session messaging (`crossSessionInbound` setting):
-  survey it before building ours.
+- Messages between agents: Claude Code's own cross-session messaging (`SendMessage`,
+  `ListAgents`, one socket per session, no Anthropic servers on one machine). tarn builds no
+  channel of its own; it may name sessions after workspace tabs so agents find each other.
 
 ### 3.5 Decision log
 
@@ -124,7 +124,7 @@ not approved before. tarn is its window: the log in the workspace, revert throug
 | Idea | Note |
 |---|---|
 | Menu bar mode | tarn state in the macOS menu bar: all fine or someone waits; the window may be closed |
-| Quota weather | one gauge: when the subscription limit runs out at the current pace; to check whether Claude Code exposes the limit |
+| Quota weather | one gauge: when the subscription limit runs out at the current pace; data in the status line JSON (section 5) |
 | Focus batching | questions of other workspaces wait and come in a batch; urgent ones pass at once |
 
 ## 5. Relation to Claude Code settings
@@ -134,7 +134,24 @@ not approved before. tarn is its window: the log in the workspace, revert throug
   The user turns the plugin on or off per project with Claude Code's own `enabledPlugins`.
 - tarn's levels and lists are stored by tarn, per workspace, and applied by the plugin hooks.
 - Claude Code's own permission rules and modes stay in force; tarn adds a layer, it does not
-  replace them. Which side wins when both decide: to verify in the permissions docs.
+  replace them. A `PreToolUse` hook cannot pass a deny or ask rule, while a blocking hook wins
+  over an allow rule (permissions docs, "Precedence among rules, hooks, and mods"): tarn can only
+  be stricter than the user's settings, or answer a prompt Claude Code would show anyway.
+- When the tarn app is not running, the hooks do nothing and Claude Code behaves as configured.
+- Plugin `userConfig` is not used: Claude Code stores it in the user's `settings.json`.
+
+| Feature | Instrument | Claude Code setting it meets |
+|---|---|---|
+| Agent state, inbox, news | plugin hooks: prompt, tool, `Stop`, task events | `enabledPlugins` only; `awaySummaryEnabled` is Claude's own per-session recap |
+| Permission card | `PermissionRequest`; questions by `PreToolUse` on `AskUserQuestion` with `updatedInput` | fires only where Claude would ask; user's deny and ask rules first |
+| Notifications | tarn's own | Claude's `preferredNotifChannel` may duplicate them; the user picks one |
+| `tarn` CLI | plugin `bin/` (on the Bash tool's PATH while the plugin is on) and a plugin skill | Bash permission rules of the user decide whether `tarn` runs without a prompt |
+| Trust levels, Sleep | `UserPromptSubmit` context, `PreToolUse` deny, `PermissionRequest`, `Stop` block; levels stored by tarn | permission mode stays the user's; tarn only tightens |
+| Awareness, radar | `SessionStart` and `PostToolUse` `additionalContext` | none |
+| Messages between agents | Claude Code's own cross-session messaging (`SendMessage`, `ListAgents`, v2.1.224+) | `crossSessionInbound`, deny rules on `SendMessage` |
+| Decision log | plugin skill rule and a `tarn` command | none |
+| Quota weather | status line JSON `rate_limits.five_hour` | `statusLine` is a user setting a plugin cannot set: opt-in, the user points it at a `tarn` command |
+| Git, localhost, menu bar | tarn app | none |
 
 ## 6. Not in 2.0
 
@@ -145,6 +162,7 @@ agent teams, subagent panel (R17), codex and opencode state, tix connector (R18)
 
 1. Sleep: loop guard for a blocked `Stop`; which forbidden list by default.
 2. News: rely on the skill rule or add `claude -p` compression.
-3. Messaging: Claude Code `crossSessionInbound` versus hook context.
+3. Messaging: can tarn name Claude Code sessions after tabs without typing `/rename`.
 4. Decision log: rules, storage, link to tix.
-5. Quota: is the limit visible to hooks or the status line.
+5. Quota: the status line has it, but only through a user setting; is opt-in acceptable.
+6. Does `PermissionRequest` fire in auto mode, and does a skill's `allowed-tools` cover `tarn`.
