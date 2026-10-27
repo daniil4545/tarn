@@ -81,6 +81,29 @@ enum AgentProcess {
         }
     }
 
+    /// The process that stands for a foreground process group: its leader, as WezTerm
+    /// `get_foreground_process_info` takes `process_group_leader` (`mux/src/localpane.rs`). The one exception is a command Ghostty starts
+    /// through `/usr/bin/login -flp` (`src/termio/Exec.zig:1933`): without job control it stays in
+    /// login's group, so the leader is login and the command is login's child in the group. The
+    /// members come from `proc_listpids(PROC_PGRP_ONLY)`, as kitty `processes_in_group` reads them.
+    static func foreground(group: pid_t) -> pid_t {
+        guard comm(pid: group) == "login" else { return group }
+        let count = proc_listpids(UInt32(PROC_PGRP_ONLY), UInt32(group), nil, 0) / Int32(MemoryLayout<pid_t>.size)
+        guard count > 0 else { return group }
+        var pids = [pid_t](repeating: 0, count: Int(count) + 8)
+        let size = proc_listpids(
+            UInt32(PROC_PGRP_ONLY), UInt32(group), &pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        let members = pids.prefix(Int(size) / MemoryLayout<pid_t>.size)
+        return members.first { $0 > 0 && $0 != group && parent($0) == group } ?? group
+    }
+
+    private static func parent(_ pid: pid_t) -> pid_t? {
+        var info = proc_bsdshortinfo()
+        let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
+        guard proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size else { return nil }
+        return pid_t(info.pbsi_ppid)
+    }
+
     /// The arguments of `pid` from `KERN_PROCARGS2`:
     /// `[int32 argc][exec_path\0][\0 padding][argv0\0 argv1\0 …][env…]`.
     static func argv(pid: pid_t) -> [String]? {

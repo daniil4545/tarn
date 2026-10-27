@@ -97,6 +97,7 @@ enum AgentCommands {
             let tab = WorkspaceRegistry.shared.tabKey(of: window)
             let workspace = WorkspaceRegistry.shared.workspace(of: window)?.id
             return controller.surfaceTree.map { view in
+                let pid = view.surfaceModel?.foregroundPID.map { AgentProcess.foreground(group: pid_t($0)) }
                 let cwd = view.workingDirectory ?? ""
                 return PaneRow(
                     pane: view.id,
@@ -104,7 +105,7 @@ enum AgentCommands {
                     workspace: workspace,
                     title: view.title,
                     cwd: cwd,
-                    process: view.surfaceModel?.foregroundPID.flatMap { AgentProcess.comm(pid: pid_t($0)) } ?? "",
+                    process: pid.flatMap(AgentProcess.comm) ?? "",
                     branch: ProjectInfo.resolve(cwd: cwd).branch,
                     state: SessionRegistry.shared.sessions[view.id]?.listState ?? ""
                 )

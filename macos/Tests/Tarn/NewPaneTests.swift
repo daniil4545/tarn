@@ -62,4 +62,29 @@ struct NewPaneTests {
         #expect(NSApp.isActive == active)
         #expect(NSApp.keyWindow === key)
     }
+
+    /// spec: T-218 - the pane runs under Ghostty's login; `ls` names the command and its folder, not login's.
+    @Test @MainActor func aNewPaneShowsItsCommandAndFolder() async throws {
+        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
+        let controller = TerminalController(app)
+        let window = try #require(controller.window)
+        defer { window.close() }
+        let caller = try #require(controller.surfaceTree.first)
+
+        var config = Ghostty.SurfaceConfiguration()
+        config.command = "/bin/sleep 30"
+        config.workingDirectory = "/tmp"
+        let pane = try #require(NewPane.split(controller, at: caller, direction: .down, config: config))
+
+        var process = ""
+        let deadline = ContinuousClock.now + .seconds(5)
+        while ContinuousClock.now < deadline {
+            process = pane.surfaceModel?.foregroundPID
+                .flatMap { AgentProcess.comm(pid: AgentProcess.foreground(group: pid_t($0))) } ?? ""
+            if process == "sleep" { break }
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(process == "sleep")
+        #expect(pane.workingDirectory == "/private/tmp")
+    }
 }
