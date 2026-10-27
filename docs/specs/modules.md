@@ -84,7 +84,6 @@ The tab style picker moves from Settings > Tabs to the Sidebar row; Tabs keeps t
 ```
 
 - A new section `modules` in `TarnSettingsView.Section` (`TarnSettings.swift:147`), first in the list, grouped `Form` like the other panes. The File Viewer pane keeps its switch on the same key.
-- A Settings button (gear, "Settings (Cmd+,)") in the sidebar header, next to Hide Sidebar, opens the settings window (user request 2026-10-27).
 - The agent line runs its checks off the main thread when the pane opens; no network:
   1. found: `claude --version` from the first of `~/.local/bin/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, `~/.claude/local/claude`; none of them: `$SHELL -l -i -c 'claude --version'`, killed after 5 s (measured 1.5 to 3.4 s on the user's Mac). The version is the line matching `^\d+\.\d+\.\d+ \(Claude Code\)`. No match: "Claude Code not found".
   2. plugin: `~/.claude/plugins/installed_plugins.json` has the key `tarn@tarn` under `plugins` (format seen on 2.1.311, read only). Missing: "install the tarn plugin" with the command from `docs/install.md`.

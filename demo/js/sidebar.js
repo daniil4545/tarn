@@ -57,7 +57,7 @@ function render() {
   const settings = button("sbSettings", "Settings (Cmd+,)", GEAR);
   const top = ui.rail
     ? `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${settings}${viewer}${button("sbNew", "New tab", "+")}</div>`
-    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${settings}<span class="grow"></span>${viewer}${newWs}${button("sbNew", "New tab", "+")}</div>`;
+    : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${settings}${newWs}<span class="grow"></span>${viewer}${button("sbNew", "New tab", "+")}</div>`;
   const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
     sb.innerHTML = top + (grouped ? s.wss : [{ tabs: order }]).map((w) => w.tabs.map((id) => {
