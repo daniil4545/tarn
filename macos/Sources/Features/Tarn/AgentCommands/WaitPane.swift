@@ -76,6 +76,14 @@ enum WaitRule {
     }
 }
 
+extension WaitRule {
+    /// A parked wait on a pane that shows no prompt mark while the shell is back in the foreground:
+    /// the command ended and no OSC 133 finish will come (`docs/specs/agent-cli.md` 4.6).
+    static func stalled(mark: RunMark?, facts: PaneFacts, integrated: Bool) -> Bool {
+        mark == nil && !integrated && facts.promptReadable && !facts.atPrompt && facts.shellInForeground
+    }
+}
+
 /// An answer that can be sent once, and tells when the other end hangs up.
 protocol WaitSink: AnyObject {
     func send(_ line: Data)
@@ -100,7 +108,12 @@ final class PaneWaits {
         let started = Date()
         let reply: any WaitSink
         var timer: Task<Void, Never>?
+        /// Ticks that saw the shell back in the foreground; a finish arrives within ms, so one is not enough.
+        var shellSeen = 0
     }
+
+    /// One year: `Task.sleep` never gets a huge value.
+    static let longestTimeout = 365.0 * 86400
 
     private(set) var marks: [UUID: RunMark] = [:]
     private var integrated = Set<UUID>()
@@ -108,6 +121,11 @@ final class PaneWaits {
 
     /// Panes that still exist; tests replace it.
     var exists: (UUID) -> Bool = { SessionRegistry.surfaceView($0) != nil }
+
+    /// What a pane looks like now; tests replace it.
+    var factsOf: (UUID) -> PaneFacts? = { id in SessionRegistry.surfaceView(id).map(WaitPane.facts(of:)) }
+
+    private var ticker: Task<Void, Never>?
 
     var pendingCount: Int { waits.count }
 
@@ -139,17 +157,45 @@ final class PaneWaits {
         let id = wait.id
         if let timeout, timeout > 0 {
             wait.timer = Task { [weak self] in
-                try? await Task.sleep(for: .seconds(timeout))
+                try? await Task.sleep(for: .seconds(min(timeout, Self.longestTimeout)))
                 guard !Task.isCancelled else { return }
                 self?.finish(id, .failure(.timeout))
             }
         }
         waits.append(wait)
+        startTicker()
         // A cancelled wait (its CLI killed) is released when its connection closes.
         reply.watchPeer { [weak self] in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.release(id) } }
         }
         return nil
+    }
+
+    private func startTicker() {
+        guard ticker == nil else { return }
+        ticker = Task { [weak self] in
+            while !Task.isCancelled, self?.waits.isEmpty == false {
+                try? await Task.sleep(for: .milliseconds(500))
+                self?.tick()
+            }
+            self?.ticker = nil
+        }
+    }
+
+    /// Looks again at the panes of parked waits: a command without OSC 133 marks ended when the shell
+    /// is back in the foreground on two ticks in a row, and the wait says so instead of hanging.
+    func tick() {
+        for index in waits.indices {
+            let pane = waits[index].pane
+            guard let facts = factsOf(pane),
+                  WaitRule.stalled(mark: marks[pane], facts: facts, integrated: integrated.contains(pane))
+            else {
+                waits[index].shellSeen = 0
+                continue
+            }
+            waits[index].shellSeen += 1
+        }
+        for wait in waits where wait.shellSeen >= 2 { finish(wait.id, .failure(.noShellIntegration)) }
     }
 
     /// Ghostty `command_finished` of a shell pane; a negative code is "no code reported".
@@ -161,6 +207,8 @@ final class PaneWaits {
             .success(WaitOutcome.finished(code: $0, command: command, durationMs: Int(durationNs / 1_000_000)).fields)
         } ?? .failure(.exitCodeUnknown)
         answer(pane, result)
+        // The finish the `run` pane waited for is spent: a later wait on the idle pane answers at once.
+        if marks[pane]?.kind == .run { marks[pane] = nil }
     }
 
     /// Ghostty `show_child_exited`: ends the wait on a `new` pane; the code is unknown (U8).
@@ -177,7 +225,7 @@ final class PaneWaits {
 
     /// Answers `closed` for the waits of panes that no longer exist and forgets their marks.
     func sweep() {
-        closed(panes: Set(waits.map(\.pane)).union(marks.keys).filter { !exists($0) })
+        closed(panes: Set(waits.map(\.pane)).union(marks.keys).union(integrated).filter { !exists($0) })
     }
 
     /// Answers `closed` for the waits on `panes` and forgets their marks.
@@ -249,7 +297,7 @@ enum WaitPane {
     }
 
     @MainActor
-    private static func facts(of view: Ghostty.SurfaceView) -> PaneFacts {
+    static func facts(of view: Ghostty.SurfaceView) -> PaneFacts {
         let pid = view.surfaceModel?.foregroundPID.map { AgentProcess.foreground(group: pid_t($0)) }
         let comm = pid.flatMap(AgentProcess.comm) ?? ""
         return PaneFacts(

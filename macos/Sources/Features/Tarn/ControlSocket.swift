@@ -127,7 +127,7 @@ extension ControlSocket {
         private var isClosed = false
         private var peerTimer: DispatchSourceTimer?
 
-        fileprivate init(fd: Int32, queue: DispatchQueue) {
+        init(fd: Int32, queue: DispatchQueue) {
             self.fd = fd
             self.queue = queue
             var on: Int32 = 1

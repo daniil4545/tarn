@@ -164,4 +164,97 @@ struct WaitPaneTests {
         waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
         #expect(sink.lines.isEmpty)
     }
+
+    /// No OSC 133: a typed command ends, the shell is back, no finish comes. Two ticks answer exit 6.
+    @MainActor @Test func shellBackWithoutMarksEndsTheWaitWithNoIntegration() {
+        let waits = PaneWaits()
+        let sink = Sink()
+        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink)
+        waits.factsOf = { _ in self.shell }
+        waits.tick()
+        #expect(sink.lines.isEmpty, "one tick may be a finish still on its way")
+        waits.tick()
+        #expect(sink.lines.first?["error"] as? String == "no shell integration")
+        #expect(sink.lines.first?["code"] as? Int == 6)
+    }
+
+    @MainActor @Test func aFinishThatArrivesFirstWinsOverTheStall() {
+        let waits = PaneWaits()
+        let sink = Sink()
+        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink)
+        waits.factsOf = { _ in self.shell }
+        waits.tick()
+        waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
+        waits.tick()
+        #expect(sink.lines.count == 1)
+        #expect(sink.lines.first?["state"] as? String == "succeed")
+    }
+
+    @MainActor @Test func aBusyPaneResetsTheStallCount() {
+        let waits = PaneWaits()
+        let sink = Sink()
+        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink)
+        for facts in [shell, busy, shell] {
+            waits.factsOf = { _ in facts }
+            waits.tick()
+        }
+        #expect(sink.lines.isEmpty)
+    }
+
+    /// The `run` mark is spent by the finish it waited for: the next wait on the idle pane answers at once.
+    @MainActor @Test func aRunMarkIsConsumedByItsFinish() throws {
+        let waits = PaneWaits()
+        waits.mark(pane, RunMark(kind: .run, command: "make"))
+        _ = waits.begin(pane: pane, facts: idle, timeout: nil, reply: Sink())
+        waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
+        #expect(waits.marks[pane] == nil)
+        let again = try #require(waits.begin(pane: pane, facts: idle, timeout: nil, reply: Sink()))
+        #expect(try again.get()["state"] as? String == "succeed")
+    }
+
+    @MainActor @Test func aHugeTimeoutDoesNotCrash() {
+        let waits = PaneWaits()
+        let sink = Sink()
+        #expect(waits.begin(pane: pane, facts: busy, timeout: 1e99, reply: sink) == nil)
+        waits.closed(panes: [pane])
+        #expect(sink.lines.first?["state"] as? String == "closed")
+    }
+
+    @MainActor @Test func sweepForgetsIntegratedPanesThatAreGone() {
+        let waits = PaneWaits()
+        waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
+        waits.exists = { _ in false }
+        waits.sweep()
+        let sink = Sink()
+        // Not integrated any more: a shell in the foreground without a prompt is refused again.
+        let result = waits.begin(pane: pane, facts: shell, timeout: nil, reply: sink)
+        guard case .failure(let refusal)? = result else {
+            Issue.record("the pane stayed integrated")
+            return
+        }
+        #expect(refusal == .noShellIntegration)
+    }
+
+    /// A real socket pair: the other end closing fires the callback; its half-close does not.
+    @Test func watchPeerFiresOnCloseAndNotOnHalfClose() async throws {
+        var fds: [Int32] = [0, 0]
+        try #require(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0)
+        let reply = ControlSocket.Reply(fd: fds[0], queue: DispatchQueue(label: "test.peer"))
+        let fired = Flag()
+        reply.watchPeer { fired.set() }
+        shutdown(fds[1], SHUT_WR)
+        try await Task.sleep(for: .milliseconds(1300))
+        #expect(!fired.value, "a half-close is not a hang-up")
+        close(fds[1])
+        let deadline = ContinuousClock.now + .seconds(2)
+        while !fired.value, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(50)) }
+        #expect(fired.value)
+    }
+
+    private final class Flag: @unchecked Sendable {
+        private let lock = NSLock()
+        private var flag = false
+        var value: Bool { lock.withLock { flag } }
+        func set() { lock.withLock { flag = true } }
+    }
 }

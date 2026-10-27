@@ -239,6 +239,21 @@ def main() -> int:
             home, done, ["wait", SURFACE], delay=2, TARN_TIMEOUT="1"
         )
         check("wait ignores TARN_TIMEOUT", code == 0 and out.startswith("error"), out)
+        # --timeout takes ^[0-9]+(\.[0-9]+)?$ only; a bad one sends nothing.
+        for bad in [".5", "5.", ".", "-1", "1e99", "", "1.2.3", "abc"]:
+            (code, out, err), req = with_server(
+                home, done, ["wait", SURFACE, "--timeout", bad]
+            )
+            check(
+                f"bad timeout {bad!r}",
+                (code, out, err) == (1, "", "tarn: bad timeout\n") and req == [],
+                (code, err, req),
+            )
+        for good in ["0", "1.5", "99999999999999999999"]:
+            (code, _, _), req = with_server(
+                home, done, ["wait", SURFACE, "--timeout", good]
+            )
+            check(f"timeout {good}", code == 0 and len(req) == 1, (code, req))
         code, out, err = run(home, ["wait", SURFACE], surface=None)
         check("wait without surface", (code, err) == (1, "tarn: not in a tarn tab\n"))
 
