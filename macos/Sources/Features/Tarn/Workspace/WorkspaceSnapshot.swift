@@ -31,8 +31,10 @@ struct WorkspaceSnapshot: Codable, Equatable {
     var manual: [TabKey] = []
 
     /// The set this snapshot describes. A tab listed twice stays in the first workspace;
-    /// a workspace without a tab is dropped.
-    func makeSet() -> WorkspaceSet {
+    /// a workspace without a tab is dropped. A "~" saved with the home folder loads without it,
+    /// as every "~" is now.
+    func makeSet(home: String = NSHomeDirectory()) -> WorkspaceSet {
+        let homeFolder = WorkspaceFolder.standardized(home) ?? home
         var members: [TabKey: Workspace.ID] = [:]
         var kept: [Workspace] = []
         for entry in workspaces {
@@ -41,7 +43,8 @@ struct WorkspaceSnapshot: Codable, Equatable {
                 members[key] = entry.id
                 any = true
             }
-            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: entry.folder)) }
+            let folder = entry.name == WorkspaceSet.homeName && entry.folder == homeFolder ? nil : entry.folder
+            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: folder)) }
         }
         return WorkspaceSet(id: setID, workspaces: kept, members: members, manual: Set(manual), revision: revision)
     }

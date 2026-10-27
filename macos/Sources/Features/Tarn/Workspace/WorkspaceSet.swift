@@ -22,7 +22,8 @@ struct WorkspaceSet: Equatable {
     static let defaultName = "No project"
     /// The name sets had before "No project"; restored sets keep it.
     static let legacyDefaultName = "Default"
-    /// The workspace that takes new tabs while Workspaces is off: the home folder, named "~".
+    /// The start workspace of a fresh set and the target of Workspaces off. It has no folder, so
+    /// its tabs and splits open where Ghostty opens them.
     static let homeName = "~"
 
     /// One window's workspaces. Not part of the stored state.
@@ -276,19 +277,18 @@ struct WorkspaceSet: Equatable {
         return reorders
     }
 
-    /// Workspaces are off: a tab with no workspace joins the workspace whose folder is the home
-    /// folder (one folder, one workspace); a new one named "~" is made when the set has none.
-    /// Nothing else moves, whatever the order of the tabs.
-    mutating func reconcileFrozen(current: [TabKey], home: String = NSHomeDirectory()) {
+    /// Workspaces are off: a tab with no workspace joins "~"; a new "~" is made when the set has
+    /// none. Nothing else moves, whatever the order of the tabs.
+    mutating func reconcileFrozen(current: [TabKey]) {
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         guard !fresh.isEmpty else { return }
-        let homeWorkspace = Self.makeHome(at: home)
         let target: Workspace.ID
-        if let existing = workspaces.first(where: { $0.folder == homeWorkspace.folder }) {
+        if let existing = workspaces.first(where: Self.isHome) {
             target = existing.id
         } else {
-            workspaces.append(homeWorkspace)
-            target = homeWorkspace.id
+            let created = Self.makeHome()
+            workspaces.append(created)
+            target = created.id
         }
         for tab in fresh { members[tab] = target }
         revision += 1
@@ -343,12 +343,12 @@ struct WorkspaceSet: Equatable {
         }
     }
 
-    /// A new "~" workspace with the standardized home folder: the start workspace of a fresh set
-    /// and the target of Workspaces off.
-    static func makeHome(at home: String = NSHomeDirectory()) -> Workspace {
-        var workspace = Workspace(name: homeName)
-        workspace.folder = WorkspaceFolder.standardized(home) ?? home
-        return workspace
+    static func makeHome() -> Workspace {
+        Workspace(name: homeName)
+    }
+
+    static func isHome(_ workspace: Workspace) -> Bool {
+        workspace.name == homeName && workspace.folder == nil
     }
 
     /// `target` when it exists, else the first workspace, else a new "~".

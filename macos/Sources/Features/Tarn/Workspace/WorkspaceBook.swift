@@ -164,13 +164,13 @@ struct WorkspaceBook {
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
     }
 
-    /// A set that is one unrenamed start workspace: "~" with the home folder, or the older
-    /// "No project" / "Default" with no folder. A window nobody has set up.
+    /// A set that is one unrenamed start workspace with no folder: "~", or the older "No project"
+    /// or "Default". A window nobody has set up.
     func isPlain(_ set: WorkspaceSet) -> Bool {
         guard set.workspaces.count == 1 else { return false }
         let only = set.workspaces[0]
-        if only.name == WorkspaceSet.homeName { return only.folder == WorkspaceSet.makeHome().folder }
-        return only.folder == nil && [WorkspaceSet.defaultName, WorkspaceSet.legacyDefaultName].contains(only.name)
+        return only.folder == nil
+            && [WorkspaceSet.homeName, WorkspaceSet.defaultName, WorkspaceSet.legacyDefaultName].contains(only.name)
     }
 
     /// The set each group follows. A set belongs to the group that holds most of its live tabs; a

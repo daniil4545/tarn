@@ -137,7 +137,6 @@ const decided = new Map();
 
 // An agent that starts in a tab not placed by hand moves the tab to the workspace whose folder
 // holds the agent's folder, the deepest one first (D21). No such workspace: the tab stays.
-// The start workspace "~" (T-245) never pulls a tab from another workspace.
 function arrive() {
   const s = read("workspaces"), registry = read("registry");
   for (const [tabId, pane] of decided) if (!s.tabs[tabId] || !registry[pane]) decided.delete(tabId);
@@ -148,7 +147,7 @@ function arrive() {
     decided.set(tab.id, agent.pane);
     if (tab.manual) continue;
     const cwd = panes.get(agent.pane)?.cwd ?? tab.cwd, here = wsOf(s, tab.id);
-    const home = s.wss.filter((w) => w.folder && inside(w.folder, cwd) && (w.folder !== "~" || w === here))
+    const home = s.wss.filter((w) => w.folder && inside(w.folder, cwd))
       .sort((a, b) => b.folder.length - a.folder.length)[0];
     if (home && here.folder !== home.folder) bus.cmd("tab.move", { id: tab.id, ws: home.id, arrival: true });
   }
@@ -168,13 +167,12 @@ function ensurePane(id, cwd) {
 }
 
 const short = (cwd) => cwd.replace("~/code/", "~/c/");
-// Workspaces off (or Sidebar off): the registry stops grouping. New tabs join the workspace with the folder ~ (named "~"), created
+// Workspaces off (or Sidebar off): the registry stops grouping. New tabs join "~" (no folder), created
 // at the end of the list when missing; the frozen workspaces stay untouched.
 const flat = () => !isOn("workspaces");
-// One folder, one workspace: a workspace whose folder is ~ takes the new tabs, else "~" is made.
 const homeWs = (s) => {
-  let ws = s.wss.find((w) => w.folder === "~");
-  if (!ws) { ws = { id: nextId("w"), name: "~", folder: "~", tabs: [] }; s.wss.push(ws); }
+  let ws = s.wss.find((w) => w.name === "~" && !w.folder);
+  if (!ws) { ws = { id: nextId("w"), name: "~", tabs: [] }; s.wss.push(ws); }
   return ws;
 };
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
@@ -195,9 +193,9 @@ function addTab(s, ws, { cwd = startCwd(s, ws), title = `zsh · ${short(cwd)}` }
   return id;
 }
 
-// A new window starts with the workspace "~" (folder ~, T-245) and one tab.
+// A new window starts with the workspace "~" (no folder) and one tab in the home folder.
 function openWindow(s) {
-  const ws = { id: nextId("w"), name: "~", folder: "~", tabs: [] };
+  const ws = { id: nextId("w"), name: "~", tabs: [] };
   s.wss = [ws];
   s.cur = addTab(s, ws, { cwd: "~" });
 }

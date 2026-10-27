@@ -2,18 +2,16 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// T-245: every fresh set starts in workspace "~" with the home folder, the same "~" that
+/// T-245: every fresh set starts in workspace "~" with no folder, the same "~" that
 /// Workspaces off creates. Restored sets keep their saved names.
 @Suite
 struct HomeStartTests {
     private let t = (0..<6).map { _ in TabKey() }
-    private let home = WorkspaceBook.expectedHome
-
     private func expectHomeOnly(_ book: WorkspaceBook, _ tab: TabKey, sourceLocation: SourceLocation = #_sourceLocation) {
         let set = book.set(of: tab)
         #expect(set?.workspaces.count == 1, sourceLocation: sourceLocation)
         #expect(set?.workspaces.first?.name == "~", sourceLocation: sourceLocation)
-        #expect(set?.workspaces.first?.folder == home, sourceLocation: sourceLocation)
+        #expect(set?.workspaces.first?.folder == nil, sourceLocation: sourceLocation)
     }
 
     // MARK: The places that make a fresh set
@@ -23,7 +21,6 @@ struct HomeStartTests {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])
         expectHomeOnly(book, t[0])
-        #expect(home != nil)
     }
 
     // spec: windows-workspaces D10
@@ -65,7 +62,7 @@ struct HomeStartTests {
         _ = set.reconcile(previous: [], current: [t[0]], target: UUID())
         #expect(set.workspaces.count == 1)
         #expect(set.workspaces[0].name == "~")
-        #expect(set.workspaces[0].folder == home)
+        #expect(set.workspaces[0].folder == nil)
         #expect(set.workspace(of: t[0])?.id == set.workspaces[0].id)
     }
 
@@ -115,6 +112,35 @@ struct HomeStartTests {
         book.restoreLegacy([t[0]], name: WorkspaceSet.legacyDefaultName)
         _ = book.pass([[t[0]]])
         #expect(book.names([t[0]]) == ["Default"])
+    }
+
+    // spec: workspace-folder D24 - a "~" saved with the home folder loads as a plain "~"
+    @Test func aRestoredHomeWithTheHomeFolderLoadsWithoutIt() {
+        let home = NSHomeDirectory()
+        let snapshot = WorkspaceSnapshot(
+            version: 1, setID: UUID(), revision: 1, tabKey: t[0],
+            workspaces: [
+                .init(id: UUID(), name: "~", collapsed: false, folder: WorkspaceFolder.standardized(home), tabKeys: [t[0]]),
+                .init(id: UUID(), name: "Home base", collapsed: false, folder: WorkspaceFolder.standardized(home), tabKeys: [t[1]]),
+            ]
+        )
+        let set = snapshot.makeSet(home: home)
+        #expect(set.workspaces.map(\.folder) == [nil, WorkspaceFolder.standardized(home)])
+        let lone = WorkspaceSnapshot(
+            version: 1, setID: UUID(), revision: 1, tabKey: t[3],
+            workspaces: [.init(id: UUID(), name: "~", collapsed: false, folder: WorkspaceFolder.standardized(home), tabKeys: [t[3]])]
+        )
+        #expect(WorkspaceBook().isPlain(lone.makeSet(home: home)))
+        let elsewhere = WorkspaceSnapshot(
+            version: 1, setID: UUID(), revision: 1, tabKey: t[4],
+            workspaces: [.init(id: UUID(), name: "~", collapsed: false, folder: "/p/F", tabKeys: [t[4]])]
+        )
+        #expect(elsewhere.makeSet(home: home).workspaces.first?.folder == "/p/F")
+        var book = WorkspaceBook()
+        book.adopt(snapshot)
+        book.frozen = true
+        _ = book.pass([[t[0], t[1], t[2]]])
+        #expect(book.workspace(of: t[2])?.id == book.workspace(of: t[0])?.id)
     }
 
     // MARK: Merge All Windows

@@ -12,7 +12,7 @@ struct TargetTests {
         var book = WorkspaceBook()
         let outcome = book.pass([[t[0]]])
         #expect(book.names([t[0]]) == [WorkspaceSet.homeName])
-        #expect(book.workspace(of: t[0])?.folder == WorkspaceBook.expectedHome)
+        #expect(book.workspace(of: t[0])?.folder == nil)
         #expect(outcome.reorders.isEmpty)
         #expect(outcome.changed.count == 1)
     }
@@ -23,7 +23,7 @@ struct TargetTests {
         _ = book.pass([[t[0]], [t[1]]])
         #expect(book.set(of: t[0])?.id != book.set(of: t[1])?.id)
         #expect(book.names([t[1]]) == [WorkspaceSet.homeName])
-        #expect(book.workspace(of: t[1])?.folder == WorkspaceBook.expectedHome)
+        #expect(book.workspace(of: t[1])?.folder == nil)
     }
 
     @Test func aNewTabJoinsTheWorkspaceOfTheSelectedTab() {
@@ -107,8 +107,8 @@ struct TargetTests {
         #expect(book.set(of: t[2])?.id != book.set(of: t[0])?.id)
         #expect(book.names([t[2]]) == [WorkspaceSet.homeName])
         #expect(book.names([t[0], t[1]]) == [WorkspaceSet.homeName])
-        // The set the tab dragged out of a window starts gets the home folder too.
-        #expect(book.workspace(of: t[2])?.folder == WorkspaceBook.expectedHome)
+        // The set the tab dragged out of a window starts gets a "~" with no folder too.
+        #expect(book.workspace(of: t[2])?.folder == nil)
     }
 
     @Test func aTabDraggedToAnotherWindowJoinsItsCurrentWorkspace() {
