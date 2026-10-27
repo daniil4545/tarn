@@ -88,6 +88,20 @@ struct AgentCommandsTests {
         #expect(ListPanes.text([]) == ListPanes.columns.joined(separator: "  ") + "\n")
     }
 
+    /// Cells of more than one UTF-16 unit or scalar are neither cut nor shifted.
+    @Test func textKeepsEmojiAndDecomposedCells() {
+        let nfd = "/w/caf\u{65}\u{301}"
+        let rows = [
+            PaneRow(pane: UUID(), tab: nil, workspace: left, title: "🚀 dev", cwd: nfd, process: "zsh"),
+            PaneRow(pane: UUID(), tab: nil, workspace: left, title: "x\u{1B}[31m", cwd: "/w", process: "zsh"),
+        ]
+        let lines = ListPanes.text(rows).split(separator: "\n").map(String.init)
+        #expect(lines[1].contains("🚀 dev  ") && lines[1].contains(nfd + "  "))
+        #expect(!lines[2].contains("\u{1B}"))
+        let process = lines.map { $0.distance(from: $0.startIndex, to: $0.range(of: $0 == lines[0] ? "PROCESS" : "zsh")!.lowerBound) }
+        #expect(Set(process).count == 1, "\(lines)")
+    }
+
     @Test func listStateShowsAFailedWait() {
         var session = AgentSession(surfaceID: UUID())
         session.state = .waiting

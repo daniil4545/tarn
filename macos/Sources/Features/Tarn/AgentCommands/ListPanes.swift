@@ -32,7 +32,8 @@ enum ListPanes {
         var parts: [String] = []
         for (column, cell) in cells.enumerated() {
             let last = column == cells.count - 1
-            parts.append(last ? cell : cell.padding(toLength: widths[column], withPad: " ", startingAt: 0))
+            // Padded by characters: `padding(toLength:)` counts UTF-16 units and cuts an emoji or an NFD path.
+            parts.append(last ? cell : cell + String(repeating: " ", count: widths[column] - cell.count))
         }
         return parts.joined(separator: "  ") + "\n"
     }
@@ -51,7 +52,8 @@ enum ListPanes {
         ]
     }
 
+    /// Control characters (newline, tab, ESC) become spaces, so a title cannot break or recolor the table.
     private static func oneLine(_ text: String) -> String {
-        String(text.map { $0.isNewline || $0 == "\t" ? " " : $0 })
+        String(text.map { $0.unicodeScalars.contains { $0.properties.generalCategory == .control } ? " " : $0 })
     }
 }
