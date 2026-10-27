@@ -332,13 +332,14 @@ the stage that changes them.
 
 ## Questions
 
-For the user; the answers become decisions and scenarios before stage 1.
+Answered by the user's rule (2026-10-27): take the behaviour of VS Code and Claude desktop.
 
-- Q1. S3: picking a folder that a workspace of this window already has selects that workspace
-  instead of making a second one (as VS Code focuses the open window). Proposed: yes.
-- Q2. A workspace without a folder (a scratch group): the folder panel gets a "No Folder..."
-  button that asks for a name as today. Proposed: yes; otherwise only "No project" and old
-  workspaces have no folder.
-- Q3. Header menu "Remove Folder" next to "Set Folder...". Proposed: yes.
-- Q4. Set Folder... on a folder another workspace of this window holds: refused with an alert
-  naming that workspace, as Q1. Proposed: yes.
+- Q1. Picking a folder a workspace of this window already has selects that workspace (VS Code
+  brings the window of an open folder forward). Scenario S3.
+- Q2. No new folderless workspace: "No project" is the folderless one, as VS Code's empty
+  window; Claude desktop always runs a session in a folder. Cancel in the panel creates nothing
+  (S2); old workspaces without a folder stay as they are.
+- Q3. Header menu "Remove Folder" (VS Code File > Close Folder): the workspace keeps its name and
+  tabs and loses the folder. Named "Remove" because "Close" in a terminal reads as closing tabs.
+- Q4. Set Folder... on a folder another workspace of this window holds selects that workspace
+  and changes nothing, as Q1.
