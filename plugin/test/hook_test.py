@@ -10,6 +10,7 @@ Run: python3 -I plugin/test/hook_test.py
 import contextlib
 import json
 import os
+import select
 import shutil
 import socket
 import subprocess
@@ -138,22 +139,28 @@ def check_stop(socket_path: Path, home: Path) -> str | None:
 
 
 def check_order(socket_path: Path, home: Path) -> str | None:
-    """A live app gets the events of back-to-back hook runs in the order they ran."""
+    """By the time hook.sh exits, its event is already queued at a live app's socket."""
     names = ["Start", "Pre", "Post", "Stop"]
     received: list[bytes] = []
-    with socket.socket(socket.AF_UNIX) as server:
-        server.bind(str(socket_path))
-        server.listen(8)
-        server.settimeout(3)
-        for name in names:
-            payload = json.dumps({"hook_event_name": name}).encode()
-            if failure := silent("hook.sh", home, "x", payload):
-                return f"{name}: {failure}"
-            client, _ = server.accept()
-            with client:
-                client.settimeout(3)
-                received.append(read_line(client))
-    socket_path.unlink()
+    try:
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(socket_path))
+            server.listen(8)
+            server.settimeout(3)
+            for name in names:
+                payload = json.dumps({"hook_event_name": name}).encode()
+                if failure := silent("hook.sh", home, "x", payload):
+                    return f"{name}: {failure}"
+                if not select.select([server], [], [], 0)[0]:
+                    return f"{name}: hook exited before it connected"
+                client, _ = server.accept()
+                with client:
+                    client.settimeout(3)
+                    received.append(read_line(client))
+    finally:
+        socket_path.unlink(missing_ok=True)
+    if not all(received):
+        return f"received nothing for some event: {received!r}"
     got = [json.loads(line)["event"]["hook_event_name"] for line in received]
     return None if got == names else f"received {got}"
 

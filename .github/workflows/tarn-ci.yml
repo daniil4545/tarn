@@ -89,6 +89,10 @@ jobs:
     if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
+    env:
+      # A hung app costs hook.sh up to 404 ms on these runners (T-182 measured the old loop);
+      # 800 ms still catches a wait on nc's 1 s timeout. The 100 ms contract is checked on the Mac.
+      TARN_HOOK_LIMIT_MS: "800"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
