@@ -129,10 +129,7 @@ final class ViewerHost: ObservableObject {
     /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
     func toggleFromKey(root: String?) {
         guard isViewerOn() else { return }
-        guard activeModel != nil else {
-            if isViewerOn() { openTreeOnly(root: root) }
-            return
-        }
+        guard activeModel != nil else { return openTreeOnly(root: root) }
         if hidden { return show() }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
         for model in models { model.flushPendingEdit() }
