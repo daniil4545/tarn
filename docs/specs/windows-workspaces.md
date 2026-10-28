@@ -37,7 +37,7 @@ Every tab sits in exactly one workspace; a tab never exists outside one.
 - D10. Each window has its own workspaces; cmd+N opens a window with one ungrouped tab (D1). Matches Ghostty, where tabs and restore are per window. The same name may appear in two windows.
 - D11. No folder rule: a tab goes where it was opened (D2); an agent's tab goes to the workspace of the agent's own tab (S12).
 - D12. Closing the last tab of a workspace closes the workspace; closing the last tab of the window closes the window as in Ghostty, and the next window starts with one ungrouped tab (D1). Cmd+Z within 5 s brings back the tab, ungrouped or in its workspace (recreated when gone).
-- D13. A workspace is a plain group: rename, delete, reorder. `No project` of an older build is an ordinary group too. Deleting a workspace moves its tabs to the one above, or below if it is first (ungrouped blocks are skipped); the last workspace has no delete (D4, until `docs/specs/workspace-folder.md` G7).
+- D13. A workspace is a plain group: rename, delete, reorder. `No project` of an older build is an ordinary group too. Deleting a group leaves its tabs ungrouped where they stand, or closes them with a checkbox; the only group can be deleted too (`docs/specs/workspace-folder.md` G7).
 
 ## 3. Workspace lifecycle
 
@@ -47,12 +47,12 @@ stateDiagram-v2
   open --> collapsed: header click
   collapsed --> open: header click / new tab in it
   open --> open: rename / drag / tab in or out
-  open --> [*]: delete [another workspace exists]
-  collapsed --> [*]: delete [another workspace exists]
+  open --> [*]: delete
+  collapsed --> [*]: delete
   open --> [*]: last tab closed (D12)
 ```
 
-The last workspace has no delete action until `docs/specs/workspace-folder.md` G7; closing the last tab of the window closes the window (D12).
+Any group can be deleted (`docs/specs/workspace-folder.md` G7); closing the last tab of the window closes the window (D12).
 
 ## 3a. Drop zones (Rectangle-style, user decision 2026-10-25)
 
@@ -77,7 +77,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S3 | + on a workspace header | a tab in that workspace; the workspace unfolds |
 | S4 | New workspace (sidebar button or Shift+Cmd+T), choose a folder in the panel | a workspace named after the folder at the end of the list with one new tab in it, started in the folder and focused, so no workspace is ever empty; Cancel creates nothing |
 | S5 | rename from the header menu | name changes in the sidebar and the window title |
-| S6 | delete a workspace with tabs | confirmation names the count; tabs move to the workspace above, or below if it is first (D13) |
+| S6 | delete a group with tabs | confirmation with "Also close its N tabs" unchecked; the tabs stay, ungrouped (D13) |
 | S7 | drag a tab onto a header or between rows | the tab moves there; order is kept after a restart |
 | S8 | right click a tab, Move to | same as S7 without drag |
 | S9 | drag a workspace header | a line shows the gap; the group moves there |

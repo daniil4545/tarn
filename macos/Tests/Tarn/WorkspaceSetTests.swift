@@ -179,9 +179,22 @@ struct NewGroupChoiceTests {
     }
 
     // spec: docs/specs/workspace-folder.md S1
-    @Test func aWorkspaceTakesItsFolderAndNeedsOne() {
-        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: "/p/tarn") == .workspace(folder: "/p/tarn"))
-        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: " ") == nil)
+    @Test func aWorkspaceTakesAnExistingFolderAndExpandsTheTilde() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: " \(dir.path) ") == .workspace(folder: dir.path))
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: "~") == .workspace(folder: NSHomeDirectory()))
+    }
+
+    // spec: docs/specs/workspace-folder.md S1
+    @Test func aWorkspaceRefusesAMissingPathAFileAndABlankFolder() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        for folder in ["/no/such/tarn-folder", file.path, "~/no-such-tarn-folder", " "] {
+            #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: folder) == nil, "\(folder)")
+        }
     }
 
     // spec: docs/specs/workspace-folder.md S2

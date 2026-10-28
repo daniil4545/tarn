@@ -132,12 +132,12 @@ enum WorkspacePrompt {
         guard TarnModules.isOn(.workspaces) else { return }
         let form = NewGroupForm()
         let alert = NSAlert()
-        alert.messageText = "New Group"
-        alert.informativeText = "A workspace is a group bound to a project folder: its tabs start there."
+        alert.messageText = "New group"
         alert.accessoryView = form
-        alert.addButton(withTitle: "Create")
+        let create = alert.addButton(withTitle: "Create")
         alert.addButton(withTitle: "Cancel")
         alert.window.initialFirstResponder = form.nameField
+        form.onChange = { [weak create, weak form] in create?.isEnabled = form?.choice(confirmed: true) != nil }
         alert.beginSheetModal(for: window) { [weak window] response in
             guard let window, let choice = form.choice(confirmed: response == .alertFirstButtonReturn) else { return }
             WorkspaceRegistry.shared.create(choice, from: window)
@@ -152,11 +152,9 @@ enum WorkspacePrompt {
         done: @escaping (_ closeTabs: Bool) -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "Delete Group \u{201C}\(name)\u{201D}?"
-        alert.informativeText = tabCount == 0 ? "The group is empty." : "Its tabs stay where they are, without a group."
+        alert.messageText = "Delete group \(name)?"
         alert.alertStyle = .warning
         let close = NSButton(checkboxWithTitle: "Also close its \(tabCount) tab\(tabCount == 1 ? "" : "s")", target: nil, action: nil)
-        close.isHidden = tabCount == 0
         alert.accessoryView = close
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
@@ -171,11 +169,16 @@ enum NewGroupChoice: Equatable {
     case group(name: String)
     case workspace(folder: String)
 
-    /// The choice of a closed dialog; nil for Cancel and for a workspace with no folder.
+    /// The choice of a closed dialog; nil for Cancel and for a workspace whose folder is not an
+    /// existing directory (`~` is the home folder). The sheet disables Create for such a path.
     static func make(confirmed: Bool, isWorkspace: Bool, name: String, folder: String) -> NewGroupChoice? {
         guard confirmed else { return nil }
         if !isWorkspace { return .group(name: WorkspaceSet.cleaned(name) ?? "Group") }
-        return WorkspaceSet.cleaned(folder).map { .workspace(folder: $0) }
+        guard let typed = WorkspaceSet.cleaned(folder) else { return nil }
+        let path = (typed as NSString).expandingTildeInPath
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
+        return .workspace(folder: path)
     }
 }
 
@@ -184,19 +187,23 @@ enum NewGroupChoice: Equatable {
 private final class NewGroupForm: NSView {
     let nameField = NSTextField(string: "")
     private let folderField = NSTextField(string: "")
+    /// Called when the kind or a field changes, to enable Create only for a usable choice.
+    var onChange: () -> Void = {}
     private let groupRadio = NSButton(radioButtonWithTitle: "Group", target: nil, action: nil)
     private let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
 
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 330, height: 56))
         nameField.placeholderString = "Name"
-        folderField.placeholderString = "Project folder"
+        folderField.placeholderString = "~/code/project"
         for radio in [groupRadio, workspaceRadio] {
             radio.target = self
             radio.action = #selector(kindChanged)
             radio.widthAnchor.constraint(equalToConstant: 90).isActive = true
         }
         groupRadio.state = .on
+        folderField.delegate = self
+        nameField.delegate = self
         let rows = NSStackView(views: [
             NSStackView(views: [groupRadio, nameField]),
             NSStackView(views: [workspaceRadio, folderField]),
@@ -219,6 +226,7 @@ private final class NewGroupForm: NSView {
     }
 
     @objc private func kindChanged(_ sender: NSButton) {
+        defer { onChange() }
         window?.makeFirstResponder(sender === groupRadio ? nameField : folderField)
     }
 }
@@ -228,5 +236,18 @@ extension TerminalController {
     @IBAction func newWorkspace(_ sender: Any?) {
         guard let window else { return }
         WorkspacePrompt.newGroup(in: window)
+    }
+}
+
+extension NewGroupForm: NSTextFieldDelegate {
+    /// A field takes the kind it belongs to, as in the demo.
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        let isFolder = (obj.object as? NSTextField) === folderField
+        workspaceRadio.state = isFolder ? .on : .off
+        groupRadio.state = isFolder ? .off : .on
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        onChange()
     }
 }
