@@ -38,6 +38,7 @@ struct NewPaneTests {
         // Not shown: the window tests that count visible windows are not disturbed.
         let controller = TerminalController(app)
         let window = try #require(controller.window)
+        window.isReleasedWhenClosed = false
         defer { window.close() }
         let caller = try #require(controller.surfaceTree.first)
         let deadline = ContinuousClock.now + .seconds(5)
@@ -68,6 +69,7 @@ struct NewPaneTests {
         let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
         let controller = TerminalController(app)
         let window = try #require(controller.window)
+        window.isReleasedWhenClosed = false
         defer { window.close() }
         let caller = try #require(controller.surfaceTree.first)
 
