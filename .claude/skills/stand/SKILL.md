@@ -23,7 +23,9 @@ flowchart LR
    links the built core). Run it in the background; it takes minutes. Output:
    `macos/build/Debug/Tarn.app`, log `macos/build/dev.log`.
 2. Start: `make -f tarn.mk live` (default app is the Debug one; `STAND_APP=<path>` for another).
-   It prints `HOME` and `TARN_SURFACE`; `drive.sh tarn` sets them itself.
+   It prints `HOME` and `TARN_SURFACE`; `drive.sh tarn` sets them itself. Another session may run
+   the default stand `/tmp/tarn-stand`: set `TARN_STAND=/tmp/tarn-stand-<task>` for `live`, every
+   `drive.sh` call and `stop`; each path gets its own bundle id.
 3. Drive, one action per call. Before typing into a fresh pane wait for its prompt
    (`drive.sh wait '>'`): text sent earlier runs late. After a command wait for its output with
    `wait <text>` for text only the output has: the typed command is on the screen too, so print a
