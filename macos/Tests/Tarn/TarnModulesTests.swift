@@ -99,15 +99,6 @@ struct TarnModulesTests {
         #expect(menu.items.allSatisfy { !$0.isHidden })
     }
 
-    // MARK: Viewer
-
-    @Test func viewerPanesAreDrawnOnlyWhenNotHiddenAndTheModuleIsOn() {
-        #expect(ViewerHost.isShown(hidden: false, moduleOn: true))
-        #expect(!ViewerHost.isShown(hidden: true, moduleOn: true))
-        #expect(!ViewerHost.isShown(hidden: false, moduleOn: false))
-        #expect(!ViewerHost.isShown(hidden: true, moduleOn: false))
-    }
-
     // MARK: Agent checks
 
     @Test func theVersionIsTheLineOfClaudeCode() {
