@@ -98,7 +98,7 @@ struct WorkspaceBook {
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
                 // Merge All Windows: the loser's workspaces come whole, with their names. A window
                 // that holds only its stock "No project" has nothing to keep: it is the same as a tab
-                // dragged in and joins the target.
+                // dragged in and joins "~".
                 won.absorb(loser)
                 sets[winner] = won
                 sets[old] = nil
@@ -106,7 +106,7 @@ struct WorkspaceBook {
                 for moved in oldTabs { setOf[moved] = winner }
                 touched.insert(old)
             } else {
-                // One tab dragged in, or out: it joins the new group's target.
+                // One tab dragged in, or out: it joins "~" of the new group.
                 remove(tab, from: old)
                 touched.insert(old)
             }

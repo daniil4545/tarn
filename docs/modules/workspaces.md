@@ -101,10 +101,10 @@ Rows 15 and 16 of [architecture.md](../architecture.md): `WorkspaceRestore.encod
 | Rule | Enforced by |
 |---|---|
 | Ghostty is the single writer of tab order; we never call `removeWindow` or `addTabbedWindowSafely` to order tabs | review; reordering only through `move_tab` |
-| Every tab is in exactly one workspace; a tab never ends outside one | `ensureWorkspace`, tests `FailureTests` |
+| Every tab is in exactly one workspace; a tab never ends outside one | `WorkspaceSet.reconcile` ("~" for a tab with none), tests `FailureTests` |
 | The last workspace is not deleted; a workspace closes with its last tab | `WorkspaceFolderTests` | folder path rules (symlink, trailing slash, `F-old`), set and remove folder, folder choice by workspace, snapshot with and without the field, plain set with both names |
 | `WorkspaceSetTests` |
-| Any uncovered case logs one line `workspace: <reason> window=<key> set=<id>` (category `workspace`), puts the tab in "~" and never crashes or drops a tab | `WorkspaceBook.note`; a broken snapshot, and the `ensureWorkspace` fallback, give one "~" holding all the window's tabs (T-245) |
+| Any uncovered case logs one line `workspace: <reason> window=<key> set=<id>` (category `workspace`), puts the tab in "~" and never crashes or drops a tab | `WorkspaceBook.note`; a broken snapshot, and the `reconcile` fallback, give one "~" holding all the window's tabs (T-245) |
 | A second `reconcile` over the same groups changes nothing | `ReconcileTests`, `TargetTests` |
 | No timer of ours for undo | tombstone closure expires with Ghostty's undo |
 | Own key hops do not change fold state | `KeyHops`, `KeyHopsTests` |

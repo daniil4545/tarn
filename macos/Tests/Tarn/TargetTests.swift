@@ -41,13 +41,17 @@ struct TargetTests {
         _ = book.pass([[t[0], t[1]]])
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
-        // t1 (Work) is selected, but the new tab is opened from t0 ("~").
-        _ = book.selected(t[1])
-        _ = book.pass([[t[0], t[2], t[1]]], selected: [t[1]])
-        _ = book.opened(t[2], from: t[0])
-        #expect(book.workspace(of: t[2])?.name == WorkspaceSet.homeName)
+        // t0 ("~") is selected, but the new tab is opened from t1 (Work): before any pass saw it,
+        // and again after a pass put it in "~".
+        _ = book.selected(t[0])
         _ = book.opened(t[2], from: t[1])
+        _ = book.pass([[t[0], t[1], t[2]]], selected: [t[0]])
         #expect(book.workspace(of: t[2])?.id == work)
+        _ = book.opened(t[3], from: t[0])
+        _ = book.pass([[t[0], t[1], t[2], t[3]]], selected: [t[0]])
+        _ = book.opened(t[3], from: t[1])
+        #expect(book.names([t[0], t[1], t[2], t[3]]) == [WorkspaceSet.homeName, "Work"])
+        #expect(book.runs(for: [t[0], t[1], t[2], t[3]])[1].tabs == [t[1], t[2], t[3]])
     }
 
     @Test func aTabOpenedFromAnotherIsPlacedBeforeThePassSeesIt() {
@@ -109,9 +113,10 @@ struct TargetTests {
         _ = book.selected(t[0])
         // t3 comes from the other window and lands between t0 and t1.
         _ = book.pass([[t[0], t[3], t[1], t[2]]], selected: [t[0]])
-        #expect(book.workspace(of: t[3])?.name == WorkspaceSet.homeName)
-        #expect(book.workspace(of: t[0])?.id == tarn)
-        #expect(book.workspace(of: t[1])?.id == tarn)
+        let runs = book.runs(for: [t[0], t[3], t[1], t[2]])
+        #expect(runs.map(\.workspace.name) == ["tarn", WorkspaceSet.homeName])
+        #expect(runs[0].tabs == [t[0], t[1]])
+        #expect(runs[1].tabs == [t[3], t[2]])
     }
 
     @Test func aTabInAFoldedWorkspaceUnfoldsItOnSelectionButNotOnRepeat() {
