@@ -63,6 +63,10 @@ final class ViewerHost: ObservableObject {
         lastViewer.flatMap { panes[$0] } ?? tree.viewers.first.flatMap { panes[$0.id] }
     }
 
+    /// Whether the layout draws the viewers: not hidden by the user and the module is on. The
+    /// panes themselves stay in `panes` either way.
+    nonisolated static func isShown(hidden: Bool, moduleOn: Bool) -> Bool { !hidden && moduleOn }
+
     /// The File viewer switch flipped: the keyboard leaves a pane that is no longer drawn.
     func moduleChanged() {
         if !isViewerOn(), focusedPane != nil { returnFocusToTerminal() }

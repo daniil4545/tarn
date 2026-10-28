@@ -17,7 +17,7 @@ struct ViewerLayout<Content: View>: View {
     }
 
     var body: some View {
-        if let root = host.tree.root, host.tree.isSplit, !host.hidden && viewerOn && FileViewerSetting.isOn {
+        if let root = host.tree.root, host.tree.isSplit, ViewerHost.isShown(hidden: host.hidden, moduleOn: viewerOn && FileViewerSetting.isOn) {
             AreaSubtree(host: host, ghostty: ghostty, node: root, block: content)
                 .overlay(AreaDropOverlay(host: host))
                 // Ghostty's grab handle publishes which terminal is dragged.
