@@ -130,7 +130,7 @@ enum WorkspacePrompt {
     /// Asks for a group name or a project folder (G2) and creates it. Cancel does nothing (S2).
     static func newGroup(in window: NSWindow) {
         guard TarnModules.isOn(.workspaces) else { return }
-        let form = NewGroupForm(window: window)
+        let form = NewGroupForm()
         let alert = NSAlert()
         alert.messageText = "New Group"
         alert.informativeText = "A workspace is a group bound to a project folder: its tabs start there."
@@ -141,25 +141,6 @@ enum WorkspacePrompt {
         alert.beginSheetModal(for: window) { [weak window] response in
             guard let window, let choice = form.choice(confirmed: response == .alertFirstButtonReturn) else { return }
             WorkspaceRegistry.shared.create(choice, from: window)
-        }
-    }
-
-    /// The folder panel as a sheet; it starts in the folder of the current tab.
-    fileprivate static func chooseFolder(title: String, message: String, in window: NSWindow, done: @escaping (String) -> Void) {
-        let panel = NSOpenPanel()
-        panel.title = title
-        panel.message = message
-        panel.prompt = "Choose"
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.canCreateDirectories = true
-        if let start = (window.windowController as? TerminalController)?.focusedSurface?.workingDirectory {
-            panel.directoryURL = URL(fileURLWithPath: start, isDirectory: true)
-        }
-        panel.beginSheetModal(for: window) { response in
-            guard response == .OK, let url = panel.url else { return }
-            done(url.path)
         }
     }
 
@@ -198,21 +179,18 @@ enum NewGroupChoice: Equatable {
     }
 }
 
-/// The accessory of the New Group dialog: the kind, a name, a folder with the folder panel.
+/// The accessory of the New Group dialog: the kind, a name and a typed folder path, as in the demo.
 @MainActor
 private final class NewGroupForm: NSView {
     let nameField = NSTextField(string: "")
     private let folderField = NSTextField(string: "")
     private let groupRadio = NSButton(radioButtonWithTitle: "Group", target: nil, action: nil)
     private let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
-    private weak var sheetWindow: NSWindow?
 
-    init(window: NSWindow) {
-        sheetWindow = window
+    init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 330, height: 56))
         nameField.placeholderString = "Name"
         folderField.placeholderString = "Project folder"
-        let choose = NSButton(title: "Choose...", target: self, action: #selector(chooseFolder))
         for radio in [groupRadio, workspaceRadio] {
             radio.target = self
             radio.action = #selector(kindChanged)
@@ -221,7 +199,7 @@ private final class NewGroupForm: NSView {
         groupRadio.state = .on
         let rows = NSStackView(views: [
             NSStackView(views: [groupRadio, nameField]),
-            NSStackView(views: [workspaceRadio, folderField, choose]),
+            NSStackView(views: [workspaceRadio, folderField]),
         ])
         rows.orientation = .vertical
         rows.alignment = .leading
@@ -242,15 +220,6 @@ private final class NewGroupForm: NSView {
 
     @objc private func kindChanged(_ sender: NSButton) {
         window?.makeFirstResponder(sender === groupRadio ? nameField : folderField)
-    }
-
-    @objc private func chooseFolder() {
-        guard let window = window ?? sheetWindow else { return }
-        WorkspacePrompt.chooseFolder(title: "New Workspace", message: "Choose the project folder.", in: window) { [weak self] folder in
-            self?.folderField.stringValue = folder
-            self?.workspaceRadio.state = .on
-            self?.groupRadio.state = .off
-        }
     }
 }
 
