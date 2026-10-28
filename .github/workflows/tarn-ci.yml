@@ -63,9 +63,14 @@ jobs:
         with:
           fetch-depth: ${{ inputs.upstream && '0' || '1' }}
           persist-credentials: false
+      - name: Merge upstream/main
+        if: inputs.upstream
+        run: |
+          git -c user.name=ci -c user.email=ci@localhost fetch --quiet https://github.com/ghostty-org/ghostty.git main
+          git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Shell lint
-        run: shellcheck -e SC2015 install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh plugin/hooks/*.sh
+        run: shellcheck -e SC2015 plugin/hooks/*.sh install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
       - name: Spelling
         run: |
           uvx typos@1.51.1 --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
