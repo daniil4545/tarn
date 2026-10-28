@@ -5,7 +5,7 @@
 # live     a second Tarn with its own home and control socket next to the user's (tools/stand/stand.sh), for live checks;
 #          tools/stand/drive.sh types into it, reads its screen and takes screenshots
 # check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests, shellcheck, typos, ruff;
-#          CI runs this target on every PR into dev and main, nothing else
+#          the cheap linters run before the build; CI runs this target on every PR into dev and main
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
 # bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
 #
@@ -55,6 +55,11 @@ live:
 
 check:
 	cd macos && swiftlint lint --strict Sources/Features/Tarn Tests/Tarn
+	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
+	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
+		macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
+	uvx ruff@0.17.2 check plugin/test
+	uvx ruff@0.17.2 format --check plugin/test
 	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
 		-jobs 4 -skip-testing GhosttyUITests test > $(SYMROOT)/test.log 2>&1 || \
@@ -62,11 +67,6 @@ check:
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
-	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
-	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
-		macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
-	uvx ruff check plugin/test
-	uvx ruff format --check plugin/test
 	sh cli/test/install_test.sh
 
 release:

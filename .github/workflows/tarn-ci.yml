@@ -20,8 +20,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: tarn-ci-${{ github.workflow }}-${{ github.ref }}
-  # A newer push to a PR replaces its old run; a run on dev or main is never cancelled.
+  # A newer push to a PR replaces its old run. A push to dev or main gets a group of its own (the
+  # commit), so a queued run is never dropped for a newer one.
+  group: tarn-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
