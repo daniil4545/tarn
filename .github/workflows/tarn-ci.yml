@@ -54,7 +54,8 @@ jobs:
           done
 
   lint:
-    # Everything of `make -f tarn.mk check` that needs no macOS: runs on every PR in about 2 min.
+    # What of `make -f tarn.mk check` needs no macOS: runs on every PR in about 2 min. Swiftlint,
+    # the app tests and the installer test (plutil, ditto) stay on macOS.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -79,7 +80,6 @@ jobs:
         run: |
           python3 -I plugin/test/hook_test.py
           python3 -I cli/test/cli_test.py
-          sh cli/test/install_test.sh
 
   app:
     # The macOS runner is slow and queues PRs one behind another (T-278), so it gates only main.
