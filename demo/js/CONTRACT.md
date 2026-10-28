@@ -23,9 +23,9 @@ Commands and their writers (the main ones; `rg "bus.handle\(" demo/js` lists all
 
 | Command | Payload | Writer |
 | --- | --- | --- |
-| `tab.new`, `tab.close`, `tab.go`, `tab.move` | `{ws?, id?, n?, to?}` | `workspace.js` |
+| `tab.new`, `tab.close`, `tab.go`, `tab.move` | `{ws?, id?, n?, to?, header?}`; `ws: "loose"` in `tab.move` ungroups | `workspace.js` |
 | `pane.split`, `pane.close`, `pane.focus`, `pane.zoom`, `pane.resize`, `pane.equalize`, `pane.undo` | `{id?, dir}` | `workspace.js` |
-| `ws.new`, `ws.rename`, `ws.delete` | `{id?, name}` | `workspace.js` |
+| `ws.new`, `ws.rename`, `ws.delete` | `{id?, name, folder?, closeTabs?}`; ungrouped tabs are one `loose` set, always last | `workspace.js` |
 | `hook` | `{pane, name, event}` | `registry.js` |
 | `card.answer` | `{pane, allow}` | `term-pane.js` (the pane's shell answers; the script then emits `hook`) |
 | `viewer.open` | `{path, line?, pane?}` | `viewer.js` |

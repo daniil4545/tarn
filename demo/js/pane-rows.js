@@ -18,7 +18,7 @@ export function paneRows({ workspaces, registry, vfs, home, caller }) {
     return panesOf(tab.layout).map((pane) => ({
       pane,
       tab: id,
-      workspace: ws.id,
+      workspace: ws.loose ? "" : ws.id,
       group: ws.loose ? "" : ws.name,
       folder: ws.folder ?? "",
       title: tab.title,

@@ -65,7 +65,8 @@ function usable(state) {
 // A store from before groups has a workspace "~" without a folder: its tabs become the ungrouped
 // tabs, below the groups.
 function migrateHome(state) {
-  const home = state.wss.filter((w) => w.loose || (w.name === "~" && !w.folder));
+  if (state.wss.some((w) => w.loose)) return;
+  const home = state.wss.filter((w) => w.name === "~" && !w.folder);
   if (!home.length) return;
   state.wss = [...state.wss.filter((w) => !home.includes(w)), { id: home[0].id, name: "", loose: true, tabs: home.flatMap((w) => w.tabs) }];
 }

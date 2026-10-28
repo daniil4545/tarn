@@ -343,6 +343,17 @@ def tarn_cli(base):
             and has(pg, "p7", r'"host": ""'),
             screen(pg, "p7"),
         )
+        focus(pg, "p6")
+        run(pg, "p6", "tarn ls --json", r'"panes"')
+        check(
+            "tarn ls of an ungrouped caller lists its own tab only, with no group",
+            has(pg, "p6", r'"pane": "p6"')
+            and has(pg, "p6", r'"workspace": ""')
+            and has(pg, "p6", r'"group": ""')
+            and not has(pg, "p6", r'"pane": "p[1-57-9]"'),
+            screen(pg, "p6"),
+        )
+        focus(pg, "p7")
 
         run(pg, "p7", "touch scratch.txt")
         run(pg, "p7", "git status -s", r"\?\? scratch\.txt")
