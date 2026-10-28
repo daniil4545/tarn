@@ -36,6 +36,9 @@ STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
 GUI_TESTS := GhosttyTests/NewPaneTests/theSplitGoesBelowAndKeepsTheFocus() \
 	GhosttyTests/SidebarWidthTests/terminalKeepsItsFrameWhileTheSidebarIsDragged()
 CI_SKIP   := $(if $(CI),$(foreach t,$(GUI_TESTS),-skip-testing '$(t)'))
+# A failed test runs once more in a new test host (T-280): window tests time out when macOS is slow,
+# and the host at times exits mid-run, which Xcode retries only with relaunch. A real break fails both.
+RETRY     := -retry-tests-on-failure -test-iterations 2 -test-repetition-relaunch-enabled YES
 
 .PHONY: check release bench worktree dev live
 
@@ -68,9 +71,13 @@ check:
 	uvx ruff@0.17.2 format --check plugin/test
 	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
-		-jobs 4 -skip-testing GhosttyUITests $(CI_SKIP) test > $(SYMROOT)/test.log 2>&1 || \
+		-jobs 4 -skip-testing GhosttyUITests $(CI_SKIP) $(RETRY) test > $(SYMROOT)/test.log 2>&1 || \
 		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
-	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
+	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed and retried; log $(SYMROOT)/test.log"
+	@grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -v "(0.000 seconds)" | \
+		sed -E "s/^Test [Cc]ase '([^']*)'.*/  retried: \1/" | sort -u
+	@n=$$(grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -c "(0.000 seconds)"); \
+		[ "$$n" -eq 0 ] || echo "  retried: $$n tests the test host never finished (it exited mid-run)"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
 	sh cli/test/install_test.sh
