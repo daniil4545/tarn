@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Ghostty
@@ -197,9 +198,36 @@ struct NewGroupChoiceTests {
         }
     }
 
+    // spec: docs/specs/workspace-folder.md S1
+    @Test func aTrailingSlashNamesTheSameFolder() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let plain = NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: dir.path)
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: dir.path + "/") == plain)
+        #expect(plain != nil)
+    }
+
     // spec: docs/specs/workspace-folder.md S2
     @Test func cancelChoosesNothing() {
         #expect(NewGroupChoice.make(confirmed: false, isWorkspace: false, name: "notes", folder: "") == nil)
         #expect(NewGroupChoice.make(confirmed: false, isWorkspace: true, name: "", folder: "/p") == nil)
+    }
+}
+
+/// The kind radios of the New Group sheet stand in two stacks and must still exclude each other.
+@MainActor
+struct NewGroupFormTests {
+    // spec: docs/specs/workspace-folder.md S41
+    @Test func pickingOneKindClearsTheOtherAndTheChoiceFollows() {
+        let form = NewGroupForm()
+        form.nameField.stringValue = "notes"
+        form.folderField.stringValue = NSTemporaryDirectory()
+        form.workspaceRadio.performClick(nil)
+        #expect(form.groupRadio.state == .off)
+        #expect(form.choice(confirmed: true) == NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "", folder: NSTemporaryDirectory()))
+        form.groupRadio.performClick(nil)
+        #expect(form.workspaceRadio.state == .off)
+        #expect(form.choice(confirmed: true) == .group(name: "notes"))
     }
 }

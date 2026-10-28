@@ -178,19 +178,19 @@ enum NewGroupChoice: Equatable {
         let path = (typed as NSString).expandingTildeInPath
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
-        return .workspace(folder: path)
+        return .workspace(folder: URL(fileURLWithPath: path).standardized.path)
     }
 }
 
 /// The accessory of the New Group dialog: the kind, a name and a typed folder path, as in the demo.
 @MainActor
-private final class NewGroupForm: NSView {
+final class NewGroupForm: NSView {
     let nameField = NSTextField(string: "")
-    private let folderField = NSTextField(string: "")
+    let folderField = NSTextField(string: "")
     /// Called when the kind or a field changes, to enable Create only for a usable choice.
     var onChange: () -> Void = {}
-    private let groupRadio = NSButton(radioButtonWithTitle: "Group", target: nil, action: nil)
-    private let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
+    let groupRadio = NSButton(radioButtonWithTitle: "Group", target: nil, action: nil)
+    let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
 
     init() {
         super.init(frame: NSRect(x: 0, y: 0, width: 330, height: 56))
@@ -227,6 +227,9 @@ private final class NewGroupForm: NSView {
 
     @objc private func kindChanged(_ sender: NSButton) {
         defer { onChange() }
+        // The radios stand in different stacks, so AppKit does not pair them.
+        groupRadio.state = sender === groupRadio ? .on : .off
+        workspaceRadio.state = sender === groupRadio ? .off : .on
         window?.makeFirstResponder(sender === groupRadio ? nameField : folderField)
     }
 }
