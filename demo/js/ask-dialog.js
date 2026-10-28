@@ -15,11 +15,7 @@ export function ask(message, labels, body = null) {
       resolve(label);
     };
     const onKey = (e) => {
-      if (e.key === "Enter" && body && e.target.tagName === "INPUT") {
-        e.preventDefault();
-        e.stopPropagation();
-        return done(labels[0]);
-      }
+      if (e.key === "Enter" && body && e.target.tagName === "INPUT") { e.preventDefault(); e.stopPropagation(); return done(labels[0]); }
       if (e.key !== "Escape") return;
       e.stopPropagation();
       done(labels.at(-1));
