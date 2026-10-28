@@ -581,12 +581,12 @@ def run(base):
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
         groups = [w for w in snap()["wss"] if not w.get("loose")]
         check(
-            "W11 a new workspace takes a folder, is named after it, goes last of the groups and starts in it with one tab",
+            "W11 a new workspace takes a folder, is named after it, goes to the bottom and starts in it with one tab",
             home is not None
             and home.get("folder") == "~/code/home"
             and len(home["tabs"]) == 1
             and groups[-1]["name"] == "home"
-            and snap()["wss"][-1].get("loose")
+            and snap()["wss"][-1]["name"] == "home"
             and cur() == home["tabs"][0]
             and snap()["tabs"][home["tabs"][0]]["cwd"] == "~/code/home"
             and count(f".wsh[data-wsh='{home['id']}'] .kind") == 1,
@@ -610,8 +610,8 @@ def run(base):
         pg.click("#ctx [data-wsdel]")
         pg.click(".ask-dialog button:text('Delete')")
         check(
-            "W12 deleting a group keeps its tabs, ungrouped, at the top of the ungrouped list",
-            ws_tabs("w0")[0] == home["tabs"][0] and count(f".wsh[data-wsh='{home['id']}']") == 0,
+            "W12 deleting a group keeps its tabs ungrouped where they stood, after the ungrouped tab above",
+            ws_tabs("w0")[-1] == home["tabs"][0] and count(f".wsh[data-wsh='{home['id']}']") == 0,
         )
         n(f".wsh[data-wsh='{notes['id']}']").click(button="right")
         pg.click("#ctx [data-wsdel]")

@@ -164,13 +164,14 @@ function moveGap(sb, el, y) {
   openGap(tab, at.below, true);
 }
 
-// Slot i is the gap before group i; a group spans from its header to the next header.
+// Slot i is the gap before block i: a group from its header, an ungrouped block (hidden header)
+// from its first row, up to the next block.
 function slot(y) {
-  const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]:not(.flat)")];
-  const end = sb.querySelector(".wsh.flat + .tab") ?? document.getElementById("wsNew");
-  const tops = [...heads.map((h) => h.getBoundingClientRect().top), end.getBoundingClientRect().top];
+  const sb = document.getElementById("sidebar");
+  const heads = [...sb.querySelectorAll(".wsh[data-wsh]")].map((h) => ({ id: h.dataset.wsh, el: h.classList.contains("flat") ? h.nextElementSibling : h }));
+  const tops = [...heads.map((h) => h.el.getBoundingClientRect().top), document.getElementById("wsNew").getBoundingClientRect().top];
   const i = heads.filter((_, n) => (tops[n] + tops[n + 1]) / 2 < y).length;
-  return { before: heads[i]?.dataset.wsh ?? null, y: tops[i] - sb.getBoundingClientRect().top + sb.scrollTop };
+  return { before: heads[i]?.id ?? null, y: tops[i] - sb.getBoundingClientRect().top + sb.scrollTop };
 }
 
 function drawLine(e) {
