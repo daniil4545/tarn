@@ -57,7 +57,9 @@ enum WaitRule {
             return facts.processExited ? .failure(.exitCodeUnknown) : nil
         }
         // Otty `pane wait`: a pane that cannot report an end says so at once instead of hanging.
-        guard integrated || facts.integrationExpected else { return .failure(.noShellIntegration) }
+        // A readable prompt mark is OSC 133 too (`Terminal.cursorIsAtPrompt`): integrated by hand.
+        let marked = facts.promptReadable && facts.atPrompt
+        guard integrated || marked || facts.integrationExpected else { return .failure(.noShellIntegration) }
         // Never answer idle early: without a readable prompt the next finish is the only sign.
         guard facts.promptReadable else { return nil }
         if facts.atPrompt {
@@ -71,7 +73,7 @@ enum WaitRule {
 /// Whether Ghostty injects its OSC 133 integration, by its own rule (`src/termio/shell_integration.zig:43-167`).
 enum ShellIntegration {
     /// `setting` is the `shell-integration` value; `shell` the command Ghostty started in the pane,
-    /// nil while the pane has no process yet: then Ghostty is still to decide, and the wait parks.
+    /// nil when no process is readable, and the wait parks.
     static func injects(setting: String?, shell: String?) -> Bool {
         switch setting {
         case "none": return false
@@ -83,6 +85,12 @@ enum ShellIntegration {
         guard shell != "/bin/bash" else { return false }
         return ["bash", "elvish", "fish", "nu", "zsh"].contains((shell as NSString).lastPathComponent)
     }
+}
+
+extension ShellIntegration {
+    /// The shell Ghostty starts without a `command`: `$SHELL`, else the passwd entry (`src/config/Config.zig:4813-4880`).
+    /// A configured `command` is not readable through the C API.
+    static func defaultShell(env: String?, passwd: String?) -> String? { env ?? passwd }
 }
 
 /// An answer that can be sent once, and tells when the other end hangs up.
@@ -248,7 +256,9 @@ enum WaitPane {
             promptReadable: option("confirm-close-surface") == "true",
             atPrompt: !view.needsConfirmQuit,
             integrationExpected: ShellIntegration.injects(
-                setting: option("shell-integration"), shell: pid.flatMap(AgentProcess.paneShell(below:)))
+                setting: option("shell-integration"), shell: pid.flatMap(AgentProcess.paneShell(below:)) ?? ShellIntegration.defaultShell(
+                    env: ProcessInfo.processInfo.environment["SHELL"],
+                    passwd: getpwuid(getuid()).flatMap { $0.pointee.pw_shell.map { String(cString: $0) } }))
         )
     }
 }

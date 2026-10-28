@@ -45,8 +45,13 @@ struct WaitPaneTests {
             Case(mark: new, facts: PaneFacts(processExited: true), integrated: false, expected: .failure(.exitCodeUnknown)),
             Case(mark: run, facts: idle, integrated: true, expected: nil),
             Case(mark: run, facts: idle, integrated: false, expected: nil),
-            Case(mark: run, facts: PaneFacts(atPrompt: true, integrationExpected: false), integrated: false,
-                 expected: .failure(.noShellIntegration)),
+            // A readable prompt mark proves OSC 133 whatever Ghostty injects: integrated by hand.
+            Case(mark: run, facts: PaneFacts(atPrompt: true, integrationExpected: false), integrated: false, expected: nil),
+            Case(mark: nil, facts: PaneFacts(atPrompt: true, integrationExpected: false), integrated: false,
+                 expected: .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))),
+            // Without a readable prompt `atPrompt` proves nothing.
+            Case(mark: nil, facts: PaneFacts(promptReadable: false, atPrompt: true, integrationExpected: false),
+                 integrated: false, expected: .failure(.noShellIntegration)),
             Case(mark: nil, facts: blind, integrated: true, expected: nil),
             Case(mark: nil, facts: blind, integrated: false, expected: nil),
         ]
@@ -253,6 +258,13 @@ struct WaitPaneTests {
         }
     }
 
+    /// A pane with no known process gets Ghostty's default shell: `$SHELL`, else the passwd entry (`Config.zig:4813-4880`).
+    @Test func defaultShellFollowsGhostty() {
+        #expect(ShellIntegration.defaultShell(env: "/bin/zsh", passwd: "/bin/bash") == "/bin/zsh")
+        #expect(ShellIntegration.defaultShell(env: nil, passwd: "/bin/bash") == "/bin/bash")
+        #expect(ShellIntegration.defaultShell(env: nil, passwd: nil) == nil)
+    }
+
     /// Ghostty's login wrapper stands for the command it is about to `exec` (`src/termio/Exec.zig:1951`).
     @Test func theLoginWrapperStandsForItsCommand() {
         let wrapper = ["/bin/bash", "--noprofile", "--norc", "-c"]
@@ -262,5 +274,8 @@ struct WaitPaneTests {
         #expect(AgentProcess.launched(path: "/bin/zsh", argv: ["-zsh"]) == "/bin/zsh")
         #expect(AgentProcess.launched(path: "/opt/homebrew/bin/bash", argv: ["bash", "build.sh"]) == "/opt/homebrew/bin/bash")
         #expect(AgentProcess.launched(path: nil, argv: nil) == nil)
+        // The wrapper's argv unreadable in the middle of `exec`: its `/bin/bash` is not the user's shell.
+        #expect(AgentProcess.launched(path: "/bin/bash", argv: nil) == nil)
+        #expect(AgentProcess.launched(path: "/bin/zsh", argv: nil) == "/bin/zsh")
     }
 }

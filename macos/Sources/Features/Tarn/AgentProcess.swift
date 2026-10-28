@@ -126,7 +126,8 @@ enum AgentProcess {
     /// Before its `exec`, Ghostty's wrapper `/bin/bash --noprofile --norc -c "exec -l <command>"`
     /// (`src/termio/Exec.zig:1951`) stands for the command it is about to become.
     static func launched(path: String?, argv: [String]?) -> String? {
-        guard let argv, argv.count == 5, argv[0] == "/bin/bash", argv[1...3] == ["--noprofile", "--norc", "-c"],
+        guard let argv else { return path == "/bin/bash" ? nil : path }
+        guard argv.count == 5, argv[0] == "/bin/bash", argv[1...3] == ["--noprofile", "--norc", "-c"],
               argv[4].hasPrefix("exec -l ")
         else { return path }
         return argv[4].dropFirst("exec -l ".count).split(separator: " ").first.map(String.init)
