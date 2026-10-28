@@ -263,12 +263,11 @@ struct UngroupedModelTests {
 
     // spec: docs/specs/workspace-folder.md S21 - the snapshot with the key restores as saved
     @Test func aSnapshotWithTheUngroupedKeyRestoresTheUngroupedGroup() throws {
-        var set = make([a, nil])
+        let set = make([a, nil])
         let snapshot = WorkspaceSnapshot(set: set, tabKey: t[0], order: [t[0], t[1]])
         let copy = try WorkspaceSnapshot.decode(snapshot.encoded()).makeSet()
         #expect(isUngrouped(copy, t[1]))
         #expect(copy.workspace(of: t[0])?.name == "A")
-        _ = set.ungroupedID()
     }
 
     // spec: docs/specs/workspace-folder.md S54 - absorb puts the other ungrouped tabs into ours

@@ -252,7 +252,7 @@ struct WorkspaceSet: Equatable {
             let heir = workspace(target) == nil ? ungroupedID() : target
             for tab in fresh {
                 let owner = arrivals.contains(tab) ? neighbourGroup(of: tab, in: current) : nil
-                members[tab] = owner ?? (arrivals.contains(tab) ? ungroupedID() : heir)
+                members[tab] = owner ?? (arrivals.contains(tab) ? ungroupedID() : foreignRun(of: tab, in: current, explicit: explicit) ?? heir)
             }
         }
 
@@ -318,6 +318,15 @@ struct WorkspaceSet: Equatable {
             moves.append(Reorder(tab: tab, delta: place - at))
         }
         return moves
+    }
+
+    /// The group of a run that holds `tab` between two of its tabs when no sidebar command named
+    /// the target: a whole window dropped into the middle of another group joins it (G5a).
+    private func foreignRun(of tab: TabKey, in order: [TabKey], explicit: Bool) -> Workspace.ID? {
+        guard !explicit, let index = order.firstIndex(of: tab), index > 0, index + 1 < order.count,
+              let above = members[order[index - 1]], above == members[order[index + 1]]
+        else { return nil }
+        return above
     }
 
     /// The group of the tab above `tab`, or below it when it is first.

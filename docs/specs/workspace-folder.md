@@ -46,7 +46,7 @@ Two invariants and their writers:
 
 - I1. At most one ungrouped group per set. Writer: `ungroupedID()`, the only place that makes
   it. `absorb` (Merge All Windows) puts the other set's ungrouped tabs into it; every merge goes
-  through `absorb`, the `isPlain` branch goes, so a window with no group merges the same way; `reinsert`
+  through `absorb`, the `isPlain` branch goes. One exception: a window of one ungrouped tab. The book sees a new tab alone in its window before it is tabbed, and the pass often runs before Ghostty selects it, so a one-tab window never goes through `absorb`: selected where it enters a group it is a new tab with the target (G4, S55), else it joins by the tab above it like an arrival (tests `MergeTests`). Limit: a one-tab window merged into a window with no ungrouped tab joins the last group; `reinsert`
   (undo of a close) maps a closed ungrouped group to it, `makeSet` (restore) merges every entry
   taken as ungrouped. `ensureWorkspace`, `reconcileFrozen`, `makeHome` and `makeDefault` go.
 - I2. The ungrouped run is last. A tab of a group standing below an ungrouped tab is a break,
@@ -96,7 +96,9 @@ Decisions (each names its source):
   is dropped, or of the tab below when it is first; among ungrouped tabs it is ungrouped (user
   decision 2026-10-28, B2; the mover rule of `repair`). It is known as an arrival because the
   book closed it in another set in the same pass. An arrival with no neighbour (a tab dropped
-  outside every window, a new window set) is ungrouped. Merge All Windows has no drop place and
+  outside every window, a new window set) is ungrouped. Price of the one-tab rule: a one-tab window
+  merged into groups only joins the last group (S54, degenerate form); a selected one dropped into the
+  middle of a group joins that group, at an edge it takes the target. Merge All Windows has no drop place and
   is not an arrival (I1).
 - G6. The last tab leaving a group removes the group; Cmd+Z of a closed tab brings it back.
   Source: user decision 2026-10-28 (1a); it is today's rule for a workspace.
@@ -244,7 +246,7 @@ extension WorkspaceRegistry {
 `reconcile` keeps a fresh tab without a pending target where Ghostty put it when it touches its
 target run (G4), applies the mover rule to an arrival from another window (G5a), puts a new
 group's first tab before the first ungrouped tab (G8) and counts a group tab below an ungrouped
-tab as a break (I2). `isPlain` and its merge branch go (I1). `sourceTab` (the cmux rule of
+tab as a break (I2). `isPlain` and its merge branch go (I1); a one-tab window is never merged, as in I1. `sourceTab` (the cmux rule of
 D20) goes. `WorkspaceBook.targetWorkspace` falls back to the ungrouped group instead of the
 first workspace.
 

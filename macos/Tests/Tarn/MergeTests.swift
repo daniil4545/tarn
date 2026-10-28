@@ -29,14 +29,74 @@ struct MergeTests {
         #expect(outcome.reorders == [.init(tab: t[2], delta: -1)])
     }
 
-    // A new tab is seen alone in its window first; it joins by the tab above it, not by a merge.
-    @Test func aNewTabSeenAloneJoinsTheGroupOfTheTabAboveIt() {
+    // spec: docs/specs/workspace-folder.md S4, G4. Cmd+T: the new tab is seen alone in its window
+    // first, then enters the group of the window selected (Ghostty selects the new tab).
+    @Test func aNewTabSeenAloneAndSelectedTakesTheTargetNotAMerge() {
         var book = WorkspaceBook()
-        _ = book.pass([[t[0], t[1]]])
+        _ = book.pass([[t[0], t[1], t[3]]])
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        _ = book.selected(t[0])
+        _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
+        // Ghostty puts the new tab right after the source t0.
+        let outcome = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[2]])
+        #expect(book.workspace(of: t[2])?.id == work)
+        #expect(outcome.reorders.isEmpty)
+    }
+
+    // spec: docs/specs/workspace-folder.md S55 through the book: `end` puts the tab last, it goes to the end of its group
+    @Test func aNewTabAtTheEndSeenAloneGoesToTheEndOfItsGroup() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[3]]])
+        let work = book.newWorkspace("Work", in: t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        _ = book.selected(t[0])
+        _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
+        let outcome = book.pass([[t[0], t[1], t[3], t[2]]], selected: [t[2]])
+        #expect(book.workspace(of: t[2])?.id == work)
+        #expect(outcome.reorders == [.init(tab: t[2], delta: -1)])
+    }
+
+    // spec: docs/specs/workspace-folder.md S54 through the book: windows made by Cmd+N merge into a
+    // window that has ungrouped tabs; the selected tab is the receiving window's.
+    @Test func lonelyWindowsMergedIntoAWindowWithUngroupedTabsStayUngrouped() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[4]], [t[2]], [t[3]]])
+        let work = book.newWorkspace("Work", in: t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        let outcome = book.pass([[t[0], t[1], t[4], t[2], t[3]]], selected: [t[0]])
+        let set = book.set(of: t[0])!
+        #expect(book.sets.count == 1)
+        #expect(set.members[t[0]] == work)
+        #expect(set.members[t[1]] == work)
+        #expect(set.members[t[2]] == set.id)
+        #expect(set.members[t[3]] == set.id)
+        #expect(outcome.reorders.isEmpty)
+    }
+
+    // The known limit of the rule: with no ungrouped tab to land next to, a one-tab window merged in
+    // joins the last group. Whether Ghostty selects the new tab before the pass is not reliable.
+    @Test func aLonelyWindowMergedIntoGroupsOnlyJoinsTheLastGroup() {
+        var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]], [t[2]]])
-        _ = book.pass([[t[0], t[2], t[1]]])
+        let work = book.newWorkspace("Work", in: t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        _ = book.pass([[t[0], t[1], t[2]]], selected: [t[0]])
+        #expect(book.workspace(of: t[2])?.id == work)
+    }
+
+    // G5a, the price of the rule: a whole one-tab window dropped into the middle of another group joins it.
+    @Test func aSelectedOneTabWindowDroppedInsideAGroupJoinsThatGroup() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
+        let work = book.newWorkspace("Work", in: t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        _ = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[2]])
         #expect(book.workspace(of: t[2])?.id == work)
     }
 

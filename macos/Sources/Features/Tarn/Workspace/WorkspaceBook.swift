@@ -121,7 +121,9 @@ struct WorkspaceBook {
             } else {
                 // One tab dragged in, or out: it joins the group of its neighbour (G5a), or the
                 // group a sidebar command named.
-                if pendingTarget[winner] == nil { arrivals.insert(tab) }
+                if pendingTarget[winner] == nil, !(sets[old].map(isLoneTab) == true && group.selected == tab) {
+                    arrivals.insert(tab)
+                }
                 remove(tab, from: old)
                 touched.insert(old)
             }
@@ -164,6 +166,9 @@ struct WorkspaceBook {
 
     /// A window of one ungrouped tab. A new tab is seen alone in its own window before AppKit
     /// tabs it (a title change posts in between), so it joins like a tab dragged in, not like a merge.
+    /// If it is already selected where it enters a group (Ghostty selects a new tab,
+    /// `TerminalController.swift:493`) it is a new tab with a target. The pass often runs before that
+    /// selection (checked in the test host), so the neighbour rule decides then.
     private func isLoneTab(_ set: WorkspaceSet) -> Bool {
         set.members.count == 1 && set.workspaces.count == 1 && set.isUngrouped(set.workspaces[0])
     }

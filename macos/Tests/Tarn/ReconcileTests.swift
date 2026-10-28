@@ -109,7 +109,7 @@ struct ReconcileTests {
         var set = twoWorkspaces()
         let fresh = set.create(name: "C")!
         let order = [t[0], t[4], t[1], t[2], t[3]]
-        let moves = set.reconcile(previous: Array(t[0...3]), current: order, target: fresh)
+        let moves = set.reconcile(previous: Array(t[0...3]), current: order, target: fresh, explicit: true)
         #expect(set.members[t[4]] == fresh)
         #expect(moves == [.init(tab: t[4], delta: 3)])
     }
