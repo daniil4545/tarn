@@ -33,9 +33,10 @@ final class WorkspaceRegistry {
     private static let maxRounds = 3
     /// Our own moves are under way: ignore the notifications they cause.
     private var isBusy = false
-    /// Native moves wait for the next main-queue turn (`sync`).
-    private var movesScheduled = false
-    private var movesNow = false
+    /// The book asked for native moves; they run on the next main-queue turn (`sync`).
+    private var movesPending = false
+    /// Deferred move turns in a row; a pass that keeps asking for moves stops after `maxRounds`.
+    private var moveRounds = 0
     /// Windows raised by `moveNatively`; their key notifications arrive after `isBusy` is over.
     private var hops = KeyHops()
 
@@ -123,34 +124,44 @@ final class WorkspaceRegistry {
     /// Looks at every tab group and brings workspaces in line with it. Safe to call often.
     func sync() {
         guard !isBusy else { return }
+        // The book already counted the moves it asked for; a pass before they run would read the
+        // old order as the user's and hand tabs to the wrong group (`repair`).
+        guard !movesPending else { return }
         isBusy = true
         entries = entries.filter { $0.value.window != nil }
         claimTombstones()
         cacheSurfaces()
 
-        var outcome = book.reconcile(bookGroups())
+        let outcome = book.reconcile(bookGroups())
         for note in outcome.notes { Self.logger.error("\(note, privacy: .public)") }
-        if !outcome.reorders.isEmpty, !movesNow {
+        if outcome.reorders.isEmpty {
+            moveRounds = 0
+        } else if moveRounds < Self.maxRounds {
             // A sync can run inside AppKit's addTabbedWindow (a title change posts there); a native
             // move then breaks its tab group (NSWindowStackController assertion). Move one turn later.
-            if !movesScheduled {
-                movesScheduled = true
-                DispatchQueue.main.async { [self] in
-                    movesScheduled = false
-                    movesNow = true
-                    sync()
-                    movesNow = false
-                }
-            }
-        } else if !outcome.reorders.isEmpty {
-            for reorder in outcome.reorders {
-                guard let window = window(for: reorder.tab) else { continue }
-                moveNatively(window, by: reorder.delta)
-            }
-            outcome.changed.formUnion(book.reconcile(bookGroups()).changed)
+            moveRounds += 1
+            movesPending = true
+            DispatchQueue.main.async { [self] in runPendingMoves() }
+        } else {
+            Self.logger.error("workspace: tab moves did not settle after \(Self.maxRounds) turns")
+            moveRounds = 0
         }
         isBusy = false
         publish(outcome.changed)
+    }
+
+    /// AppKit may have changed the order since the pass (Cmd+T tabs the new window in), so the
+    /// moves are counted again from membership, which the pass already settled. The pass that
+    /// follows sees what changed meanwhile and asks for its own moves.
+    private func runPendingMoves() {
+        movesPending = false
+        isBusy = true
+        for reorder in book.runMoves(bookGroups()) {
+            guard let window = window(for: reorder.tab) else { continue }
+            moveNatively(window, by: reorder.delta)
+        }
+        isBusy = false
+        sync()
     }
 
     private func bookGroups() -> [WorkspaceBook.Group] {

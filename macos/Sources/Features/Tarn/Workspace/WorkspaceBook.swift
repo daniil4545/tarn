@@ -64,6 +64,16 @@ struct WorkspaceBook {
         return set.runs(order: group)
     }
 
+    /// The native moves that make every group one run again in the order AppKit shows now,
+    /// membership unchanged. A group with a tab no pass has seen yet waits for that pass.
+    func runMoves(_ groups: [Group]) -> [WorkspaceSet.Reorder] {
+        groups.flatMap { group -> [WorkspaceSet.Reorder] in
+            guard let id = group.tabs.first.flatMap({ setOf[$0] }), let set = sets[id],
+                  group.tabs.allSatisfy({ set.workspace(of: $0) != nil }) else { return [] }
+            return set.regroup(order: group.tabs)
+        }
+    }
+
     /// The snapshot a window saves: its set table and its own key.
     func snapshot(of tab: TabKey, order: [TabKey]) -> WorkspaceSnapshot? {
         set(of: tab).map { WorkspaceSnapshot(set: $0, tabKey: tab, order: order) }
@@ -114,8 +124,12 @@ struct WorkspaceBook {
             // posts in between). Ghostty announced it (`expectNewTab`); any other one-tab window
             // coming whole is a window merged in.
             let lone = sets[old].map(isLoneTab) == true
-            if lone, let source = expectingTab.removeValue(forKey: winner) { announced = source }
-            let newTab = lone && (announced != nil || pendingTarget[winner] != nil)
+            var isAnnounced = false
+            if lone, let source = expectingTab.removeValue(forKey: winner) {
+                announced = source
+                isAnnounced = true
+            }
+            let newTab = lone && (isAnnounced || pendingTarget[winner] != nil)
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !newTab {
                 // Merge All Windows: the loser's groups come whole, its ungrouped tabs join ours (I1).
                 won.absorb(loser)
@@ -141,6 +155,10 @@ struct WorkspaceBook {
         let before = sets[winner]?.revision
         var set = sets[winner] ?? WorkspaceSet(id: winner)
         let fresh = group.tabs.filter { setOf[$0] == nil }
+        // No pass saw the announced tab alone (they waited for native moves): it comes fresh.
+        if announced == nil, fresh.count == 1, let source = expectingTab.removeValue(forKey: winner) {
+            announced = source
+        }
         // A sidebar command's target comes first; then the group of the tab Cmd+T was pressed in.
         let announcedTarget = pendingTarget[winner] == nil ? announced.flatMap { set.workspace(of: $0)?.id } : nil
         let target = announcedTarget ?? targetWorkspace(in: set, group: group, winner: winner)
