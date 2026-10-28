@@ -78,7 +78,7 @@ enum AgentProcess {
     }
 
     /// ssh itself, or the wrapper every shell integration of Ghostty runs in its place
-    /// (`ghostty +ssh [flags] -- host`, src/shell-integration/zsh/ghostty-integration:322),
+    /// (`ghostty +ssh [flags] -- host`, src/shell-integration/zsh/ghostty-integration),
     /// which leads the group with ssh as a child. Only a `ghostty` process costs an argv read.
     static func isSSH(comm: String?, argv: () -> [String]?) -> Bool {
         if comm == "ssh" { return true }
@@ -96,7 +96,7 @@ enum AgentProcess {
 
     /// The process that stands for a foreground process group: its leader, as WezTerm
     /// `get_foreground_process_info` takes `process_group_leader` (`mux/src/localpane.rs`). The one exception is a command Ghostty starts
-    /// through `/usr/bin/login -flp` (`src/termio/Exec.zig:1933`): without job control it stays in
+    /// through `/usr/bin/login -flp` (`src/termio/Exec.zig`): without job control it stays in
     /// login's group, so the leader is login and the command is login's child in the group. The
     /// members come from `proc_listpids(PROC_PGRP_ONLY)`, as kitty `processes_in_group` reads them.
     static func foreground(group: pid_t) -> pid_t {
@@ -122,7 +122,7 @@ enum AgentProcess {
     }
 
     /// Before its `exec`, Ghostty's wrapper `/bin/bash --noprofile --norc -c "exec -l <command>"`
-    /// (`src/termio/Exec.zig:1951`) stands for the command it is about to become.
+    /// (`src/termio/Exec.zig`) stands for the command it is about to become.
     static func launched(path: String?, argv: [String]?) -> String? {
         guard let argv else { return path == "/bin/bash" ? nil : path }
         guard argv.count == 5, argv[0] == "/bin/bash", argv[1...3] == ["--noprofile", "--norc", "-c"],
@@ -184,9 +184,8 @@ enum AgentProcess {
 
 /// Answers of `AgentProcess.agent(pid:)` kept for the current run loop turn. Every tab window
 /// has its own sidebar model, and one tab event (a title change) makes all N of them rebuild
-/// their tabs; without this each model re-read every process, 2*N^2 reads per event
-/// (T-106). A pid read once in a turn is shared, so a pass costs one read per pid; an event has two passes (2*N reads, not 2*N^2). The
-/// next turn starts empty: the second refresh after a tab event and the 2 s timer see a
+/// their tabs: a pid read once in a turn is shared, so an event costs about 2*N reads, not 2*N^2.
+/// The next turn starts empty, so the second refresh after a tab event and the 2 s timer see a
 /// process that was replaced by `exec`.
 @MainActor
 enum AgentProcessCache {

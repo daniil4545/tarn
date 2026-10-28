@@ -31,7 +31,7 @@ enum NewPane {
     }
 
     /// `run` leaves `command` empty, so Ghostty starts the user's login shell, and types the line with no
-    /// newline (Ghostty `input`, `src/config/Config.zig:1305-1346`): Enter stays with the user (B2).
+    /// newline (Ghostty `input`, `src/config/Config.zig`): Enter stays with the user (B2).
     static func configuration(_ kind: RunMark.Kind, command: String) -> Ghostty.SurfaceConfiguration {
         var config = Ghostty.SurfaceConfiguration()
         switch kind {
@@ -42,7 +42,7 @@ enum NewPane {
     }
 
     /// Inserts a new surface next to `at` and assigns the tree directly: `newSplit` would move the
-    /// focus to it and register an undo (`BaseTerminalController.swift:282-316`, `540-582`).
+    /// focus to it and register an undo (`BaseTerminalController`).
     @MainActor
     static func split(
         _ controller: BaseTerminalController,
