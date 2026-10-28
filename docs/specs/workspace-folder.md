@@ -46,7 +46,7 @@ Two invariants and their writers:
 
 - I1. At most one ungrouped group per set. Writer: `ungroupedID()`, the only place that makes
   it. `absorb` (Merge All Windows) puts the other set's ungrouped tabs into it; every merge goes
-  through `absorb`, the `isPlain` branch goes. One exception: a window of one ungrouped tab. The book sees a new tab alone in its window before it is tabbed; Ghostty has selected it by the pass that sees it in a group (`TerminalController.swift:493`, stand), so a selected one-tab window is a new tab and takes the target (G4, S55), an unselected one is a merged window and goes through `absorb` (tests `MergeTests`, order of the app); `reinsert`
+  through `absorb`, the `isPlain` branch goes. One exception: a window of one ungrouped tab. The book sees a new tab alone in its window before it is tabbed, and on the stand the pass usually runs before Ghostty selects it (`TerminalController.swift:493`). So a one-tab window is a new tab (takes the target, G4, S55) when it is selected in the group or was never key (`lastSelectedTab`, written on `didBecomeKey`); one that was key and is not selected is a merged window and goes through `absorb` (tests `MergeTests`, both orders of Cmd+T); `reinsert`
   (undo of a close) maps a closed ungrouped group to it, `makeSet` (restore) merges every entry
   taken as ungrouped. `ensureWorkspace`, `reconcileFrozen`, `makeHome` and `makeDefault` go.
 - I2. The ungrouped run is last. A tab of a group standing below an ungrouped tab is a break,
@@ -97,8 +97,8 @@ Decisions (each names its source):
   decision 2026-10-28, B2; the mover rule of `repair`). It is known as an arrival because the
   book closed it in another set in the same pass. An arrival with no neighbour (a tab dropped
   outside every window, a new window set) is ungrouped. Price of the one-tab rule: a whole one-tab
-  window dropped into another window is selected, so it goes as Cmd+T into the group of `lastSelected`
-  (the mover rule inside another group's run). Merge All Windows has no drop place and
+  window dropped into another window was key: selected there it goes as Cmd+T (inside another group's
+  run it joins that group), not selected it is merged and stays ungrouped. Merge All Windows has no drop place and
   is not an arrival (I1).
 - G6. The last tab leaving a group removes the group; Cmd+Z of a closed tab brings it back.
   Source: user decision 2026-10-28 (1a); it is today's rule for a workspace.
@@ -246,7 +246,7 @@ extension WorkspaceRegistry {
 `reconcile` keeps a fresh tab without a pending target where Ghostty put it when it touches its
 target run (G4), applies the mover rule to an arrival from another window (G5a), puts a new
 group's first tab before the first ungrouped tab (G8) and counts a group tab below an ungrouped
-tab as a break (I2). `isPlain` and its merge branch go (I1); a one-tab window is a merge or a new tab by its selection, as in I1. `sourceTab` (the cmux rule of
+tab as a break (I2). `isPlain` and its merge branch go (I1); a one-tab window is a merge or a new tab by its selection and key history, as in I1. `sourceTab` (the cmux rule of
 D20) goes. `WorkspaceBook.targetWorkspace` falls back to the ungrouped group instead of the
 first workspace.
 

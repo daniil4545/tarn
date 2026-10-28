@@ -107,7 +107,7 @@ struct WorkspaceBook {
             guard let old = setOf[tab], old != winner else { continue }
             let oldTabs = live.filter { setOf[$0] == old }
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner],
-               !(isLoneTab(loser) && (group.selected == tab || pendingTarget[winner] != nil)) {
+               !(isNewTab(loser, old: old, tab: tab, group: group) || (isLoneTab(loser) && pendingTarget[winner] != nil)) {
                 // Merge All Windows: the loser's groups come whole, its ungrouped tabs join ours (I1).
                 won.absorb(loser)
                 merged = true
@@ -122,8 +122,8 @@ struct WorkspaceBook {
             } else {
                 // One tab dragged in, or out: it joins the group of its neighbour (G5a), or the
                 // group a sidebar command named.
-                let isNewTab = sets[old].map(isLoneTab) == true && group.selected == tab
-                if pendingTarget[winner] == nil, !isNewTab { arrivals.insert(tab) }
+                let lone = sets[old].map { isNewTab($0, old: old, tab: tab, group: group) } == true
+                if pendingTarget[winner] == nil, !lone { arrivals.insert(tab) }
                 remove(tab, from: old)
                 touched.insert(old)
             }
@@ -165,9 +165,16 @@ struct WorkspaceBook {
     }
 
     /// A window of one ungrouped tab. A new tab is seen alone in its own window before AppKit tabs
-    /// it (a title change posts in between). In the app Ghostty has selected it by the pass that
-    /// sees it in a group (`TerminalController.swift:493`, checked on the stand): selected, it is a
-    /// new tab (Cmd+T) and takes the target; not selected, it is a window merged in (`absorb`).
+    /// it (a title change posts in between), and on the stand the pass runs before Ghostty selects
+    /// it (`TerminalController.swift:493`) except for the first Cmd+T. So a one-tab window is a new
+    /// tab (Cmd+T, takes the target) when it is selected in the group, or when it was never selected
+    /// before: `lastSelectedTab` is written when a window becomes key (`WorkspaceRegistry.windowDidBecomeKey`
+    /// calls `selected(_:)`), and a Cmd+N window is key when shown. A one-tab window that was key
+    /// is a window merged in (`absorb`).
+    private func isNewTab(_ set: WorkspaceSet, old: UUID, tab: TabKey, group: Group) -> Bool {
+        isLoneTab(set) && (group.selected == tab || lastSelectedTab[old] == nil)
+    }
+
     private func isLoneTab(_ set: WorkspaceSet) -> Bool {
         set.members.count == 1 && set.workspaces.count == 1 && set.isUngrouped(set.workspaces[0])
     }
