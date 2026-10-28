@@ -63,7 +63,7 @@ check:
 	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
 		-jobs 4 -skip-testing GhosttyUITests test > $(SYMROOT)/test.log 2>&1 || \
-		{ grep -E "error:|failed|\*\* TEST" $(SYMROOT)/test.log | tail -40; exit 1; }
+		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py

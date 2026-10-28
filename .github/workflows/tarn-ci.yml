@@ -76,4 +76,6 @@ jobs:
         run: make -f tarn.mk check
       - name: Test log
         if: failure()
-        run: tail -200 macos/build/test.log || true
+        run: |
+          grep -n -B2 -A6 -E "✘|Expectation|recorded an issue" macos/build/test.log | head -120 || true
+          tail -200 macos/build/test.log || true
