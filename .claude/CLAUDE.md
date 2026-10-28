@@ -64,10 +64,10 @@ Project profile for `~/.claude/docs/pipeline.md`:
 | Parameter | Value |
 | --- | --- |
 | Autonomy | agent decides technical questions within the spec; behavior questions, irreversible steps and spending subscription limits go to the user |
-| Subagents | a stage runs through `orchestrate`: plan, `spec-reviewer`, workers, `code-reviewer` thorough, `skeptic` by `regress` |
+| Subagents | a stage runs through `orchestrate`: plan, `spec-reviewer`, workers, `code-reviewer` thorough; no `skeptic` (user decision 2026-10-28) |
 | Tracker | tix, project `tarn`; stage plan in `docs/plans/<stage>.md` |
 | Subagent brief | `~/.claude/templates/subagent-brief.md` |
-| Findings file | `docs/findings.jsonl` |
+| Findings file | none: no `Правило:` lines, no `pr-metrics.jsonl` (user decision 2026-10-28: only a reliable gate for now; bring them back when needed) |
 
 - Feature pipeline (user decision 2026-10-23): approve the feature, survey how other projects built it (read their code and architecture), approve our architecture, then write code. Take proven parts from other projects, then optimize and cut the excess; do not invent what exists. tarn stays MIT so anyone may reuse it (user decision 2026-10-25): copied code must be MIT or Apache-2.0; from GPL and AGPL projects (cmux, Tellurion) we follow structure and behavior and write the code ourselves; Warp is closed source, so only its behavior is followed.
 - Demo first (user decision 2026-10-25): `demo/` is one living browser demo of the whole terminal, built features plus planned ones (the README of the demo lists which). A step that changes the UI is first drawn in the demo, the user approves the look, then it is built in the app; once built, the demo marks it as built. The checks in `demo/test/` walk its user paths and must pass before the demo goes to the user.
