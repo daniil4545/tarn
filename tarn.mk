@@ -75,8 +75,8 @@ check:
 		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed and retried; log $(SYMROOT)/test.log"
 	@grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -v "(0.000 seconds)" | \
-		sed -E "s/^Test [Cc]ase '([^']*)'.*/  retried: \1/" | sort -u
-	@n=$$(grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -c "(0.000 seconds)"); \
+		sed -E "s/^Test [Cc]ase '([^']*)'.*/  retried: \1/" | sort -u || true
+	@n=$$(grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -c "(0.000 seconds)" || true); \
 		[ "$$n" -eq 0 ] || echo "  retried: $$n tests the test host never finished (it exited mid-run)"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
