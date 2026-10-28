@@ -165,11 +165,8 @@ body.dragging iframe { pointer-events: none; }
 .ask-dialog button { margin-right: 8px; padding: 3px 12px; font: inherit; }
 .ask-dialog .newgroup { display: grid; gap: 8px; margin: 0 0 14px; }
 .ask-dialog .closetabs { display: flex; align-items: center; gap: 6px; margin: 0 0 14px; }
-.ask-dialog button { color: var(--fg); background: rgba(127, 127, 127, .18); border: 1px solid var(--line); border-radius: 5px; }
-.ask-dialog button:first-of-type { background: var(--sys-accent); border-color: transparent; color: #fff; }
 .ask-dialog .newgroup label { display: grid; grid-template-columns: auto 84px 1fr; align-items: center; gap: 6px; }
 .ask-dialog input:not([type]) { font: inherit; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--chrome); color: var(--fg); }
-.wsh .kind { flex: none; }
 
 /* Ungrouped tabs, and every tab with Workspaces off: the header stays in the DOM for the drag code
    and takes no room; the rows sit flush. The end spacer stands where "+ New group" was, so a tab
