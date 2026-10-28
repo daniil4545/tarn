@@ -1,24 +1,21 @@
 import AppKit
 
 /// `tarn new [--right] [--cwd D] -- <cmd...>`: a split below the caller's pane, or to its right, that
-/// runs the command; `tarn run` shares the path (`RunPane`); focus stays where it was (`docs/specs/agent-cli.md` 4.2-4.4). Placement follows
+/// runs the command; `tarn run` shares the path (kind `run`); focus stays where it was (`docs/specs/agent-cli.md` 4.2-4.4). Placement follows
 /// WezTerm `cli split-pane` (default bottom) and kitty `launch --keep-focus`.
 enum NewPane {
     static let notOneLine = AgentRefusal(text: "command must be one line")
-
-    @MainActor
-    static func run(_ message: [String: Any], _ scope: AgentScope) -> Result<[String: Any], AgentRefusal> {
-        open(message, scope, kind: .new)
-    }
+    static let controlCharacter = AgentRefusal(text: "command has a control character")
 
     /// The path `new` and `run` share: the command line, the caller's tab, the split and the run mark.
-    /// A `new` pane runs the line as its command; a `run` pane starts the login shell with the line typed.
+    /// A `new` pane runs the line as its command; a `run` pane starts the login shell with the line typed
+    /// (`docs/specs/agent-cli.md` 4.5; herdr `send-text` "non-submitting", Otty `send-text`).
     @MainActor
     static func open(_ message: [String: Any], _ scope: AgentScope, kind: RunMark.Kind) -> Result<[String: Any], AgentRefusal> {
         guard let argv = message["argv"] as? [String], !argv.isEmpty else { return .failure(AgentRefusal(text: "no command")) }
         guard let command = ShellQuote.join(argv) else { return .failure(notOneLine) }
         // Typed input reaches the line editor as keys: Ctrl+O submits in zsh and bash, Tab completes (B2).
-        if kind == .run, Ghostty.Shell.containsControlCharacters(command) { return .failure(RunPane.controlCharacter) }
+        if kind == .run, Ghostty.Shell.containsControlCharacters(command) { return .failure(controlCharacter) }
         guard let caller = SessionRegistry.surfaceView(scope.caller.pane),
               let controller = BaseTerminalController.controller(owning: caller)
         else { return .failure(.notInTab) }
