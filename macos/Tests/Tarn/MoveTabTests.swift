@@ -37,7 +37,7 @@ struct MoveTabTests {
     /// Remove from group on the middle tab: ungrouped, one move to the place after the group's last tab.
     @Test func removingTheMiddleTabMovesItAfterTheLastTabOfItsGroup() {
         var (set, _, _) = twoGroups()
-        let place = WorkspaceRegistry.place(of: t[1], in: t, members: set.members, to: nil, before: nil, behind: nil, frozen: false)
+        let place = WorkspaceRegistry.place(of: t[1], in: t, members: set.members, to: nil, before: nil, behind: nil)
         set.remove(t[1])
         #expect(set.workspace(of: t[1]) == nil)
         #expect(place == 2, "order becomes t0 t2 t1 t3 t4: delta +1")
@@ -46,13 +46,13 @@ struct MoveTabTests {
     // spec: docs/specs/workspace-folder.md S61
     @Test func removingTheLastTabOfAGroupMovesNothing() {
         let (set, _, _) = twoGroups()
-        #expect(WorkspaceRegistry.place(of: t[2], in: t, members: set.members, to: nil, before: nil, behind: nil, frozen: false) == 2)
+        #expect(WorkspaceRegistry.place(of: t[2], in: t, members: set.members, to: nil, before: nil, behind: nil) == 2)
     }
 
     // spec: docs/specs/workspace-folder.md S62
     @Test func moveToPutsTheTabAfterTheLastTabOfTheTargetGroup() {
         var (set, _, notes) = twoGroups()
-        let place = WorkspaceRegistry.place(of: t[0], in: t, members: set.members, to: notes, before: nil, behind: nil, frozen: false)
+        let place = WorkspaceRegistry.place(of: t[0], in: t, members: set.members, to: notes, before: nil, behind: nil)
         set.join(t[0], to: notes)
         #expect(set.workspace(of: t[0])?.name == "notes")
         #expect(place == 3, "order becomes t1 t2 t3 t0 t4: delta +3")
@@ -62,7 +62,7 @@ struct MoveTabTests {
     /// The only tab of a group leaves: the group is gone, the tab stays where it is.
     @Test func theLastTabLeavingRemovesItsGroupAndStaysInPlace() {
         var (set, _, notes) = twoGroups()
-        #expect(WorkspaceRegistry.place(of: t[3], in: t, members: set.members, to: nil, before: nil, behind: nil, frozen: false) == 3)
+        #expect(WorkspaceRegistry.place(of: t[3], in: t, members: set.members, to: nil, before: nil, behind: nil) == 3)
         set.remove(t[3])
         #expect(set.workspace(notes) == nil)
     }
@@ -71,7 +71,7 @@ struct MoveTabTests {
     /// Dropped below all rows: after the last tab of the window.
     @Test func aDropBelowAllRowsGoesAfterTheLastTab() {
         let (set, _, _) = twoGroups()
-        let place = WorkspaceRegistry.place(of: t[0], in: t, members: set.members, to: nil, before: nil, behind: Set(t), frozen: false)
+        let place = WorkspaceRegistry.place(of: t[0], in: t, members: set.members, to: nil, before: nil, behind: Set(t))
         #expect(place == 4)
     }
 }

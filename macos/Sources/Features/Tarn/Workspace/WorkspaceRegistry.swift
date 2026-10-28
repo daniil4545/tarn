@@ -388,7 +388,7 @@ final class WorkspaceRegistry {
         let members = Dictionary(uniqueKeysWithValues: order.compactMap { key in book.workspace(of: key).map { (key, $0.id) } })
         let place = Self.place(
             of: tab, in: order, members: members, to: workspace,
-            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) }, frozen: book.frozen
+            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) } ?? (book.frozen ? Set(order) : nil)
         )
         isBusy = true
         let changed = book.frozen ? nil : book.edit(tab) { set in
@@ -402,19 +402,18 @@ final class WorkspaceRegistry {
 
     /// The place a sidebar move gives `tab`: before `neighbour`, else after the last of `behind`, else
     /// after the last other tab of the group it ends in (the one it leaves, for `workspace` nil).
-    /// `members` is the membership before the move.
+    /// `members` is the membership before the move; a frozen set passes every tab as `behind`.
     nonisolated static func place(
         of tab: TabKey,
         in order: [TabKey],
         members: [TabKey: Workspace.ID],
         to workspace: Workspace.ID?,
         before neighbour: TabKey?,
-        behind: Set<TabKey>?,
-        frozen: Bool
+        behind: Set<TabKey>?
     ) -> Int {
         let anchor = workspace ?? members[tab]
         return destination(of: tab, in: order, before: neighbour) {
-            behind?.contains($0) ?? (frozen || members[$0] == anchor)
+            behind?.contains($0) ?? (members[$0] == anchor)
         }
     }
 
