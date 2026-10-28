@@ -11,8 +11,8 @@ export const WORKSPACES = {
   },
   wss: [
     { id: "w1", name: "tarn", folder: "~/code/tarn", tabs: ["t1", "t2", "t3", "t4"] },
-    { id: "w2", name: "website", folder: "~/code/website", tabs: ["t5"] },
-    { id: "w0", name: "~", tabs: ["t6"] },
+    { id: "w2", name: "release", tabs: ["t5"] },
+    { id: "w0", name: "", loose: true, tabs: ["t6"] },
   ],
   cur: "t1",
 };

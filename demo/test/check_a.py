@@ -319,14 +319,14 @@ def tarn_cli(base):
             pg,
             "p7",
             "tarn ls",
-            r"\nPANE\s+TAB\s+TITLE\s+CWD\s+PROCESS\s+BRANCH\s+HOST\s+STATE",
+            r"\nPANE\s+TAB\s+GROUP\s+TITLE\s+CWD\s+PROCESS\s+BRANCH\s+HOST\s+STATE",
         )
         check(
-            "tarn ls lists the panes of the caller's workspace",
+            "tarn ls lists the panes of the caller's group with the group name",
             has(
                 pg,
                 "p7",
-                r"\np1\s+t1\s+Claude · spec\s+\S+\s+claude\s+main\s+-\s+waiting",
+                r"\np1\s+t1\s+tarn\s+Claude · spec\s+\S+\s+claude\s+main\s+-\s+waiting",
             )
             and has(pg, "p7", r"\np7\s+")
             and not has(pg, "p7", r"\np5\s+"),
@@ -335,9 +335,11 @@ def tarn_cli(base):
         run(pg, "p7", "tarn ls --json", r'"panes"')
         check(
             "tarn ls --json carries the pane fields",
-            # the screen keeps the tail of the reply: the caller's own pane comes last
-            has(pg, "p7", r'"pane": "p7"')
+            # the screen keeps the tail of the reply: the last tab of the caller's group
+            has(pg, "p7", r'"pane": "p4"')
             and has(pg, "p7", r'"workspace": "w1"')
+            and has(pg, "p7", r'"group": "tarn"')
+            and has(pg, "p7", r'"folder": "~/code/tarn"')
             and has(pg, "p7", r'"host": ""'),
             screen(pg, "p7"),
         )

@@ -94,9 +94,9 @@ def sidebar_checks(pg):
         and not pg.locator("[data-module=workspaces] input").is_disabled(),
     )
     check(
-        "M8 Sidebar off: with several workspaces each top tab carries its workspace name",
+        "M8 Sidebar off: each grouped top tab carries its group name, an ungrouped one none",
         pg.locator("#topTabs .ttab .tw").first.inner_text() == "tarn"
-        and pg.locator("#topTabs .ttab .tw").count() == 6,
+        and pg.locator("#topTabs .ttab .tw").count() == 5,
     )
     flip(pg, "sidebar")
     check(
@@ -209,7 +209,7 @@ def notification_checks(pg):
 def workspace_checks(pg):
     before = groups(pg)
     order = pg.evaluate("__tarn.snapshot().workspaces.wss.flatMap((w) => w.tabs)")
-    check("M21 grouped by default: headers shown", headers(pg) == len(before))
+    check("M21 grouped by default: a header per group, none for the ungrouped tabs", headers(pg) == len([g for g in before if g[0]]))
     pg.keyboard.press("Meta+Comma")
     pg.click("#setNav [data-sec='modules']")
     flip(pg, "workspaces")
@@ -228,9 +228,9 @@ def workspace_checks(pg):
     pg.wait_for_function("n => document.querySelectorAll('#sidebar .tab[data-tabid]').length === n + 1", arg=n)
     after = groups(pg)
     check(
-        "M23 a new tab joins the seeded workspace '~' (one '~', no duplicate)",
-        after[-1][0] == "~" and after[-1][1] == before[-1][1] + 1 and after[:-1] == before[:-1]
-        and [g[0] for g in after].count("~") == 1,
+        "M23 a new tab is ungrouped (one ungrouped list, no duplicate)",
+        after[-1][0] == "" and after[-1][1] == before[-1][1] + 1 and after[:-1] == before[:-1]
+        and [g[0] for g in after].count("") == 1,
         repr(after),
     )
     check(
@@ -261,11 +261,11 @@ def workspace_checks(pg):
     pg.keyboard.press("Escape")
     names = [g[0] for g in groups(pg)]
     check(
-        "M27 Workspaces on again: frozen groups return with '~' holding the new tab",
-        names[:4] == ["tarn", "website", "~"]
+        "M27 Workspaces on again: frozen groups return, the new tab stays ungrouped",
+        names[:3] == ["tarn", "release", ""]
         and pg.evaluate("__tarn.snapshot().workspaces.wss[0].tabs.includes('t4')")
-        and pg.evaluate("__tarn.snapshot().workspaces.wss.find((w) => w.name === '~').folder ?? null") is None
-        and headers(pg) == len(names),
+        and pg.evaluate("__tarn.snapshot().workspaces.wss.at(-1).loose === true")
+        and headers(pg) == len(names) - 1,
         repr(names),
     )
 

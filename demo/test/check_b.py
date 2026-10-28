@@ -567,40 +567,65 @@ def run(base):
         pg.mouse.move(start["x"] + 30, start["y"] + start["height"] / 2)
         pg.mouse.up()
         check("W10k Esc and a release over the row it left select nothing and move nothing", cur() == "t1" and ws_tabs("w1") == order, cur())
-        last_ws = snap()["wss"][-1]["id"]
         mouse_drag(n(f"{TAB}[data-tabid='t2']"), n("#wsNew"), 2.5)
-        check("W10l a tab let go below the rows goes to the end of the last workspace", ws_tabs(last_ws)[-1] == "t2", str(ws_tabs(last_ws)))
+        check("W10l a tab let go below the rows leaves its group for the ungrouped tabs", ws_tabs("w0")[-1] == "t2", str(ws_tabs("w0")))
         after_t2 = order[order.index("t2") + 1 :]
         cmd(pg, "tab.move", {"id": "t2", "ws": "w1", "before": after_t2[0] if after_t2 else None})
-        reply["answers"] = iter(["~/code/home/"])
-        pg.click("#wsNew")
+
+        def new_group(field, text):
+            pg.click("#wsNew")
+            pg.fill(field, text)
+            pg.click(".ask-dialog button:text('Create')")
+
+        new_group("#ngFolder", "~/code/home/")
         home = next((w for w in snap()["wss"] if w["name"] == "home"), None)
+        groups = [w for w in snap()["wss"] if not w.get("loose")]
         check(
-            "W11 a new workspace asks a folder, is named after it, goes last and starts in it with one tab",
+            "W11 a new workspace takes a folder, is named after it, goes last of the groups and starts in it with one tab",
             home is not None
             and home.get("folder") == "~/code/home"
             and len(home["tabs"]) == 1
-            and snap()["wss"][-1]["name"] == "home"
+            and groups[-1]["name"] == "home"
+            and snap()["wss"][-1].get("loose")
             and cur() == home["tabs"][0]
-            and snap()["tabs"][home["tabs"][0]]["cwd"] == "~/code/home",
+            and snap()["tabs"][home["tabs"][0]]["cwd"] == "~/code/home"
+            and count(f".wsh[data-wsh='{home['id']}'] .kind") == 1,
         )
-        reply["answers"] = iter(["~/code/home"])
-        pg.click("#wsNew")
+        new_group("#ngFolder", "~/code/home")
         check(
             "W11a a folder that a workspace already has selects it instead of a second one",
             sum(w.get("folder") == "~/code/home" for w in snap()["wss"]) == 1,
         )
+        cmd(pg, "tab.go", {"id": "t6"})
+        new_group("#ngName", "notes")
+        notes = next((w for w in snap()["wss"] if w["name"] == "notes"), None)
+        check(
+            "W11b a plain group takes a name, has no folder and its tab starts where Cmd+T would",
+            notes is not None
+            and "folder" not in notes
+            and snap()["tabs"][notes["tabs"][0]]["cwd"] == snap()["tabs"]["t6"]["cwd"]
+            and count(f".wsh[data-wsh='{notes['id']}'] .kind") == 0,
+        )
         n(f".wsh[data-wsh='{home['id']}']").click(button="right")
         pg.click("#ctx [data-wsdel]")
+        pg.click(".ask-dialog button:text('Delete')")
         check(
-            "W12 deleting it moves its tabs to the workspace above",
-            home["tabs"][0] in ws_tabs("w0") and count(".wsh") == 3,
+            "W12 deleting a group keeps its tabs, ungrouped, at the top of the ungrouped list",
+            ws_tabs("w0")[0] == home["tabs"][0] and count(f".wsh[data-wsh='{home['id']}']") == 0,
+        )
+        n(f".wsh[data-wsh='{notes['id']}']").click(button="right")
+        pg.click("#ctx [data-wsdel]")
+        pg.check("#dgClose")
+        pg.click(".ask-dialog button:text('Delete')")
+        check(
+            "W12a deleting a group with Also close its tabs closes them",
+            notes["tabs"][0] not in snap()["tabs"] and count(f".wsh[data-wsh='{notes['id']}']") == 0,
         )
         for tab_id in ws_tabs("w0"):
             pg.click(f"{TAB}[data-tabid='{tab_id}'] .x")
         check(
-            "W13 closing the last tab of ~ closes it like any workspace",
-            count(".wsh") == 2 and count(".wsh[data-wsh='w0']") == 0,
+            "W13 with no ungrouped tab left the groups stay and nothing is drawn for the ungrouped list",
+            count(".wsh:not(.flat)") == 2 and count(".wsh.flat") == 0,
         )
         drag(n(".wsh[data-wsh='w2']"), n(".wsh[data-wsh='w1']"), 0.5, 0.5)
         check(
@@ -813,35 +838,35 @@ def run(base):
 
         # ---- workspace close and window ----
         heads = count(".wsh")
-        pg.evaluate("window.prompt = (q) => (q === 'Folder for the new workspace' ? '~/work' : '')")
         pg.click("#wsNew")
+        pg.fill("#ngName", "work")
+        pg.keyboard.press("Enter")
         check(
-            "O1 a new workspace shows its header with one tab",
+            "O1 a new group shows its header with one tab",
             count(".wsh") == heads + 1 and count(".wsh:has-text('work')") == 1,
         )
         pg.click(TERM)
         pg.keyboard.press("Meta+w")
         check(
-            "O2 cmd+W on the last tab of a workspace closes the workspace",
+            "O2 cmd+W on the last tab of a group closes the group",
             count(".wsh") == heads and count(".wsh:has-text('work')") == 0,
         )
         pg.keyboard.press("Meta+z")
-        check("O3 cmd+Z brings the workspace back", count(".wsh:has-text('work')") == 1)
+        check("O3 cmd+Z brings the group back", count(".wsh:has-text('work')") == 1)
         for ws in snap()["wss"]:
             if ws.get("collapsed"):
                 cmd(pg, "ws.fold", {"id": ws["id"]})
         while count(f"{TAB}"):
             pg.click(f"{TAB} >> nth=0 >> .x")
         check(
-            "O4 the last tab of the last workspace closes the window",
+            "O4 the last tab of the window closes it",
             len(snap()["wss"]) == 0 and "window closed" in pg.inner_text("#ws"),
         )
         pg.keyboard.press("Meta+n")
         check(
-            "O5 a new window starts with ~ and one tab",
-            [w["name"] + ":" + str(len(w["tabs"])) for w in snap()["wss"]]
-            == ["~:1"]
-            and count(".wsh") == 1,
+            "O5 a new window starts with one ungrouped tab and no group",
+            [(w.get("loose", False), len(w["tabs"])) for w in snap()["wss"]] == [(True, 1)]
+            and count(".wsh:not(.flat)") == 0,
         )
 
         # ---- viewer drags and drop zones ----
@@ -1036,15 +1061,17 @@ def run(base):
         check("R4a the rail has the viewer button too", vis(VIEWER))
         pg.click("#sbViewer")
         pg.click("#sbToggle")
-        pg.evaluate("window.prompt = () => 'keyed'")
         pg.evaluate("document.activeElement.blur()")
         pg.keyboard.press("Control+Alt+Shift+T")
-        check("R4b Shift+Cmd+T (fallback Ctrl+Alt+Shift+T) asks a name and opens the workspace",
+        pg.fill("#ngName", "keyed")
+        pg.keyboard.press("Enter")
+        check("R4b Shift+Cmd+T (fallback Ctrl+Alt+Shift+T) asks a name and opens the group",
               any(w["name"] == "keyed" for w in snap()["wss"]))
-        pg.evaluate("window.prompt = () => 'top'")  # an earlier check replaced window.prompt
         pg.click("#wsNewTop")
+        pg.fill("#ngName", "top")
+        pg.click(".ask-dialog button:text('Create')")
         check(
-            "R5 the header workspace button asks a name and opens the workspace",
+            "R5 the header group button asks a name and opens the group",
             any(w["name"] == "top" for w in snap()["wss"]),
             str([w["name"] for w in snap()["wss"]]),
         )
