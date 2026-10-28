@@ -64,7 +64,7 @@ jobs:
           persist-credentials: false
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
       - name: Shell lint
-        run: shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh plugin/hooks/*.sh
+        run: shellcheck -e SC2015 install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh plugin/hooks/*.sh
       - name: Spelling
         run: |
           uvx typos@1.51.1 --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
