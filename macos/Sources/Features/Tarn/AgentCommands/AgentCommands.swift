@@ -11,7 +11,6 @@ struct PaneRow: Equatable {
     var cwd = ""
     var process = ""
     var branch = ""
-    var host = ""
     /// The agent state of `docs/spec.md` 8, or empty for a pane without a session.
     var state = ""
 }
