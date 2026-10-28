@@ -46,7 +46,7 @@ Two invariants and their writers:
 
 - I1. At most one ungrouped group per set. Writer: `ungroupedID()`, the only place that makes
   it. `absorb` (Merge All Windows) puts the other set's ungrouped tabs into it; every merge goes
-  through `absorb`, the `isPlain` branch goes. One exception: a window of one ungrouped tab. The book sees a new tab alone in its window before it is tabbed, and on the stand the pass usually runs before Ghostty selects it (`TerminalController.swift:493`). So a one-tab window is a new tab (takes the target, G4, S55) when it is selected in the group or was never key (`lastSelectedTab`, written on `didBecomeKey`); one that was key and is not selected is a merged window and goes through `absorb` (tests `MergeTests`, both orders of Cmd+T); `reinsert`
+  through `absorb`, the `isPlain` branch goes. One exception: a window of one ungrouped tab. The book sees a new tab alone in its window before it is tabbed. Ghostty announces a new tab before it exists (`ghosttyNewTab`, insertion point 36 of `docs/architecture.md`); `WorkspaceRegistry.willOpenTab(from:)` passes the source tab to `WorkspaceBook.expectNewTab(from:)`, and the announcement is dropped after 1 s (`clearExpectedTab`). A one-tab window that enters a set with an announcement is a new tab (takes the target, G4, S55); any other one-tab window is a merged window and goes through `absorb` and stays ungrouped (S54), selected or not (tests `MergeTests`); `reinsert`
   (undo of a close) maps a closed ungrouped group to it, `makeSet` (restore) merges every entry
   taken as ungrouped. `ensureWorkspace`, `reconcileFrozen`, `makeHome` and `makeDefault` go.
 - I2. The ungrouped run is last. A tab of a group standing below an ungrouped tab is a break,
@@ -80,7 +80,7 @@ Decisions (each names its source):
 - G4. Cmd+T in a grouped tab adds a tab right after it, in the same group, in its folder
   (Ghostty). Cmd+T in an ungrouped tab adds an ungrouped tab. Cmd+D stays in its tab (Ghostty).
   The new-tab button at the top of the sidebar is Cmd+T (demo). The group is the one of the tab
-  selected when Cmd+T was pressed. A fresh tab without a pending target (the sidebar's "+" and a
+  Cmd+T was pressed in (the source tab of the announcement, I1); a sidebar target comes first. A fresh tab without a pending target (the sidebar's "+" and a
   new group set one, Cmd+T does not) stays where Ghostty put it when it touches the run of that
   group; otherwise it goes to the end of the run. So with the default
   `window-new-tab-position = current` it stands right after its source, with `end` at the end of
@@ -96,9 +96,9 @@ Decisions (each names its source):
   is dropped, or of the tab below when it is first; among ungrouped tabs it is ungrouped (user
   decision 2026-10-28, B2; the mover rule of `repair`). It is known as an arrival because the
   book closed it in another set in the same pass. An arrival with no neighbour (a tab dropped
-  outside every window, a new window set) is ungrouped. Price of the one-tab rule: a whole one-tab
-  window dropped into another window was key: selected there it goes as Cmd+T (inside another group's
-  run it joins that group), not selected it is merged and stays ungrouped. Merge All Windows has no drop place and
+  outside every window, a new window set) is ungrouped. A whole one-tab
+  window dropped into another window has no announcement, so it is a merge and stays ungrouped, even
+  inside another group's run (no deviation from S54). Merge All Windows has no drop place and
   is not an arrival (I1).
 - G6. The last tab leaving a group removes the group; Cmd+Z of a closed tab brings it back.
   Source: user decision 2026-10-28 (1a); it is today's rule for a workspace.
@@ -141,7 +141,7 @@ directory of a new tab and split comes from the inherited config
 and `tab-inherit-working-directory` (`src/config/Config.zig:2089`, `:2094`); `window-new-tab-position`; `SurfaceConfiguration.workingDirectory`
 (`macos/Sources/Ghostty/Surface View/SurfaceView.swift:581`); native tab order by `move_tab`.
 Ghostty has no groups (issue #1598 closed). Our code adds only the group of a tab, the folder of
-a workspace's first tab and of its "+", and the agent scope. No new insertion point.
+a workspace's first tab and of its "+", and the agent scope. One insertion point is added: `AppDelegate.ghosttyNewTab` calls `WorkspaceRegistry.willOpenTab(from:)` before the tab exists. An observer of the same notification runs after AppDelegate's on a launch without restored windows, when the tab already exists (checked on the stand); user decision 2026-10-28.
 
 Canon this spec replaces (each edited with the stage that changes the behaviour):
 
@@ -246,7 +246,7 @@ extension WorkspaceRegistry {
 `reconcile` keeps a fresh tab without a pending target where Ghostty put it when it touches its
 target run (G4), applies the mover rule to an arrival from another window (G5a), puts a new
 group's first tab before the first ungrouped tab (G8) and counts a group tab below an ungrouped
-tab as a break (I2). `isPlain` and its merge branch go (I1); a one-tab window is a merge or a new tab by its selection and key history, as in I1. `sourceTab` (the cmux rule of
+tab as a break (I2). `isPlain` and its merge branch go (I1); a one-tab window is a merge, or a new tab when Ghostty announced one for the set (`expectNewTab`), as in I1. `sourceTab` (the cmux rule of
 D20) goes. `WorkspaceBook.targetWorkspace` falls back to the ungrouped group instead of the
 first workspace.
 

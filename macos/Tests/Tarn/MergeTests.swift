@@ -29,31 +29,32 @@ struct MergeTests {
         #expect(outcome.reorders == [.init(tab: t[2], delta: -1)])
     }
 
-    // spec: docs/specs/workspace-folder.md S4, G4. Cmd+T, first order (stand, first Cmd+T): the new tab is seen
-    // alone in its window, then enters the group already selected.
-    @Test func aNewTabSeenAloneAndSelectedTakesTheTargetNotAMerge() {
+    /// A set with group Work (t0, t1), ungrouped t3 and t0 selected.
+    private func workBook() -> (WorkspaceBook, Workspace.ID) {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[3]]])
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[0]) { $0.join(t[0], to: work) }
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.selected(t[0])
+        return (book, work)
+    }
+
+    // spec: docs/specs/workspace-folder.md S4, G4, I1. Ghostty announced Cmd+T from t0; the new tab is seen
+    // alone in its window, then enters the group already selected.
+    @Test func anAnnouncedNewTabSeenAloneAndSelectedTakesTheSourceGroup() {
+        var (book, work) = workBook()
+        book.expectNewTab(from: t[0])
         _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
-        // In the app Ghostty has selected the new tab by this pass. It stands right after the source t0.
         let outcome = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[2]])
         #expect(book.workspace(of: t[2])?.id == work)
         #expect(outcome.reorders.isEmpty)
     }
 
-    // spec: docs/specs/workspace-folder.md S4, G4. Cmd+T, usual order (stand): the pass runs before Ghostty
-    // selects the new tab; selected is still the source and the new window was never key.
-    @Test func aNewTabSeenAloneAndNeverKeyTakesTheTargetWhileTheSourceIsSelected() {
-        var book = WorkspaceBook()
-        _ = book.pass([[t[0], t[1], t[3]]])
-        let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
-        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
-        _ = book.selected(t[0])
+    // spec: docs/specs/workspace-folder.md S4, G4. The same, but the pass runs before Ghostty selects the new tab.
+    @Test func anAnnouncedNewTabSeenAloneWhileTheSourceIsSelectedTakesTheSourceGroup() {
+        var (book, work) = workBook()
+        book.expectNewTab(from: t[0])
         _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
         let outcome = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[0]])
         #expect(book.workspace(of: t[2])?.id == work)
@@ -61,17 +62,67 @@ struct MergeTests {
     }
 
     // spec: docs/specs/workspace-folder.md S55 through the book: `end` puts the tab last, it goes to the end of its group
-    @Test func aNewTabAtTheEndSeenAloneGoesToTheEndOfItsGroup() {
-        var book = WorkspaceBook()
-        _ = book.pass([[t[0], t[1], t[3]]])
-        let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
-        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
-        _ = book.selected(t[0])
+    @Test func anAnnouncedNewTabAtTheEndGoesToTheEndOfItsGroup() {
+        var (book, work) = workBook()
+        book.expectNewTab(from: t[0])
         _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
         let outcome = book.pass([[t[0], t[1], t[3], t[2]]], selected: [t[0]])
         #expect(book.workspace(of: t[2])?.id == work)
         #expect(outcome.reorders == [.init(tab: t[2], delta: -1)])
+    }
+
+    // spec: docs/specs/workspace-folder.md S54, I1. Nothing announced: a one-tab window is a window merged in,
+    // selected or not, and stays ungrouped.
+    @Test func aOneTabWindowWithoutAnAnnouncementIsAMergeEvenWhenSelected() {
+        var (book, work) = workBook()
+        _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
+        _ = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[2]])
+        #expect(book.workspace(of: t[2])?.id != work)
+        #expect(book.set(of: t[2]).map { $0.isUngrouped(book.workspace(of: t[2])!) } == true)
+        #expect(book.sets.count == 1)
+    }
+
+    // spec: docs/specs/workspace-folder.md G4. The tab comes from group A; the announcement names A.
+    @Test func anAnnouncementFromAGroupNamesThatGroupNotTheSelectedOne() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[3], t[4]]])
+        let a = book.newWorkspace("A", in: t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: a) }
+        let b = book.newWorkspace("B", in: t[1])
+        _ = book.edit(t[1]) { $0.join(t[1], to: b) }
+        _ = book.selected(t[1])
+        book.expectNewTab(from: t[0])
+        _ = book.pass([[t[0], t[1], t[3], t[4]], [t[2]]])
+        _ = book.pass([[t[0], t[2], t[1], t[3], t[4]]], selected: [t[2]])
+        #expect(book.workspace(of: t[2])?.id == a)
+    }
+
+    // spec: docs/specs/workspace-folder.md G4. An explicit sidebar target (B) comes before the announcement (A).
+    @Test func aSidebarTargetBeatsTheAnnouncedSourceGroup() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[3]]])
+        let a = book.newWorkspace("A", in: t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: a) }
+        let b = book.newWorkspace("B", in: t[1])
+        _ = book.edit(t[1]) { $0.join(t[1], to: b) }
+        _ = book.selected(t[0])
+        book.setPendingTarget(b, for: t[0])
+        book.expectNewTab(from: t[0])
+        _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
+        _ = book.pass([[t[0], t[1], t[2], t[3]]], selected: [t[2]])
+        #expect(book.workspace(of: t[2])?.id == b)
+    }
+
+    // spec: docs/specs/workspace-folder.md S54. An announcement that never came is cleared; the next
+    // one-tab window is a merge.
+    @Test func aClearedAnnouncementLeavesTheNextOneTabWindowAMerge() {
+        var (book, work) = workBook()
+        book.expectNewTab(from: t[0])
+        book.clearExpectedTab(for: t[0])
+        _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
+        _ = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[0]])
+        #expect(book.workspace(of: t[2])?.id != work)
+        #expect(book.set(of: t[2]).map { $0.isUngrouped(book.workspace(of: t[2])!) } == true)
     }
 
     // spec: docs/specs/workspace-folder.md S54 through the book: windows made by Cmd+N merge into a
@@ -107,9 +158,9 @@ struct MergeTests {
         #expect(book.set(of: t[2]).map { $0.isUngrouped(book.workspace(of: t[2])!) } == true)
     }
 
-    // G5a, the price of the rule: a whole one-tab window dropped into another window and selected there
-    // is a new tab; inside another group's run it joins that group. One that is key but not selected is a merge.
-    @Test func aSelectedOneTabWindowDroppedInsideAGroupJoinsThatGroup() {
+    // G5a: a whole one-tab window dropped into another window is not a new tab (nothing was announced):
+    // it is a merge and stays ungrouped, even inside a group's run.
+    @Test func aOneTabWindowDroppedInsideAGroupStaysUngrouped() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
         _ = book.selected(t[2])
@@ -117,7 +168,8 @@ struct MergeTests {
         _ = book.edit(t[0]) { $0.join(t[0], to: work) }
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[2]])
-        #expect(book.workspace(of: t[2])?.id == work)
+        #expect(book.workspace(of: t[2])?.id != work)
+        #expect(book.set(of: t[2]).map { $0.isUngrouped(book.workspace(of: t[2])!) } == true)
     }
 
     // spec: docs/specs/workspace-folder.md S54 - a window of groups only with one of ungrouped tabs only
