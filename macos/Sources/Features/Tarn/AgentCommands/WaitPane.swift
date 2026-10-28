@@ -15,8 +15,8 @@ struct PaneFacts: Equatable {
     var promptReadable = true
     /// The cursor sits at a prompt: only OSC 133 marks can say so (`Terminal.cursorIsAtPrompt`).
     var atPrompt = false
-    /// The foreground process is the shell itself, so nothing runs and no mark tells it.
-    var shellInForeground = false
+    /// Ghostty injects its OSC 133 integration into the pane's shell (`ShellIntegration.injects`).
+    var integrationExpected = true
 }
 
 /// How a wait ended: the reply fields of `tarn wait`.
@@ -56,19 +56,34 @@ enum WaitRule {
             // U8: Ghostty reports no exit code of a configured command on macOS.
             return facts.processExited ? .failure(.exitCodeUnknown) : nil
         }
+        // Otty `pane wait`: a pane that cannot report an end says so at once instead of hanging.
+        // A readable prompt mark is OSC 133 too (`Terminal.cursorIsAtPrompt`): integrated by hand.
+        let marked = facts.promptReadable && facts.atPrompt
+        guard integrated || marked || facts.integrationExpected else { return .failure(.noShellIntegration) }
         // Never answer idle early: without a readable prompt the next finish is the only sign.
         guard facts.promptReadable else { return nil }
         if facts.atPrompt {
             // A `run` pane looks idle before Enter; an old command's code is not this wait's.
             return mark?.kind == .run ? nil : .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))
         }
-        return !integrated && facts.shellInForeground ? .failure(.noShellIntegration) : nil
+        return nil
     }
+}
 
-    /// A parked wait on a pane that shows no prompt mark while the shell is back in the foreground:
-    /// the command ended and no OSC 133 finish will come (`docs/specs/agent-cli.md` 4.6).
-    static func stalled(mark: RunMark?, facts: PaneFacts, integrated: Bool) -> Bool {
-        mark == nil && !integrated && facts.promptReadable && !facts.atPrompt && facts.shellInForeground
+/// Whether Ghostty injects its OSC 133 integration, by its own rule (`src/termio/shell_integration.zig:43-167`).
+enum ShellIntegration {
+    /// `setting` is the `shell-integration` value; `shell` the command Ghostty started in the pane,
+    /// nil when no process is readable, and the wait parks.
+    static func injects(setting: String?, shell: String?) -> Bool {
+        switch setting {
+        case "none": return false
+        case nil, "detect": break
+        default: return true
+        }
+        guard let shell else { return true }
+        // Apple's bash 3.2 ignores the ENV startup path Ghostty injects through.
+        guard shell != "/bin/bash" else { return false }
+        return ["bash", "elvish", "fish", "nu", "zsh"].contains((shell as NSString).lastPathComponent)
     }
 }
 
@@ -96,8 +111,6 @@ final class PaneWaits {
         let started = Date()
         let reply: any WaitSink
         var timer: Task<Void, Never>?
-        /// Ticks that saw the shell back in the foreground; a finish arrives within ms, so one is not enough.
-        var shellSeen = 0
     }
 
     static let longestTimeout = 365.0 * 86400
@@ -109,10 +122,6 @@ final class PaneWaits {
     /// Panes that still exist; tests replace it.
     var exists: (UUID) -> Bool = { SessionRegistry.surfaceView($0) != nil }
 
-    /// What a pane looks like now; tests replace it.
-    var factsOf: (UUID) -> PaneFacts? = { id in SessionRegistry.surfaceView(id).map(WaitPane.facts(of:)) }
-
-    private var ticker: Task<Void, Never>?
     var pendingCount: Int { waits.count }
 
     /// The calls Ghostty's callbacks make; they run on the main thread.
@@ -137,39 +146,11 @@ final class PaneWaits {
             }
         }
         waits.append(wait)
-        startTicker()
         // A cancelled wait (its CLI killed) is released when its connection closes.
         reply.watchPeer { [weak self] in
             DispatchQueue.main.async { MainActor.assumeIsolated { self?.finish(id, nil) } }
         }
         return nil
-    }
-
-    private func startTicker() {
-        guard ticker == nil else { return }
-        ticker = Task { [weak self] in
-            while !Task.isCancelled, self?.waits.isEmpty == false {
-                try? await Task.sleep(for: .milliseconds(500))
-                self?.tick()
-            }
-            self?.ticker = nil
-        }
-    }
-
-    /// Looks again at the panes of parked waits: a command without OSC 133 marks ended when the shell
-    /// is back in the foreground on two ticks in a row, and the wait says so instead of hanging.
-    func tick() {
-        for index in waits.indices {
-            let pane = waits[index].pane
-            guard let facts = factsOf(pane),
-                  WaitRule.stalled(mark: marks[pane], facts: facts, integrated: integrated.contains(pane))
-            else {
-                waits[index].shellSeen = 0
-                continue
-            }
-            waits[index].shellSeen += 1
-        }
-        for wait in waits where wait.shellSeen >= 2 { finish(wait.id, .failure(.noShellIntegration)) }
     }
 
     /// Ghostty `command_finished` of a shell pane; a negative code is "no code reported".
@@ -252,12 +233,11 @@ enum WaitPane {
         }
     }
 
-    /// The live value of `confirm-close-surface`: `true`, `false` or `always`.
+    /// The live value of an enum option, such as `confirm-close-surface` (`true`, `false`, `always`).
     @MainActor
-    private static var confirmCloseSurface: String? {
+    private static func option(_ key: String) -> String? {
         guard let config = (NSApp.delegate as? AppDelegate)?.ghostty.config.config else { return nil }
         var value: UnsafePointer<Int8>?
-        let key = "confirm-close-surface"
         guard ghostty_config_get(config, &value, key, UInt(key.utf8.count)), let value else { return nil }
         return String(cString: value)
     }
@@ -267,9 +247,10 @@ enum WaitPane {
         let pid = view.surfaceModel?.foregroundPID.map { AgentProcess.foreground(group: pid_t($0)) }
         return PaneFacts(
             processExited: view.processExited,
-            promptReadable: confirmCloseSurface == "true",
+            promptReadable: option("confirm-close-surface") == "true",
             atPrompt: !view.needsConfirmQuit,
-            shellInForeground: pid.map(AgentProcess.isRootShell(pid:)) ?? false
+            integrationExpected: ShellIntegration.injects(
+                setting: option("shell-integration"), shell: pid.flatMap(AgentProcess.paneShell(below:)) ?? getpwuid(getuid()).flatMap { $0.pointee.pw_shell.map { String(cString: $0) } })
         )
     }
 }
