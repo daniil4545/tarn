@@ -136,15 +136,11 @@ final class ViewerHost: ObservableObject {
         hidePane()
     }
 
-    private func focusTreeSoon() {
+    private func openTreeOnly(root: String?) {
+        makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.revealTree()
         DispatchQueue.main.async { [weak self] in
             self?.activeModel?.focusTreeInPage()
         }
-    }
-
-    private func openTreeOnly(root: String?) {
-        makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.revealTree()
-        focusTreeSoon()
     }
 
     /// Hides the viewers keeping their models; the keyboard goes to the terminal.
