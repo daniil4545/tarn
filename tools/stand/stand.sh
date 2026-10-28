@@ -66,7 +66,7 @@ while [ "$i" -lt 30 ]; do
   if [ -S "$sock" ]; then
     surface=$(osascript -e "tell application id \"$id\" to get id of focused terminal of selected tab of front window" 2>/dev/null || true)
     if [ -n "$surface" ]; then
-      [ -z "$front" ] || [ "$front" = "$app" ] || open -a "$front"
+      [ -z "$front" ] || [ "$front" = "$app" ] || open -a "$front" || echo "stand: could not give focus back to $front" >&2
       echo "stand up (pid $pid), log $stand/app.log"
       echo "export HOME='$stand/home' TARN_SURFACE='$surface'"
       exit 0

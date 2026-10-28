@@ -412,6 +412,7 @@
 			inputPaths = (
 				"$(SRCROOT)/../cli/tarn",
 				"$(SRCROOT)/../cli/SKILL.md",
+				"$(TARGET_BUILD_DIR)/$(INFOPLIST_PATH)",
 			);
 			name = "Install tarn CLI";
 			outputFileListPaths = (
