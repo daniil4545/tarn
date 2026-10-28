@@ -303,6 +303,7 @@ def tarn_cli(base):
             has(pg, "p7", r"tarn: no such file: nope\.md"),
         )
         run(pg, "p7", "tarn new -- npm test", r"\np\d+\s*\n")
+        new_id = (re.findall(r"\n(p\d+)\s*\n", screen(pg, "p7")) or [""])[-1]
         agent = [c for c in calls(pg, "pane.split") if c.get("focus") is False]
         check(
             "tarn new splits below the caller and does not take focus",
@@ -354,6 +355,39 @@ def tarn_cli(base):
             screen(pg, "p6"),
         )
         focus(pg, "p7")
+
+        # read and close (agent-cli 4.7, 4.8): the pane `tarn new` opened above.
+        run(pg, "p7", "echo alpha-line", r"\nalpha-line")
+        read = r"tarn read p7 --lines 2\s*\nalpha-line\s*\n[^\n]*tarn read p7 --lines 2"
+        run(pg, "p7", "tarn read p7 --lines 2", read)
+        check(
+            "tarn read prints the last lines of a pane",
+            has(pg, "p7", read),
+            screen(pg, "p7")[-400:],
+        )
+        for bad in ["0", "-1", "x"]:
+            run(pg, "p7", f"tarn read p7 --lines {bad}", r"tarn: bad lines\s*\n.*%")
+        check(
+            "tarn read refuses a bad --lines",
+            len(re.findall(r"\ntarn: bad lines", screen(pg, "p7"))) >= 3,
+            screen(pg, "p7")[-400:],
+        )
+        run(pg, "p7", "tarn close p5", r"tarn: no pane matched: p5")
+        check(
+            "tarn close refuses a pane of another workspace",
+            has(pg, "p7", r"tarn: no pane matched: p5") and not calls(pg, "pane.close"),
+            str(calls(pg, "pane.close")),
+        )
+        run(pg, "p7", f"tarn close {new_id}")
+        check(
+            "tarn close closes the pane and leaves focus and input alone",
+            bool(new_id)
+            and calls(pg, "pane.close") == [{"id": new_id, "exited": True}]
+            and pg.evaluate(f"!document.querySelector(\"[data-pane='{new_id}']\")")
+            and pg.evaluate("document.activeElement.tagName") == active
+            and last_prompt_line(pg, "p7").endswith("%"),
+            f"{new_id} {calls(pg, 'pane.close')}",
+        )
 
         run(pg, "p7", "touch scratch.txt")
         run(pg, "p7", "git status -s", r"\?\? scratch\.txt")

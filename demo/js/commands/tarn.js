@@ -1,8 +1,9 @@
-// The tarn CLI as agents and people use it: open, ls, new, run, wait (docs/specs/agent-cli.md 4).
-// None of these moves focus or presses Enter. `new` and `run` open a split below the caller, or
-// to its right with --right; the demo pane is a shell: `new` does not run the command, `run`
-// types it at the prompt and leaves Enter to the user.
-const USAGE = "usage: tarn <open path[:line] | ls [--json] | new [--right] [--cwd D] -- <cmd...> | run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S]>";
+// The tarn CLI as agents and people use it: open, ls, new, run, wait, read, close
+// (docs/specs/agent-cli.md 4). None of these moves focus or presses Enter. `new` and `run` open a
+// split below the caller, or to its right with --right; the demo pane is a shell: `new` does not
+// run the command, `run` types it at the prompt and leaves Enter to the user.
+const USAGE =
+  "usage: tarn <open path[:line] | ls [--json] | new [--right] [--cwd D] -- <cmd...> | run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] | read <pane> [--lines N] | close <pane>>";
 
 function open(ctx) {
   const arg = ctx.args[1];
@@ -50,6 +51,34 @@ function wait(ctx) {
   return ctx.out("succeed  exit 0  0.0s");
 }
 
+// A pane of the caller's workspace, or the refusal the app gives (exit 4, never a fallback).
+function target(ctx, id) {
+  if (ctx.panes().some((r) => r.pane === id)) return id;
+  ctx.out(`tarn: no pane matched: ${id}`);
+  return undefined;
+}
+
+// herdr `pane read --lines N`: the last lines, default 80, the empty rows below the output cut.
+function read(ctx) {
+  const args = ctx.args.slice(1);
+  const at = args.indexOf("--lines");
+  const count = at < 0 ? "80" : args[at + 1];
+  const rest = at < 0 ? args : args.filter((_, i) => i !== at && i !== at + 1);
+  if (rest.length !== 1 || count === undefined) return ctx.out(USAGE);
+  if (!/^[1-9][0-9]*$/.test(count)) return ctx.out("tarn: bad lines");
+  if (!target(ctx, rest[0])) return undefined;
+  const lines = String(ctx.emit("pane.read", { id: rest[0] })).split("\n").map((l) => l.trimEnd());
+  while (lines.length && !lines[lines.length - 1]) lines.pop();
+  if (lines.length) ctx.out(lines.slice(-Number(count)).join("\n"));
+  return undefined;
+}
+
+function close(ctx) {
+  if (ctx.args.length !== 2) return ctx.out(USAGE);
+  if (target(ctx, ctx.args[1])) ctx.emit("pane.close", { id: ctx.args[1] });
+  return undefined;
+}
+
 export function tarn(ctx) {
   const sub = ctx.args[0];
   switch (sub) {
@@ -58,6 +87,8 @@ export function tarn(ctx) {
     case "new":
     case "run": return split(ctx);
     case "wait": return wait(ctx);
+    case "read": return read(ctx);
+    case "close": return close(ctx);
     default: return ctx.out(USAGE);
   }
 }

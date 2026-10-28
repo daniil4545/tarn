@@ -103,6 +103,9 @@ export function createPane(id, { cwd }) {
         if (fresh && data.typed) panes.get(fresh)?.type(data.typed);
         return fresh;
       }
+      case "pane.read": return panes.get(data.id)?.screenText() ?? "";
+      // As a pane whose process exited: no confirmation, focus stays where it was.
+      case "pane.close": bus.cmd("pane.close", { id: data.id, exited: true }); break;
       case "hook": bus.cmd("hook", { pane: id, ...data }); break;
       case "command": notifyWhenDone(data); break;
       default: throw new Error(`unknown shell event: ${name}`);
