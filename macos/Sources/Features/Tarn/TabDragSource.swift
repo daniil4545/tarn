@@ -30,8 +30,8 @@ enum SidebarDragKind: Equatable {
 enum SidebarDropSlot: Equatable {
     /// Before a tab row, in that row's workspace.
     case beforeTab(TabKey)
-    /// After the last tab of a workspace.
-    case endOfWorkspace(Workspace.ID)
+    /// After the last tab of a workspace, or of a block of ungrouped tabs (named by its id).
+    case endOfWorkspace(UUID)
     /// Before a workspace header.
     case beforeWorkspace(Workspace.ID)
     /// After the last workspace.
@@ -62,13 +62,11 @@ extension SidebarModel {
             return groups.contains { $0.workspace?.id == id } ? .endOfWorkspace(id) : nil
 
         case (.tab, .tab(let key)):
-            // Rows of an ungrouped block take no drop yet (the commands that ungroup are PR 4 of T-266).
             guard let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
-                  let workspace = group.workspace,
                   let index = group.tabs.firstIndex(where: { $0.key == key })
             else { return nil }
             if !lowerHalf { return .beforeTab(key) }
-            return group.tabs[safe: index + 1].map { .beforeTab($0.key) } ?? .endOfWorkspace(workspace.id)
+            return group.tabs[safe: index + 1].map { .beforeTab($0.key) } ?? .endOfWorkspace(group.id)
 
         case (.workspace, .header(let id)):
             guard let index = groups.firstIndex(where: { $0.workspace?.id == id }) else { return nil }
@@ -83,7 +81,7 @@ extension SidebarModel {
             return before ? .beforeWorkspace(workspace.id) : slot(after: index, in: groups)
 
         case (.tab, .tail):
-            return groups.last?.workspace.map { .endOfWorkspace($0.id) }
+            return groups.last.map { .endOfWorkspace($0.id) }
 
         case (.workspace, .tail):
             return groups.isEmpty ? nil : .end

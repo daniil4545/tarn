@@ -157,16 +157,32 @@ struct SidebarGroupingTests {
         )
     }
 
-    @Test func anUngroupedBlockHasNoSlotOfItsOwnYet() {
+    /// spec: docs/specs/workspace-folder.md S51
+    /// A row without a group takes a tab drag like any row (native order only), also in the flat list
+    /// of Workspaces off.
+    @Test func aTabDraggedOverAnUngroupedRowLandsByTheHalfOfThatRow() {
+        let (groups, tabs) = withUngrouped()
+        let key = tabs[2].key
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(key), lowerHalf: false, in: groups) == .beforeTab(key))
+        // The lone row of its block: the lower half is the end of the block.
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(key), lowerHalf: true, in: groups) == .endOfWorkspace(groups[1].id))
+
+        let flat = [SidebarModel.Group(workspace: nil, tabs: Array(tabs[0...2]))]
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(tabs[0].key), lowerHalf: true, in: flat) == .beforeTab(tabs[1].key))
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(tabs[2].key), lowerHalf: true, in: flat) == .endOfWorkspace(flat[0].id))
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: flat) == .endOfWorkspace(flat[0].id))
+    }
+
+    @Test func anUngroupedBlockTakesNoWorkspaceDragAndHasNoHeader() {
         let (groups, tabs) = withUngrouped()
         let key = tabs[2].key
         for lowerHalf in [false, true] {
-            #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(key), lowerHalf: lowerHalf, in: groups) == nil)
             #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tab(key), lowerHalf: lowerHalf, in: groups) == nil)
         }
         // The ungrouped block has no header; its id is its first tab, no workspace's.
         #expect(groups[1].id == key)
         #expect(!groups.contains { $0.workspace?.id == key })
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .header(key), lowerHalf: false, in: groups) == nil)
     }
 
     @Test func aWorkspaceDroppedBelowAnotherLandsBeforeTheNextWorkspaceNotTheUngroupedBlock() {
@@ -178,10 +194,10 @@ struct SidebarGroupingTests {
         #expect(end == .end)
     }
 
-    @Test func belowAnUngroupedLastBlockATabHasNoSlot() {
+    @Test func belowAnUngroupedLastBlockATabGoesToTheEndOfThatBlock() {
         let (groups, tabs) = withUngrouped()
         let ungroupedLast = Array(groups[0...1])
-        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: ungroupedLast) == nil)
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: ungroupedLast) == .endOfWorkspace(groups[1].id))
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .endOfWorkspace(groups[2].id))
         // A gap in the ungrouped block pulls no header up: it belongs to no workspace.
         #expect(!SidebarModel.gapPullsUp(groups[2].id, gap: .beforeTab(tabs[2].key), in: groups))

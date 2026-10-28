@@ -398,6 +398,19 @@ final class WorkspaceRegistry {
         publish(changed.map { [$0] } ?? [])
     }
 
+    /// Moves a tab among ungrouped tabs, or in the flat list of Workspaces off: one native move, no
+    /// membership change (M3). Before `neighbour`, or after the last of `block`.
+    func reorderTab(_ window: NSWindow, before neighbour: NSWindow? = nil, behind block: [NSWindow] = []) {
+        let tab = key(for: window)
+        let order = group(of: window).map(key(for:))
+        guard let index = order.firstIndex(of: tab) else { return }
+        let members = Set(block.map(key(for:)))
+        isBusy = true
+        moveNatively(window, by: Self.destination(of: tab, in: order, before: neighbour.map(key(for:)), isMember: members.contains) - index)
+        isBusy = false
+        sync()
+    }
+
     /// The place of `tab` among the other tabs of `order` after a move: before `neighbour`, or
     /// after the last other member of the workspace. A tab that is the only member of the
     /// workspace stays where it is.

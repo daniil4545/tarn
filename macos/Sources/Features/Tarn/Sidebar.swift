@@ -562,15 +562,23 @@ final class SidebarModel: ObservableObject {
         case (.tab, .beforeTab(let key)):
             guard let moving = tab(withKey: id).flatMap(tabWindow(for:)),
                   let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
-                  let workspace = group.workspace,
                   let neighbour = group.tabs.first(where: { $0.key == key }).flatMap(tabWindow(for:))
             else { return false }
-            if moving !== neighbour { registry.moveTab(moving, to: workspace.id, before: neighbour) }
+            guard moving !== neighbour else { return true }
+            if let workspace = group.workspace {
+                registry.moveTab(moving, to: workspace.id, before: neighbour)
+            } else {
+                registry.reorderTab(moving, before: neighbour)
+            }
             return true
 
-        case (.tab, .endOfWorkspace(let workspace)):
+        case (.tab, .endOfWorkspace(let block)):
             guard let moving = tab(withKey: id).flatMap(tabWindow(for:)) else { return false }
-            registry.moveTab(moving, to: workspace)
+            if let group = groups.first(where: { $0.id == block && $0.workspace == nil }) {
+                registry.reorderTab(moving, behind: group.tabs.compactMap(tabWindow(for:)))
+            } else {
+                registry.moveTab(moving, to: block)
+            }
             return true
 
         case (.workspace, .beforeWorkspace(let other)):
@@ -897,9 +905,7 @@ struct Sidebar: View {
                                         SidebarRow(model: model, tab: tab, isCompact: false, isIndented: group.workspace != nil)
                                             .transition(.opacity)
                                     }
-                                    if group.workspace != nil {
-                                        TabGap(model: model, slot: .endOfWorkspace(group.id))
-                                    }
+                                    TabGap(model: model, slot: .endOfWorkspace(group.id))
                                 }
                             }
                             // Only a fold or unfold animates: a title change or a reorder keeps
