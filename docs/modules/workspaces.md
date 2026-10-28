@@ -125,6 +125,7 @@ All in `macos/Tests/Tarn/`; `BookSupport.swift` holds helpers.
 | `FailureTests` | broken or foreign-version snapshot, missing workspace, vanished window |
 | `TombstoneTests` | match by surface ids only after undo, most shared surfaces wins, unclaimed dropped, runs inside Ghostty's undo group, expiry, window and tab undo |
 | `WorkspaceTitleTests` | subtitle while Workspaces is on, whatever the tab style; none while off; the name in the native tab mark; settings text |
+| `MoveTabTests` | the native place of Remove from group, Move to and a drop below all rows (S43, S61, S62) |
 | `WorkspaceFreezeTests` | frozen: a new tab is ungrouped, a drag changes no membership, closing keeps the rest; on again: no move, drawn by membership, the new tabs ungrouped (S51) |
 
 ## Extending it
