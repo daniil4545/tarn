@@ -361,12 +361,11 @@ final class ViewerModel {
         if case .notice = disk {
             return toast("The file on disk is no longer text this viewer can edit: not saved")
         }
-        if !doc.conflict, [.conflict, .reloaded].contains(doc.diskChanged(disk)) {
+        if doc.conflict || [.conflict, .reloaded].contains(doc.diskChanged(disk)) {
             docs[path] = doc
             pushChrome()
             return toast("The file changed on disk: take the agent version or keep yours first")
         }
-        if doc.conflict { return toast("The file changed on disk: take the agent version or keep yours first") }
         do {
             try Self.write(doc.text, to: path)
         } catch {
