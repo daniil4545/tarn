@@ -72,7 +72,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 
 | # | Start and steps | Result |
 | --- | --- | --- |
-| S1 | first launch | one window; sidebar shows `~` with one tab; focus in its terminal; the tab starts in the home folder (Ghostty `working-directory`) |
+| S1 | first launch | one window; one ungrouped tab (stage 1a still draws it under a `~` header); focus in its terminal; the tab starts in the home folder (Ghostty `working-directory`) |
 | S2 | cmd+T or + at the sidebar top | a tab in the current workspace, after its last tab, focused |
 | S3 | + on a workspace header | a tab in that workspace; the workspace unfolds |
 | S4 | New workspace (sidebar button or Shift+Cmd+T), choose a folder in the panel | a workspace named after the folder at the end of the list with one new tab in it, started in the folder and focused, so no workspace is ever empty; Cancel creates nothing |
@@ -90,10 +90,10 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S15 | cmd+W on a pane | the pane closes; cmd+Z within 5 s brings it back |
 | S16 | cmd+W on the last pane of a tab | the tab closes with its viewers; cmd+Z within 5 s brings it back |
 | S17 | close the last tab of a workspace | the workspace closes; cmd+Z within 5 s brings both back (D12) |
-| S18 | close the last tab of the last workspace (cmd+W on its last pane included) | the window closes as in Ghostty; the next window starts with `~` (D12) |
+| S18 | close the last tab of the last workspace (cmd+W on its last pane included) | the window closes as in Ghostty; the next window starts with one ungrouped tab (D12) |
 | S19 | quit and launch again | windows, tabs, splits and cwd come back (Ghostty `window-save-state`); workspaces, their order, folding and tab membership come back with them; scrollback does not |
-| S20 | cmd+N, a second window | a window with its own `~` and one tab (D10) |
-| S21 | drag a tab out to another window | Ghostty moves it; it joins that window's current workspace; dropped outside every window it opens a new window with `~` (D10) |
+| S20 | cmd+N, a second window | a window with its own ungrouped tab, whatever group the source tab was in (D10, T-255) |
+| S21 | drag a tab out to another window | Ghostty moves it; it joins the group of the tab above it where it is dropped (ungrouped among ungrouped tabs); dropped outside every window it opens a new window with an ungrouped tab (D10, G5a) |
 | S22 | settings: tabs at the top | a flat tab bar, no workspaces or agent state; back to the sidebar style shows the workspaces as they were (D14) |
 | S23 | an agent in a collapsed workspace asks for permission | the header dot turns orange; one notification names the workspace and the tab |
 
