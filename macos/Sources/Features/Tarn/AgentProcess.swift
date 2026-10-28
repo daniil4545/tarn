@@ -88,9 +88,7 @@ enum AgentProcess {
 
     /// The kernel name of `pid`: the executable's basename cut to 15 characters.
     static func comm(pid: pid_t) -> String? {
-        var info = proc_bsdshortinfo()
-        let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size else { return nil }
+        guard var info = shortInfo(pid) else { return nil }
         return withUnsafeBytes(of: &info.pbsi_comm) { raw in
             raw.bindMemory(to: CChar.self).baseAddress.map { String(cString: $0) }
         }
@@ -140,10 +138,13 @@ enum AgentProcess {
     }
 
     private static func parent(_ pid: pid_t) -> pid_t? {
+        shortInfo(pid).map { pid_t($0.pbsi_ppid) }
+    }
+
+    private static func shortInfo(_ pid: pid_t) -> proc_bsdshortinfo? {
         var info = proc_bsdshortinfo()
         let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size else { return nil }
-        return pid_t(info.pbsi_ppid)
+        return proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size ? info : nil
     }
 
     /// The arguments of `pid` from `KERN_PROCARGS2`:
