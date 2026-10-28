@@ -79,6 +79,7 @@ struct AgentProcessCacheTests {
         // Not shown: the window tests that count visible windows are not disturbed.
         let controller = TerminalController(app)
         let window = try #require(controller.window)
+        window.isReleasedWhenClosed = false
         let model = SidebarModel()
         model.window = window
 
