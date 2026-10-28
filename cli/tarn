@@ -19,6 +19,8 @@
 #                           prints the last N lines (default 80) of the pane's screen and
 #                           scrollback as plain text
 #   tarn close <pane>       closes the pane at once, without confirmation; never moves focus
+#   tarn module ls [--json] list the tarn modules and their state: on, off or unavailable
+#   tarn skill              print the agent skill of this build; needs no running app
 # TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer; `wait` ignores it.
 LC_ALL=C
 export LC_ALL
@@ -38,7 +40,7 @@ refused() {
 }
 
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane>"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane> | module ls [--json] | skill"
 }
 
 # Prints $1 as a JSON string.
@@ -248,6 +250,29 @@ case $cmd in
     [ $# -eq 1 ] || usage
     need_surface
     ask "{\"version\":1,\"cmd\":\"close\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$1")}"
+    ;;
+  module)
+    [ "${1-}" = ls ] || usage
+    shift
+    need_surface
+    if [ $# -eq 0 ]; then
+      ask "{\"version\":1,\"cmd\":\"modules\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":false}"
+      json_field text
+    elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
+      ask "{\"version\":1,\"cmd\":\"modules\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":true}"
+      printf '%s\n' "$reply"
+    else
+      usage
+    fi
+    ;;
+  skill)
+    [ $# -eq 0 ] || usage
+    # The app bundle keeps the skill in Contents/Resources/tarn, a checkout next to this script.
+    dir=$(dirname "$0")
+    for file in "$dir/../Resources/tarn/SKILL.md" "$dir/SKILL.md"; do
+      [ -f "$file" ] && exec cat "$file"
+    done
+    fail "no skill in this build"
     ;;
   notify)
     [ $# -gt 0 ] || usage

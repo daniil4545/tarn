@@ -45,7 +45,9 @@ if [ ! -f "$lib" ] || [ "$here/fakehome.c" -nt "$lib" ]; then
   clang -dynamiclib -o "$lib" "$here/fakehome.c"
 fi
 # The stand activates itself on launch: the user's keys would land in it, so the front app gets focus back.
-front=$(lsappinfo info -only bundleid "$(lsappinfo front)" | sed -n 's/.*="\(.*\)"/\1/p')
+# By path: the bundle id of another stand's copy is not registered, so `open -b` fails on it.
+front=$(lsappinfo info -only bundlepath "$(lsappinfo front)" | sed -n 's/.*="\(.*\)"/\1/p')
+front=${front#/private}
 rm -rf "$app"
 ditto "$src" "$app"
 plutil -replace CFBundleIdentifier -string "$id" "$app/Contents/Info.plist"
@@ -64,7 +66,7 @@ while [ "$i" -lt 30 ]; do
   if [ -S "$sock" ]; then
     surface=$(osascript -e "tell application id \"$id\" to get id of focused terminal of selected tab of front window" 2>/dev/null || true)
     if [ -n "$surface" ]; then
-      [ -z "$front" ] || [ "$front" = "$id" ] || open -b "$front"
+      [ -z "$front" ] || [ "$front" = "$app" ] || open -a "$front"
       echo "stand up (pid $pid), log $stand/app.log"
       echo "export HOME='$stand/home' TARN_SURFACE='$surface'"
       exit 0

@@ -67,7 +67,7 @@ flowchart LR
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works |
 | Browser demo | static page that mimics the window; not part of the app | [demo.md](modules/demo.md) | works |
 | Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket command `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
-| Agent commands | socket commands on panes of the caller's workspace: `ls`, `new`, `run`, `wait` | [agent-commands.md](modules/agent-commands.md) | works |
+| Agent commands | socket commands on panes of the caller's workspace: `ls`, `new`, `run`, `wait`, `read`, `close`; `module ls`; `tarn skill` | [agent-commands.md](modules/agent-commands.md) | works |
 
 Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names its suites.
 
@@ -115,7 +115,7 @@ One environment: the local macOS app. One config file of ours: `~/.config/tarn/g
 | module Sidebar, key `TarnTabStyle`: `sidebar` (default, on) or `top` (off) | sidebar or native tab bar | Settings > Modules, `UserDefaults` |
 | module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules and File Viewer, `UserDefaults` |
 | modules Workspaces, Permission card, Notifications, keys `TarnModule.workspaces`, `TarnModule.permissionCard`, `TarnModule.notifications` | default on; Permission card needs Sidebar; a wrong type counts as on and is logged (category `settings`) | Settings > Modules, `UserDefaults`; launch arguments such as `-TarnModule.workspaces NO` win without writing (the bench uses them) |
-| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.2.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
+| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.3.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
 
 Logs: `os_log`, subsystem `tarn`, categories `registry`, `socket`, `viewer`, `attention`, `settings`, `workspace`; view in Console.app. Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (3600 s).
 
@@ -150,7 +150,7 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 19 | `macos/Sources/App/MainMenu.xib` | View menu: item "Toggle File Viewer", key equivalent `b`, action `toggleViewer:` to the first responder | Cmd+B from the terminal opens, shows or hides the viewer pane; the action is in `ViewerHost.swift` |
 | 20 | `macos/Sources/App/MainMenu.xib` | Window menu: item "Jump to Waiting Session", key equivalent `u`, action `jumpToWaitingSession:` to the first responder, after "Show/Hide All Terminals" | Cmd+U jump; the action is in `AttentionJump.swift` |
 | 21 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `showDesktopNotification(_ app:target:n:)` surface case: `if MainActor.assumeIsolated({ Attention.suppresses(surfaceView) }) { return }`; `private` removed from `showDesktopNotification(_ surfaceView:title:body:requireFocus:)` | OSC 9/777 of a live agent session is dropped; our notification goes through Ghostty's route |
-| 22 | `macos/Ghostty.xcodeproj/project.pbxproj` | shell phase "Install tarn CLI" in the app target: installs `cli/tarn` into `Contents/MacOS` and signs it | the CLI ships in the bundle; the core puts that folder on `PATH` |
+| 22 | `macos/Ghostty.xcodeproj/project.pbxproj` | shell phase "Install tarn CLI" in the app target: installs `cli/tarn` into `Contents/MacOS` and signs it, and `cli/SKILL.md` with the app version into `Contents/Resources/tarn` | the CLI ships in the bundle; the core puts that folder on `PATH` |
 | 23 | `macos/Ghostty.xcodeproj/project.pbxproj`, `Ghostty.xcscheme` | bundle ids `com.daniil4545.tarn[.debug|-dock-tile|.tests|.uitests]`, `PRODUCT_NAME = Tarn` with `PRODUCT_MODULE_NAME = Ghostty`, display name, usage strings, `MARKETING_VERSION = 1.0.0`, icon name `AppIcon`, `Tarn.app` in `TEST_HOST`; `images/Ghostty.icon` out of Resources | the app installs next to Ghostty |
 | 24 | `macos/Ghostty-Info.plist`, `SurfaceView+Transferable.swift` | UTI `com.daniil4545.tarn.surfaceId`; `GhosttyCommit` from `$(GHOSTTY_COMMIT)` | two apps never export one type id |
 | 25 | `DockTilePlugin.swift`, `Notification+AppIcon.swift` | defaults suite and notification name use `com.daniil4545.tarn` | the dock tile reads tarn's defaults, not Ghostty's |

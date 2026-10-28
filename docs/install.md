@@ -49,6 +49,8 @@ tarn ls                      # the panes of this workspace: PANE TAB TITLE CWD P
 tarn ls --json               # the same panes as JSON
 tarn notify "build done"     # mark this session and notify you
 tarn new -- npm test         # a split below this pane running the command; prints its pane id
+tarn module ls               # the tarn modules: on, off or unavailable
+tarn skill                   # how an agent uses these commands, for this build
 ```
 
 Details: [attention.md](modules/attention.md). Outside a Tarn terminal, call `/Applications/Tarn.app/Contents/MacOS/tarn`.
