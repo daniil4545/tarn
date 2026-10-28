@@ -9,6 +9,8 @@ tarn is an agent-first terminal for macOS, a fork of Ghostty. It keeps the Ghost
 ## Principles
 
 - Simplicity: a part stays only if something breaks without it. Features outside `docs/spec.md` section 1 are cut, not hidden behind a setting.
+- A hard feature is a reason to rethink it (user decision 2026-10-28): when a feature is hard to build, its behavior is unclear or it conflicts with others, simplify it or cut it, as workspaces became optional tab groups. The agent proposes the cut with options; the user decides.
+- Small steps (user decision 2026-10-28): every step is its own small PR; a large piece is split before work starts.
 - Speed: startup, input latency, idle CPU and memory stay at the level of upstream Ghostty built from the same commit; `make -f tarn.mk bench` decides, not impressions.
 - Agent-first: an agent opens files, lists sessions and asks for attention through the `tarn` CLI; focus and keystrokes stay with the human.
 - Local only: no account, cloud, telemetry, subscription or built-in AI model.
