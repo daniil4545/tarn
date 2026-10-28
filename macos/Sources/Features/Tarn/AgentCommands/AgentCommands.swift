@@ -64,6 +64,7 @@ enum AgentCommands {
         "run": RunPane.run,
         "read": ReadPane.run,
         "close": ClosePane.run,
+        "modules": ListModules.run,
     ]
 
     /// Answers a command of `handlers`; false for any other line.

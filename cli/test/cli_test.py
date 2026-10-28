@@ -351,6 +351,58 @@ def main() -> int:
         )
         check("close no pane", (code, out) == (4, "") and "no pane matched" in err, err)
 
+        # module ls: cmd "modules", text or the reply line (agent-cli 4.9).
+        rows = "MODULE   STATE\nsidebar  on\n"
+        (code, out, _), req = with_server(home, reply(text=rows), ["module", "ls"])
+        check("module ls text", (code, out) == (0, rows), (code, out))
+        check(
+            "module ls request",
+            req
+            == [{"version": 1, "cmd": "modules", "surface": SURFACE, "json": False}],
+            req,
+        )
+        line = reply(modules=[{"module": "sidebar", "state": "on"}])
+        (code, out, _), req = with_server(home, line, ["module", "ls", "--json"])
+        check(
+            "module ls json",
+            code == 0 and out.encode() == line and req[0]["json"] is True,
+            out,
+        )
+
+        # skill: the file next to the script, no socket and no surface (agent-cli 4.10).
+        code, out, err = run(home, ["skill"], surface=None)
+        check(
+            "skill",
+            (code, err) == (0, "")
+            and out == (CLI.parent / "SKILL.md").read_text()
+            and out.startswith("# tarn @VERSION@"),
+            (code, err),
+        )
+        bundle = home / "Tarn.app" / "Contents"
+        (bundle / "MacOS").mkdir(parents=True)
+        (bundle / "Resources" / "tarn").mkdir(parents=True)
+        shutil.copy(CLI, bundle / "MacOS" / "tarn")
+        (bundle / "Resources" / "tarn" / "SKILL.md").write_text("# tarn 9.9.9\n")
+        done = subprocess.run(
+            ["/bin/sh", str(bundle / "MacOS" / "tarn"), "skill"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        check("skill in the bundle", done.stdout == "# tarn 9.9.9\n", done)
+        (bundle / "Resources" / "tarn" / "SKILL.md").unlink()
+        done = subprocess.run(
+            ["/bin/sh", str(bundle / "MacOS" / "tarn"), "skill"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        check(
+            "no skill",
+            (done.returncode, done.stderr) == (1, "tarn: no skill in this build\n"),
+            done,
+        )
+
         # client-side errors.
         for name, args, surface in [
             ("open", ["open", "/x"], None),
@@ -360,6 +412,7 @@ def main() -> int:
             ("run", ["run", "--", "ls"], None),
             ("read", ["read", SURFACE], None),
             ("close", ["close", SURFACE], None),
+            ("module ls", ["module", "ls"], None),
         ]:
             code, out, err = run(home, args, surface=surface)
             check(
@@ -424,6 +477,10 @@ def main() -> int:
             ["read", "a", "--bogus"],
             ["close"],
             ["close", "a", "b"],
+            ["module"],
+            ["module", "list"],
+            ["module", "ls", "--bogus"],
+            ["skill", "x"],
         ]:
             code, out, err = run(home, args)
             check(

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The socket commands an agent calls on terminal panes: `ls`, `new`, `run`, `wait`, `read` and `close`. Every command names its caller by `TARN_SURFACE` and reaches only the panes of the caller's workspace. Spec: `docs/specs/agent-cli.md`.
+The socket commands an agent calls on terminal panes: `ls`, `new`, `run`, `wait`, `read` and `close`, and `modules` for `tarn module ls`. Every command names its caller by `TARN_SURFACE` and reaches only the panes of the caller's workspace. Spec: `docs/specs/agent-cli.md`.
 
 ## Place in the system
 
@@ -31,6 +31,8 @@ Reading: `AgentCommands` builds the rows of every pane, resolves the caller and 
 | Out | `{"ok":true,"text":...}` | `ReadPane.run` |
 | In | `{"version":1,"cmd":"close","surface":<uuid>,"pane":<uuid>}` | `AgentCommands.handle` |
 | Out | `{"ok":true}` | `ClosePane.run` |
+| In | `{"version":1,"cmd":"modules","surface":<uuid>,"json":bool}` | `AgentCommands.handle` |
+| Out | `{"ok":true,"text":...}` or `{"ok":true,"modules":[{"module","state"}]}` | `ListModules.run` |
 | Out | `{"ok":false,"code":<n>,"error":...}`; the CLI prints `tarn: <error>` and exits with `code` | `AgentCommands.answer` |
 
 ## How it works
@@ -52,3 +54,7 @@ A new command is one handler file in `AgentCommands/`, one row in `AgentCommands
 `read` (`ReadPane`): `--lines` must be a positive integer, else `bad lines` (code 1), in the CLI before anything is sent and in the app; default 80 (herdr `pane read`). The text is a fresh `ghostty_surface_read_text` of the whole screen and scrollback (`GHOSTTY_POINT_SCREEN`), not `cachedScreenContents` (500 ms cache). It comes from the cell grid, so it has no escape sequences. Trailing blanks of each line and the empty rows below the last output are cut, then the last `lines` lines are kept, each ending in a newline; a soft-wrapped row comes back as one line.
 
 `close` (`ClosePane`): Ghostty `closeSurface(_:withConfirmation: false)`: no alert whatever runs, an undo entry as for Cmd+W, the last pane of a tab closes the tab. The last pane of a tab whose viewer has unsaved edits is refused with `unsaved viewer edits` (code 1): its close would put the Save sheet (`ViewerClose.intercept`) on the user's window. Ghostty refocuses its last focused surface in that window; the first responder the window had before the close is given back (`NewPane.keep`) unless it was the closed pane (B1). A wait on the pane answers `closed` through the `surfaceTreeDidChange` insertion point or the window close. The app does not refuse the caller's own pane: which panes to close is a rule of the skill (`docs/specs/agent-cli.md` 4.8).
+
+`modules` (`ListModules`): one row per `TarnModule`, `MODULE  STATE`, the id in kebab case (`permission-card`); state `off` when stored off, `unavailable` when stored on but a needed module is off (`TarnModules.isOn`), else `on`. Read only; the caller check of every command applies.
+
+`tarn skill` needs no socket: the CLI prints `Contents/Resources/tarn/SKILL.md`, which the build phase "Install tarn CLI" copies from `cli/SKILL.md` with `@VERSION@` in the first line replaced by `MARKETING_VERSION`; in a checkout it prints `cli/SKILL.md`. The plugin stub skill `plugin/skills/tarn/SKILL.md` only tells the agent to run `tarn skill` (`docs/specs/agent-cli.md` U2). How the agent uses the commands is an edit of `cli/SKILL.md`, no code.
