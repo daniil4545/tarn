@@ -118,11 +118,8 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in a pane (the web
-    /// view takes the key first, so there is one path per focus). It opens and hides, it never closes:
-    /// no viewer opens one with the tree and the keyboard in it; hidden viewers come back as they were
-    /// with the keyboard in them; shown viewers (with files or not) hide whole, tabs, unsaved edits and
-    /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
+    /// Cmd+B, from the terminal or typed in a pane. It opens and hides, it never closes (Cmd+W closes):
+    /// no viewer opens one with the tree; hidden viewers come back; shown ones hide whole.
     func toggleFromKey(root: String?) {
         guard isViewerOn() else { return }
         guard activeModel != nil else { return openTreeOnly(root: root) }
@@ -409,10 +406,8 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
-    /// A viewer dropped outside every window opens in a new window at the drop point. The window
-    /// comes from Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out: it
-    /// sets the position when the window is presented, after which nothing cascades it back to the
-    /// first screen, and keeps it on the screen that holds the point (`constrainToScreen`).
+    /// A viewer dropped outside every window opens in a new window at the drop point, made by
+    /// Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out.
     private func detach(_ id: UUID, at point: NSPoint) {
         guard let pane = panes[id], let controller, let app = controller.ghostty.app else { return }
         let created = TerminalController.newWindow(

@@ -20,7 +20,7 @@ enum ViewerColors {
     }
 
     /// Makes the colors part of every page load, run at document start: the first paint and a
-    /// page reloaded after the web process died already have them. Replaces the earlier script.
+    /// page reloaded after the web process died already have them.
     static func install(_ chrome: ThemeChrome?, in content: WKUserContentController) {
         content.removeAllUserScripts()
         content.addUserScript(WKUserScript(
@@ -143,7 +143,7 @@ final class ViewerWebView: WKWebView {
     @IBAction func moveSplitDividerLeft(_ sender: Any?) { onLayout?(.resize(.left, pane: bounds.size)) }
     @IBAction func moveSplitDividerRight(_ sender: Any?) { onLayout?(.resize(.right, pane: bounds.size)) }
     @IBAction func equalizeSplits(_ sender: Any?) { onLayout?(.equalize) }
-    /// Zoom is a terminal's (user decision 2026-10-26): from a viewer it does nothing, rather than
+    /// Zoom is a terminal's: from a viewer it does nothing, rather than
     /// zoom the terminal the keyboard is not in.
     @IBAction func splitZoom(_ sender: Any?) {}
 
