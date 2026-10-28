@@ -74,6 +74,10 @@ check:
 		-jobs 4 -skip-testing GhosttyUITests $(CI_SKIP) $(RETRY) test > $(SYMROOT)/test.log 2>&1 || \
 		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed and retried; log $(SYMROOT)/test.log"
+	@grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -v "(0.000 seconds)" | \
+		sed -E "s/^Test [Cc]ase '([^']*)'.*/  retried: \1/" | sort -u
+	@n=$$(grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -c "(0.000 seconds)"); \
+		[ "$$n" -eq 0 ] || echo "  retried: $$n tests the test host never finished (it exited mid-run)"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
 	sh cli/test/install_test.sh
