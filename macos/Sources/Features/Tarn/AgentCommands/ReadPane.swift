@@ -37,12 +37,12 @@ enum ReadPane {
     }
 
     /// The last `count` lines, each with its trailing blanks cut; the empty rows below the last
-    /// output are not lines. Each line ends with a newline.
+    /// output are not lines. Each line ends with a newline. Only the kept lines are trimmed: the
+    /// scrollback can hold thousands of rows.
     static func last(_ count: Int, of text: String) -> String {
-        var lines = text.split(separator: "\n", omittingEmptySubsequences: false).map { line in
-            String(line.reversed().drop { $0 == " " || $0 == "\t" || $0 == "\r" }.reversed())
-        }
-        while lines.last?.isEmpty == true { lines.removeLast() }
-        return lines.suffix(count).map { $0 + "\n" }.joined()
+        let blank: (Character) -> Bool = { $0 == " " || $0 == "\t" || $0 == "\r" }
+        var lines = text.split(separator: "\n", omittingEmptySubsequences: false)[...]
+        while let line = lines.last, line.allSatisfy(blank) { lines.removeLast() }
+        return lines.suffix(count).map { String($0.reversed().drop(while: blank).reversed()) + "\n" }.joined()
     }
 }
