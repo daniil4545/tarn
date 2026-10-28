@@ -3,7 +3,7 @@ import Foundation
 /// `tarn ls`: the terminal panes of the caller's workspace (`docs/specs/agent-cli.md` 4.1), in the
 /// form of WezTerm `cli list` (`wezterm/src/cli/list.rs`): a header row, columns padded to the widest cell.
 enum ListPanes {
-    static let columns = ["PANE", "TAB", "TITLE", "CWD", "PROCESS", "BRANCH", "HOST", "STATE"]
+    static let columns = ["PANE", "TAB", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"]
 
     @MainActor
     static func run(_ message: [String: Any], _ scope: AgentScope) -> Result<[String: Any], AgentRefusal> {
@@ -22,7 +22,7 @@ enum ListPanes {
     private static func cells(_ row: PaneRow) -> [String] {
         let values: [String] = [
             row.pane.uuidString, row.tab?.uuidString ?? "", oneLine(row.title), row.cwd,
-            row.process, row.branch, row.host, row.state,
+            row.process, row.branch, row.state,
         ]
         return values.map { $0.isEmpty ? "-" : $0 }
     }
@@ -47,7 +47,6 @@ enum ListPanes {
             "cwd": row.cwd,
             "process": row.process,
             "branch": row.branch,
-            "host": row.host,
             "state": row.state,
         ]
     }

@@ -7,7 +7,7 @@ function panesOf(node) {
   return [...(node.pane ? [node.pane] : []), ...Object.values(node).flatMap(panesOf)];
 }
 
-// `host` stays empty until SSH sessions (#39); `state` is empty for a pane without a session.
+// `state` is empty for a pane without a session.
 export function paneRows({ workspaces, registry, vfs, home, caller }) {
   const ws = workspaces.wss.find((w) => w.tabs.some((id) => panesOf(workspaces.tabs[id].layout).includes(caller)));
   if (!ws) return [];
@@ -25,7 +25,6 @@ export function paneRows({ workspaces, registry, vfs, home, caller }) {
       cwd,
       process: registry[pane] ? "claude" : "zsh",
       branch: vfs.gitBranch(cwd) ?? "",
-      host: "",
       state: registry[pane]?.state ?? "",
     }));
   });
