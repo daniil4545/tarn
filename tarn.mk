@@ -31,6 +31,12 @@ LSREG    :=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 
 STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
 
+# The GitHub runner has no GUI session: tests that need a real window, focus or mouse drag fail there
+# and pass on the Mac (T-270). CI skips them; the agent runs the full check on the Mac before a merge.
+GUI_TESTS := GhosttyTests/NewPaneTests/theSplitGoesBelowAndKeepsTheFocus() \
+	GhosttyTests/SidebarWidthTests/terminalKeepsItsFrameWhileTheSidebarIsDragged()
+CI_SKIP   := $(if $(CI),$(foreach t,$(GUI_TESTS),-skip-testing '$(t)'))
+
 .PHONY: check release bench worktree dev live
 
 # The core (GhosttyKit.xcframework, zig-out) is untracked and slow to build: every worktree links this one.
@@ -62,7 +68,7 @@ check:
 	uvx ruff@0.17.2 format --check plugin/test
 	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
-		-jobs 4 -skip-testing GhosttyUITests test > $(SYMROOT)/test.log 2>&1 || \
+		-jobs 4 -skip-testing GhosttyUITests $(CI_SKIP) test > $(SYMROOT)/test.log 2>&1 || \
 		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
 	python3 -I plugin/test/hook_test.py
