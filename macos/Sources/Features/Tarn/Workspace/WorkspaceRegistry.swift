@@ -33,6 +33,9 @@ final class WorkspaceRegistry {
     private static let maxRounds = 3
     /// Our own moves are under way: ignore the notifications they cause.
     private var isBusy = false
+    /// Native moves wait for the next main-queue turn (`sync`).
+    private var movesScheduled = false
+    private var movesNow = false
     /// Windows raised by `moveNatively`; their key notifications arrive after `isBusy` is over.
     private var hops = KeyHops()
 
@@ -64,6 +67,17 @@ final class WorkspaceRegistry {
                 if let window = note.object as? NSWindow { self?.windowWillClose(window) }
             }
         }
+    }
+
+    /// Ghostty is about to open a new tab from `window` (insertion point in
+    /// `AppDelegate.ghosttyNewTab`, which every Cmd+T reaches: key, menu, the sidebar "+"). It tells
+    /// a new tab from a one-tab window merged in (`WorkspaceBook.expectNewTab`). An observer of the
+    /// same notification is not enough: on a launch without restored windows it runs after
+    /// AppDelegate's, when the tab already exists (checked on the stand).
+    func willOpenTab(from window: NSWindow) {
+        let tab = key(for: window)
+        book.expectNewTab(from: tab)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in book.clearExpectedTab(for: tab) }
     }
 
     // MARK: Reading
@@ -116,7 +130,19 @@ final class WorkspaceRegistry {
 
         var outcome = book.reconcile(bookGroups())
         for note in outcome.notes { Self.logger.error("\(note, privacy: .public)") }
-        if !outcome.reorders.isEmpty {
+        if !outcome.reorders.isEmpty, !movesNow {
+            // A sync can run inside AppKit's addTabbedWindow (a title change posts there); a native
+            // move then breaks its tab group (NSWindowStackController assertion). Move one turn later.
+            if !movesScheduled {
+                movesScheduled = true
+                DispatchQueue.main.async { [self] in
+                    movesScheduled = false
+                    movesNow = true
+                    sync()
+                    movesNow = false
+                }
+            }
+        } else if !outcome.reorders.isEmpty {
             for reorder in outcome.reorders {
                 guard let window = window(for: reorder.tab) else { continue }
                 moveNatively(window, by: reorder.delta)

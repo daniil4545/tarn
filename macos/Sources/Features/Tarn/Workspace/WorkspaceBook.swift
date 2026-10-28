@@ -43,6 +43,8 @@ struct WorkspaceBook {
     private var live = Set<TabKey>()
     private var seenOrder: [UUID: [TabKey]] = [:]
     private var pendingTarget: [UUID: Workspace.ID] = [:]
+    /// Sets Ghostty announced a new tab for (`expectNewTab`), with the tab it comes from.
+    private var expectingTab: [UUID: TabKey] = [:]
     private var lastSelected: [UUID: Workspace.ID] = [:]
     private var lastSelectedTab: [UUID: TabKey] = [:]
 
@@ -103,11 +105,18 @@ struct WorkspaceBook {
             setOf[tab] = nil
         }
 
+        // The tab Cmd+T was pressed in, when Ghostty announced the new tab (G4).
+        var announced: TabKey?
         for tab in group.tabs {
             guard let old = setOf[tab], old != winner else { continue }
             let oldTabs = live.filter { setOf[$0] == old }
-            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner],
-               !(isNewTab(loser, old: old, tab: tab, group: group) || (isLoneTab(loser) && pendingTarget[winner] != nil)) {
+            // A new tab is seen alone in its own window before AppKit tabs it in (a title change
+            // posts in between). Ghostty announced it (`expectNewTab`); any other one-tab window
+            // coming whole is a window merged in.
+            let lone = sets[old].map(isLoneTab) == true
+            if lone, let source = expectingTab.removeValue(forKey: winner) { announced = source }
+            let newTab = lone && (announced != nil || pendingTarget[winner] != nil)
+            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !newTab {
                 // Merge All Windows: the loser's groups come whole, its ungrouped tabs join ours (I1).
                 won.absorb(loser)
                 merged = true
@@ -115,6 +124,7 @@ struct WorkspaceBook {
                 sets[old] = nil
                 seenOrder[old] = nil
                 pendingTarget[old] = nil
+                expectingTab[old] = nil
                 lastSelected[old] = nil
                 lastSelectedTab[old] = nil
                 for moved in oldTabs { setOf[moved] = winner }
@@ -122,8 +132,7 @@ struct WorkspaceBook {
             } else {
                 // One tab dragged in, or out: it joins the group of its neighbour (G5a), or the
                 // group a sidebar command named.
-                let lone = sets[old].map { isNewTab($0, old: old, tab: tab, group: group) } == true
-                if pendingTarget[winner] == nil, !lone { arrivals.insert(tab) }
+                if pendingTarget[winner] == nil, !newTab { arrivals.insert(tab) }
                 remove(tab, from: old)
                 touched.insert(old)
             }
@@ -132,7 +141,9 @@ struct WorkspaceBook {
         let before = sets[winner]?.revision
         var set = sets[winner] ?? WorkspaceSet(id: winner)
         let fresh = group.tabs.filter { setOf[$0] == nil }
-        let target = targetWorkspace(in: set, group: group, winner: winner)
+        // A sidebar command's target comes first; then the group of the tab Cmd+T was pressed in.
+        let announcedTarget = pendingTarget[winner] == nil ? announced.flatMap { set.workspace(of: $0)?.id } : nil
+        let target = announcedTarget ?? targetWorkspace(in: set, group: group, winner: winner)
         for tab in fresh { setOf[tab] = winner }
 
         let previous = (seenOrder[winner] ?? []).filter(members.contains)
@@ -162,17 +173,6 @@ struct WorkspaceBook {
 
         if set.revision != before { touched.insert(winner) }
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
-    }
-
-    /// A window of one ungrouped tab. A new tab is seen alone in its own window before AppKit tabs
-    /// it (a title change posts in between), and on the stand the pass runs before Ghostty selects
-    /// it (`TerminalController.swift:493`) except for the first Cmd+T. So a one-tab window is a new
-    /// tab (Cmd+T, takes the target) when it is selected in the group, or when it was never selected
-    /// before: `lastSelectedTab` is written when a window becomes key (`WorkspaceRegistry.windowDidBecomeKey`
-    /// calls `selected(_:)`), and a Cmd+N window is key when shown. A one-tab window that was key
-    /// is a window merged in (`absorb`).
-    private func isNewTab(_ set: WorkspaceSet, old: UUID, tab: TabKey, group: Group) -> Bool {
-        isLoneTab(set) && (group.selected == tab || lastSelectedTab[old] == nil)
     }
 
     private func isLoneTab(_ set: WorkspaceSet) -> Bool {
@@ -264,6 +264,7 @@ struct WorkspaceBook {
             sets[id] = nil
             seenOrder[id] = nil
             pendingTarget[id] = nil
+            expectingTab[id] = nil
             lastSelected[id] = nil
             lastSelectedTab[id] = nil
         } else {
@@ -277,6 +278,18 @@ struct WorkspaceBook {
     mutating func setPendingTarget(_ workspace: Workspace.ID, for tab: TabKey) {
         guard let id = setOf[tab] else { return }
         pendingTarget[id] = workspace
+    }
+
+    /// Ghostty announced a new tab from `tab` (`ghosttyNewTab`, posted before the tab exists): the
+    /// next one-tab window that joins this set is that tab, not a window merged in.
+    mutating func expectNewTab(from tab: TabKey) {
+        guard let id = setOf[tab] else { return }
+        expectingTab[id] = tab
+    }
+
+    /// Forgets an announced tab that never came.
+    mutating func clearExpectedTab(for tab: TabKey) {
+        if let id = setOf[tab], expectingTab[id] == tab { expectingTab[id] = nil }
     }
 
     /// Forgets a target that nobody used. True when there was one.

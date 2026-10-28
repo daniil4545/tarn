@@ -806,6 +806,8 @@ class AppDelegate: NSObject,
         let configAny = notification.userInfo?[Ghostty.Notification.NewSurfaceConfigKey]
         let config = configAny as? Ghostty.SurfaceConfiguration
 
+        // tarn: the tab group of the new tab is the group of the tab it opens from.
+        MainActor.assumeIsolated { WorkspaceRegistry.shared.willOpenTab(from: window) }
         _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
     }
 
