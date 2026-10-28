@@ -27,7 +27,7 @@ enum TarnModule: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The UserDefaults key. Sidebar and File viewer keep the keys of 1.2.0.
+    /// The UserDefaults key. Sidebar and File viewer keep their original keys.
     var key: String {
         switch self {
         case .sidebar: TabStyle.key

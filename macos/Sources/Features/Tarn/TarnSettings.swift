@@ -109,9 +109,8 @@ final class TarnSettingsController: NSWindowController, NSWindowDelegate {
         window?.performClose(sender)
     }
 
-    /// The menu items Close (Cmd+W) and Close Window send `close:` and `closeWindow:` down the
-    /// responder chain. `NSWindow` answers neither, so without these the items stay disabled and
-    /// Cmd+W does nothing. `AboutController` does the same.
+    /// Close and Close Window send `close:` and `closeWindow:` down the responder chain;
+    /// `NSWindow` answers neither, so without these Cmd+W does nothing.
     @IBAction func close(_ sender: Any?) {
         window?.performClose(sender)
     }

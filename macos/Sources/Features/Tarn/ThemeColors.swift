@@ -1,8 +1,8 @@
 import GhosttyKit
 import SwiftUI
 
-/// One color of a terminal theme, 8 bits per channel. The window colors are derived from it with
-/// the rule of the demo (`demo/js/color.js`, `demo/js/chrome-theme.js`); `docs/modules/settings.md`.
+/// One color of a terminal theme, 8 bits per channel. Window colors derive from it by the demo's
+/// rule (`demo/js/chrome-theme.js`).
 struct ThemeColor: Equatable, Hashable {
     let r: Int
     let g: Int
