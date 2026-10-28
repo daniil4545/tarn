@@ -14,8 +14,6 @@ struct WorkspaceBook {
 
     /// What a pass over the groups decided.
     struct Outcome: Equatable {
-        /// Native moves for the registry to make: new tabs go to the end of their run.
-        var reorders: [WorkspaceSet.Reorder] = []
         /// Sets whose table changed, so their windows must save their state again.
         var changed: Set<UUID> = []
         /// One line per case no rule covered (section 8).
@@ -33,15 +31,12 @@ struct WorkspaceBook {
     private(set) var sets: [UUID: WorkspaceSet] = [:]
     /// Workspaces are off: new tabs join "~" and no tab or workspace moves (`docs/modules/workspaces.md`).
     var frozen = false
-    /// Workspaces came back on: the next pass regroups the tabs instead of repairing membership.
-    var regroupPending = false
     private var setOf: [TabKey: UUID] = [:]
     /// Tabs seen in a group that held every live tab of their set. A settled tab that shows
     /// up in a group without its set has left it. Restored tabs start unsettled: AppKit
     /// may put their windows into one group only later.
     private var settled = Set<TabKey>()
     private var live = Set<TabKey>()
-    private var seenOrder: [UUID: [TabKey]] = [:]
     private var pendingTarget: [UUID: Workspace.ID] = [:]
     private var lastSelected: [UUID: Workspace.ID] = [:]
     private var lastSelectedTab: [UUID: TabKey] = [:]
@@ -83,15 +78,13 @@ struct WorkspaceBook {
         // does not depend on the order of the groups (AppKit lists windows front to back).
         let groups = groups.filter { !$0.tabs.isEmpty }
         let winners = winningSets(for: groups)
-        let regroup = regroupPending && !frozen
-        regroupPending = false
         for (group, winner) in zip(groups, winners) {
-            reconcile(group, winner: winner, regroup: regroup, into: &outcome)
+            reconcile(group, winner: winner, into: &outcome)
         }
         return outcome
     }
 
-    private mutating func reconcile(_ group: Group, winner: UUID, regroup: Bool, into outcome: inout Outcome) {
+    private mutating func reconcile(_ group: Group, winner: UUID, into outcome: inout Outcome) {
         let members = Set(group.tabs)
         var touched = Set<UUID>()
 
@@ -111,7 +104,6 @@ struct WorkspaceBook {
                 won.absorb(loser)
                 sets[winner] = won
                 sets[old] = nil
-                seenOrder[old] = nil
                 pendingTarget[old] = nil
                 lastSelected[old] = nil
                 lastSelectedTab[old] = nil
@@ -130,14 +122,10 @@ struct WorkspaceBook {
         let target = targetWorkspace(in: set, group: group, winner: winner)
         for tab in fresh { setOf[tab] = winner }
 
-        let previous = (seenOrder[winner] ?? []).filter(members.contains)
         if frozen {
             set.reconcileFrozen(current: group.tabs)
-        } else if regroup {
-            set.reconcileFrozen(current: group.tabs)
-            outcome.reorders += set.regroup(order: group.tabs)
         } else {
-            outcome.reorders += set.reconcile(previous: previous, current: group.tabs, target: target)
+            set.reconcile(current: group.tabs, target: target)
         }
         if !fresh.isEmpty {
             if let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
@@ -146,7 +134,6 @@ struct WorkspaceBook {
         set.removeEmpty(keeping: pendingTarget[winner])
         sets[winner] = set
 
-        seenOrder[winner] = (seenOrder[winner] ?? []).filter { !members.contains($0) } + group.tabs
         if live.filter({ setOf[$0] == winner }).isSubset(of: members) { settled.formUnion(members) }
         if lastSelected[winner] == nil, let selected = group.selected, let id = set.workspace(of: selected)?.id {
             lastSelected[winner] = id
@@ -206,13 +193,6 @@ struct WorkspaceBook {
         return set.runs(order: group.tabs).first?.workspace.id ?? set.workspaces.first?.id ?? UUID()
     }
 
-    /// The tab a new tab of `workspace` inherits from, as cmux does: `selected` when it is in
-    /// `workspace`, else the workspace's last tab in `order`; nil for an empty workspace.
-    func sourceTab(for workspace: Workspace.ID, order: [TabKey], selected: TabKey) -> TabKey? {
-        let tabs = order.filter { self.workspace(of: $0)?.id == workspace }
-        return tabs.contains(selected) ? selected : tabs.last
-    }
-
     // MARK: Closing and coming back
 
     /// Notes a tab that is about to close. Returns what is needed to put it back.
@@ -249,12 +229,10 @@ struct WorkspaceBook {
     private mutating func remove(_ tab: TabKey, from id: UUID) {
         setOf[tab] = nil
         settled.remove(tab)
-        seenOrder[id] = seenOrder[id]?.filter { $0 != tab }
         guard var set = sets[id] else { return }
         set.remove(tab)
         if set.workspaces.isEmpty {
             sets[id] = nil
-            seenOrder[id] = nil
             pendingTarget[id] = nil
             lastSelected[id] = nil
             lastSelectedTab[id] = nil

@@ -32,7 +32,6 @@ struct MergeTests {
         book.reinsert(t[3], from: closed!)
         #expect(book.workspace(of: t[3])?.id == work)
         let outcome = book.pass([[t[0], t[1], t[3]]])
-        #expect(outcome.reorders.isEmpty)
         #expect(book.names([t[0], t[1], t[3]]) == ["~", "Work"])
     }
 

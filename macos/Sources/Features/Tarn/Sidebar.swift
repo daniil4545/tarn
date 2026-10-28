@@ -351,14 +351,9 @@ final class SidebarModel: ObservableObject {
 
     private var registry: WorkspaceRegistry { .shared }
 
-    /// A tab in the current workspace.
+    /// Cmd+T: Ghostty places the tab, our registry gives it the workspace of the selected one.
     func newTab() {
-        guard let window else { return }
-        if let workspace = registry.workspace(of: window) {
-            registry.newTab(in: workspace.id, from: window)
-        } else {
-            (window.windowController as? TerminalController)?.newTab(nil)
-        }
+        (window?.windowController as? TerminalController)?.newTab(nil)
     }
 
     func newTab(in group: Group) {

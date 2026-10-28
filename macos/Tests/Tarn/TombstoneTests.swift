@@ -113,7 +113,6 @@ struct TombstoneTests {
 
         for (new, old) in zip(t[4...7], closed) { book.reinsert(new, from: old) }
         let outcome = book.pass([Array(t[4...7])])
-        #expect(outcome.reorders.isEmpty)
         #expect(book.sets.count == 1)
         #expect(book.set(of: t[4])?.id == original)
         #expect(book.names(Array(t[4...7])) == ["~", "Work"])
@@ -132,7 +131,6 @@ struct TombstoneTests {
 
         book.reinsert(t[3], from: closed)
         let outcome = book.pass([[t[0], t[1], t[3]]])
-        #expect(outcome.reorders.isEmpty)
         #expect(book.names([t[0], t[1], t[3]]) == ["~", "Work"])
         #expect(book.workspace(of: t[3])?.id == work)
     }

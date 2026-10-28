@@ -59,7 +59,7 @@ struct HomeStartTests {
 
     @Test func aMissingTargetOfAnEmptySetFallsBackToHome() {
         var set = WorkspaceSet()
-        _ = set.reconcile(previous: [], current: [t[0]], target: UUID())
+        set.reconcile(current: [t[0]], target: UUID())
         #expect(set.workspaces.count == 1)
         #expect(set.workspaces[0].name == "~")
         #expect(set.workspaces[0].folder == nil)

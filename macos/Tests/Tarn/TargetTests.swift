@@ -13,7 +13,6 @@ struct TargetTests {
         let outcome = book.pass([[t[0]]])
         #expect(book.names([t[0]]) == [WorkspaceSet.homeName])
         #expect(book.workspace(of: t[0])?.folder == nil)
-        #expect(outcome.reorders.isEmpty)
         #expect(outcome.changed.count == 1)
     }
 
@@ -43,10 +42,8 @@ struct TargetTests {
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.selected(t[0])
         book.setPendingTarget(work, for: t[0])
-        let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
+        _ = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
         #expect(book.workspace(of: t[2])?.id == work)
-        // t2 sits before t1, the last tab of Work: it moves one place down.
-        #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
     }
 
     @Test func aPendingTargetIsUsedOnce() {
@@ -61,7 +58,7 @@ struct TargetTests {
         #expect(book.workspace(of: t[3])?.name == WorkspaceSet.homeName)
     }
 
-    @Test func aNewWorkspaceHoldsItsFirstTabAndOpensAtTheEnd() {
+    @Test func aNewWorkspaceHoldsItsFirstTab() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
         let fresh = book.newWorkspace("Notes", in: t[0])
@@ -70,9 +67,8 @@ struct TargetTests {
         _ = book.pass([[t[0], t[1]]])
         #expect(book.set(of: t[0])?.workspace(fresh) != nil)
 
-        let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["~", "Notes"])
-        #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
+        _ = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
+        #expect(book.workspace(of: t[2])?.id == fresh)
     }
 
     @Test func aTabInAFoldedWorkspaceUnfoldsItOnSelectionButNotOnRepeat() {

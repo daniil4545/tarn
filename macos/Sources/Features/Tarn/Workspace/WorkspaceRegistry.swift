@@ -88,19 +88,14 @@ final class WorkspaceRegistry {
 
     // MARK: Module switch
 
-    /// Workspaces off freezes the workspaces as they are; on again regroups the tabs. The pass
-    /// runs now and tells the sidebars.
+    /// Workspaces off freezes the workspaces as they are; on again draws them by membership. The
+    /// pass runs now and tells the sidebars.
     var isFrozen: Bool { book.frozen }
 
     func setFrozen(_ frozen: Bool) {
         guard book.frozen != frozen else { return }
         book.frozen = frozen
-        book.regroupPending = !frozen
-        // The switch is clicked in another window (Settings); the native moves raise the tabs they
-        // move, so the window that had the keyboard gets it back.
-        let keyWindow = NSApp.keyWindow
         sync()
-        if let keyWindow, NSApp.keyWindow !== keyWindow { keyWindow.makeKeyAndOrderFront(nil) }
         NotificationCenter.default.post(name: .terminalTabsDidChange, object: self)
     }
 
@@ -114,15 +109,8 @@ final class WorkspaceRegistry {
         claimTombstones()
         cacheSurfaces()
 
-        var outcome = book.reconcile(bookGroups())
+        let outcome = book.reconcile(bookGroups())
         for note in outcome.notes { Self.logger.error("\(note, privacy: .public)") }
-        if !outcome.reorders.isEmpty {
-            for reorder in outcome.reorders {
-                guard let window = window(for: reorder.tab) else { continue }
-                moveNatively(window, by: reorder.delta)
-            }
-            outcome.changed.formUnion(book.reconcile(bookGroups()).changed)
-        }
         isBusy = false
         publish(outcome.changed)
     }
@@ -285,27 +273,37 @@ final class WorkspaceRegistry {
 
     // MARK: Sidebar commands
 
-    /// A new tab in `workspace`, after its last tab. It inherits from a tab of that workspace
-    /// (`WorkspaceBook.sourceTab`) through Ghostty's own inheritance, as Cmd+T inherits from the
-    /// focused tab; an empty workspace gets Cmd+T's config.
+    /// A new tab in `workspace`, right after its last tab: Ghostty's `newTab(from:)` with that tab as
+    /// the parent, inheriting from it as Cmd+T inherits from the focused tab.
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
-        guard let controller = window.windowController as? TerminalController else { return }
         guard !book.frozen else {
-            controller.newTab(nil)
+            (window.windowController as? TerminalController)?.newTab(nil)
             return
         }
         let tab = key(for: window)
         book.setPendingTarget(workspace, for: tab)
-        let order = group(of: window).map(key(for:))
-        if let source = book.sourceTab(for: workspace, order: order, selected: tab),
-           let sourceController = self.window(for: source)?.windowController as? TerminalController,
-           let surface = (sourceController.focusedSurface ?? sourceController.surfaceTree.first)?.surface {
-            let config = Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_TAB))
-            _ = TerminalController.newTab(controller.ghostty, from: window, withBaseConfig: config)
-        } else {
-            controller.newTab(nil)
-        }
+        let last = group(of: window).last { book.workspace(of: key(for: $0))?.id == workspace } ?? window
+        openTab(after: last, inheritingFrom: last)
         expirePendingTarget(of: tab)
+    }
+
+    /// Ghostty's new tab with `parent` as the parent, configured as a tab of `source` would be;
+    /// `folder` replaces the working directory.
+    private func openTab(after parent: NSWindow, inheritingFrom source: NSWindow, folder: String? = nil) {
+        guard let controller = parent.windowController as? TerminalController else { return }
+        let sourceController = source.windowController as? TerminalController
+        var config = (sourceController?.focusedSurface ?? sourceController?.surfaceTree.first)?.surface.map {
+            Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB))
+        }
+        if let folder {
+            config = config ?? Ghostty.SurfaceConfiguration()
+            config?.workingDirectory = folder
+        }
+        guard let config else {
+            controller.newTab(nil)
+            return
+        }
+        _ = TerminalController.newTab(controller.ghostty, from: parent, withBaseConfig: config)
     }
 
     /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for
@@ -349,17 +347,8 @@ final class WorkspaceRegistry {
         guard let created else { return false }
         book.setPendingTarget(created, for: tab)
         publish(changed.map { [$0] } ?? [])
-        if let folder, let controller = window.windowController as? TerminalController {
-            // Ghostty's own path for a tab with a base config, inherited as Cmd+T inherits it
-            // (font size, tab context); only the working directory is the folder.
-            var config = controller.focusedSurface?.surface.map {
-                Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB))
-            } ?? Ghostty.SurfaceConfiguration()
-            config.workingDirectory = folder
-            _ = TerminalController.newTab(controller.ghostty, from: window, withBaseConfig: config)
-        } else {
-            (window.windowController as? TerminalController)?.newTab(nil)
-        }
+        // The group stands at the bottom: its tab opens from the last tab of the window (G8).
+        openTab(after: group(of: window).last ?? window, inheritingFrom: window, folder: folder)
         expirePendingTarget(of: tab)
         return true
     }
