@@ -1,6 +1,7 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# Both jobs run on every PR and push to dev and main. They are required checks of dev (branch
-# protection): a PR merges only when `app` and `demo` are green.
+# `demo` runs on every PR and push to dev and main and is the required check of dev. `app` runs on
+# PRs into main and on pushes to main, and is required there; on dev the agent runs
+# `make -f tarn.mk check` on the Mac before a merge (T-278).
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
@@ -53,6 +54,8 @@ jobs:
           done
 
   app:
+    # The macOS runner is slow and queues PRs one behind another (T-278), so it gates only main.
+    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
     env:
