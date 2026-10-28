@@ -1,5 +1,6 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# dev gets the demo checks only, nothing waits on them; main (release PRs from dev) gets both jobs.
+# Both jobs run on every PR and push to dev and main. They are required checks of dev (branch
+# protection): a PR merges only when `app` and `demo` are green.
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
@@ -19,8 +20,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: tarn-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR replaces its old run. A push to dev or main gets a group of its own (the
+  # commit), so a queued run is never dropped for a newer one.
+  group: tarn-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   demo:
@@ -42,12 +45,14 @@ jobs:
         run: node --test demo/test/unit/*.test.mjs
       - name: Demo checks
         run: |
+          # A pointer drag in a loaded browser misses its target now and then (W7 in check_b, T-270):
+          # a check script that fails gets one more run; a real defect fails both.
           for c in 0 a b c e2e review modules; do
-            uv run -q --with playwright python -I demo/test/check_$c.py
+            uv run -q --with playwright python -I demo/test/check_$c.py ||
+              uv run -q --with playwright python -I demo/test/check_$c.py
           done
 
   app:
-    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
     env:
@@ -67,11 +72,13 @@ jobs:
       # The version comes from minimum_zig_version in build.zig.zon.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - name: Linters
-        run: brew install swiftlint shellcheck
+        run: brew install swiftlint shellcheck typos-cli uv
       - name: Build GhosttyKit
         run: zig build -Demit-macos-app=false
       - name: make -f tarn.mk check
         run: make -f tarn.mk check
       - name: Test log
         if: failure()
-        run: tail -200 macos/build/test.log || true
+        run: |
+          grep -n -B2 -A6 -E "✘|Expectation|recorded an issue" macos/build/test.log | head -120 || true
+          tail -200 macos/build/test.log || true

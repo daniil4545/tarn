@@ -4,7 +4,8 @@
 # dev      the Debug Tarn.app of this checkout without coverage, the app the stand runs by default
 # live     a second Tarn with its own home and control socket next to the user's (tools/stand/stand.sh), for live checks;
 #          tools/stand/drive.sh types into it, reads its screen and takes screenshots
-# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests
+# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests, shellcheck, typos, ruff;
+#          the cheap linters run before the build; CI runs this target on every PR into dev and main
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
 # bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
 #
@@ -30,6 +31,12 @@ LSREG    :=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchSe
 
 STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
 
+# The GitHub runner has no GUI session: tests that need a real window, focus or mouse drag fail there
+# and pass on the Mac (T-270). CI skips them; the agent runs the full check on the Mac before a merge.
+GUI_TESTS := GhosttyTests/NewPaneTests/theSplitGoesBelowAndKeepsTheFocus() \
+	GhosttyTests/SidebarWidthTests/terminalKeepsItsFrameWhileTheSidebarIsDragged()
+CI_SKIP   := $(if $(CI),$(foreach t,$(GUI_TESTS),-skip-testing '$(t)'))
+
 .PHONY: check release bench worktree dev live
 
 # The core (GhosttyKit.xcframework, zig-out) is untracked and slow to build: every worktree links this one.
@@ -54,14 +61,18 @@ live:
 
 check:
 	cd macos && swiftlint lint --strict Sources/Features/Tarn Tests/Tarn
+	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
+	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
+		macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
+	uvx ruff@0.17.2 check plugin/test
+	uvx ruff@0.17.2 format --check plugin/test
 	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
-		-jobs 4 -skip-testing GhosttyUITests test > $(SYMROOT)/test.log 2>&1 || \
-		{ grep -E "error:|failed|\*\* TEST" $(SYMROOT)/test.log | tail -40; exit 1; }
+		-jobs 4 -skip-testing GhosttyUITests $(CI_SKIP) test > $(SYMROOT)/test.log 2>&1 || \
+		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
 	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
-	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
 	sh cli/test/install_test.sh
 
 release:
