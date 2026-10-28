@@ -69,10 +69,9 @@ struct AgentCommandsTests {
     @Test @MainActor func jsonCarriesThePaneFields() throws {
         let mine = pane(in: left, state: "waiting")
         let entry = try #require((try ls(mine.pane.uuidString, in: [mine])["panes"] as? [[String: Any]])?.first)
-        #expect(Set(entry.keys) == ["pane", "tab", "workspace", "title", "cwd", "process", "branch", "host", "state"])
+        #expect(Set(entry.keys) == ["pane", "tab", "workspace", "title", "cwd", "process", "branch", "state"])
         #expect(entry["workspace"] as? String == left.uuidString)
         #expect(entry["state"] as? String == "waiting")
-        #expect(entry["host"] as? String == "")
     }
 
     /// The form of WezTerm `cli list`: a header, columns padded to the widest cell, `-` for empty.
@@ -82,8 +81,8 @@ struct AgentCommandsTests {
         let row = PaneRow(pane: id, tab: tab, workspace: left, title: "a\nb", cwd: "/w", process: "claude", branch: "", state: "permission")
         let lines = ListPanes.text([row]).split(separator: "\n").map(String.init)
         #expect(lines.count == 2)
-        #expect(lines[0].split(separator: " ").map(String.init) == ["PANE", "TAB", "TITLE", "CWD", "PROCESS", "BRANCH", "HOST", "STATE"])
-        #expect(lines[1].split(separator: " ").map(String.init) == [id.uuidString, tab.uuidString, "a", "b", "/w", "claude", "-", "-", "permission"])
+        #expect(lines[0].split(separator: " ").map(String.init) == ["PANE", "TAB", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"])
+        #expect(lines[1].split(separator: " ").map(String.init) == [id.uuidString, tab.uuidString, "a", "b", "/w", "claude", "-", "permission"])
         #expect(lines[0].range(of: "TAB")?.lowerBound.utf16Offset(in: lines[0]) == id.uuidString.count + 2)
         #expect(ListPanes.text([]) == ListPanes.columns.joined(separator: "  ") + "\n")
     }

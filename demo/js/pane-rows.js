@@ -25,7 +25,6 @@ export function paneRows({ workspaces, registry, vfs, home, caller }) {
       cwd,
       process: registry[pane] ? "claude" : "zsh",
       branch: vfs.gitBranch(cwd) ?? "",
-      host: "",
       state: registry[pane]?.state ?? "",
     }));
   });

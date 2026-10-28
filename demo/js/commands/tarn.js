@@ -17,7 +17,7 @@ function open(ctx) {
   return undefined;
 }
 
-const COLUMNS = ["pane", "tab", "group", "title", "cwd", "process", "branch", "host", "state"];
+const COLUMNS = ["pane", "tab", "group", "title", "cwd", "process", "branch", "state"];
 
 // The form of WezTerm `cli list`: a header, columns padded to the widest cell, `-` for empty.
 function list(ctx) {
