@@ -100,4 +100,24 @@ struct ReadClosePaneTests {
         #expect(window.firstResponder === caller)
         #expect(window.attachedSheet == nil)
     }
+
+    /// The last pane of a tab with unsaved viewer edits is refused: closing it would put the Save
+    /// sheet on the user's window.
+    @Test @MainActor func closeRefusesTheLastPaneOverUnsavedEdits() async throws {
+        let (controller, window, caller) = try await window()
+        defer { window.close() }
+        let path = NSTemporaryDirectory() + "tarn-close-" + UUID().uuidString + ".md"
+        try "one".write(toFile: path, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(atPath: path) }
+        #expect(controller.viewerHost.open(OpenTarget(path: path), root: nil, focus: false))
+        let model = try #require(controller.viewerHost.models.first)
+        model.handle(["t": "edit", "path": path, "text": "two", "rev": 1])
+        let row = PaneRow(pane: caller.id, tab: UUID(), workspace: UUID())
+
+        let result = ClosePane.run(["pane": caller.id.uuidString], AgentScope(caller: row, panes: [row]))
+
+        #expect(throws: ClosePane.unsavedEdits) { try result.get() }
+        #expect(Array(controller.surfaceTree).map(\.id) == [caller.id])
+        #expect(window.attachedSheet == nil)
+    }
 }
