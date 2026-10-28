@@ -34,7 +34,6 @@ STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
 # The GitHub runner has no GUI session: tests that need a real window, focus or mouse drag fail there
 # and pass on the Mac (T-270). CI skips them; the agent runs the full check on the Mac before a merge.
 GUI_TESTS := GhosttyTests/NewPaneTests/theSplitGoesBelowAndKeepsTheFocus() \
-	GhosttyTests/NewPaneTests/aNewPaneShowsItsCommandAndFolder() \
 	GhosttyTests/SidebarWidthTests/terminalKeepsItsFrameWhileTheSidebarIsDragged()
 CI_SKIP   := $(if $(CI),$(foreach t,$(GUI_TESTS),-skip-testing '$(t)'))
 

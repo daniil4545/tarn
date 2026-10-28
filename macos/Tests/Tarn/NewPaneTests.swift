@@ -77,7 +77,8 @@ struct NewPaneTests {
         let pane = try #require(NewPane.split(controller, at: caller, direction: .down, config: config))
 
         var process = ""
-        let deadline = ContinuousClock.now + .seconds(5)
+        // The CI runner runs 4 test jobs at once; the shell there took over 5 s to exec the command.
+        let deadline = ContinuousClock.now + .seconds(20)
         while ContinuousClock.now < deadline {
             process = pane.surfaceModel?.foregroundPID
                 .flatMap { AgentProcess.comm(pid: AgentProcess.foreground(group: pid_t($0))) } ?? ""
