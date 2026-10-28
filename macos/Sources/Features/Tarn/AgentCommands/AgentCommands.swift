@@ -5,7 +5,7 @@ import OSLog
 struct PaneRow: Equatable {
     let pane: UUID
     let tab: UUID?
-    /// Nil for a window outside the workspaces, such as the quick terminal.
+    /// Nil for a tab with no workspace and for a window outside the workspaces.
     let workspace: UUID?
     var title = ""
     var cwd = ""
@@ -27,7 +27,8 @@ struct AgentRefusal: Error, Equatable {
     static func noPane(_ id: String) -> AgentRefusal { AgentRefusal(text: "no pane matched: \(id)", code: 4) }
 }
 
-/// The caller of a command and the panes it may reach: the panes of its own workspace (B3).
+/// The caller of a command and the panes it may reach: the panes of its own workspace, or of its
+/// own tab when the tab has no workspace (B3, G9).
 struct AgentScope: Equatable {
     let caller: PaneRow
     let panes: [PaneRow]
@@ -36,8 +37,11 @@ struct AgentScope: Equatable {
         guard let uuid = id.flatMap(UUID.init(uuidString:)), let caller = all.first(where: { $0.pane == uuid }) else {
             return .failure(.notInTab)
         }
-        guard let workspace = caller.workspace else { return .failure(.notInWorkspace) }
-        return .success(AgentScope(caller: caller, panes: all.filter { $0.workspace == workspace }))
+        if let workspace = caller.workspace {
+            return .success(AgentScope(caller: caller, panes: all.filter { $0.workspace == workspace }))
+        }
+        guard let tab = caller.tab else { return .failure(.notInWorkspace) }
+        return .success(AgentScope(caller: caller, panes: all.filter { $0.tab == tab }))
     }
 
     /// The pane `id` names; a missing or foreign id is refused, never replaced by another pane (B5).

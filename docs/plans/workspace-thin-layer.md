@@ -96,8 +96,7 @@ the focused pane not confirmed.
 
 Code that goes:
 
-- PR 1: home folder of "~" (`makeHome`, `isHome`, `isPlain` one rule, `WorkspaceFolder.home`
-  exclusion); migration in `WorkspaceSnapshot.makeSet`: a workspace named "~" whose folder is
+- PR 1: home folder of "~" (the start workspace rules; replaced by ungrouped tabs in T-266); migration in `WorkspaceSnapshot.makeSet`: a workspace named "~" whose folder is
   the standardized home loads with no folder.
 - PR 2: `WorkspaceRegistry.prepare`, `landsInWorkspace`, both insertion points (the two Ghostty
   functions go back to upstream, `let config` included; architecture rows 31 and 32 removed);

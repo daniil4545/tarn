@@ -23,8 +23,18 @@ struct WorkspaceSetTests {
         var set = threeWorkspaces()
         let result = set.delete(b.id, order: tabs)
         #expect(result)
-        #expect(set.runs(order: tabs).map(\.workspace.name) == ["A", "C"])
+        #expect(set.runs(order: tabs).map { $0.workspace?.name } == ["A", "C"])
         #expect(set.runs(order: tabs)[0].tabs == Array(tabs[0...3]))
+    }
+
+    /// A neighbour that is an ungrouped block cannot be the heir.
+    @Test func deleteSkipsUngroupedBlocksWhenItLooksForTheHeir() {
+        var set = WorkspaceSet(workspaces: [c, a, b], members: [tabs[0]: a.id, tabs[2]: b.id, tabs[3]: c.id])
+        let order = Array(tabs[0...3])
+        let deleted = set.delete(b.id, order: order)
+        #expect(deleted)
+        #expect(set.workspace(of: tabs[2])?.id == a.id)
+        #expect(set.workspace(of: tabs[1]) == nil)
     }
 
     @Test func deleteOfTheFirstWorkspaceMovesTabsBelow() {
@@ -32,13 +42,14 @@ struct WorkspaceSetTests {
         let result = set.delete(a.id, order: tabs)
         #expect(result)
         let runs = set.runs(order: tabs)
-        #expect(runs.map(\.workspace.name) == ["B", "C"])
+        #expect(runs.map { $0.workspace?.name } == ["B", "C"])
         #expect(runs[0].tabs == Array(tabs[0...3]))
     }
 
     @Test func theLastWorkspaceIsNotDeleted() {
-        var set = WorkspaceSet.makeDefault(tabs: [tabs[0]])
-        let id = set.workspaces[0].id
+        var set = WorkspaceSet()
+        let id = set.create(name: "Only")!
+        set.join(tabs[0], to: id)
         let result = set.delete(id, order: [tabs[0]])
         #expect(!result)
         #expect(set.workspaces.count == 1)
@@ -64,7 +75,8 @@ struct WorkspaceSetTests {
     }
 
     @Test func closingTheLastTabOfTheLastWorkspaceEmptiesTheSet() {
-        var set = WorkspaceSet.makeDefault(tabs: [tabs[0]])
+        var set = WorkspaceSet()
+        set.join(tabs[0], to: set.create(name: "Only")!)
         let closed = set.remove(tabs[0])
         guard case .workspaceClosed = closed else {
             Issue.record("workspace stayed")
@@ -87,13 +99,27 @@ struct WorkspaceSetTests {
     @Test func foldIsStoredOnTheWorkspace() {
         var set = threeWorkspaces()
         set.setCollapsed(b.id, true)
-        #expect(set.runs(order: tabs).map(\.workspace.collapsed) == [false, true, false])
+        #expect(set.runs(order: tabs).compactMap { $0.workspace?.collapsed } == [false, true, false])
     }
 
     @Test func runsFollowTheTabOrderNotTheStoredOrder() {
         let set = threeWorkspaces()
         let reversed = Array(tabs.reversed())
-        #expect(set.runs(order: reversed).map(\.workspace.name) == ["C", "B", "A"])
+        #expect(set.runs(order: reversed).map { $0.workspace?.name } == ["C", "B", "A"])
+    }
+
+    /// A workspace stands where its first tab is and holds all its tabs; ungrouped tabs stand
+    /// where they are, and two that only a later tab of a workspace parted make one block.
+    @Test func runsDrawUngroupedTabsWhereTheyStand() {
+        let set = WorkspaceSet(workspaces: [a, b], members: [tabs[1]: a.id, tabs[3]: a.id, tabs[4]: b.id])
+        let runs = set.runs(order: tabs)
+        #expect(runs.map { $0.workspace?.name } == [nil, "A", nil, "B", nil])
+        #expect(runs.map(\.tabs) == [[tabs[0]], [tabs[1], tabs[3]], [tabs[2]], [tabs[4]], [tabs[5]]])
+
+        let parted = WorkspaceSet(workspaces: [a], members: [tabs[0]: a.id, tabs[2]: a.id])
+        let merged = parted.runs(order: Array(tabs[0...3]))
+        #expect(merged.map { $0.workspace?.name } == ["A", nil])
+        #expect(merged.last?.tabs == [tabs[1], tabs[3]])
     }
 
     @Test func snapshotRoundTrips() throws {
@@ -117,6 +143,18 @@ struct WorkspaceSetTests {
         json["manual"] = [tabs[0].uuidString]
         let restored = try WorkspaceSnapshot.decode(JSONSerialization.data(withJSONObject: json))
         #expect(restored == snapshot)
+    }
+
+    /// spec: docs/specs/workspace-folder.md S21
+    @Test func anUngroupedTabIsInNoWorkspaceOfTheSnapshotAndComesBackUngrouped() throws {
+        let set = WorkspaceSet(workspaces: [a], members: [tabs[0]: a.id])
+        let order = [tabs[0], tabs[1]]
+        let snapshot = WorkspaceSnapshot(set: set, tabKey: tabs[1], order: order)
+        #expect(snapshot.workspaces.flatMap(\.tabKeys) == [tabs[0]])
+        let copy = try WorkspaceSnapshot.decode(snapshot.encoded()).makeSet()
+        #expect(copy.workspace(of: tabs[1]) == nil)
+        #expect(copy.runs(order: order) == set.runs(order: order))
+        #expect(copy.runs(order: order).map { $0.workspace?.name } == ["A", nil])
     }
 
     @Test func snapshotKeepsTabsThatHaveNoWindowYet() {

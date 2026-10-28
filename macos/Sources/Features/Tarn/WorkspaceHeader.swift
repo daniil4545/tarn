@@ -7,6 +7,7 @@ import SwiftUI
 struct WorkspaceHeader: View {
     @ObservedObject var model: SidebarModel
     let group: SidebarModel.Group
+    let workspace: Workspace
 
     @State private var isHovering = false
     @Environment(\.chromeInk) private var ink
@@ -16,20 +17,20 @@ struct WorkspaceHeader: View {
             // One arrow turned a quarter: the fold animates it instead of swapping two symbols.
             Image(systemName: "chevron.right")
                 .font(.system(size: 8, weight: .bold))
-                .rotationEffect(.degrees(group.workspace.collapsed ? 0 : 90))
-                .animation(Motion.fold, value: group.workspace.collapsed)
+                .rotationEffect(.degrees(workspace.collapsed ? 0 : 90))
+                .animation(Motion.fold, value: workspace.collapsed)
                 .frame(width: 10)
-            Text(group.workspace.name)
+            Text(workspace.name)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            if group.workspace.collapsed {
+            if workspace.collapsed {
                 if let agent = group.worstAgent { AgentBadge(agent: agent) }
                 Text("\(group.tabs.count)")
                     .foregroundStyle(ink.faint)
             }
             if isHovering {
                 Button {
-                    model.newTab(in: group)
+                    model.newTab(in: workspace)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 9, weight: .bold))
@@ -37,8 +38,8 @@ struct WorkspaceHeader: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("New Tab in \(group.workspace.name)")
-                .accessibilityLabel("New Tab in \(group.workspace.name)")
+                .help("New Tab in \(workspace.name)")
+                .accessibilityLabel("New Tab in \(workspace.name)")
             }
         }
         .font(.system(size: 11, weight: .semibold))
@@ -49,41 +50,41 @@ struct WorkspaceHeader: View {
         .frame(height: 26)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.workspace.id)) }
+        .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(workspace.id)) }
         .overlay(alignment: .bottom) { dropLine(endsHere) }
         .padding(.vertical, Sidebar.rowGap / 2)
         .padding(.horizontal, Sidebar.listInset)
         .overlay(
             SidebarInteraction(
-                payload: { (.workspace, group.workspace.id.uuidString) },
-                onClick: { model.toggleFold(group) },
-                menu: { model.contextMenu(for: group) },
+                payload: { (.workspace, workspace.id.uuidString) },
+                onClick: { model.toggleFold(workspace) },
+                menu: { model.contextMenu(for: workspace) },
                 dragOver: { kind, value, lowerHalf in
-                    model.dragOver(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
+                    model.dragOver(kind, value: value, over: .header(workspace.id), lowerHalf: lowerHalf)
                 },
                 dragExit: { model.dragExit() },
                 drop: { kind, value, lowerHalf in
-                    model.drop(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
+                    model.drop(kind, value: value, over: .header(workspace.id), lowerHalf: lowerHalf)
                 },
                 dragEnded: { _, _ in model.dragExit() },
                 excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0,
-                toolTip: Self.tip(group)
+                toolTip: Self.tip(group, workspace)
             )
         )
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(group.workspace.collapsed ? "Expand \(group.workspace.name)" : "Collapse \(group.workspace.name)")
-        .accessibilityAction { model.toggleFold(group) }
+        .accessibilityLabel(workspace.collapsed ? "Expand \(workspace.name)" : "Collapse \(workspace.name)")
+        .accessibilityAction { model.toggleFold(workspace) }
     }
 
     /// The folder with `~` for home, and the number of tabs (the demo's tooltip).
-    static func tip(_ group: SidebarModel.Group) -> String {
+    static func tip(_ group: SidebarModel.Group, _ workspace: Workspace) -> String {
         let count = "\(group.tabs.count) tab\(group.tabs.count == 1 ? "" : "s")"
-        return group.workspace.folder.map { "\(WorkspaceFolder.display($0)) \u{B7} \(count)" } ?? count
+        return workspace.folder.map { "\(WorkspaceFolder.display($0)) \u{B7} \(count)" } ?? count
     }
 
     /// A workspace dropped after every workspace draws its line under a folded last header.
     private var endsHere: Bool {
-        group.workspace.collapsed && model.dropSlot == .end && model.groups.last?.id == group.id
+        workspace.collapsed && model.dropSlot == .end && model.groups.last?.id == group.id
     }
 }
 

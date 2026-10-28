@@ -35,13 +35,14 @@ final class SidebarModel: ObservableObject {
         let folder: String?
     }
 
-    /// A workspace and its tabs in tab order. A folded workspace still lists its tabs here;
-    /// the view hides them.
+    /// A workspace and its tabs in tab order, or a block of ungrouped tabs (no workspace, no
+    /// header). A folded workspace still lists its tabs here; the view hides them.
     struct Group: Identifiable, Equatable {
-        let workspace: Workspace
+        let workspace: Workspace?
         let tabs: [Tab]
 
-        var id: Workspace.ID { workspace.id }
+        /// The workspace, or the first ungrouped tab, which no workspace shares.
+        var id: UUID { workspace?.id ?? tabs.first?.key ?? UUID(uuidString: "00000000-0000-0000-0000-00000000F1A7")! }
 
         /// The session among the tabs that needs the user most.
         var worstAgent: AgentSession? { SidebarModel.mostUrgent(tabs.compactMap(\.agent)) }
@@ -51,9 +52,6 @@ final class SidebarModel: ObservableObject {
 
     /// The modules that are on; a change redraws what depends on them.
     @Published private(set) var modules = TarnModules.effective()
-
-    /// The one group of the flat list shown while Workspaces is off. It has no header.
-    private static let flatWorkspace = Workspace(id: UUID(uuidString: "00000000-0000-0000-0000-00000000F1A7")!, name: "")
 
     /// Where a drop in progress would land: a workspace drag draws a line there, a tab drag
     /// opens a gap.
@@ -220,14 +218,14 @@ final class SidebarModel: ObservableObject {
 
         // Workspaces off: one flat list in the order of the native tabs, whatever the frozen workspaces say.
         let runs = flat
-            ? [WorkspaceRun(workspace: Self.flatWorkspace, windows: tabWindows)]
+            ? [WorkspaceRun(workspace: nil, windows: tabWindows)]
             : registry.runs(for: window)
         let newGroups = runs.map { run in
             Group(workspace: run.workspace, tabs: run.windows.compactMap { tabWindow -> Tab? in
                 guard let index = positions[ObjectIdentifier(tabWindow)], let key = registry.tabKey(of: tabWindow)
                 else { return nil }
                 let shortcut = index <= 9 ? config?.keyboardShortcut(for: "goto_tab:\(index)") : nil
-                return makeTab(tabWindow, key: key, index: index, workspace: flat ? "" : run.workspace.name, shortcut: shortcut.map { "\($0)" })
+                return makeTab(tabWindow, key: key, index: index, workspace: run.workspace?.name ?? "", shortcut: shortcut.map { "\($0)" })
             })
         }
         guard newGroups != groups else { return }
@@ -356,9 +354,9 @@ final class SidebarModel: ObservableObject {
         (window?.windowController as? TerminalController)?.newTab(nil)
     }
 
-    func newTab(in group: Group) {
+    func newTab(in workspace: Workspace) {
         guard let window else { return }
-        registry.newTab(in: group.workspace.id, from: window)
+        registry.newTab(in: workspace.id, from: window)
     }
 
     /// Opens, shows or hides the viewer pane of the window, as Cmd+B does.
@@ -371,26 +369,29 @@ final class SidebarModel: ObservableObject {
         WorkspacePrompt.newWorkspace(in: window)
     }
 
-    func rename(_ group: Group) {
+    func rename(_ workspace: Workspace) {
         guard let window else { return }
-        WorkspacePrompt.askName(title: "Rename Workspace", message: "", initial: group.workspace.name, in: window) { [weak self] name in
+        WorkspacePrompt.askName(title: "Rename Workspace", message: "", initial: workspace.name, in: window) { [weak self] name in
             guard let self, let window = self.window else { return }
-            self.registry.rename(group.workspace.id, to: name, in: window)
+            self.registry.rename(workspace.id, to: name, in: window)
         }
     }
 
-    func delete(_ group: Group) {
-        guard let window, let index = groups.firstIndex(where: { $0.id == group.id }), groups.count > 1 else { return }
-        let heir = groups[index > 0 ? index - 1 : index + 1].workspace.name
-        WorkspacePrompt.confirmDelete(group.workspace.name, tabCount: group.tabs.count, heir: heir, in: window) { [weak self] in
+    /// The workspaces, headers only: the ungrouped blocks between them are not workspaces.
+    private var workspaces: [Group] { groups.filter { $0.workspace != nil } }
+
+    func delete(_ workspace: Workspace) {
+        guard let window, let index = workspaces.firstIndex(where: { $0.id == workspace.id }), workspaces.count > 1 else { return }
+        let heir = workspaces[index > 0 ? index - 1 : index + 1].workspace?.name ?? ""
+        WorkspacePrompt.confirmDelete(workspace.name, tabCount: workspaces[index].tabs.count, heir: heir, in: window) { [weak self] in
             guard let self, let window = self.window else { return }
-            self.registry.delete(group.workspace.id, in: window)
+            self.registry.delete(workspace.id, in: window)
         }
     }
 
-    func toggleFold(_ group: Group) {
+    func toggleFold(_ workspace: Workspace) {
         guard let window else { return }
-        registry.setCollapsed(group.workspace.id, !group.workspace.collapsed, in: window)
+        registry.setCollapsed(workspace.id, !workspace.collapsed, in: window)
     }
 
     func select(_ tab: Tab) {
@@ -456,15 +457,18 @@ final class SidebarModel: ObservableObject {
         let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         submenu.autoenablesItems = false
-        for group in groups {
+        var canMove = false
+        for group in workspaces {
+            guard let workspace = group.workspace else { continue }
             let isCurrent = group.tabs.contains { $0.id == tab.id }
-            submenu.addItem(menuItem(group.workspace.name, isEnabled: !isCurrent) { [weak self] in
+            canMove = canMove || !isCurrent
+            submenu.addItem(menuItem(workspace.name, isEnabled: !isCurrent) { [weak self] in
                 guard let window = self?.tabWindow(for: tab) else { return }
-                self?.registry.moveTab(window, to: group.workspace.id)
+                self?.registry.moveTab(window, to: workspace.id)
             })
         }
         moveTo.submenu = submenu
-        moveTo.isEnabled = groups.count > 1
+        moveTo.isEnabled = canMove
         if modules.contains(.workspaces) {
             menu.addItem(moveTo)
             menu.addItem(.separator())
@@ -478,21 +482,21 @@ final class SidebarModel: ObservableObject {
     }
 
     /// The right-click menu for a workspace header.
-    func contextMenu(for group: Group) -> NSMenu {
+    func contextMenu(for workspace: Workspace) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.addItem(menuItem("New Tab") { [weak self] in
-            self?.newTab(in: group)
+            self?.newTab(in: workspace)
         })
-        menu.addItem(menuItem(group.workspace.collapsed ? "Expand" : "Collapse") { [weak self] in
-            self?.toggleFold(group)
+        menu.addItem(menuItem(workspace.collapsed ? "Expand" : "Collapse") { [weak self] in
+            self?.toggleFold(workspace)
         })
         menu.addItem(.separator())
         menu.addItem(menuItem("Rename Workspace...") { [weak self] in
-            self?.rename(group)
+            self?.rename(workspace)
         })
-        menu.addItem(menuItem("Delete Workspace...", isEnabled: groups.count > 1) { [weak self] in
-            self?.delete(group)
+        menu.addItem(menuItem("Delete Workspace...", isEnabled: workspaces.count > 1) { [weak self] in
+            self?.delete(workspace)
         })
         return menu
     }
@@ -558,9 +562,10 @@ final class SidebarModel: ObservableObject {
         case (.tab, .beforeTab(let key)):
             guard let moving = tab(withKey: id).flatMap(tabWindow(for:)),
                   let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
+                  let workspace = group.workspace,
                   let neighbour = group.tabs.first(where: { $0.key == key }).flatMap(tabWindow(for:))
             else { return false }
-            if moving !== neighbour { registry.moveTab(moving, to: group.workspace.id, before: neighbour) }
+            if moving !== neighbour { registry.moveTab(moving, to: workspace.id, before: neighbour) }
             return true
 
         case (.tab, .endOfWorkspace(let workspace)):
@@ -804,6 +809,10 @@ struct Sidebar: View {
     /// its line.
     static let listInset: CGFloat = 6
     static let rowGap: CGFloat = 2
+    /// The indent of the rows under a workspace header (`demo/css/chrome.css`).
+    static let groupIndent: CGFloat = 12
+    /// The space above a block of ungrouped rows while Workspaces is on.
+    static let ungroupedGap: CGFloat = 10
 
     /// `width` held in `widthRange`. A stored value outside the range, or not a number, would
     /// draw a sidebar that is hidden, too wide or of no width, so it falls back instead.
@@ -877,15 +886,20 @@ struct Sidebar: View {
                         VStack(spacing: 0) {
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(model.groups) { group in
-                                    if model.modules.contains(.workspaces) {
-                                        WorkspaceHeader(model: model, group: group)
+                                    if let workspace = group.workspace {
+                                        WorkspaceHeader(model: model, group: group, workspace: workspace)
+                                    } else if model.modules.contains(.workspaces) {
+                                        // Where a header would stand: the demo's gap above ungrouped rows.
+                                        Color.clear.frame(height: Sidebar.ungroupedGap)
                                     }
                                     ForEach(visibleTabs(of: group)) { tab in
                                         TabGap(model: model, slot: .beforeTab(tab.key))
-                                        SidebarRow(model: model, tab: tab, isCompact: false)
+                                        SidebarRow(model: model, tab: tab, isCompact: false, isIndented: group.workspace != nil)
                                             .transition(.opacity)
                                     }
-                                    TabGap(model: model, slot: .endOfWorkspace(group.id))
+                                    if group.workspace != nil {
+                                        TabGap(model: model, slot: .endOfWorkspace(group.id))
+                                    }
                                 }
                             }
                             // Only a fold or unfold animates: a title change or a reorder keeps
@@ -904,12 +918,12 @@ struct Sidebar: View {
 
     /// The workspaces that are folded, which the fold animation follows.
     private var foldedWorkspaces: [Workspace.ID] {
-        model.groups.filter(\.workspace.collapsed).map(\.id)
+        model.groups.filter { $0.workspace?.collapsed == true }.map(\.id)
     }
 
     /// A folded workspace shows no tabs; selecting one of them unfolds it.
     private func visibleTabs(of group: SidebarModel.Group) -> [SidebarModel.Tab] {
-        group.workspace.collapsed ? [] : group.tabs
+        group.workspace?.collapsed == true ? [] : group.tabs
     }
 
     private var tail: some View {
@@ -1006,6 +1020,8 @@ private struct SidebarRow: View {
     @ObservedObject var model: SidebarModel
     let tab: SidebarModel.Tab
     let isCompact: Bool
+    /// The row stands under a workspace header; an ungrouped row sits flush.
+    var isIndented = false
 
     @State private var isHovering = false
     @AppStorage(TabRows.key) private var rows: TabRows = .wide
@@ -1031,7 +1047,8 @@ private struct SidebarRow: View {
             .help(isCompact ? tab.title : "")
             .overlay(alignment: .bottom) { dropLine(endsHere) }
             .padding(.vertical, Sidebar.rowGap / 2)
-            .padding(.horizontal, isCompact ? 0 : Sidebar.listInset)
+            .padding(.leading, isCompact ? 0 : Sidebar.listInset + indent)
+            .padding(.trailing, isCompact ? 0 : Sidebar.listInset)
             .overlay(interaction)
             .opacity(isLifted ? 0.4 : 1)
             .accessibilityElement(children: .combine)
@@ -1041,6 +1058,8 @@ private struct SidebarRow: View {
     }
 
     private var isLifted: Bool { model.liftedTab == tab.key }
+
+    private var indent: CGFloat { isIndented ? Sidebar.groupIndent : 0 }
 
     /// A workspace dropped after every workspace draws its line under the last tab.
     private var endsHere: Bool {
@@ -1068,7 +1087,7 @@ private struct SidebarRow: View {
             dragBegan: { height in model.dragBegan(tab, height: height) },
             dragEnded: { point, accepted in model.dragEnded(tab, at: point, accepted: accepted) },
             // The close button of an expanded row sits in its first 22 points after the inset.
-            excludedLeading: isCompact ? 0 : Sidebar.listInset + 22
+            excludedLeading: isCompact ? 0 : Sidebar.listInset + indent + 22
         )
     }
 

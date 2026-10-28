@@ -25,11 +25,12 @@ struct WorkspaceBook {
         let tab: TabKey
         /// The set as it was just before the tab left.
         let set: WorkspaceSet
-        let workspace: Workspace
+        /// Nil when the tab was ungrouped.
+        let workspace: Workspace?
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
-    /// Workspaces are off: new tabs join "~" and no tab or workspace moves (`docs/modules/workspaces.md`).
+    /// Workspaces are off: a new tab stays ungrouped and no tab or workspace moves (`docs/modules/workspaces.md`).
     var frozen = false
     private var setOf: [TabKey: UUID] = [:]
     /// Tabs seen in a group that held every live tab of their set. A settled tab that shows
@@ -95,10 +96,9 @@ struct WorkspaceBook {
         for tab in group.tabs {
             guard let old = setOf[tab], old != winner else { continue }
             let oldTabs = live.filter { setOf[$0] == old }
-            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
-                // Merge All Windows: the loser's workspaces come whole, with their names. A window
-                // that holds only its stock "No project" has nothing to keep: it is the same as a tab
-                // dragged in and joins "~".
+            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner] {
+                // Merge All Windows, or the last tab of a window dropped in: the loser's workspaces
+                // come whole, with their names, and its ungrouped tabs stay ungrouped (M4).
                 won.absorb(loser)
                 sets[winner] = won
                 sets[old] = nil
@@ -106,34 +106,21 @@ struct WorkspaceBook {
                 for moved in oldTabs { setOf[moved] = winner }
                 touched.insert(old)
             } else {
-                // One tab dragged in, or out: it joins "~" of the new group.
+                // One tab dragged in, or out: it is ungrouped in the new group (M1).
                 remove(tab, from: old)
                 touched.insert(old)
             }
         }
 
-        let before = sets[winner]?.revision
-        var set = sets[winner] ?? WorkspaceSet(id: winner)
+        // A tab no rule has placed is ungrouped (M1).
         let fresh = group.tabs.filter { setOf[$0] == nil }
         for tab in fresh { setOf[tab] = winner }
-
-        set.reconcile(current: group.tabs)
-        if !fresh.isEmpty, let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
-        sets[winner] = set
+        if sets[winner] == nil { sets[winner] = WorkspaceSet(id: winner) }
 
         if live.filter({ setOf[$0] == winner }).isSubset(of: members) { settled.formUnion(members) }
 
-        if set.revision != before { touched.insert(winner) }
+        if !fresh.isEmpty { touched.insert(winner) }
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
-    }
-
-    /// A set that is one unrenamed start workspace with no folder: "~", or the older "No project"
-    /// or "Default". A window nobody has set up.
-    func isPlain(_ set: WorkspaceSet) -> Bool {
-        guard set.workspaces.count == 1 else { return false }
-        let only = set.workspaces[0]
-        return only.folder == nil
-            && [WorkspaceSet.homeName, WorkspaceSet.defaultName, WorkspaceSet.legacyDefaultName].contains(only.name)
     }
 
     /// The set each group follows. A set belongs to the group that holds most of its live tabs; a
@@ -172,23 +159,23 @@ struct WorkspaceBook {
 
     /// Notes a tab that is about to close. Returns what is needed to put it back.
     mutating func closing(_ tab: TabKey) -> ClosedTab? {
-        guard let id = setOf[tab], let set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
-        let closed = ClosedTab(tab: tab, set: set, workspace: workspace)
+        guard let id = setOf[tab], let set = sets[id] else { return nil }
+        let closed = ClosedTab(tab: tab, set: set, workspace: set.workspace(of: tab))
         var outcome = Outcome()
         closeQuietly(tab, into: &outcome)
         live.remove(tab)
         return closed
     }
 
-    /// Puts a reopened tab back where `closed` says: its set (recreated when gone, with the
-    /// names and fold kept but no empty "No project") and its workspace (recreated when deleted).
+    /// Puts a reopened tab back where `closed` says: its set (recreated when gone) and its
+    /// workspace (recreated when deleted), or ungrouped (M2).
     mutating func reinsert(_ tab: TabKey, from closed: ClosedTab) {
         let id = closed.set.id
         var set = sets[id] ?? WorkspaceSet(id: id, revision: closed.set.revision)
-        if set.workspace(closed.workspace.id) == nil {
-            set.add(closed.workspace)
+        if let workspace = closed.workspace {
+            if set.workspace(workspace.id) == nil { set.add(workspace) }
+            set.join(tab, to: workspace.id)
         }
-        set.join(tab, to: closed.workspace.id)
         sets[id] = set
         setOf[tab] = id
         settled.insert(tab)
@@ -206,28 +193,31 @@ struct WorkspaceBook {
         settled.remove(tab)
         guard var set = sets[id] else { return }
         set.remove(tab)
-        if set.workspaces.isEmpty {
+        // A set lives while it has a tab, grouped or not.
+        if setOf.values.contains(id) {
+            sets[id] = set
+        } else {
             sets[id] = nil
             lastSelectedTab[id] = nil
-        } else {
-            sets[id] = set
         }
     }
 
     // MARK: Sidebar commands
 
     /// M1: `tab`, which Ghostty just opened from `source`, takes the workspace of `source`
-    /// and unfolds it. Returns the sets that changed.
+    /// and unfolds it; a source with no workspace gives none. Returns the sets that changed.
     mutating func opened(_ tab: TabKey, from source: TabKey) -> Set<UUID> {
-        guard let id = setOf[source], var set = sets[id], let workspace = set.workspace(of: source) else { return [] }
+        guard let id = setOf[source], var set = sets[id] else { return [] }
         var changed: Set<UUID> = [id]
         if let old = setOf[tab], old != id {
             remove(tab, from: old)
             changed.insert(old)
         }
         setOf[tab] = id
-        set.join(tab, to: workspace.id)
-        set.setCollapsed(workspace.id, false)
+        if let workspace = set.workspace(of: source) {
+            set.join(tab, to: workspace.id)
+            set.setCollapsed(workspace.id, false)
+        }
         sets[id] = set
         return changed.filter { sets[$0] != nil }
     }

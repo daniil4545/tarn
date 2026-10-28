@@ -64,7 +64,7 @@ struct WorkspaceFolderTests {
 
     // spec: docs/specs/workspace-folder.md S6. "+" opens after the last tab of the group, in its folder.
     @Test func thePlusOfAGroupOpensAfterItsLastTabInTheGroupFolder() throws {
-        var set = WorkspaceSet.makeDefault(tabs: [t[0], t[1]])
+        var set = WorkspaceSet()
         let created = set.create(name: "tarn", folder: "/p/tarn")
         let tarn = try #require(created)
         let createdEmpty = set.create(name: "empty", folder: nil)
@@ -79,7 +79,7 @@ struct WorkspaceFolderTests {
 
     // spec: docs/specs/workspace-folder.md S3. Q1 and Q4 pick the workspace that holds the folder.
     @Test func theFirstTabOfTheWorkspaceWithTheFolderIsChosen() throws {
-        var set = WorkspaceSet.makeDefault(tabs: [t[0], t[1]])
+        var set = WorkspaceSet()
         let createdNotes = set.create(name: "notes", folder: "/p/notes")
         let createdTarn = set.create(name: "tarn", folder: "/p/tarn")
         let notes = try #require(createdNotes)
@@ -102,7 +102,7 @@ struct WorkspaceFolderTests {
 
     // spec: docs/specs/workspace-folder.md S21
     @Test func aSnapshotKeepsTheFolderThroughEncoding() throws {
-        var set = WorkspaceSet.makeDefault(tabs: [t[0]])
+        var set = WorkspaceSet()
         let created = set.create(name: "tarn", folder: "/p/tarn")
         let tarn = try #require(created)
         set.join(t[1], to: tarn)
@@ -122,30 +122,5 @@ struct WorkspaceFolderTests {
         let set = try WorkspaceSnapshot.decode(Data(json.utf8)).makeSet()
         #expect(set.workspace(id)?.name == "Default")
         #expect(set.workspace(id)?.folder == nil)
-        #expect(WorkspaceBook().isPlain(set))
-    }
-
-    @Test func isPlainTakesBothNamesAndNoFolder() throws {
-        let book = WorkspaceBook()
-        var set = WorkspaceSet.makeDefault(tabs: [t[0]])
-        #expect(set.workspaces[0].name == "No project")
-        #expect(book.isPlain(set))
-        let id = set.workspaces[0].id
-        let toDefault = set.rename(id, to: "Default")
-        #expect(toDefault)
-        #expect(book.isPlain(set))
-        let toWork = set.rename(id, to: "Work")
-        #expect(toWork)
-        #expect(!book.isPlain(set))
-        let back = set.rename(id, to: "No project")
-        #expect(back)
-        _ = set.create(name: "Second")
-        #expect(!book.isPlain(set))
-
-        var withFolder = WorkspaceSet()
-        let created = withFolder.create(name: "No project", folder: "/p/tarn")
-        let tarn = try #require(created)
-        withFolder.join(t[0], to: tarn)
-        #expect(!book.isPlain(withFolder))
     }
 }

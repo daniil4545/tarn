@@ -94,13 +94,11 @@ struct TombstoneTests {
     }
 
     /// Closing a window closes its tabs one by one; the undo makes new tabs. The set, the
-    /// names and the places come back, and no empty "~" appears.
-    @Test func aWindowUndoRestoresEveryWorkspaceWithoutAnEmptyDefault() {
+    /// names and the places come back.
+    @Test func aWindowUndoRestoresEveryWorkspace() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2], t[3]]])
-        let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[2]) { $0.join(t[2], to: work) }
-        _ = book.edit(t[3]) { $0.join(t[3], to: work) }
+        book.group("Work", [t[2], t[3]])
         let original = book.set(of: t[0])?.id
 
         var order = Array(t[0...3])
@@ -115,23 +113,61 @@ struct TombstoneTests {
         _ = book.pass([Array(t[4...7])])
         #expect(book.sets.count == 1)
         #expect(book.set(of: t[4])?.id == original)
-        #expect(book.names(Array(t[4...7])) == ["~", "Work"])
-        #expect(book.set(of: t[4])?.workspaces.count == 2)
+        #expect(book.names(Array(t[4...7])) == ["-", "Work"])
+        #expect(book.set(of: t[4])?.workspaces.count == 1)
     }
 
     /// The last tab of a workspace closed the workspace; the undo recreates it in its place.
     @Test func aTabUndoRecreatesItsClosedWorkspaceAtItsPlace() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
-        let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[2]) { $0.join(t[2], to: work) }
+        let work = book.group("Work", [t[2]])
         let closed = book.closing(t[2])!
         _ = book.pass([[t[0], t[1]]])
-        #expect(book.names([t[0], t[1]]) == ["~"])
+        #expect(book.names([t[0], t[1]]) == ["-"])
 
         book.reinsert(t[3], from: closed)
         _ = book.pass([[t[0], t[1], t[3]]])
-        #expect(book.names([t[0], t[1], t[3]]) == ["~", "Work"])
+        #expect(book.names([t[0], t[1], t[3]]) == ["-", "Work"])
         #expect(book.workspace(of: t[3])?.id == work)
+    }
+
+    /// spec: docs/specs/workspace-folder.md S64
+    /// A tab with no group leaves a tombstone too: its undo puts it back ungrouped, and the shelf
+    /// hands the tombstone (with its viewers) to the window that appears.
+    @Test func anUngroupedTabLeavesATombstoneAndComesBackUngrouped() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1]]])
+        book.group("Work", [t[0]])
+        let surface = UUID()
+        let closed = book.closing(t[1])
+        #expect(closed != nil)
+        #expect(closed?.workspace == nil)
+
+        let shelf = TombstoneShelf()
+        shelf.arm(TombstoneToken(WorkspaceTombstone(closed: closed!, surfaces: [surface], viewers: nil)))
+        let claimed = shelf.claim(surfaces: [surface])
+        #expect(claimed != nil)
+
+        book.reinsert(t[2], from: claimed!.closed)
+        _ = book.pass([[t[0], t[2]]])
+        #expect(book.workspace(of: t[2]) == nil)
+        #expect(book.set(of: t[2])?.id == book.set(of: t[0])?.id)
+        #expect(book.names([t[0], t[2]]) == ["Work", "-"])
+    }
+
+    /// spec: docs/specs/workspace-folder.md S64
+    @Test func theUndoOfAnUngroupedWindowRecreatesItsSetAndNoGroup() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        let closed = book.closing(t[0])!
+        #expect(book.sets.isEmpty)
+
+        book.reinsert(t[1], from: closed)
+        _ = book.pass([[t[1]]])
+        #expect(book.names([t[1]]) == ["-"])
+        #expect(book.set(of: t[1])?.id == closed.set.id)
+        #expect(book.sets.count == 1)
+        #expect(book.set(of: t[1])?.workspaces.isEmpty == true)
     }
 }

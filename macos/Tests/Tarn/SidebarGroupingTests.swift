@@ -139,13 +139,53 @@ struct SidebarGroupingTests {
         #expect(!SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[3].key), in: groups))
         #expect(!SidebarModel.gapPullsUp(b, gap: nil, in: groups))
         // A folded or empty workspace shows nothing below its header: the new gap comes under the pointer.
-        var workspace = groups[1].workspace
+        var workspace = groups[1].workspace!
         workspace.collapsed = true
         var folded = groups
         folded[1] = SidebarModel.Group(workspace: workspace, tabs: groups[1].tabs)
         #expect(!SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(a), in: folded))
         let empty = group("D", [])
         #expect(!SidebarModel.gapPullsUp(empty.id, gap: .endOfWorkspace(a), in: groups + [empty]))
+    }
+
+    /// A: two tabs, ungrouped: one tab, B: two tabs.
+    private func withUngrouped() -> (groups: [SidebarModel.Group], tabs: [SidebarModel.Tab]) {
+        let tabs = (1...5).map { tab($0) }
+        return (
+            [group("A", Array(tabs[0...1])), .init(workspace: nil, tabs: [tabs[2]]), group("B", Array(tabs[3...4]))],
+            tabs
+        )
+    }
+
+    @Test func anUngroupedBlockHasNoSlotOfItsOwnYet() {
+        let (groups, tabs) = withUngrouped()
+        let key = tabs[2].key
+        for lowerHalf in [false, true] {
+            #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(key), lowerHalf: lowerHalf, in: groups) == nil)
+            #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tab(key), lowerHalf: lowerHalf, in: groups) == nil)
+        }
+        // The ungrouped block has no header; its id is its first tab, no workspace's.
+        #expect(groups[1].id == key)
+        #expect(!groups.contains { $0.workspace?.id == key })
+    }
+
+    @Test func aWorkspaceDroppedBelowAnotherLandsBeforeTheNextWorkspaceNotTheUngroupedBlock() {
+        let (groups, _) = withUngrouped()
+        let a = groups[0].id, b = groups[2].id
+        let lower = SidebarModel.dropSlot(dragging: .workspace, over: .header(a), lowerHalf: true, in: groups)
+        #expect(lower == .beforeWorkspace(b))
+        let end = SidebarModel.dropSlot(dragging: .workspace, over: .header(b), lowerHalf: true, in: groups)
+        #expect(end == .end)
+    }
+
+    @Test func belowAnUngroupedLastBlockATabHasNoSlot() {
+        let (groups, tabs) = withUngrouped()
+        let ungroupedLast = Array(groups[0...1])
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: ungroupedLast) == nil)
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .endOfWorkspace(groups[2].id))
+        // A gap in the ungrouped block pulls no header up: it belongs to no workspace.
+        #expect(!SidebarModel.gapPullsUp(groups[2].id, gap: .beforeTab(tabs[2].key), in: groups))
+        #expect(SidebarModel.gapPullsUp(groups[2].id, gap: .endOfWorkspace(groups[0].id), in: groups))
     }
 
     @Test func unknownTargetsGiveNoSlot() {

@@ -59,36 +59,40 @@ extension SidebarModel {
     ) -> SidebarDropSlot? {
         switch (kind, target) {
         case (.tab, .header(let id)):
-            return groups.contains { $0.workspace.id == id } ? .endOfWorkspace(id) : nil
+            return groups.contains { $0.workspace?.id == id } ? .endOfWorkspace(id) : nil
 
         case (.tab, .tab(let key)):
+            // Rows of an ungrouped block take no drop yet (the commands that ungroup are PR 4 of T-266).
             guard let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
+                  let workspace = group.workspace,
                   let index = group.tabs.firstIndex(where: { $0.key == key })
             else { return nil }
             if !lowerHalf { return .beforeTab(key) }
-            return group.tabs[safe: index + 1].map { .beforeTab($0.key) } ?? .endOfWorkspace(group.workspace.id)
+            return group.tabs[safe: index + 1].map { .beforeTab($0.key) } ?? .endOfWorkspace(workspace.id)
 
         case (.workspace, .header(let id)):
-            guard let index = groups.firstIndex(where: { $0.workspace.id == id }) else { return nil }
+            guard let index = groups.firstIndex(where: { $0.workspace?.id == id }) else { return nil }
             return lowerHalf ? slot(after: index, in: groups) : .beforeWorkspace(id)
 
         case (.workspace, .tab(let key)):
             guard let index = groups.firstIndex(where: { $0.tabs.contains { $0.key == key } }),
+                  let workspace = groups[index].workspace,
                   let row = groups[index].tabs.firstIndex(where: { $0.key == key })
             else { return nil }
             let before = (row + (lowerHalf ? 1 : 0)) * 2 <= groups[index].tabs.count
-            return before ? .beforeWorkspace(groups[index].workspace.id) : slot(after: index, in: groups)
+            return before ? .beforeWorkspace(workspace.id) : slot(after: index, in: groups)
 
         case (.tab, .tail):
-            return groups.last.map { .endOfWorkspace($0.workspace.id) }
+            return groups.last?.workspace.map { .endOfWorkspace($0.id) }
 
         case (.workspace, .tail):
             return groups.isEmpty ? nil : .end
         }
     }
 
+    /// Before the next workspace below `index`, or the end. Ungrouped blocks are not slots yet.
     private nonisolated static func slot(after index: Int, in groups: [Group]) -> SidebarDropSlot {
-        groups[safe: index + 1].map { .beforeWorkspace($0.workspace.id) } ?? .end
+        groups.dropFirst(index + 1).lazy.compactMap(\.workspace).first.map { .beforeWorkspace($0.id) } ?? .end
     }
 
     /// The slot while `lifted` is dragged. The slot before the lifted row and the slot after it
@@ -102,16 +106,16 @@ extension SidebarModel {
     /// up a row and leave its first row under the pointer, which then takes the gap. So the gap
     /// stays; the header takes it only when its workspace is folded or empty.
     nonisolated static func gapPullsUp(_ id: Workspace.ID, gap: SidebarDropSlot?, in groups: [Group]) -> Bool {
-        guard let header = groups.firstIndex(where: { $0.workspace.id == id }),
-              !groups[header].workspace.collapsed, !groups[header].tabs.isEmpty
+        guard let header = groups.firstIndex(where: { $0.workspace?.id == id }),
+              groups[header].workspace?.collapsed == false, !groups[header].tabs.isEmpty
         else { return false }
         let owner: Workspace.ID?
         switch gap {
-        case .beforeTab(let key): owner = groups.first { $0.tabs.contains { $0.key == key } }?.workspace.id
+        case .beforeTab(let key): owner = groups.first { $0.tabs.contains { $0.key == key } }?.workspace?.id
         case .endOfWorkspace(let workspace): owner = workspace
         default: owner = nil
         }
-        return groups.firstIndex { $0.workspace.id == owner }.map { $0 < header } ?? false
+        return owner.flatMap { owner in groups.firstIndex { $0.workspace?.id == owner } }.map { $0 < header } ?? false
     }
 }
 

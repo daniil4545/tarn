@@ -34,7 +34,7 @@ struct AgentCommandsTests {
     }
 
     @Test @MainActor func callerOutsideAPaneOrAWorkspaceIsRefused() throws {
-        let quick = pane(in: nil)
+        let quick = PaneRow(pane: UUID(), tab: nil, workspace: nil)
         let cases: [(String?, String)] = [
             (nil, "not in a tarn tab"),
             (UUID().uuidString, "not in a tarn tab"),
@@ -46,6 +46,34 @@ struct AgentCommandsTests {
             #expect(reply["error"] as? String == error, "\(caller ?? "nil")")
             #expect(reply["code"] as? Int == 1)
         }
+    }
+
+    /// spec: docs/specs/workspace-folder.md S49 - a caller in a tab with no workspace reaches that tab only.
+    @Test @MainActor func lsOfAnUngroupedCallerListsItsOwnTab() throws {
+        let tab = UUID()
+        let mine = [PaneRow(pane: UUID(), tab: tab, workspace: nil), PaneRow(pane: UUID(), tab: tab, workspace: nil)]
+        let all = [mine[0], PaneRow(pane: UUID(), tab: UUID(), workspace: nil), mine[1], pane(in: left)]
+        let reply = try ls(mine[1].pane.uuidString, in: all)
+        let ids = try #require(reply["panes"] as? [[String: Any]]).compactMap { $0["pane"] as? String }
+        #expect(ids == mine.map(\.pane.uuidString))
+    }
+
+    /// spec: docs/specs/workspace-folder.md S57 - `wait`, `read` and `close` on another ungrouped tab: exit 4.
+    @Test @MainActor func anUngroupedCallerCannotReachAnotherTab() throws {
+        final class Sink: WaitSink {
+            func send(_ line: Data) {}
+            func watchPeer(_ handler: @escaping @Sendable () -> Void) {}
+        }
+        let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
+        let other = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
+        let scope = try AgentScope.resolve(caller: caller.pane.uuidString, in: [caller, other]).get()
+        let message: [String: Any] = ["pane": other.pane.uuidString]
+        let expected = AgentRefusal.noPane(other.pane.uuidString)
+        #expect(throws: expected) { try ReadPane.run(message, scope).get() }
+        #expect(throws: expected) { try ClosePane.run(message, scope).get() }
+        let waited = WaitPane.start(message, scope: scope, reply: Sink())
+        #expect(throws: expected) { try #require(waited).get() }
+        #expect(expected.code == 4)
     }
 
     /// spec: agent-cli B5 - a missing or foreign id is exit 4, never the selected pane.

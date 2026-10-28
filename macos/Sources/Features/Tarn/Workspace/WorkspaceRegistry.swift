@@ -2,9 +2,10 @@ import AppKit
 import GhosttyKit
 import OSLog
 
-/// A workspace and the tab windows in it, top to bottom.
+/// A workspace and the tab windows in it, top to bottom; the ungrouped tabs between two
+/// workspaces are a run with no workspace.
 struct WorkspaceRun {
-    let workspace: Workspace
+    let workspace: Workspace?
     let windows: [NSWindow]
 }
 
@@ -416,9 +417,9 @@ final class WorkspaceRegistry {
     func moveWorkspace(_ workspace: Workspace.ID, before other: Workspace.ID?, in window: NSWindow) {
         var order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)
-        guard let from = runs.firstIndex(where: { $0.workspace.id == workspace }) else { return }
+        guard let from = runs.firstIndex(where: { $0.workspace?.id == workspace }) else { return }
         let moving = runs.remove(at: from)
-        runs.insert(moving, at: runs.firstIndex { $0.workspace.id == other } ?? runs.count)
+        runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.workspace?.id == id } } ?? runs.count)
 
         isBusy = true
         for (place, tab) in runs.flatMap(\.tabs).enumerated() {
