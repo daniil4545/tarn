@@ -12,7 +12,6 @@
 set -eu
 
 stand="${TARN_STAND:-/tmp/tarn-stand}"
-id=com.daniil4545.tarn.stand
 here=$(cd "$(dirname "$0")" && pwd)
 
 fail() {
@@ -23,6 +22,9 @@ fail() {
 # Refuses when the stand is down: AppleScript by bundle id would launch a copy with the real home.
 pid=$(pgrep -f "$stand/Tarn.app/Contents/MacOS/ghostty" | head -1) || true
 [ -n "$pid" ] || fail "the stand is not running: make -f tarn.mk live"
+# stand.sh gives each stand path its own bundle id; the copy's plist is the one source of it.
+id=$(plutil -extract CFBundleIdentifier raw -o - "$stand/Tarn.app/Contents/Info.plist") ||
+  fail "no bundle id in $stand/Tarn.app"
 
 # Runs AppleScript on the focused terminal; argv passes text without quoting. The stand is checked
 # before each call: a stand that died would be relaunched by bundle id with the real home.

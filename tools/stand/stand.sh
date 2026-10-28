@@ -7,7 +7,9 @@
 set -eu
 
 stand="${TARN_STAND:-/tmp/tarn-stand}"
+# Each stand path gets its own bundle id, so two stands never answer each other's AppleScript.
 id=com.daniil4545.tarn.stand
+[ "$stand" = /tmp/tarn-stand ] || id="$id.$(printf '%s' "$stand" | cksum | cut -d ' ' -f 1)"
 app="$stand/Tarn.app"
 sock="$stand/home/Library/Application Support/tarn/tarn.sock"
 lsreg=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
