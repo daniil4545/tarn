@@ -12,6 +12,9 @@ struct WorkspaceSnapshot: Codable, Equatable {
         var collapsed: Bool
         /// Missing in snapshots saved before folders; decodes as nil.
         var folder: String?
+        /// The ungrouped group (G13). Missing in older snapshots: a "~" without a folder or with
+        /// the home folder is ungrouped.
+        var ungrouped: Bool?
         /// In tab order.
         var tabKeys: [TabKey]
     }
@@ -28,21 +31,29 @@ struct WorkspaceSnapshot: Codable, Equatable {
     /// In run order.
     var workspaces: [Entry]
 
-    /// The set this snapshot describes. A tab listed twice stays in the first workspace;
-    /// a workspace without a tab is dropped. A "~" saved with the home folder loads without it,
-    /// as every "~" is now.
+    /// The set this snapshot describes. A tab listed twice stays in the first group; a group
+    /// without a tab is dropped; every ungrouped entry merges into the one ungrouped group (I1).
     func makeSet(home: String = NSHomeDirectory()) -> WorkspaceSet {
         let homeFolder = WorkspaceFolder.standardized(home) ?? home
         var members: [TabKey: Workspace.ID] = [:]
         var kept: [Workspace] = []
+        var hasUngrouped = false
         for entry in workspaces {
+            let ungrouped = entry.ungrouped
+                ?? (entry.name == WorkspaceSet.homeName && (entry.folder == nil || entry.folder == homeFolder))
+            let id = ungrouped ? setID : entry.id
             var any = false
             for key in entry.tabKeys where members[key] == nil {
-                members[key] = entry.id
+                members[key] = id
                 any = true
             }
-            let folder = entry.name == WorkspaceSet.homeName && entry.folder == homeFolder ? nil : entry.folder
-            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: folder)) }
+            guard any else { continue }
+            if !ungrouped {
+                kept.append(Workspace(id: id, name: entry.name, collapsed: entry.collapsed, folder: entry.folder))
+            } else if !hasUngrouped {
+                hasUngrouped = true
+                kept.append(Workspace(id: id, name: WorkspaceSet.homeName))
+            }
         }
         return WorkspaceSet(id: setID, workspaces: kept, members: members, revision: revision)
     }
@@ -76,6 +87,7 @@ extension WorkspaceSnapshot {
                 name: run.workspace.name,
                 collapsed: run.workspace.collapsed,
                 folder: run.workspace.folder,
+                ungrouped: set.isUngrouped(run.workspace),
                 tabKeys: run.tabs + extra.sorted { $0.uuidString < $1.uuidString }
             )
         }
@@ -83,7 +95,8 @@ extension WorkspaceSnapshot {
             let keys = set.tabs(in: workspace.id).sorted { $0.uuidString < $1.uuidString }
             if !keys.isEmpty {
                 entries.append(Entry(
-                    id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, folder: workspace.folder, tabKeys: keys
+                    id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, folder: workspace.folder,
+                    ungrouped: set.isUngrouped(workspace), tabKeys: keys
                 ))
             }
         }

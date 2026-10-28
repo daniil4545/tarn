@@ -94,13 +94,13 @@ struct TombstoneTests {
     }
 
     /// Closing a window closes its tabs one by one; the undo makes new tabs. The set, the
-    /// names and the places come back, and no empty "~" appears.
+    /// names and the places come back, and no empty ungrouped group appears.
     @Test func aWindowUndoRestoresEveryWorkspaceWithoutAnEmptyDefault() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2], t[3]]])
         let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[2]) { $0.join(t[2], to: work) }
-        _ = book.edit(t[3]) { $0.join(t[3], to: work) }
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         let original = book.set(of: t[0])?.id
 
         var order = Array(t[0...3])
@@ -116,7 +116,7 @@ struct TombstoneTests {
         #expect(outcome.reorders.isEmpty)
         #expect(book.sets.count == 1)
         #expect(book.set(of: t[4])?.id == original)
-        #expect(book.names(Array(t[4...7])) == ["~", "Work"])
+        #expect(book.names(Array(t[4...7])) == ["Work", "~"])
         #expect(book.set(of: t[4])?.workspaces.count == 2)
     }
 
@@ -125,15 +125,16 @@ struct TombstoneTests {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
         let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[2]) { $0.join(t[2], to: work) }
-        let closed = book.closing(t[2])!
-        _ = book.pass([[t[0], t[1]]])
-        #expect(book.names([t[0], t[1]]) == ["~"])
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        let closed = book.closing(t[0])!
+        _ = book.pass([[t[1], t[2]]])
+        #expect(book.names([t[1], t[2]]) == ["~"])
 
+        // Ghostty puts the undone tab back at its old place, first.
         book.reinsert(t[3], from: closed)
-        let outcome = book.pass([[t[0], t[1], t[3]]])
+        let outcome = book.pass([[t[3], t[1], t[2]]])
         #expect(outcome.reorders.isEmpty)
-        #expect(book.names([t[0], t[1], t[3]]) == ["~", "Work"])
+        #expect(book.names([t[3], t[1], t[2]]) == ["Work", "~"])
         #expect(book.workspace(of: t[3])?.id == work)
     }
 }

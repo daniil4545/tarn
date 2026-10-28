@@ -107,30 +107,7 @@ struct WorkspaceFolderTests {
         let set = try WorkspaceSnapshot.decode(Data(json.utf8)).makeSet()
         #expect(set.workspace(id)?.name == "Default")
         #expect(set.workspace(id)?.folder == nil)
-        #expect(WorkspaceBook().isPlain(set))
-    }
-
-    @Test func isPlainTakesBothNamesAndNoFolder() throws {
-        let book = WorkspaceBook()
-        var set = WorkspaceSet.makeDefault(tabs: [t[0]])
-        #expect(set.workspaces[0].name == "No project")
-        #expect(book.isPlain(set))
-        let id = set.workspaces[0].id
-        let toDefault = set.rename(id, to: "Default")
-        #expect(toDefault)
-        #expect(book.isPlain(set))
-        let toWork = set.rename(id, to: "Work")
-        #expect(toWork)
-        #expect(!book.isPlain(set))
-        let back = set.rename(id, to: "No project")
-        #expect(back)
-        _ = set.create(name: "Second")
-        #expect(!book.isPlain(set))
-
-        var withFolder = WorkspaceSet()
-        let created = withFolder.create(name: "No project", folder: "/p/tarn")
-        let tarn = try #require(created)
-        withFolder.join(t[0], to: tarn)
-        #expect(!book.isPlain(withFolder))
+        // "Default" and "No project" stay plain groups (G13).
+        #expect(set.workspace(id).map(set.isUngrouped) == false)
     }
 }

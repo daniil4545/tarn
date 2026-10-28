@@ -1,6 +1,21 @@
 import Foundation
 @testable import Ghostty
 
+extension WorkspaceSet {
+    /// The names plain groups had before the ungrouped group; restored sets keep them.
+    static let defaultName = "No project"
+    static let legacyDefaultName = "Default"
+
+    /// A set with one plain group "No project" holding `tabs`.
+    static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
+        let workspace = Workspace(name: defaultName)
+        return WorkspaceSet(
+            workspaces: [workspace],
+            members: Dictionary(uniqueKeysWithValues: tabs.map { ($0, workspace.id) })
+        )
+    }
+}
+
 extension WorkspaceBook {
     /// One pass over groups given as lists of keys; the first key of each is selected
     /// unless `selected` says otherwise.
@@ -17,8 +32,8 @@ extension WorkspaceBook {
         return created!
     }
 
-    /// Restores one window as a saved set of a single folderless workspace (a set saved before
-    /// "~" was the start workspace): `tabs` are its members, the first is the window's tab.
+    /// Restores one window as a saved set of a single plain group (a set saved before the
+    /// ungrouped group): `tabs` are its members, the first is the window's tab.
     mutating func restoreLegacy(_ tabs: [TabKey], name: String = WorkspaceSet.defaultName) {
         adopt(WorkspaceSnapshot(
             version: 1, setID: UUID(), revision: 1, tabKey: tabs[0],

@@ -19,11 +19,8 @@ struct Workspace: Equatable, Identifiable, Codable {
 /// a contiguous run of the native tab order, so workspace order is derived from the order of
 /// tabs and never stored (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
-    static let defaultName = "No project"
-    /// The name sets had before "No project"; restored sets keep it.
-    static let legacyDefaultName = "Default"
-    /// The start workspace of a fresh set and the target of Workspaces off. It has no folder, so
-    /// its tabs and splits open where Ghostty opens them.
+    /// The stored name of the ungrouped group (I1), so an older build rolls back to its start
+    /// workspace. It has no folder: its tabs and splits open where Ghostty opens them.
     static let homeName = "~"
 
     /// One window's workspaces. Not part of the stored state.
@@ -65,16 +62,12 @@ struct WorkspaceSet: Equatable {
         self.revision = revision
     }
 
-    /// A set with `No project` holding `tabs`.
-    static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
-        let workspace = Workspace(name: defaultName)
-        return WorkspaceSet(
-            workspaces: [workspace],
-            members: Dictionary(uniqueKeysWithValues: tabs.map { ($0, workspace.id) })
-        )
-    }
-
     // MARK: Queries
+
+    /// The ungrouped group is the one whose id is the set's id (I1).
+    func isUngrouped(_ workspace: Workspace) -> Bool {
+        workspace.id == id
+    }
 
     func workspace(_ id: Workspace.ID) -> Workspace? {
         workspaces.first { $0.id == id }
@@ -103,7 +96,7 @@ struct WorkspaceSet: Equatable {
         }
     }
 
-    /// Each workspace of `order` forms one unbroken run.
+    /// Each workspace of `order` forms one unbroken run and the ungrouped run is last.
     func isContiguous(_ order: [TabKey]) -> Bool {
         var closed = Set<Workspace.ID>()
         var current: Workspace.ID?
@@ -111,6 +104,8 @@ struct WorkspaceSet: Equatable {
             guard let id = members[tab] else { continue }
             if id == current { continue }
             if closed.contains(id) { return false }
+            // A tab of a group below the ungrouped run is a break (I2).
+            if current == self.id { return false }
             if let current { closed.insert(current) }
             current = id
         }
@@ -156,7 +151,18 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Adds a workspace that already has an identity, for an undone close.
+    /// The ungrouped group, made when missing. The only place that makes it (I1).
+    @discardableResult
+    mutating func ungroupedID() -> Workspace.ID {
+        if workspace(id) == nil {
+            workspaces.append(Workspace(id: id, name: Self.homeName))
+            revision += 1
+        }
+        return id
+    }
+
+    /// Adds a workspace that already has an identity, for an undone close. A known id is
+    /// refused, so a second ungrouped group cannot be added (I1).
     mutating func add(_ workspace: Workspace) {
         guard self.workspace(workspace.id) == nil else { return }
         workspaces.append(workspace)
@@ -203,10 +209,13 @@ struct WorkspaceSet: Equatable {
         return true
     }
 
-    /// Appends every workspace and tab of `other` unchanged, for Merge All Windows.
+    /// Appends every group and tab of `other` for Merge All Windows; its ungrouped tabs join
+    /// the ungrouped group of this set (I1).
     mutating func absorb(_ other: WorkspaceSet) {
-        workspaces.append(contentsOf: other.workspaces)
-        members.merge(other.members) { current, _ in current }
+        workspaces.append(contentsOf: other.workspaces.filter { !other.isUngrouped($0) })
+        for (tab, owner) in other.members where members[tab] == nil {
+            members[tab] = owner == other.id ? ungroupedID() : owner
+        }
         revision += 1
     }
 
@@ -226,60 +235,83 @@ struct WorkspaceSet: Equatable {
     /// - Parameters:
     ///   - previous: the relative order of the tabs at the last look.
     ///   - current: the native order now, new tabs included.
-    ///   - target: where a tab with no workspace goes (section 4).
-    /// - Returns: the native moves that put each new tab at the end of its workspace's run.
-    ///   Membership is already final; the caller makes the moves.
-    mutating func reconcile(previous: [TabKey], current: [TabKey], target: Workspace.ID) -> [Reorder] {
+    ///   - target: where a tab with no workspace goes (section 4); the ungrouped group when it is gone.
+    ///   - selected: the selected tab, the mover of a swap of neighbours (I2).
+    ///   - explicit: a sidebar command named `target`, so a new tab goes to the end of its run (G4).
+    ///   - arrivals: tabs dragged in from another window; they join the group of their neighbour (G5a).
+    ///   - repairs: false after a merge, which settles the ungrouped run instead of the mover rule.
+    /// - Returns: the native moves for new tabs and for the ungrouped run. Membership is already
+    ///   final; the caller makes the moves.
+    mutating func reconcile(
+        previous: [TabKey], current: [TabKey], target: Workspace.ID,
+        selected: TabKey? = nil, explicit: Bool = false, arrivals: Set<TabKey> = [], repairs: Bool = true
+    ) -> [Reorder] {
         let before = self
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         if !fresh.isEmpty {
-            let heir = ensureWorkspace(target)
-            for tab in fresh { members[tab] = heir }
+            let heir = workspace(target) == nil ? ungroupedID() : target
+            for tab in fresh {
+                let owner = arrivals.contains(tab) ? neighbourGroup(of: tab, in: current) : nil
+                members[tab] = owner ?? (arrivals.contains(tab) ? ungroupedID() : heir)
+            }
         }
 
         let known = current.filter { !fresh.contains($0) }
-        if !isContiguous(known) {
-            repair(known, previous: previous.filter(known.contains))
+        if repairs, !isContiguous(known) {
+            repair(known, previous: previous.filter(known.contains), selected: selected)
         }
 
         var reorders: [Reorder] = []
         var order = current
-        for tab in fresh {
-            guard let index = order.firstIndex(of: tab), let id = members[tab] else { continue }
+        for tab in fresh where !arrivals.contains(tab) {
+            guard let index = order.firstIndex(of: tab), let owner = members[tab] else { continue }
             order.remove(at: index)
-            let lastPeer = order.lastIndex { members[$0] == id }
-            let destination = lastPeer.map { $0 + 1 } ?? order.count
+            let peers = order.indices.filter { members[order[$0]] == owner }
+            let destination: Int
+            if let first = peers.first, let last = peers.last {
+                // Ghostty's own place stands when it touches the run of the group (G4).
+                destination = !explicit && index >= first && index <= last + 1 ? index : last + 1
+            } else {
+                // The first tab of a new group goes before the first ungrouped tab (G8).
+                destination = owner == id ? order.count : order.firstIndex { members[$0] == id } ?? order.count
+            }
             order.insert(tab, at: destination)
             if destination != index { reorders.append(Reorder(tab: tab, delta: destination - index)) }
         }
+        reorders += settleUngrouped(order: order)
 
         if members != before.members || workspaces != before.workspaces { revision = before.revision + 1 }
         return reorders
     }
 
-    /// Workspaces are off: a tab with no workspace joins "~"; a new "~" is made when the set has
-    /// none. Nothing else moves, whatever the order of the tabs.
-    mutating func reconcileFrozen(current: [TabKey]) {
+    /// Workspaces are off: a tab with no workspace is ungrouped. Nothing else moves, whatever
+    /// the order of the tabs.
+    mutating func joinUngrouped(current: [TabKey]) {
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         guard !fresh.isEmpty else { return }
-        let target: Workspace.ID
-        if let existing = workspaces.first(where: Self.isHome) {
-            target = existing.id
-        } else {
-            let created = Self.makeHome()
-            workspaces.append(created)
-            target = created.id
-        }
-        for tab in fresh { members[tab] = target }
+        let loose = ungroupedID()
+        for tab in fresh { members[tab] = loose }
         revision += 1
     }
 
-    /// Workspaces are on again: the native moves that make every workspace one run, in the order of
-    /// first appearance. Membership does not change.
+    /// Workspaces are on again: the native moves that make every group one run, in the order of
+    /// first appearance, the ungrouped run last. Membership does not change.
     func regroup(order: [TabKey]) -> [Reorder] {
+        let runs = runs(order: order)
+        let target = (runs.filter { $0.workspace.id != id } + runs.filter { $0.workspace.id == id }).flatMap(\.tabs)
+        return moves(from: order, to: target)
+    }
+
+    /// I2: the native moves that put the ungrouped run last, the groups and the order inside
+    /// each run unchanged. Membership does not change.
+    func settleUngrouped(order: [TabKey]) -> [Reorder] {
+        moves(from: order, to: order.filter { members[$0] != id } + order.filter { members[$0] == id })
+    }
+
+    private func moves(from order: [TabKey], to target: [TabKey]) -> [Reorder] {
         var current = order
         var moves: [Reorder] = []
-        for (place, tab) in runs(order: order).flatMap(\.tabs).enumerated() {
+        for (place, tab) in target.enumerated() {
             guard let at = current.firstIndex(of: tab), at != place else { continue }
             current.remove(at: at)
             current.insert(tab, at: place)
@@ -288,20 +320,26 @@ struct WorkspaceSet: Equatable {
         return moves
     }
 
+    /// The group of the tab above `tab`, or below it when it is first.
+    private func neighbourGroup(of tab: TabKey, in order: [TabKey]) -> Workspace.ID? {
+        guard let index = order.firstIndex(of: tab) else { return nil }
+        return [index - 1, index + 1].filter(order.indices.contains).lazy.compactMap { members[order[$0]] }.first
+    }
+
     /// Makes the workspaces of `known` contiguous again. Ghostty moves one tab at a time, so
     /// first look for the tab whose removal leaves the others in their old order; it joins
-    /// the workspace of its upper neighbour, or its lower one when it is first. If that does
-    /// not heal the order, every tab outside the first run of its workspace joins the
-    /// workspace above it.
-    private mutating func repair(_ known: [TabKey], previous: [TabKey]) {
+    /// the workspace of its upper neighbour, or its lower one when it is first. When two
+    /// neighbours swap both fit: the mover is the selected tab, else the tab of a group. If that
+    /// does not heal the order, every tab outside the first run of its workspace joins the
+    /// workspace above it, never into or out of the ungrouped group (`settleUngrouped` heals those).
+    private mutating func repair(_ known: [TabKey], previous: [TabKey], selected: TabKey?) {
         if previous.count == known.count, previous != known {
-            let mover = known.first { tab in
-                known.filter { $0 != tab } == previous.filter { $0 != tab }
-            }
+            let fits = known.filter { tab in known.filter { $0 != tab } == previous.filter { $0 != tab } }
+            let mover = fits.first { $0 == selected } ?? fits.first { members[$0] != id } ?? fits.first
             if let mover, let index = known.firstIndex(of: mover) {
                 let neighbour = index > 0 ? known[index - 1] : known[safe: index + 1]
-                if let id = neighbour.flatMap({ members[$0] }) {
-                    members[mover] = id
+                if let owner = neighbour.flatMap({ members[$0] }) {
+                    members[mover] = owner
                 }
                 if isContiguous(known) { return }
             }
@@ -310,32 +348,15 @@ struct WorkspaceSet: Equatable {
         var closed = Set<Workspace.ID>()
         var current: Workspace.ID?
         for (index, tab) in known.enumerated() {
-            guard let id = members[tab] else { continue }
-            if id == current { continue }
-            if closed.contains(id), index > 0, let above = members[known[index - 1]] {
+            guard let owner = members[tab] else { continue }
+            if owner == current { continue }
+            if closed.contains(owner), index > 0, let above = members[known[index - 1]], owner != id, above != id {
                 members[tab] = above
                 continue
             }
             if let current { closed.insert(current) }
-            current = id
+            current = owner
         }
-    }
-
-    static func makeHome() -> Workspace {
-        Workspace(name: homeName)
-    }
-
-    static func isHome(_ workspace: Workspace) -> Bool {
-        workspace.name == homeName && workspace.folder == nil
-    }
-
-    /// `target` when it exists, else the first workspace, else a new "~".
-    private mutating func ensureWorkspace(_ target: Workspace.ID) -> Workspace.ID {
-        if workspace(target) != nil { return target }
-        if let first = workspaces.first { return first.id }
-        let created = Self.makeHome()
-        workspaces.append(created)
-        return created.id
     }
 
     private static func cleaned(_ name: String) -> String? {

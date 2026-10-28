@@ -31,7 +31,7 @@ struct WorkspaceBook {
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
-    /// Workspaces are off: new tabs join "~" and no tab or workspace moves (`docs/modules/workspaces.md`).
+    /// Workspaces are off: new tabs are ungrouped and no tab or workspace moves (`docs/modules/workspaces.md`).
     var frozen = false
     /// Workspaces came back on: the next pass regroups the tabs instead of repairing membership.
     var regroupPending = false
@@ -94,6 +94,8 @@ struct WorkspaceBook {
     private mutating func reconcile(_ group: Group, winner: UUID, regroup: Bool, into outcome: inout Outcome) {
         let members = Set(group.tabs)
         var touched = Set<UUID>()
+        var merged = false
+        var arrivals = Set<TabKey>()
 
         // A tab whose set is unknown (a lost table) is new again.
         for tab in group.tabs where setOf[tab].map({ sets[$0] == nil }) == true {
@@ -104,11 +106,10 @@ struct WorkspaceBook {
         for tab in group.tabs {
             guard let old = setOf[tab], old != winner else { continue }
             let oldTabs = live.filter { setOf[$0] == old }
-            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
-                // Merge All Windows: the loser's workspaces come whole, with their names. A window
-                // that holds only its stock "No project" has nothing to keep: it is the same as a tab
-                // dragged in and joins the target.
+            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isLoneTab(loser) {
+                // Merge All Windows: the loser's groups come whole, its ungrouped tabs join ours (I1).
                 won.absorb(loser)
+                merged = true
                 sets[winner] = won
                 sets[old] = nil
                 seenOrder[old] = nil
@@ -118,7 +119,9 @@ struct WorkspaceBook {
                 for moved in oldTabs { setOf[moved] = winner }
                 touched.insert(old)
             } else {
-                // One tab dragged in, or out: it joins the new group's target.
+                // One tab dragged in, or out: it joins the group of its neighbour (G5a), or the
+                // group a sidebar command named.
+                if pendingTarget[winner] == nil { arrivals.insert(tab) }
                 remove(tab, from: old)
                 touched.insert(old)
             }
@@ -132,12 +135,15 @@ struct WorkspaceBook {
 
         let previous = (seenOrder[winner] ?? []).filter(members.contains)
         if frozen {
-            set.reconcileFrozen(current: group.tabs)
+            set.joinUngrouped(current: group.tabs)
         } else if regroup {
-            set.reconcileFrozen(current: group.tabs)
+            set.joinUngrouped(current: group.tabs)
             outcome.reorders += set.regroup(order: group.tabs)
         } else {
-            outcome.reorders += set.reconcile(previous: previous, current: group.tabs, target: target)
+            outcome.reorders += set.reconcile(
+                previous: previous, current: group.tabs, target: target, selected: group.selected,
+                explicit: pendingTarget[winner] != nil, arrivals: arrivals, repairs: !merged
+            )
         }
         if !fresh.isEmpty {
             if let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
@@ -156,13 +162,10 @@ struct WorkspaceBook {
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
     }
 
-    /// A set that is one unrenamed start workspace with no folder: "~", or the older "No project"
-    /// or "Default". A window nobody has set up.
-    func isPlain(_ set: WorkspaceSet) -> Bool {
-        guard set.workspaces.count == 1 else { return false }
-        let only = set.workspaces[0]
-        return only.folder == nil
-            && [WorkspaceSet.homeName, WorkspaceSet.defaultName, WorkspaceSet.legacyDefaultName].contains(only.name)
+    /// A window of one ungrouped tab. A new tab is seen alone in its own window before AppKit
+    /// tabs it (a title change posts in between), so it joins like a tab dragged in, not like a merge.
+    private func isLoneTab(_ set: WorkspaceSet) -> Bool {
+        set.members.count == 1 && set.workspaces.count == 1 && set.isUngrouped(set.workspaces[0])
     }
 
     /// The set each group follows. A set belongs to the group that holds most of its live tabs; a
@@ -198,19 +201,12 @@ struct WorkspaceBook {
     }
 
     /// Where a new tab goes: the workspace the sidebar named, else the one of the selected
-    /// tab, else the first one (section 4).
+    /// tab, else the ungrouped group (section 4).
     private func targetWorkspace(in set: WorkspaceSet, group: Group, winner: UUID) -> Workspace.ID {
         if let id = pendingTarget[winner], set.workspace(id) != nil { return id }
         if let id = lastSelected[winner], set.workspace(id) != nil { return id }
         if let selected = group.selected, let id = set.workspace(of: selected)?.id { return id }
-        return set.runs(order: group.tabs).first?.workspace.id ?? set.workspaces.first?.id ?? UUID()
-    }
-
-    /// The tab a new tab of `workspace` inherits from, as cmux does: `selected` when it is in
-    /// `workspace`, else the workspace's last tab in `order`; nil for an empty workspace.
-    func sourceTab(for workspace: Workspace.ID, order: [TabKey], selected: TabKey) -> TabKey? {
-        let tabs = order.filter { self.workspace(of: $0)?.id == workspace }
-        return tabs.contains(selected) ? selected : tabs.last
+        return winner
     }
 
     // MARK: Closing and coming back
@@ -225,15 +221,16 @@ struct WorkspaceBook {
         return closed
     }
 
-    /// Puts a reopened tab back where `closed` says: its set (recreated when gone, with the
-    /// names and fold kept but no empty "No project") and its workspace (recreated when deleted).
+    /// Puts a reopened tab back where `closed` says: its set (recreated when gone) and its group
+    /// (recreated when deleted); a closed ungrouped group maps to the set's ungrouped group (I1).
     mutating func reinsert(_ tab: TabKey, from closed: ClosedTab) {
         let id = closed.set.id
         var set = sets[id] ?? WorkspaceSet(id: id, revision: closed.set.revision)
-        if set.workspace(closed.workspace.id) == nil {
+        let owner = closed.set.isUngrouped(closed.workspace) ? set.ungroupedID() : closed.workspace.id
+        if set.workspace(owner) == nil {
             set.add(closed.workspace)
         }
-        set.join(tab, to: closed.workspace.id)
+        set.join(tab, to: owner)
         sets[id] = set
         setOf[tab] = id
         settled.insert(tab)

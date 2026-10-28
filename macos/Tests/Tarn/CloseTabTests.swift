@@ -59,7 +59,9 @@ struct CloseTabTests {
 
         #expect(registry.createWorkspace(folder: folder.path, from: firstWindow))
         try await wait { live(firstWindow).count == 2 }
-        let opened = try #require(firstWindow.tabGroup?.windows.last)
+        // The new group's tab stands before the ungrouped tab (G8).
+        let runs = registry.runs(for: firstWindow).map { "\($0.workspace.name):\($0.windows.count)" }
+        let opened = try #require(live(firstWindow).first { registry.workspace(of: $0)?.name == "proj" }, "runs \(runs)")
         let workspace = try #require(registry.workspace(of: opened))
         #expect(workspace.name == "proj")
         #expect(workspace.folder == WorkspaceFolder.standardized(folder.path))
@@ -83,17 +85,16 @@ struct CloseTabTests {
         try await wait { firstWindow.isVisible }
         registry.sync()
 
-        // Tabs in tab order: "~", "~", B, B. Each new tab lands after its own workspace, so
-        // Ghostty's native `move_tab` never runs (it asserts inside AppKit in a hidden test host).
+        // Tabs in tab order: B, B, "~", "~". The group B opens first, before the one ungrouped tab
+        // (G8): one native move of one place. Longer moves abort inside AppKit in a hidden test host.
         let defaultID = try #require(registry.workspace(of: firstWindow)?.id)
-        registry.newTab(in: defaultID, from: firstWindow)
+        #expect(registry.createWorkspace(named: "B", from: firstWindow))
         try await wait { live(firstWindow).count == 2 }
-        let second = try #require(firstWindow.tabGroup?.windows.last)
-        #expect(registry.createWorkspace(named: "B", from: second))
-        try await wait { live(firstWindow).count == 3 }
-        let third = try #require(firstWindow.tabGroup?.windows.last)
+        let third = try #require(live(firstWindow).first { registry.workspace(of: $0)?.name == "B" })
         let bID = try #require(registry.workspace(of: third)?.id)
         registry.newTab(in: bID, from: third)
+        try await wait { live(firstWindow).count == 3 }
+        registry.newTab(in: defaultID, from: firstWindow)
         try await wait { live(firstWindow).count == 4 }
         #expect(live(firstWindow).count == 4)
         #expect(Set(live(firstWindow).compactMap { $0.tabGroup?.windows.count }) == [4])

@@ -25,7 +25,7 @@ enum WorkspaceRestore {
     }
 
     /// The snapshot in `data`, or nil with one logged line for data we cannot read. The window
-    /// then restores as a new tab and lands in the first workspace of its group (section 8).
+    /// then restores as a new tab and lands in the ungrouped group (section 8).
     static func snapshot(from data: Data?) -> WorkspaceSnapshot? {
         guard let data else { return nil }
         do {

@@ -40,13 +40,13 @@ struct TargetTests {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
         let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
-        _ = book.selected(t[0])
+        _ = book.edit(t[0]) { $0.join(t[0], to: work) }
+        _ = book.selected(t[1])
         book.setPendingTarget(work, for: t[0])
-        let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
+        let outcome = book.pass([[t[0], t[1], t[2]]], selected: [t[2]])
         #expect(book.workspace(of: t[2])?.id == work)
-        // t2 sits before t1, the last tab of Work: it moves one place down.
-        #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
+        // t2 stands after the ungrouped t1; the end of Work is before it.
+        #expect(outcome.reorders == [.init(tab: t[2], delta: -1)])
     }
 
     @Test func aPendingTargetIsUsedOnce() {
@@ -61,7 +61,8 @@ struct TargetTests {
         #expect(book.workspace(of: t[3])?.name == WorkspaceSet.homeName)
     }
 
-    @Test func aNewWorkspaceHoldsItsFirstTabAndOpensAtTheEnd() {
+    // spec: docs/specs/workspace-folder.md G8
+    @Test func aNewWorkspaceHoldsItsFirstTabAndOpensBeforeTheUngroupedTabs() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
         let fresh = book.newWorkspace("Notes", in: t[0])
@@ -71,8 +72,8 @@ struct TargetTests {
         #expect(book.set(of: t[0])?.workspace(fresh) != nil)
 
         let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["~", "Notes"])
-        #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
+        #expect(book.names([t[2], t[0], t[1]]) == ["Notes", "~"])
+        #expect(outcome.reorders == [.init(tab: t[2], delta: -1)])
     }
 
     @Test func aTabInAFoldedWorkspaceUnfoldsItOnSelectionButNotOnRepeat() {
@@ -111,14 +112,15 @@ struct TargetTests {
         #expect(book.workspace(of: t[2])?.folder == nil)
     }
 
-    @Test func aTabDraggedToAnotherWindowJoinsItsCurrentWorkspace() {
+    // spec: docs/specs/workspace-folder.md S53 (G5a)
+    @Test func aTabDraggedToAnotherWindowJoinsTheGroupOfItsNeighbour() {
         var book = WorkspaceBook()
-        _ = book.pass([[t[0], t[1]], [t[2], t[3]]])
+        _ = book.pass([[t[0], t[1], t[4]], [t[2], t[3]]])
         let other = book.newWorkspace("Other", in: t[2])
         _ = book.edit(t[2]) { $0.join(t[2], to: other) }
         _ = book.selected(t[2])
-        // t1 moves to the second window, after t3.
-        _ = book.pass([[t[0]], [t[2], t[3], t[1]]], selected: [t[0], t[2]])
+        // t1 moves to the second window, between t2 and t3.
+        _ = book.pass([[t[0], t[4]], [t[2], t[1], t[3]]], selected: [t[0], t[2]])
         #expect(book.workspace(of: t[1])?.id == other)
         #expect(book.names([t[0]]) == [WorkspaceSet.homeName])
     }

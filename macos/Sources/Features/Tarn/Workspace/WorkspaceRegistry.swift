@@ -285,9 +285,8 @@ final class WorkspaceRegistry {
 
     // MARK: Sidebar commands
 
-    /// A new tab in `workspace`, after its last tab. It inherits from a tab of that workspace
-    /// (`WorkspaceBook.sourceTab`) through Ghostty's own inheritance, as Cmd+T inherits from the
-    /// focused tab; an empty workspace gets Cmd+T's config.
+    /// A new tab in `workspace`, after its last tab, with Cmd+T's config. Where it starts
+    /// is for stage 2 (G3).
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
         guard let controller = window.windowController as? TerminalController else { return }
         guard !book.frozen else {
@@ -296,15 +295,7 @@ final class WorkspaceRegistry {
         }
         let tab = key(for: window)
         book.setPendingTarget(workspace, for: tab)
-        let order = group(of: window).map(key(for:))
-        if let source = book.sourceTab(for: workspace, order: order, selected: tab),
-           let sourceController = self.window(for: source)?.windowController as? TerminalController,
-           let surface = (sourceController.focusedSurface ?? sourceController.surfaceTree.first)?.surface {
-            let config = Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_TAB))
-            _ = TerminalController.newTab(controller.ghostty, from: window, withBaseConfig: config)
-        } else {
-            controller.newTab(nil)
-        }
+        controller.newTab(nil)
         expirePendingTarget(of: tab)
     }
 

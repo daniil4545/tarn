@@ -73,9 +73,11 @@ struct BookIdempotenceTests {
                     log.append("vanish")
                 }
                 let last = settle(&book, &order, moves: moves)
-                #expect(last.changed.isEmpty && last.reorders.isEmpty,
-                        "seed \(seed) after \(log): changed \(last.changed.count) reorders \(last.reorders.count)")
-                if !last.changed.isEmpty || !last.reorders.isEmpty { break }
+                // A refused move leaves the ungrouped run out of place (I2): the book asks again
+                // but its membership stays.
+                let quiet = last.changed.isEmpty && (!moves || last.reorders.isEmpty)
+                #expect(quiet, "seed \(seed) after \(log): changed \(last.changed.count) reorders \(last.reorders.count)")
+                if !quiet { break }
             }
         }
     }
