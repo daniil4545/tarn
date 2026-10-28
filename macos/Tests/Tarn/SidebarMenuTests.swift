@@ -39,7 +39,7 @@ struct SidebarMenuTests {
     @Test func workspaceMenuItemsSendAMessageTheirTargetHandles() {
         let (model, _) = makeModel()
         let menu = model.contextMenu(for: Workspace(name: "Alpha"))
-        #expect(itemsWithActions(menu).map(\.title) == ["New Tab", "Collapse", "Rename Workspace...", "Delete Workspace..."])
+        #expect(itemsWithActions(menu).map(\.title) == ["New Tab", "Collapse", "Rename Workspace...", "Delete Group..."])
         expectHandled(itemsWithActions(menu))
     }
 

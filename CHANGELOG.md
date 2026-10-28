@@ -6,6 +6,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ### Added
 
+- New Group (Shift+Cmd+T) asks for a group name or a project folder; Delete Group keeps the tabs ungrouped, or closes them with a checkbox; the only group can be deleted too.
 - `tarn wait <pane>` waits until the command in a pane ends: `succeed`, `error` or `closed`, exit 0, 4, 6 or 9 (#59).
 - `tarn read <pane> [--lines N]` prints the last lines of a pane's screen as plain text; `tarn close <pane>` closes a pane without confirmation, focus unchanged (#71).
 - `tarn skill` prints how an agent uses the `tarn` commands, matched to the build; the Claude Code plugin carries a skill that runs it. `tarn module ls` lists the modules: on, off or unavailable (#83).
@@ -27,6 +28,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ### Added
 
+- New Group (Shift+Cmd+T) asks for a group name or a project folder; Delete Group keeps the tabs ungrouped, or closes them with a checkbox; the only group can be deleted too.
 - Shift+Cmd+T opens a new workspace; it no longer reopens a closed tab (Cmd+Z still does).
 - Viewer zoom: Cmd+=, Cmd+- and Cmd+0 in a viewer pane, one zoom for every viewer, kept across launches.
 - Find in the viewer: Cmd+F, Cmd+G and Shift+Cmd+G, in the rendered file and in the source.
@@ -66,6 +68,7 @@ First release. The build is ad-hoc signed and not notarized; see `docs/install.m
 
 ### Added
 
+- New Group (Shift+Cmd+T) asks for a group name or a project folder; Delete Group keeps the tabs ungrouped, or closes them with a checkbox; the only group can be deleted too.
 - File viewer: a pane beside the terminal with a files tree, file tabs, rendered markdown (with mermaid diagrams), a code view with highlighting, and a text editor with unsaved-edit questions. Cmd+B shows or hides it; it follows file changes on disk.
 - Workspaces and layout: a set of workspaces per window in the sidebar, restored after a restart, with undo for a closed workspace. Terminals and viewers sit in one area tree; drop a tab on a pane edge to split, and drag the grips to resize.
 - Settings window and Help: tab style and a short list of Ghostty options, plus a Help page with the keys in effect. Tarn options live in `~/.config/tarn/ghostty.conf`; your Ghostty config is read, never written.
@@ -95,6 +98,7 @@ First preview, built from source. The sidebar and Claude Code session state work
 
 ### Added
 
+- New Group (Shift+Cmd+T) asks for a group name or a project folder; Delete Group keeps the tabs ungrouped, or closes them with a checkbox; the only group can be deleted too.
 - Vertical sidebar in place of the native tab bar: tabs of a window with their shortcuts, close on hover, right-click menu, rename, resizable width, collapse to an icon strip.
 - Agent groups: a tab where `claude`, `codex` or `opencode` runs moves into the group of its project, keyed by the git root, with the agent's icon; it returns below the divider when the agent exits. Two projects with the same folder name show their parent folder.
 - Claude Code session state through the `tarn` plugin: working, needs permission, asks a question, done, done but not seen, stopped with an error, as a colored dot.

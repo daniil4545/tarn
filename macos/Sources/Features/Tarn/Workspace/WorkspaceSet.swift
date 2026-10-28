@@ -162,23 +162,11 @@ struct WorkspaceSet: Equatable {
         return .workspaceClosed(workspaces.remove(at: index))
     }
 
-    /// Deletes a workspace; its tabs go to the one above, or below when it is first.
-    /// The last workspace is never deleted. Returns false when nothing changed.
+    /// Deletes the group; its tabs stay where they stand, ungrouped (G7). False for an unknown id.
     @discardableResult
-    mutating func delete(_ id: Workspace.ID, order: [TabKey]) -> Bool {
-        guard workspaces.count > 1, workspace(id) != nil else { return false }
-        let runs = runs(order: order).filter { $0.workspace != nil }
-        if let index = runs.firstIndex(where: { $0.workspace?.id == id }) {
-            let neighbour = index > 0 ? runs[index - 1] : runs[safe: index + 1]
-            if let heir = neighbour?.workspace?.id {
-                for tab in runs[index].tabs { members[tab] = heir }
-            }
-        }
-        // Members that are not on screen (a window still being restored) follow the same rule.
-        let heir = workspaces.first { $0.id != id }?.id
-        for (tab, owner) in members where owner == id {
-            if let heir { members[tab] = heir }
-        }
+    mutating func ungroup(_ id: Workspace.ID) -> Bool {
+        guard workspace(id) != nil else { return false }
+        members = members.filter { $0.value != id }
         workspaces.removeAll { $0.id == id }
         revision += 1
         return true

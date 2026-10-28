@@ -127,17 +127,25 @@ enum WorkspacePrompt {
         }
     }
 
-    /// Asks for a folder in a sheet and opens a workspace for it (D19). Cancel does nothing.
-    static func newWorkspace(in window: NSWindow) {
+    /// Asks for a group name or a project folder (G2) and creates it. Cancel does nothing (S2).
+    static func newGroup(in window: NSWindow) {
         guard TarnModules.isOn(.workspaces) else { return }
-        chooseFolder(title: "New Workspace", message: "Choose the project folder. The workspace opens with one new tab there.", in: window) { [weak window] folder in
-            guard let window else { return }
-            WorkspaceRegistry.shared.createWorkspace(folder: folder, from: window)
+        let form = NewGroupForm(window: window)
+        let alert = NSAlert()
+        alert.messageText = "New Group"
+        alert.informativeText = "A workspace is a group bound to a project folder: its tabs start there."
+        alert.accessoryView = form
+        alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = form.nameField
+        alert.beginSheetModal(for: window) { [weak window] response in
+            guard let window, let choice = form.choice(confirmed: response == .alertFirstButtonReturn) else { return }
+            WorkspaceRegistry.shared.create(choice, from: window)
         }
     }
 
     /// The folder panel as a sheet; it starts in the folder of the current tab.
-    private static func chooseFolder(title: String, message: String, in window: NSWindow, done: @escaping (String) -> Void) {
+    fileprivate static func chooseFolder(title: String, message: String, in window: NSWindow, done: @escaping (String) -> Void) {
         let panel = NSOpenPanel()
         panel.title = title
         panel.message = message
@@ -155,24 +163,93 @@ enum WorkspacePrompt {
         }
     }
 
-    /// Names the count of tabs that move.
+    /// Asks before a group goes; `done` gets whether its tabs close with it (G7), unchecked by default.
     static func confirmDelete(
         _ name: String,
         tabCount: Int,
-        heir: String,
         in window: NSWindow,
-        done: @escaping () -> Void
+        done: @escaping (_ closeTabs: Bool) -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "Delete Workspace \u{201C}\(name)\u{201D}?"
-        alert.informativeText = tabCount == 0
-            ? "The workspace is empty."
-            : "Its \(tabCount == 1 ? "tab moves" : "\(tabCount) tabs move") to \u{201C}\(heir)\u{201D}. No tab is closed."
+        alert.messageText = "Delete Group \u{201C}\(name)\u{201D}?"
+        alert.informativeText = tabCount == 0 ? "The group is empty." : "Its tabs stay where they are, without a group."
         alert.alertStyle = .warning
+        let close = NSButton(checkboxWithTitle: "Also close its \(tabCount) tab\(tabCount == 1 ? "" : "s")", target: nil, action: nil)
+        close.isHidden = tabCount == 0
+        alert.accessoryView = close
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
-            if response == .alertFirstButtonReturn { done() }
+            if response == .alertFirstButtonReturn { done(close.state == .on) }
+        }
+    }
+}
+
+/// What the New Group dialog asks for: a plain group by name, or a workspace by folder (G2).
+enum NewGroupChoice: Equatable {
+    case group(name: String)
+    case workspace(folder: String)
+
+    /// The choice of a closed dialog; nil for Cancel and for a workspace with no folder.
+    static func make(confirmed: Bool, isWorkspace: Bool, name: String, folder: String) -> NewGroupChoice? {
+        guard confirmed else { return nil }
+        if !isWorkspace { return .group(name: WorkspaceSet.cleaned(name) ?? "Group") }
+        return WorkspaceSet.cleaned(folder).map { .workspace(folder: $0) }
+    }
+}
+
+/// The accessory of the New Group dialog: the kind, a name, a folder with the folder panel.
+@MainActor
+private final class NewGroupForm: NSView {
+    let nameField = NSTextField(string: "")
+    private let folderField = NSTextField(string: "")
+    private let groupRadio = NSButton(radioButtonWithTitle: "Group", target: nil, action: nil)
+    private let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
+    private weak var sheetWindow: NSWindow?
+
+    init(window: NSWindow) {
+        sheetWindow = window
+        super.init(frame: NSRect(x: 0, y: 0, width: 330, height: 56))
+        nameField.placeholderString = "Name"
+        folderField.placeholderString = "Project folder"
+        let choose = NSButton(title: "Choose...", target: self, action: #selector(chooseFolder))
+        for radio in [groupRadio, workspaceRadio] {
+            radio.target = self
+            radio.action = #selector(kindChanged)
+            radio.widthAnchor.constraint(equalToConstant: 90).isActive = true
+        }
+        groupRadio.state = .on
+        let rows = NSStackView(views: [
+            NSStackView(views: [groupRadio, nameField]),
+            NSStackView(views: [workspaceRadio, folderField, choose]),
+        ])
+        rows.orientation = .vertical
+        rows.alignment = .leading
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(rows)
+        NSLayoutConstraint.activate([
+            rows.leadingAnchor.constraint(equalTo: leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: trailingAnchor),
+            rows.topAnchor.constraint(equalTo: topAnchor),
+        ])
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    func choice(confirmed: Bool) -> NewGroupChoice? {
+        .make(confirmed: confirmed, isWorkspace: workspaceRadio.state == .on, name: nameField.stringValue, folder: folderField.stringValue)
+    }
+
+    @objc private func kindChanged(_ sender: NSButton) {
+        window?.makeFirstResponder(sender === groupRadio ? nameField : folderField)
+    }
+
+    @objc private func chooseFolder() {
+        guard let window = window ?? sheetWindow else { return }
+        WorkspacePrompt.chooseFolder(title: "New Workspace", message: "Choose the project folder.", in: window) { [weak self] folder in
+            self?.folderField.stringValue = folder
+            self?.workspaceRadio.state = .on
+            self?.groupRadio.state = .off
         }
     }
 }
@@ -181,6 +258,6 @@ extension TerminalController {
     /// The File menu item "New Workspace" (Shift+Cmd+T), found through the responder chain.
     @IBAction func newWorkspace(_ sender: Any?) {
         guard let window else { return }
-        WorkspacePrompt.newWorkspace(in: window)
+        WorkspacePrompt.newGroup(in: window)
     }
 }
