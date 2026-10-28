@@ -97,7 +97,6 @@ function lift(row, at) {
   };
   row.classList.add("lifted");
   openGap(t, nextShown(row), false);
-  t.home = { at: { ...t.at }, below: t.below };
   return t;
 }
 
@@ -158,13 +157,7 @@ function tabSlot(sb, el, y) {
   return { ws: owner.dataset.wsh, before: nextTab(row), below: nextShown(row) };
 }
 
-// Outside the sidebar the gap goes back to the row's own slot: a release there moves nothing.
 function moveGap(sb, el, y) {
-  if (!el || !sb.contains(el)) {
-    if (tab.below !== tab.home.below) openGap(tab, tab.home.below, true);
-    tab.at = { ...tab.home.at };
-    return;
-  }
   const at = tabSlot(sb, el, y);
   if (!at || at.below === tab.below) return;
   tab.at = { ws: at.ws, before: at.before };
