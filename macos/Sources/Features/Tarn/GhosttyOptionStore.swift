@@ -103,12 +103,12 @@ final class GhosttyOptionStore: ObservableObject {
     /// The text of a number the option takes, or nil: out of range, or a fraction for a whole number.
     static func numberText(_ number: Double, option: GhosttyOption, range: ClosedRange<Double>) -> String? {
         guard range.contains(number), !option.wholeNumber || number == number.rounded() else { return nil }
-        return String(format: "%g", number)
+        return number.optionText
     }
 
     private static func numberProblem(option: GhosttyOption, range: ClosedRange<Double>) -> String {
         let kind = option.wholeNumber ? "whole number" : "number"
-        return "Enter a \(kind) from \(String(format: "%g", range.lowerBound)) to \(String(format: "%g", range.upperBound))."
+        return "Enter a \(kind) from \(range.lowerBound.optionText) to \(range.upperBound.optionText)."
     }
 
     func reset(_ option: GhosttyOption) {
