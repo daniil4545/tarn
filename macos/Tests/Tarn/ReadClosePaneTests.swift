@@ -72,7 +72,8 @@ struct ReadClosePaneTests {
         var config = Ghostty.SurfaceConfiguration()
         config.command = "/bin/sh -c 'printf \"a\\nb\\nc\\n\"; sleep 30'"
         let pane = try #require(NewPane.split(controller, at: caller, direction: .down, config: config))
-        try await until { ReadPane.screenText(pane).contains("c") }
+        // "Last login: ... Oct" has a "c" too: wait for the output itself.
+        try await until { ReadPane.screenText(pane).contains("b\nc") }
         #expect(ReadPane.last(2, of: ReadPane.screenText(pane)) == "b\nc\n")
         #expect(window.firstResponder === caller)
     }
