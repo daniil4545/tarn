@@ -43,6 +43,22 @@ usage() {
   fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane> | module ls [--json] | skill"
 }
 
+# Prints the reply of list command $1: text with no argument, the whole reply with --json.
+list_reply() {
+  name=$1
+  shift
+  need_surface
+  if [ $# -eq 0 ]; then
+    ask "{\"version\":1,\"cmd\":\"$name\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":false}"
+    json_field text
+  elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
+    ask "{\"version\":1,\"cmd\":\"$name\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":true}"
+    printf '%s\n' "$reply"
+  else
+    usage
+  fi
+}
+
 # Prints $1 as a JSON string.
 json_str() {
   printf '%s' "$1" | tr -d '\000-\010\013\014\016-\037' | awk '
@@ -137,16 +153,7 @@ case $cmd in
     ask "{\"version\":1,\"cmd\":\"open\",\"surface\":$(json_str "$TARN_SURFACE"),\"path\":$(json_str "$path")}"
     ;;
   ls)
-    need_surface
-    if [ $# -eq 0 ]; then
-      ask "{\"version\":1,\"cmd\":\"ls\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":false}"
-      json_field text
-    elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
-      ask "{\"version\":1,\"cmd\":\"ls\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":true}"
-      printf '%s\n' "$reply"
-    else
-      usage
-    fi
+    list_reply ls "$@"
     ;;
   new | run)
     need_surface
@@ -254,16 +261,7 @@ case $cmd in
   module)
     [ "${1-}" = ls ] || usage
     shift
-    need_surface
-    if [ $# -eq 0 ]; then
-      ask "{\"version\":1,\"cmd\":\"modules\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":false}"
-      json_field text
-    elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
-      ask "{\"version\":1,\"cmd\":\"modules\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":true}"
-      printf '%s\n' "$reply"
-    else
-      usage
-    fi
+    list_reply modules "$@"
     ;;
   skill)
     [ $# -eq 0 ] || usage
