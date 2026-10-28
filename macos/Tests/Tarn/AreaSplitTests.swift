@@ -114,6 +114,7 @@ struct AreaSplitTests {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.borderless], backing: .buffered,
             defer: false)
+        window.isReleasedWhenClosed = false
         let host = NSHostingView(rootView: AreaSplit(
             direction: direction, ratio: 0.5, dividerColor: .gray, onResize: { _ in }, onEqualize: {},
             left: { Probe() }, right: { Probe() }))

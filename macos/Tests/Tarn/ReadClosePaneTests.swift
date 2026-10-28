@@ -26,6 +26,7 @@ struct ReadClosePaneTests {
         let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
         let controller = TerminalController(app)
         let window = try #require(controller.window)
+        window.isReleasedWhenClosed = false
         let caller = try #require(controller.surfaceTree.first)
         try await until { caller.window === window }
         window.makeFirstResponder(caller)
