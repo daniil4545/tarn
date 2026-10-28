@@ -258,13 +258,6 @@ struct WaitPaneTests {
         }
     }
 
-    /// A pane with no known process gets Ghostty's default shell: `$SHELL`, else the passwd entry (`Config.zig:4813-4880`).
-    @Test func defaultShellFollowsGhostty() {
-        #expect(ShellIntegration.defaultShell(env: "/bin/zsh", passwd: "/bin/bash") == "/bin/zsh")
-        #expect(ShellIntegration.defaultShell(env: nil, passwd: "/bin/bash") == "/bin/bash")
-        #expect(ShellIntegration.defaultShell(env: nil, passwd: nil) == nil)
-    }
-
     /// Ghostty's login wrapper stands for the command it is about to `exec` (`src/termio/Exec.zig:1951`).
     @Test func theLoginWrapperStandsForItsCommand() {
         let wrapper = ["/bin/bash", "--noprofile", "--norc", "-c"]

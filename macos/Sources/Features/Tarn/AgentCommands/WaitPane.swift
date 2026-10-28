@@ -87,12 +87,6 @@ enum ShellIntegration {
     }
 }
 
-extension ShellIntegration {
-    /// The shell Ghostty starts without a `command`: `$SHELL`, else the passwd entry (`src/config/Config.zig:4813-4880`).
-    /// A configured `command` is not readable through the C API.
-    static func defaultShell(env: String?, passwd: String?) -> String? { env ?? passwd }
-}
-
 /// An answer that can be sent once, and tells when the other end hangs up.
 protocol WaitSink: AnyObject {
     func send(_ line: Data)
@@ -256,9 +250,7 @@ enum WaitPane {
             promptReadable: option("confirm-close-surface") == "true",
             atPrompt: !view.needsConfirmQuit,
             integrationExpected: ShellIntegration.injects(
-                setting: option("shell-integration"), shell: pid.flatMap(AgentProcess.paneShell(below:)) ?? ShellIntegration.defaultShell(
-                    env: ProcessInfo.processInfo.environment["SHELL"],
-                    passwd: getpwuid(getuid()).flatMap { $0.pointee.pw_shell.map { String(cString: $0) } }))
+                setting: option("shell-integration"), shell: pid.flatMap(AgentProcess.paneShell(below:)) ?? getpwuid(getuid()).flatMap { $0.pointee.pw_shell.map { String(cString: $0) } })
         )
     }
 }
