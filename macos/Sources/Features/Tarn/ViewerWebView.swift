@@ -99,14 +99,13 @@ final class ViewerWebView: WKWebView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        if event.type == .keyDown, Self.isZoomIn(characters: event.charactersIgnoringModifiers, flags: event.modifierFlags),
-           let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self) {
-            ViewerZoom.change(by: 1)
-            return true
-        }
         guard event.type == .keyDown,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self)
         else { return super.performKeyEquivalent(with: event) }
+        if Self.isZoomIn(characters: event.charactersIgnoringModifiers, flags: event.modifierFlags) {
+            ViewerZoom.change(by: 1)
+            return true
+        }
         if let command = Self.command(characters: event.charactersIgnoringModifiers, keyCode: event.keyCode, flags: event.modifierFlags) {
             onCommand?(command)
             return true
