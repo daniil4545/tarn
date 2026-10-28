@@ -385,22 +385,37 @@ final class WorkspaceRegistry {
         let tab = key(for: window)
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
-        let anchor = workspace ?? book.workspace(of: tab)?.id
-        let behind = block.map { Set($0.map(key(for:))) }
+        let members = Dictionary(uniqueKeysWithValues: order.compactMap { key in book.workspace(of: key).map { (key, $0.id) } })
+        let place = Self.place(
+            of: tab, in: order, members: members, to: workspace,
+            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) }, frozen: book.frozen
+        )
         isBusy = true
         let changed = book.frozen ? nil : book.edit(tab) { set in
             if let workspace { set.join(tab, to: workspace) } else { set.remove(tab) }
         }
-        let destination = Self.destination(
-            of: tab,
-            in: order,
-            before: neighbour.map(key(for:)),
-            isMember: { [frozen = book.frozen] in behind?.contains($0) ?? (frozen || book.workspace(of: $0)?.id == anchor) }
-        )
-        moveNatively(window, by: destination - index)
+        moveNatively(window, by: place - index)
         isBusy = false
         sync()
         publish(changed.map { [$0] } ?? [])
+    }
+
+    /// The place a sidebar move gives `tab`: before `neighbour`, else after the last of `behind`, else
+    /// after the last other tab of the group it ends in (the one it leaves, for `workspace` nil).
+    /// `members` is the membership before the move.
+    nonisolated static func place(
+        of tab: TabKey,
+        in order: [TabKey],
+        members: [TabKey: Workspace.ID],
+        to workspace: Workspace.ID?,
+        before neighbour: TabKey?,
+        behind: Set<TabKey>?,
+        frozen: Bool
+    ) -> Int {
+        let anchor = workspace ?? members[tab]
+        return destination(of: tab, in: order, before: neighbour) {
+            behind?.contains($0) ?? (frozen || members[$0] == anchor)
+        }
     }
 
     /// The place of `tab` among the other tabs of `order` after a move: before `neighbour`, or
