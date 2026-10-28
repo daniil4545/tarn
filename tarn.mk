@@ -61,7 +61,7 @@ live:
 
 check:
 	cd macos && swiftlint lint --strict Sources/Features/Tarn Tests/Tarn
-	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
+	shellcheck -e SC2015 plugin/hooks/*.sh install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
 	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
 		macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
 	uvx ruff@0.17.2 check plugin/test
