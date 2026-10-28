@@ -282,8 +282,10 @@ final class WorkspaceRegistry {
         }
         let tab = key(for: window)
         book.setPendingTarget(workspace, for: tab)
-        let last = group(of: window).last { book.workspace(of: key(for: $0))?.id == workspace } ?? window
-        openTab(after: last, inheritingFrom: last)
+        let set = book.set(of: tab)
+        let order = group(of: window).map(key(for:))
+        let last = set?.lastTab(of: workspace, order: order).flatMap { self.window(for: $0) } ?? window
+        openTab(after: last, inheritingFrom: last, folder: set?.workspace(workspace)?.folder)
         expirePendingTarget(of: tab)
     }
 

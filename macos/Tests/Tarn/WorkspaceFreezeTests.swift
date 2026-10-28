@@ -63,7 +63,7 @@ struct WorkspaceFreezeTests {
         #expect(book.set(of: t[1])?.workspaces.count == 1)
     }
 
-    /// spec: docs/specs/workspace-folder.md S6
+    /// spec: docs/specs/workspace-folder.md S51
     @Test func onAgainTheTabsAreDrawnByMembershipAndNothingMoves() {
         var book = seeded()
         book.frozen = true

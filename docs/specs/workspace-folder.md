@@ -174,7 +174,7 @@ is ungrouped.
 | S1 | New workspace by folder | Shift+Cmd+T, Workspace, pick `F` | workspace "tarn" at the bottom, one tab with `workingDirectory == F` | fast |
 | S2 | Cancelled | Shift+Cmd+T, Cancel | no group, no tab | fast |
 | S3 | Folder already bound | pick `F` while "tarn" has `F` | nothing created, the first tab of "tarn" selected | fast |
-| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `F/macos`; again with `macos-titlebar-style = hidden` | new tab right after it, in "tarn", at `F/macos`, the split too; hidden: Cmd+T opens a new window whose tab is ungrouped (M1) | fast, live |
+| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `F/macos`; again with `macos-titlebar-style = hidden` | new tab right after it, in "tarn", at `F/macos`, the split too; hidden: Cmd+T opens a new window whose tab is ungrouped (M1) | stand |
 | S6 | "+" of a header | "+" on "tarn", then on plain group "notes" | each a tab at the end of its group; "tarn" in `F`, "notes" where its last tab is | fast |
 | S11 | Agent tab stays | ungrouped tab at `F/macos`, `claude` starts | stays ungrouped | live |
 | S21 | Restore | relaunch with groups, folders, ungrouped tabs; an old snapshot; one with `manual` | all come back; old decodes; `manual` ignored | fast |
@@ -182,7 +182,7 @@ is ungrouped.
 | S23 | Top tab mark | tabs at the top, a tab in "tarn", an ungrouped tab | "tarn" after the first title, none on the second | fast |
 | S26 | Path forms | symlink, trailing slash, `F-old` next to `F` | matched by resolved path on component boundaries | fast |
 | S40 | New window | Cmd+N | one ungrouped tab, no header | fast |
-| S41 | New plain group | Shift+Cmd+T, Group, "notes" | "notes" at the bottom, one tab | fast |
+| S41 | New plain group | Shift+Cmd+T, Group, "notes" | "notes" at the bottom, one tab | stand |
 | S42 | Cmd+T ungrouped | Cmd+T in an ungrouped tab | a new ungrouped tab right after it | fast |
 | S43 | Move out and in | drag a row of "tarn" below all rows; onto "notes"; "Remove from group" | ungrouped; in "notes"; ungrouped. One `move_tab` each | fast |
 | S44 | Last tab leaves | move or close the only tab of "notes" | "notes" gone; Cmd+Z of the close brings it back | fast |
@@ -264,7 +264,7 @@ whose behaviour it changes. Sizes are estimates from `origin/dev` 6906121a8.
 | PR | Checkable result | Deletes | Adds | Code size | Check |
 |---|---|---|---|---|---|
 | 0. Demo | explicit model drawn in `demo/` | | | demo only | demo checks |
-| 1. Ghostty owns order | no `move_tab` from `sync`; a native reorder changes order only (M3); "+" opens from the group's last tab; a new group or workspace opens from the window's last tab (G8); the sidebar New Tab button is Cmd+T; on again does not regroup | `Outcome.reorders` and the move loop in `sync`, `Reorder`, the end-of-run step of `WorkspaceSet.reconcile`, `repair` (mover and second branch), `isContiguous`, `seenOrder`, `regroup`, `regroupPending`, the key-window fix in `setFrozen`, `sourceTab`, the button's `newTab(in:)` branch | `newTab(in:)` and `openWorkspace` parents | -165 / +20 | unit S4, S6, S41, S51, S60; stand, also with tabs at the top |
+| 1. Ghostty owns order | no `move_tab` from `sync`; a native reorder changes order only (M3); "+" opens from the group's last tab; a new group or workspace opens from the window's last tab (G8); the sidebar New Tab button is Cmd+T; on again does not regroup | `Outcome.reorders` and the move loop in `sync`, `Reorder`, the end-of-run step of `WorkspaceSet.reconcile`, `repair` (mover and second branch), `isContiguous`, `seenOrder`, `regroup`, `regroupPending`, the key-window fix in `setFrozen`, `sourceTab`, the button's `newTab(in:)` branch | `newTab(in:)` and `openWorkspace` parents | -165 / +20 | unit S6, S51, S60; stand S4, S41, also with tabs at the top |
 | 2. Explicit new tab | M1 by the insertion point; no pending target; `join` drops an emptied group | `pendingTarget`, `setPendingTarget`, `clearPendingTarget`, `expirePendingTarget`, `lastSelected`, `targetWorkspace`, `removeEmpty(keeping:)` | insertion point (2 lines) and its `docs/architecture.md` row, `opened(_:from:)` with the same-tab-group check, new group and workspace place their own tab; unannounced tabs still join "~" | -55 / +45 | unit S4 (both styles), S42, S44, S53; stand |
 | 3. Ungrouped tabs | M1 complete, G1, G11, G13; rows without header, group rows indented; tombstone for every tab; agent scope of an ungrouped caller (own tab only) | `makeHome`, `isHome`, `homeName`, `ensureWorkspace`, `reconcileFrozen`, `isPlain`, `defaultName`, `legacyDefaultName`, `makeDefault`, the "~" home-folder rule of `makeSet` | optional group in `Run` and `ClosedTab`, set lifetime by tabs, sidebar draw of ungrouped rows, snapshot decode of "~", scope filter (about 15 lines) | -70 / +140 | unit S11, S21, S40, S49, S50, S51, S54, S57, S64, S65; stand |
 | 4. Menus and marks | "Move to" and "Remove from group" (G5), slots of ungrouped blocks and the tail, header drag over ungrouped runs, `NativeTabMark` and subtitle skip ungrouped | `delete` heir logic | `leave`, `moveTab` with no group, slot math | -25 / +80 | unit S23, S43, S61, S62; stand |

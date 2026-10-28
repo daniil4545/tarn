@@ -62,6 +62,21 @@ struct WorkspaceFolderTests {
         #expect(WorkspaceFolder.display("/opt/tarn", home: "/Users/x") == "/opt/tarn")
     }
 
+    // spec: docs/specs/workspace-folder.md S6. "+" opens after the last tab of the group, in its folder.
+    @Test func thePlusOfAGroupOpensAfterItsLastTabInTheGroupFolder() throws {
+        var set = WorkspaceSet.makeDefault(tabs: [t[0], t[1]])
+        let created = set.create(name: "tarn", folder: "/p/tarn")
+        let tarn = try #require(created)
+        let createdEmpty = set.create(name: "empty", folder: nil)
+        let empty = try #require(createdEmpty)
+        set.join(t[1], to: tarn)
+        set.join(t[2], to: tarn)
+        let order = [t[1], t[2], t[0], t[3]]
+        #expect(set.lastTab(of: tarn, order: order) == t[2])
+        #expect(set.workspace(tarn)?.folder == "/p/tarn")
+        #expect(set.lastTab(of: empty, order: order) == nil)
+    }
+
     // spec: docs/specs/workspace-folder.md S3. Q1 and Q4 pick the workspace that holds the folder.
     @Test func theFirstTabOfTheWorkspaceWithTheFolderIsChosen() throws {
         var set = WorkspaceSet.makeDefault(tabs: [t[0], t[1]])

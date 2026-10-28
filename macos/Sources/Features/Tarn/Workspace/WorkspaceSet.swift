@@ -127,6 +127,11 @@ struct WorkspaceSet: Equatable {
         runs(order: order).first { $0.workspace.folder == folder }?.tabs.first
     }
 
+    /// The last tab of workspace `id` in `order`: the parent of its "+" tab (S6).
+    func lastTab(of id: Workspace.ID, order: [TabKey]) -> TabKey? {
+        runs(order: order).last { $0.workspace.id == id }?.tabs.last
+    }
+
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {
         guard let index = workspaces.firstIndex(where: { $0.id == id }),
               workspaces[index].collapsed != collapsed
