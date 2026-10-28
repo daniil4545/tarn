@@ -106,7 +106,8 @@ struct WorkspaceBook {
         for tab in group.tabs {
             guard let old = setOf[tab], old != winner else { continue }
             let oldTabs = live.filter { setOf[$0] == old }
-            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isLoneTab(loser) {
+            if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner],
+               !(isLoneTab(loser) && (group.selected == tab || pendingTarget[winner] != nil)) {
                 // Merge All Windows: the loser's groups come whole, its ungrouped tabs join ours (I1).
                 won.absorb(loser)
                 merged = true
@@ -121,9 +122,8 @@ struct WorkspaceBook {
             } else {
                 // One tab dragged in, or out: it joins the group of its neighbour (G5a), or the
                 // group a sidebar command named.
-                if pendingTarget[winner] == nil, !(sets[old].map(isLoneTab) == true && group.selected == tab) {
-                    arrivals.insert(tab)
-                }
+                let isNewTab = sets[old].map(isLoneTab) == true && group.selected == tab
+                if pendingTarget[winner] == nil, !isNewTab { arrivals.insert(tab) }
                 remove(tab, from: old)
                 touched.insert(old)
             }
@@ -164,11 +164,10 @@ struct WorkspaceBook {
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
     }
 
-    /// A window of one ungrouped tab. A new tab is seen alone in its own window before AppKit
-    /// tabs it (a title change posts in between), so it joins like a tab dragged in, not like a merge.
-    /// If it is already selected where it enters a group (Ghostty selects a new tab,
-    /// `TerminalController.swift:493`) it is a new tab with a target. The pass often runs before that
-    /// selection (checked in the test host), so the neighbour rule decides then.
+    /// A window of one ungrouped tab. A new tab is seen alone in its own window before AppKit tabs
+    /// it (a title change posts in between). In the app Ghostty has selected it by the pass that
+    /// sees it in a group (`TerminalController.swift:493`, checked on the stand): selected, it is a
+    /// new tab (Cmd+T) and takes the target; not selected, it is a window merged in (`absorb`).
     private func isLoneTab(_ set: WorkspaceSet) -> Bool {
         set.members.count == 1 && set.workspaces.count == 1 && set.isUngrouped(set.workspaces[0])
     }

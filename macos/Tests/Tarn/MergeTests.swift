@@ -39,7 +39,7 @@ struct MergeTests {
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.selected(t[0])
         _ = book.pass([[t[0], t[1], t[3]], [t[2]]])
-        // Ghostty puts the new tab right after the source t0.
+        // In the app Ghostty has selected the new tab by this pass. It stands right after the source t0.
         let outcome = book.pass([[t[0], t[2], t[1], t[3]]], selected: [t[2]])
         #expect(book.workspace(of: t[2])?.id == work)
         #expect(outcome.reorders.isEmpty)
@@ -77,16 +77,16 @@ struct MergeTests {
         #expect(outcome.reorders.isEmpty)
     }
 
-    // The known limit of the rule: with no ungrouped tab to land next to, a one-tab window merged in
-    // joins the last group. Whether Ghostty selects the new tab before the pass is not reliable.
-    @Test func aLonelyWindowMergedIntoGroupsOnlyJoinsTheLastGroup() {
+    // spec: docs/specs/workspace-folder.md S54, the receiving window has groups only (Cmd+N, then Merge)
+    @Test func aLonelyWindowMergedIntoGroupsOnlyStaysUngrouped() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]], [t[2]]])
         let work = book.newWorkspace("Work", in: t[0])
         _ = book.edit(t[0]) { $0.join(t[0], to: work) }
         _ = book.edit(t[1]) { $0.join(t[1], to: work) }
         _ = book.pass([[t[0], t[1], t[2]]], selected: [t[0]])
-        #expect(book.workspace(of: t[2])?.id == work)
+        #expect(book.workspace(of: t[0])?.id == work)
+        #expect(book.set(of: t[2]).map { $0.isUngrouped(book.workspace(of: t[2])!) } == true)
     }
 
     // G5a, the price of the rule: a whole one-tab window dropped into the middle of another group joins it.

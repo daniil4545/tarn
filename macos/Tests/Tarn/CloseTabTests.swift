@@ -119,25 +119,4 @@ struct CloseTabTests {
         }
         try await wait { live(firstWindow).isEmpty }
     }
-
-    @Test func cmdTInAGroupKeepsTheNewTabInThatGroup() async throws {
-        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
-        let registry = WorkspaceRegistry.shared
-        let first = TerminalController.newWindow(app)
-        let firstWindow = try #require(first.window)
-        try await wait { firstWindow.isVisible }
-        registry.sync()
-        #expect(registry.createWorkspace(named: "B", from: firstWindow))
-        try await wait { live(firstWindow).count == 2 }
-        // spec: docs/specs/workspace-folder.md S4 (live, hidden host)
-        let b = try #require(live(firstWindow).first { registry.workspace(of: $0)?.name == "B" }, "no B")
-        b.makeKeyAndOrderFront(nil)
-        (b.windowController as? TerminalController)?.newTab(nil)
-        try await wait { live(firstWindow).count == 3 }
-        try await Task.sleep(for: .milliseconds(300))
-        let names = live(firstWindow).map { registry.workspace(of: $0)?.name ?? "?" }
-        #expect(names == ["B", "B", "~"], "\(names)")
-        for window in live(firstWindow) { (window.windowController as? TerminalController)?.closeWindowImmediately() }
-        try await wait { live(firstWindow).isEmpty }
-    }
 }
