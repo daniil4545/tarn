@@ -1,7 +1,7 @@
 // Drag inside the sidebar. A tab row follows the pointer as in Warp: after a 4 px move the row
 // folds out of the list, a solid copy follows the pointer, and the rows slide apart to a gap where
 // it lands: before a row in its upper half, after it in its lower half, at the end of a workspace
-// over its header, at the end of the last workspace below the rows. Tab rows use pointer events,
+// over its header, among the ungrouped tabs below the rows. Tab rows use pointer events,
 // not HTML5 drag: browsers lose the drop or cancel the drag when the list moves under it. A
 // workspace header goes into the gap nearest the pointer (HTML5 drag, a line). Slots follow
 // SidebarModel.dropSlot in the app.
@@ -110,7 +110,7 @@ function endTab() {
   bus.emit("drag:end", {});
 }
 
-// The gap stands above `below`: a tab row, the next workspace header or the New workspace button.
+// The gap stands above `below`: a tab row, the next group header or the New group button.
 // Its own margin is read with the slide off, so a margin still sliding back does not count.
 function openGap(t, below, slide) {
   if (t.below) t.below.style.marginTop = "";
@@ -141,8 +141,7 @@ function tabSlot(sb, el, y) {
   if (!el || !sb.contains(el)) return null;
   const end = document.getElementById("wsNew");
   if (el.closest("#wsNew") || (el === sb && y >= end.getBoundingClientRect().top)) {
-    const heads = sb.querySelectorAll(".wsh[data-wsh]");
-    return heads.length ? { ws: heads[heads.length - 1].dataset.wsh, before: null, below: end } : null;
+    return { ws: "loose", before: null, below: end };
   }
   const head = el.closest(".wsh[data-wsh]"), row = el.closest(".tab[data-tabid]");
   if (head) {
@@ -167,8 +166,9 @@ function moveGap(sb, el, y) {
 
 // Slot i is the gap before group i; a group spans from its header to the next header.
 function slot(y) {
-  const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]")];
-  const tops = [...heads.map((h) => h.getBoundingClientRect().top), document.getElementById("wsNew").getBoundingClientRect().top];
+  const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]:not(.flat)")];
+  const end = sb.querySelector(".wsh.flat + .tab") ?? document.getElementById("wsNew");
+  const tops = [...heads.map((h) => h.getBoundingClientRect().top), end.getBoundingClientRect().top];
   const i = heads.filter((_, n) => (tops[n] + tops[n + 1]) / 2 < y).length;
   return { before: heads[i]?.dataset.wsh ?? null, y: tops[i] - sb.getBoundingClientRect().top + sb.scrollTop };
 }

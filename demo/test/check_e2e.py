@@ -60,22 +60,36 @@ def folder_story(pg):
         and pg.locator("[data-wsfolder], [data-wsunfolder]").count() == 0,
     )
     pg.keyboard.press("Escape")
-    tabs = snap(pg)["workspaces"]["tabs"]
-    cmd(pg, "tab.go", {"id": "t2"})
-    cmd(pg, "tab.new", {"ws": "w1"})
-    fresh = snap(pg)["workspaces"]["cur"]
-    fresh_cwd = snap(pg)["workspaces"]["tabs"][fresh]["cwd"]
-    cmd(pg, "tab.close", {"id": fresh})
-    last = next(w for w in snap(pg)["workspaces"]["wss"] if w["id"] == "w1")["tabs"][-1]
+    def ws(tab):
+        return next(w for w in snap(pg)["workspaces"]["wss"] if tab in w["tabs"])
+
     cmd(pg, "tab.go", {"id": "t6"})
-    cmd(pg, "tab.new", {"ws": "w1"})
+    cmd(pg, "tab.new", {"ws": "w1", "header": True})
+    fresh = snap(pg)["workspaces"]["cur"]
+    check(
+        "F6 + of a workspace opens its folder, whatever tab is selected",
+        snap(pg)["workspaces"]["tabs"][fresh]["cwd"] == "~/code/tarn" and ws(fresh)["id"] == "w1",
+    )
+    cmd(pg, "tab.close", {"id": fresh})
+    cmd(pg, "tab.go", {"id": "t2"})
+    cmd(pg, "tab.new", {"ws": "w2", "header": True})
     other = snap(pg)["workspaces"]["cur"]
     check(
-        "F6 + inherits the folder of the selected tab of its workspace, else of its last tab (cmux)",
-        fresh_cwd == tabs["t2"]["cwd"] != "~/code/tarn"
-        and snap(pg)["workspaces"]["tabs"][other]["cwd"] == tabs[last]["cwd"],
+        "F6a + of a plain group opens the folder of the selected tab (Ghostty)",
+        snap(pg)["workspaces"]["tabs"][other]["cwd"] == snap(pg)["workspaces"]["tabs"]["t2"]["cwd"] and ws(other)["id"] == "w2",
     )
     cmd(pg, "tab.close", {"id": other})
+    cmd(pg, "tab.go", {"id": "t2"})
+    cmd(pg, "tab.new", {})
+    beside = snap(pg)["workspaces"]["cur"]
+    tabs = ws(beside)["tabs"]
+    check(
+        "F6b Cmd+T in a grouped tab joins its group right after it, in its folder",
+        ws(beside)["id"] == "w1"
+        and tabs[tabs.index("t2") + 1] == beside
+        and snap(pg)["workspaces"]["tabs"][beside]["cwd"] == snap(pg)["workspaces"]["tabs"]["t2"]["cwd"],
+    )
+    cmd(pg, "tab.close", {"id": beside})
 
     def agent_tab(cwd):
         cmd(pg, "tab.new", {"ws": "w0", "cwd": cwd})
@@ -95,9 +109,9 @@ def folder_story(pg):
     cmd(pg, "tab.go", {"id": "t1"})
     cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
     check(
-        "F5 with tabs at the top a tab reads title, then its workspace (user decision 2026-10-27)",
+        "F5 with tabs at the top a tab reads title, then its group; an ungrouped tab has no mark",
         pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn"
-        and pg.inner_text("#topTabs [data-toptab='t6'] .tw").strip() == "~",
+        and pg.locator("#topTabs [data-toptab='t6'] .tw").count() == 0,
     )
     cmd(pg, "config.reset", {"key": "tab-style"})
 

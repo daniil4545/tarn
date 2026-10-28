@@ -345,11 +345,11 @@ def model1_workspace_rules(base):
         )
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "ws.delete", {"id": "w1"})
-        first = ws(pg)["wss"][0]
+        loose = ws(pg)["wss"][-1]
         check(
-            "M2 deleting the first workspace puts its tabs first in the one below",
-            first["id"] == "w2" and first["tabs"] == ["t1", "t2", "t3", "t4", "t5"],
-            str(first["tabs"]),
+            "M2 deleting a group keeps its tabs, ungrouped, before the other ungrouped tabs",
+            loose.get("loose") and loose["tabs"] == ["t1", "t2", "t3", "t4", "t6"] and ws(pg)["wss"][0]["id"] == "w2",
+            str(loose["tabs"]),
         )
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "ws.fold", {"id": "w2"})
