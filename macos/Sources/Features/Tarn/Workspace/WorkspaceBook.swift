@@ -45,6 +45,8 @@ struct WorkspaceBook {
     private var pendingTarget: [UUID: Workspace.ID] = [:]
     /// Sets Ghostty announced a new tab for (`expectNewTab`), with the tab it comes from.
     private var expectingTab: [UUID: TabKey] = [:]
+    /// New tabs of a sidebar command whose native move has not run yet (`runMoves`).
+    private var placeLast = Set<TabKey>()
     private var lastSelected: [UUID: Workspace.ID] = [:]
     private var lastSelectedTab: [UUID: TabKey] = [:]
 
@@ -66,11 +68,15 @@ struct WorkspaceBook {
 
     /// The native moves that make every group one run again in the order AppKit shows now,
     /// membership unchanged. A group with a tab no pass has seen yet waits for that pass.
-    func runMoves(_ groups: [Group]) -> [WorkspaceSet.Reorder] {
-        groups.flatMap { group -> [WorkspaceSet.Reorder] in
+    /// Tabs a sidebar command opened go to the end of their run (G4). Workspaces off move nothing.
+    mutating func runMoves(_ groups: [Group]) -> [WorkspaceSet.Reorder] {
+        let last = placeLast
+        placeLast = []
+        guard !frozen else { return [] }
+        return groups.flatMap { group -> [WorkspaceSet.Reorder] in
             guard let id = group.tabs.first.flatMap({ setOf[$0] }), let set = sets[id],
                   group.tabs.allSatisfy({ set.workspace(of: $0) != nil }) else { return [] }
-            return set.regroup(order: group.tabs)
+            return set.regroup(order: group.tabs, last: last)
         }
     }
 
@@ -100,6 +106,8 @@ struct WorkspaceBook {
         for (group, winner) in zip(groups, winners) {
             reconcile(group, winner: winner, regroup: regroup, into: &outcome)
         }
+        // No move turn follows: a later one must not pull a tab the user has moved since.
+        if outcome.reorders.isEmpty { placeLast = [] }
         return outcome
     }
 
@@ -171,6 +179,7 @@ struct WorkspaceBook {
             set.joinUngrouped(current: group.tabs)
             outcome.reorders += set.regroup(order: group.tabs)
         } else {
+            if pendingTarget[winner] != nil { placeLast.formUnion(fresh) }
             outcome.reorders += set.reconcile(
                 previous: previous, current: group.tabs, target: target, selected: group.selected,
                 explicit: pendingTarget[winner] != nil, arrivals: arrivals, repairs: !merged

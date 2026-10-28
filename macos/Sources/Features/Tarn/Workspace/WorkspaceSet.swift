@@ -295,10 +295,12 @@ struct WorkspaceSet: Equatable {
     }
 
     /// Workspaces are on again: the native moves that make every group one run, in the order of
-    /// first appearance, the ungrouped run last. Membership does not change.
-    func regroup(order: [TabKey]) -> [Reorder] {
+    /// first appearance, the ungrouped run last. Membership does not change. Tabs in `last`
+    /// close their run, as a tab a sidebar command opened does (G4).
+    func regroup(order: [TabKey], last: Set<TabKey> = []) -> [Reorder] {
         let runs = runs(order: order)
-        let target = (runs.filter { $0.workspace.id != id } + runs.filter { $0.workspace.id == id }).flatMap(\.tabs)
+        let target = (runs.filter { $0.workspace.id != id } + runs.filter { $0.workspace.id == id })
+            .flatMap { $0.tabs.filter { !last.contains($0) } + $0.tabs.filter(last.contains) }
         return moves(from: order, to: target)
     }
 

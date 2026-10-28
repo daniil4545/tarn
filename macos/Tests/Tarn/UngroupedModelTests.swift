@@ -82,6 +82,45 @@ struct UngroupedModelTests {
         #expect(moves == [.init(tab: t[4], delta: 2)])
     }
 
+    /// The tabs in tab order after `moves`, made one after the other as `moveNatively` makes them.
+    private func apply(_ moves: [WorkspaceSet.Reorder], to order: [TabKey]) -> [TabKey] {
+        var native = order
+        for move in moves {
+            let at = native.firstIndex(of: move.tab)!
+            native.remove(at: at)
+            native.insert(move.tab, at: at + move.delta)
+        }
+        return native
+    }
+
+    // spec: docs/specs/workspace-folder.md G4 - the move turn runs after AppKit; the "+" tab
+    // still goes to the end of its run, and nothing moves while workspaces are off
+    @Test func theMoveTurnPutsTheTabOfAPlusAtTheEndOfItsRun() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        let group = book.newWorkspace("A", in: t[0])
+        book.setPendingTarget(group, for: t[0])
+        _ = book.pass([[t[0], t[1]]])
+        var order = apply(book.runMoves([.init(tabs: [t[0], t[1]], selected: t[0])]), to: [t[0], t[1]])
+        book.setPendingTarget(group, for: t[1])
+        _ = book.pass([order + [t[2]]])
+        order = apply(book.runMoves([.init(tabs: order + [t[2]], selected: t[1])]), to: order + [t[2]])
+        #expect(order == [t[1], t[2], t[0]])
+
+        // "+" of A with t1 selected: AppKit puts the new tab right after t1, inside the run.
+        book.setPendingTarget(group, for: t[1])
+        let native = [t[1], t[3], t[2], t[0]]
+        #expect(!book.pass([native]).reorders.isEmpty)
+        let moves = book.runMoves([.init(tabs: native, selected: t[1])])
+        #expect(apply(moves, to: native) == [t[1], t[2], t[3], t[0]])
+
+        book.setPendingTarget(group, for: t[1])
+        let later = [t[1], t[4], t[2], t[3], t[0]]
+        _ = book.pass([later])
+        book.frozen = true
+        #expect(book.runMoves([.init(tabs: later, selected: t[1])]).isEmpty)
+    }
+
     // spec: docs/specs/workspace-folder.md G8 - the first tab of a new group
     @Test func theFirstTabOfANewGroupStandsBeforeTheFirstUngroupedTab() {
         var set = make([a, nil, nil])
