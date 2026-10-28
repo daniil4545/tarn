@@ -15,11 +15,12 @@ struct WaitPaneTests {
     }
 
     private let pane = UUID()
-    private let shell = PaneFacts(atPrompt: false, shellInForeground: true)
+    /// A shell Ghostty injects no integration into, such as Apple's `/bin/bash` or `shell-integration = none`.
+    private let plain = PaneFacts(atPrompt: false, integrationExpected: false)
     private let busy = PaneFacts()
-    private let idle = PaneFacts(atPrompt: true, shellInForeground: true)
+    private let idle = PaneFacts(atPrompt: true)
     /// `confirm-close-surface` false or always: `needsConfirmQuit` says nothing about the prompt.
-    private let blind = PaneFacts(promptReadable: false, atPrompt: true, shellInForeground: true)
+    private let blind = PaneFacts(promptReadable: false, atPrompt: true)
 
     private func tick() async { try? await Task.sleep(for: .milliseconds(50)) }
 
@@ -34,12 +35,18 @@ struct WaitPaneTests {
         }
         let cases = [
             Case(mark: nil, facts: idle, integrated: true, expected: .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))),
-            Case(mark: nil, facts: shell, integrated: false, expected: .failure(.noShellIntegration)),
-            Case(mark: nil, facts: shell, integrated: true, expected: nil),
+            Case(mark: nil, facts: plain, integrated: false, expected: .failure(.noShellIntegration)),
+            // An OSC 133 finish already seen: integrated by hand, whatever Ghostty injects.
+            Case(mark: nil, facts: plain, integrated: true, expected: nil),
+            // Integration expected but no finish yet, as right after `tarn run`: no exit 6.
             Case(mark: nil, facts: busy, integrated: false, expected: nil),
             Case(mark: new, facts: busy, integrated: false, expected: nil),
+            Case(mark: new, facts: plain, integrated: false, expected: nil),
             Case(mark: new, facts: PaneFacts(processExited: true), integrated: false, expected: .failure(.exitCodeUnknown)),
             Case(mark: run, facts: idle, integrated: true, expected: nil),
+            Case(mark: run, facts: idle, integrated: false, expected: nil),
+            Case(mark: run, facts: PaneFacts(atPrompt: true, integrationExpected: false), integrated: false,
+                 expected: .failure(.noShellIntegration)),
             Case(mark: nil, facts: blind, integrated: true, expected: nil),
             Case(mark: nil, facts: blind, integrated: false, expected: nil),
         ]
@@ -165,42 +172,6 @@ struct WaitPaneTests {
         #expect(sink.lines.isEmpty)
     }
 
-    /// No OSC 133: a typed command ends, the shell is back, no finish comes. Two ticks answer exit 6.
-    @MainActor @Test func shellBackWithoutMarksEndsTheWaitWithNoIntegration() {
-        let waits = PaneWaits()
-        let sink = Sink()
-        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink)
-        waits.factsOf = { _ in self.shell }
-        waits.tick()
-        #expect(sink.lines.isEmpty, "one tick may be a finish still on its way")
-        waits.tick()
-        #expect(sink.lines.first?["error"] as? String == "no shell integration")
-        #expect(sink.lines.first?["code"] as? Int == 6)
-    }
-
-    @MainActor @Test func aFinishThatArrivesFirstWinsOverTheStall() {
-        let waits = PaneWaits()
-        let sink = Sink()
-        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink)
-        waits.factsOf = { _ in self.shell }
-        waits.tick()
-        waits.commandFinished(pane: pane, exitCode: 0, durationNs: 0)
-        waits.tick()
-        #expect(sink.lines.count == 1)
-        #expect(sink.lines.first?["state"] as? String == "succeed")
-    }
-
-    @MainActor @Test func aBusyPaneResetsTheStallCount() {
-        let waits = PaneWaits()
-        let sink = Sink()
-        _ = waits.begin(pane: pane, facts: busy, timeout: nil, reply: sink)
-        for facts in [shell, busy, shell] {
-            waits.factsOf = { _ in facts }
-            waits.tick()
-        }
-        #expect(sink.lines.isEmpty)
-    }
-
     /// The `run` mark is spent by the finish it waited for: the next wait on the idle pane answers at once.
     @MainActor @Test func aRunMarkIsConsumedByItsFinish() throws {
         let waits = PaneWaits()
@@ -226,8 +197,8 @@ struct WaitPaneTests {
         waits.exists = { _ in false }
         waits.sweep()
         let sink = Sink()
-        // Not integrated any more: a shell in the foreground without a prompt is refused again.
-        let result = waits.begin(pane: pane, facts: shell, timeout: nil, reply: sink)
+        // Not integrated any more: a pane without injected integration is refused again.
+        let result = waits.begin(pane: pane, facts: plain, timeout: nil, reply: sink)
         guard case .failure(let refusal)? = result else {
             Issue.record("the pane stayed integrated")
             return
@@ -258,22 +229,38 @@ struct WaitPaneTests {
         func set() { lock.withLock { flag = true } }
     }
 
-    /// Only the pane's own shell (child of login) is an idle prompt; a nested shell, `zsh -c` and a
-    /// script interpreter have a shell for parent and are commands.
-    @Test func onlyTheRootShellCountsAsShellInForeground() {
-        let cases: [(comm: String?, parent: String?, root: Bool)] = [
-            ("zsh", "login", true),
-            ("bash", "login", true),
-            ("bash", "zsh", false),
-            ("zsh", "zsh", false),
-            ("sh", "bash", false),
-            ("env", "login", false),
-            ("python3", "zsh", false),
-            ("zsh", nil, false),
-            (nil, "login", false),
+    /// Ghostty's rule (`src/termio/shell_integration.zig` `detectShell`, `setup`).
+    @Test func integrationFollowsGhosttysRule() {
+        let cases: [(setting: String?, shell: String?, injects: Bool)] = [
+            ("detect", "/bin/zsh", true),
+            ("detect", "zsh", true),
+            ("detect", "/opt/homebrew/bin/bash", true),
+            ("detect", "/bin/bash", false),
+            ("detect", "/opt/homebrew/bin/fish", true),
+            ("detect", "/usr/local/bin/nu", true),
+            ("detect", "/usr/local/bin/elvish", true),
+            ("detect", "/bin/sh", false),
+            ("detect", "/bin/dash", false),
+            ("detect", "/usr/bin/python3", false),
+            ("detect", nil, true),
+            ("none", "/bin/zsh", false),
+            ("none", nil, false),
+            ("zsh", "/bin/sh", true),
+            (nil, "/bin/zsh", true),
         ]
         for item in cases {
-            #expect(AgentProcess.isRootShell(comm: item.comm, parentComm: item.parent) == item.root, "\(item)")
+            #expect(ShellIntegration.injects(setting: item.setting, shell: item.shell) == item.injects, "\(item)")
         }
+    }
+
+    /// Ghostty's login wrapper stands for the command it is about to `exec` (`src/termio/Exec.zig:1951`).
+    @Test func theLoginWrapperStandsForItsCommand() {
+        let wrapper = ["/bin/bash", "--noprofile", "--norc", "-c"]
+        #expect(AgentProcess.launched(path: "/bin/bash", argv: wrapper + ["exec -l /bin/zsh"]) == "/bin/zsh")
+        #expect(AgentProcess.launched(path: "/bin/bash", argv: wrapper + ["exec -l fish --login"]) == "fish")
+        #expect(AgentProcess.launched(path: "/bin/bash", argv: wrapper + ["make test"]) == "/bin/bash")
+        #expect(AgentProcess.launched(path: "/bin/zsh", argv: ["-zsh"]) == "/bin/zsh")
+        #expect(AgentProcess.launched(path: "/opt/homebrew/bin/bash", argv: ["bash", "build.sh"]) == "/opt/homebrew/bin/bash")
+        #expect(AgentProcess.launched(path: nil, argv: nil) == nil)
     }
 }

@@ -112,15 +112,30 @@ enum AgentProcess {
         return members.first { $0 > 0 && $0 != group && parent($0) == group } ?? group
     }
 
-    /// A pane's own shell is a shell whose parent is Ghostty's `login`. A nested shell, `zsh -c` or a
-    /// script interpreter has a shell for parent: it is a command, not an idle prompt.
-    static func isRootShell(comm: String?, parentComm: String?) -> Bool {
-        guard let comm, ["zsh", "bash", "fish", "sh", "dash", "nu"].contains(comm) else { return false }
-        return parentComm == "login"
+    /// The command Ghostty started in a pane: the child of its `/usr/bin/login` above `pid`, or nil.
+    static func paneShell(below pid: pid_t) -> String? {
+        var current = pid
+        for _ in 0..<32 {
+            guard let up = parent(current), up > 1 else { return nil }
+            if comm(pid: up) == "login" { return launched(path: path(pid: current), argv: argv(pid: current)) }
+            current = up
+        }
+        return nil
     }
 
-    static func isRootShell(pid: pid_t) -> Bool {
-        isRootShell(comm: comm(pid: pid), parentComm: parent(pid).flatMap { comm(pid: $0) })
+    /// Before its `exec`, Ghostty's wrapper `/bin/bash --noprofile --norc -c "exec -l <command>"`
+    /// (`src/termio/Exec.zig:1951`) stands for the command it is about to become.
+    static func launched(path: String?, argv: [String]?) -> String? {
+        guard let argv, argv.count == 5, argv[0] == "/bin/bash", argv[1...3] == ["--noprofile", "--norc", "-c"],
+              argv[4].hasPrefix("exec -l ")
+        else { return path }
+        return argv[4].dropFirst("exec -l ".count).split(separator: " ").first.map(String.init)
+    }
+
+    private static func path(pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
     }
 
     private static func parent(_ pid: pid_t) -> pid_t? {
