@@ -14,6 +14,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 ### Changed
 
 - `tarn ls` has no HOST column and no `host` key: an ssh pane shows by its title and process (#72).
+- `tarn wait` answers `no shell integration` by Ghostty's rule (`shell-integration` setting and the pane's shell), at once, also on a pane from `tarn run`; no more false answer before the first prompt or endless wait.
 - A new window starts in the workspace "~" instead of "No project"; saved workspaces keep their names.
 - Tabs and splits open where Ghostty opens them, in the folder of the current pane, in every workspace; a project workspace no longer sends them to its folder. The "+" of a workspace opens a tab in the folder of that workspace's selected or last tab.
 - A tab dragged in the sidebar leaves the list, and the rows slide apart to a gap where it will land, as in Warp; no accent line for tabs.
