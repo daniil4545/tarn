@@ -806,7 +806,8 @@ class AppDelegate: NSObject,
         let configAny = notification.userInfo?[Ghostty.Notification.NewSurfaceConfigKey]
         let config = configAny as? Ghostty.SurfaceConfiguration
 
-        _ = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
+        let controller = TerminalController.newTab(ghostty, from: window, withBaseConfig: config)
+        MainActor.assumeIsolated { WorkspaceRegistry.shared.opened(controller, from: window) }
     }
 
     private func setDockBadge() {

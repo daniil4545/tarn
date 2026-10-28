@@ -59,7 +59,7 @@ struct HomeStartTests {
 
     @Test func aMissingTargetOfAnEmptySetFallsBackToHome() {
         var set = WorkspaceSet()
-        set.reconcile(current: [t[0]], target: UUID())
+        set.reconcile(current: [t[0]])
         #expect(set.workspaces.count == 1)
         #expect(set.workspaces[0].name == "~")
         #expect(set.workspaces[0].folder == nil)
@@ -102,9 +102,9 @@ struct HomeStartTests {
         _ = book.pass([[t[0], t[1]]])
         #expect(book.names([t[0], t[1]]) == ["No project"])
         #expect(book.workspace(of: t[0])?.folder == nil)
-        // A new tab joins it; "~" is not added next to it.
+        // An unannounced tab joins "~", made next to it.
         _ = book.pass([[t[0], t[1], t[2]]], selected: [t[0]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["No project"])
+        #expect(book.names([t[0], t[1], t[2]]) == ["No project", "~"])
     }
 
     @Test func aRestoredDefaultStaysDefault() {

@@ -162,6 +162,7 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 33 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `commandFinished`, after the surface is resolved and before the `notify-on-command-finish` guard: `PaneWaits.commandFinished(pane:exitCode:durationNs:)` | `tarn wait` ends on a shell command that finished, whatever the notify setting |
 | 34 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `showChildExited`, after the surface is resolved and before the guard: `PaneWaits.childExited(pane:)` | `tarn wait` on a `new` pane ends with its process |
 | 35 | `macos/Sources/Features/Terminal/BaseTerminalController.swift` | at the end of `surfaceTreeDidChange`: `PaneWaits.surfaceTreeChanged()` | `tarn wait` answers `closed` when its pane closes |
+| 36 | `macos/Sources/App/AppDelegate.swift` | in `ghosttyNewTab`: the controller that `TerminalController.newTab` returns goes to `MainActor.assumeIsolated { WorkspaceRegistry.shared.opened(_:from:) }` with the parent window | a new tab takes the workspace of the tab it was opened from (`docs/specs/workspace-folder.md` M1) |
 Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows are numbered in the order they were added, and the table is sorted by number; rows 31 and 32 went with D20. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
