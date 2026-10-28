@@ -554,7 +554,16 @@ def run(base):
             pg.evaluate(gap_at) is None and count(f"{TAB}.lifted") == 0 and count(".dragghost") == 0 and moving in ws_tabs("w2"),
         )
         press_row(n(f"{TAB}[data-tabid='{moving}']"))
+        home_gap = pg.evaluate(gap_at)
+        point(n(f"{TAB}[data-tabid='t1']"), 0.25)
+        moved_gap = pg.evaluate(gap_at)
         point(n("#ws"), 0.5, 0.5)
+        pg.wait_for_timeout(250)
+        check(
+            "W10m a drag that leaves the sidebar closes the gap: it goes back to the row's own slot",
+            moved_gap != home_gap and pg.evaluate(gap_at)["below"] == home_gap["below"],
+            f"{home_gap} {moved_gap} {pg.evaluate(gap_at)}",
+        )
         pg.mouse.up()
         check("W10h a tab let go outside the sidebar stays where it was", moving in ws_tabs("w2") and count(".dragghost") == 0)
         n(f"{TAB}[data-tabid='t1']").click()

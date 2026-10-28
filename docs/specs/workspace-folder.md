@@ -1,246 +1,275 @@
-# Spec: workspace by project folder
+# Spec: tab groups and workspaces
 
-Status: agreed (mockups approved by the user 2026-10-27; a workspace header's tooltip names its folder);
-narrowed 2026-10-27 by T-249 (`docs/plans/workspace-thin-layer.md`): workspaces are a thin layer over Ghostty
-Task: T-203, issue #35
+Status: agreed (user decisions 2026-10-28, demo approved the same day); replaces the workspace-by-folder
+model of T-203 and the thin layer of T-249 (`docs/plans/workspace-thin-layer.md`)
+Task: T-266 (survey T-262)
 Canon: `docs/specs/windows-workspaces.md` (D1-D18, S1-S23), `docs/modules/workspaces.md`,
-`docs/modules/sidebar.md`, research `~/Dev/knowledge/inbox/tarn-workspace-membership-2026-10-27-1134.md`
-(outside the repository).
+`docs/modules/sidebar.md`, `docs/specs/modules.md` section 5, `docs/specs/agent-cli.md` 4.1.
+Survey: T-262 report (Warp, Tellurion, Claude Code desktop, Codex, cmux, WezTerm, Wave, Kitty,
+iTerm2, Ghostty, tmux, Zellij), outside the repository.
 
 ## 1. Goal and scope
 
-- Goal: a workspace is a project folder. The first tab of a workspace starts in its folder; after
-  that every tab and split opens where Ghostty opens it. The user stops forgetting `cd`.
-- Result: Shift+Cmd+T asks for a folder and opens a workspace named after it, its first tab in
-  the folder; the sidebar's + opens a tab in the folder of a tab of that workspace; with tabs at
-  the top each tab reads "tarn · zsh".
-- In scope: folder on a workspace; new workspace by folder; the source of a "+" tab; workspace
-  prefix in native tab titles; restore of all of it.
-- Out of scope: any move of a tab by itself (by folder, by agent, on `cd`); moves between windows
-  (T-142); a list of recent folders in the folder dialog (a separate idea); opening a folder from
-  Finder or `tarn open` into its workspace; ssh host detection.
+- Goal: a group is a plain optional tab group, as in Warp. A group with a project folder is
+  a workspace. A group helps the user keep tabs together. It also gives an agent the context
+  of where it works: `tarn ls` lists the panes and agents of its own group.
+- Result: a new window has one ungrouped tab and no group. Shift+Cmd+T creates a group by name
+  or a workspace by folder. Tabs move freely in and out of groups. An agent in a group sees
+  that group in `tarn ls`.
+- In scope: ungrouped tabs; the two kinds of group at creation; where "+" and Cmd+T put a tab
+  and where it starts; delete with an option to close the tabs; the group in `tarn ls`;
+  restore of an old "~".
+- Out of scope (separate tickets after this core, user decision 2026-10-28): git state in a
+  header, a tab in a new worktree, a warning for two agents in one worktree, saved workspace
+  commands, a changes view, environment per workspace, pin, colour, an agent summary in the
+  header, what each agent works on. Never: a tab moves by itself (by folder, agent or `cd`),
+  moves between windows (T-142).
 
-## 2. Architecture
+## 2. Model
 
 ```mermaid
 flowchart LR
-  user["Shift+Cmd+T"] --> panel["Folder panel"]
-  panel --> reg["WorkspaceRegistry"]
-  reg -->|"first tab: folder; +: source tab config"| ghostty["Ghostty newTab"]
-  tabs["terminalTabsDidChange"] --> reg
-  reg --> book["WorkspaceBook"]
-  book --> folder["WorkspaceFolder (pure)"]
-  reg --> label["Native tab title prefix"]
+  win["Window set"] -->|"0 or more, in order"| grp["Group: name, folder?"]
+  win -->|"0 or more, below the groups"| loose["Ungrouped tabs"]
+  grp -->|"1 or more"| tab["Tab"]
+  loose --> tab
 ```
 
-| Block | Responsibility | Talks to |
-|---|---|---|
-| `WorkspaceFolder` | pure path rules: standardize, contains, name, display | none |
-| `Workspace`, `WorkspaceSet` | folder per workspace | `WorkspaceBook` |
-| `WorkspaceBook` | the source tab of a "+" tab | `WorkspaceSet` |
-| `WorkspaceRegistry` | applies the book to windows: first tab of a folder workspace, "+", native moves | AppKit, Ghostty `newTab`, `move_tab` |
-| `WorkspacePrompt` | folder panel for a new workspace | `WorkspaceRegistry` |
-| `WorkspaceTabLabel` | native tab title with the workspace prefix | `TerminalWindow.attributedTitle` |
+One entity in code: a group with an optional folder. The UI calls a group with a folder a
+workspace (user decision 2026-10-28). Ungrouped tabs are kept as one hidden group per set:
+no header, never renamed, folded or deleted. Its id is the set's id, which is the only mark of it
+(`WorkspaceSet.isUngrouped`), and a second one cannot be added (`WorkspaceSet.add` refuses a
+known id); its stored name is "~", so an
+older build rolls back to its start workspace. Every place that lists groups skips it (section 5).
 
-- Initiator: the user (new workspace, new tab, move). Source of truth: `WorkspaceSet` per window
-  set; the working directory of a surface is Ghostty's (`SurfaceView.workingDirectory`).
-- Owner of state: `WorkspaceBook`. Side effects: Ghostty `newTab` and `move_tab`, restorable
-  state `tarn.workspaces`.
+Two invariants and their writers:
 
-What Ghostty already has (Ghostty first), at `origin/dev` 449a20547:
+- I1. At most one ungrouped group per set. Writer: `ungroupedID()`, the only place that makes
+  it. `absorb` (Merge All Windows) puts the other set's ungrouped tabs into it; every merge goes
+  through `absorb`, the `isPlain` branch goes, so a window with no group merges the same way; `reinsert`
+  (undo of a close) maps a closed ungrouped group to it, `makeSet` (restore) merges every entry
+  taken as ungrouped. `ensureWorkspace`, `reconcileFrozen`, `makeHome` and `makeDefault` go.
+- I2. The ungrouped run is last. A tab of a group standing below an ungrouped tab is a break,
+  like a split run. A user's move is healed by the mover rule of `repair`: the moved tab joins
+  the group of its upper neighbour (user decision 2026-10-28, B1: the only tab of a group dragged
+  past the ungrouped tabs becomes ungrouped and its group goes). When two neighbours swap, both
+  fit the mover rule; the mover is the selected tab (AppKit selects the native tab being
+  dragged; checked on the stand before the code of stage 1a), else the tab of a group. Restore,
+  Merge All Windows and Workspaces on again skip `repair`, as `regroup` does today, and call
+  `settleUngrouped`: native moves put the ungrouped tabs after the groups, membership unchanged.
+  The same moves heal any break the mover rule leaves (an undone tab that Ghostty put back among
+  the ungrouped tabs). The second branch of `repair` never moves a tab into or out of the
+  ungrouped group.
 
-| Need | Ghostty | Where |
-|---|---|---|
-| start directory of a new tab | inherited config with `workingDirectory` passed to `TerminalController.newTab(_:from:withBaseConfig:)` | `macos/Sources/Ghostty/Ghostty.App.swift:996`, `macos/Sources/App/AppDelegate.swift:798-810` |
-| start directory of a split | inherited config passed to `newSplit(at:direction:baseConfig:)` | `Ghostty.App.swift:1024`, `macos/Sources/Features/Terminal/BaseTerminalController.swift:282` |
-| inheritance switch | `window-inherit-working-directory`, default true | `src/config/Config.zig:2089` |
-| working directory of a pane | `SurfaceView.pwd` (OSC 7); our extension `workingDirectory` adds the foreground process cwd | `macos/Sources/Ghostty/Surface View/OSSurfaceView.swift:14`, `macos/Sources/Features/Tarn/ViewerPaths.swift:5-7` |
-| start directory field | `SurfaceConfiguration.workingDirectory` | `macos/Sources/Ghostty/Surface View/SurfaceView.swift:581` |
-| native tab title | `TerminalWindow.title` sets `tab.attributedTitle` from `attributedTitle` | `macos/Sources/Features/Terminal/Window Styles/TerminalWindow.swift:398-445` |
-| reordering tabs | `move_tab` action, already used by `WorkspaceRegistry.moveNatively` | `macos/Sources/Features/Tarn/Workspace/WorkspaceRegistry.swift` |
+Decisions (each names its source):
 
-Our code fills only the folder of a workspace's first tab and the source of a "+" tab. Insertion
-points (one call, no logic), all listed in `docs/architecture.md`:
+- G1. A group is optional. A new window starts with one ungrouped tab; there is no "~" any more.
+  Source: Warp, tabs live outside groups until put in one; "Ungroup tabs" returns them
+  (docs.warp.dev/terminal/windows/tabs). Dropped: the start workspace "~" (D24 of the old model).
+- G2. Shift+Cmd+T, the header button and "+ New group" ask for a Group (a name) or a Workspace
+  (a project folder; named after its last component, the name can be changed). The group comes
+  with one new tab, above the ungrouped tabs. A folder another workspace of the window has
+  selects that workspace (Q1 of the old model, VS Code). Source: Warp for the named group,
+  Claude Code desktop for the project folder, a session works in the folder picked before the
+  first message (code.claude.com/docs/en/desktop). The app shows the macOS
+  folder panel; the demo takes a typed path.
+- G3. The "+" in a header adds a tab at the end of that group. It starts in the folder of a
+  workspace; in a plain group, where Cmd+T would start (Ghostty). Source: Claude Code desktop,
+  a session runs in its project folder; Ghostty `tab-inherit-working-directory`. User
+  decision 2026-10-28 (2a). Replaces D20's "inherit from the last tab of the workspace" (cmux).
+- G4. Cmd+T in a grouped tab adds a tab right after it, in the same group, in its folder
+  (Ghostty). Cmd+T in an ungrouped tab adds an ungrouped tab. Cmd+D stays in its tab (Ghostty).
+  The new-tab button at the top of the sidebar is Cmd+T (demo). The group is the one of the tab
+  selected when Cmd+T was pressed. A fresh tab without a pending target (the sidebar's "+" and a
+  new group set one, Cmd+T does not) stays where Ghostty put it when it touches the run of that
+  group; otherwise it goes to the end of the run. So with the default
+  `window-new-tab-position = current` it stands right after its source, with `end` at the end of
+  the group. Source: user decision 2026-10-28 (1a). Prior art: Warp's docs do not
+  say where a plain new tab lands next to a group (survey gap).
+- G5. A tab moves freely: drag onto a group or among its rows; drag below all rows or "Remove
+  from group" makes it ungrouped; "Move to <group>" in the tab menu. "Remove from group" and
+  "Move to" put the tab at the end of the target run; the sidebar tail is a drop slot of the
+  ungrouped run even when it is empty. A drag that leaves the sidebar closes the gap; a release
+  outside it moves nothing (user decision 2026-10-28, T-235). Source: Warp "Move to group",
+  "Remove from group".
+- G5a. A native tab dragged in from another window joins the group of the tab above it where it
+  is dropped, or of the tab below when it is first; among ungrouped tabs it is ungrouped (user
+  decision 2026-10-28, B2; the mover rule of `repair`). It is known as an arrival because the
+  book closed it in another set in the same pass. An arrival with no neighbour (a tab dropped
+  outside every window, a new window set) is ungrouped. Merge All Windows has no drop place and
+  is not an arrival (I1).
+- G6. The last tab leaving a group removes the group; Cmd+Z of a closed tab brings it back.
+  Source: user decision 2026-10-28 (1a); it is today's rule for a workspace.
+- G7. "Delete group…" asks for confirmation with "Also close its N tabs", unchecked by default.
+  Unchecked: the tabs become ungrouped, moved natively before the first ungrouped tab. Checked:
+  they close through `Sidebar.close([Tab])`, one confirmation and the undo it gives today. The only
+  group of a window can be deleted too; its tabs become the ungrouped tabs. Source: Warp "Ungroup" keeps the
+  tabs ("Ungroup tabs"); the checkbox is the user's decision 2026-10-28 (2b). Replaces D13 (tabs go to the
+  neighbour workspace).
+- G8. Groups stand above the ungrouped tabs (I2). The first tab of a new group goes before the
+  first ungrouped tab; a group header dropped at the tail lands after the last group. Source:
+  user decision 2026-10-28 (3); Warp mixes groups and tabs.
+- G9. The agent scope (`AgentScope`, used by `tarn ls`, `new`, `run`, `wait`, `read`, `close`)
+  is the caller's group; for an ungrouped caller, its own tab (user decision 2026-10-28, B3:
+  one rule for every command). A pane outside the scope is "no pane matched", exit 4, as today
+  (B3 of `docs/specs/agent-cli.md`). `tarn ls` adds a GROUP column after TAB (`-` when
+  ungrouped); JSON keeps `workspace` (the group id, empty when ungrouped) and adds `group` (the
+  name, empty when ungrouped) and `folder` (empty for a plain group). A caller in no window set
+  (quick terminal) keeps the refusal `tarn: not in a workspace`. Source:
+  Tellurion groups the tabs of one repository with a live agent summary, cmux shows agent state
+  per workspace (README of each, behaviour only, both AGPL); the scope rule is the user's
+  decision 2026-10-28 (3a, 4: "it sees more context where it works").
+- G10. The folder of a workspace is fixed at creation (Q3 of the old model, Claude Code desktop).
+  A plain group never gets a folder later.
+- G11. Workspaces off (Settings > Modules): every tab is listed flat; new tabs are ungrouped
+  (was: join "~"); groups are frozen and come back when it is on again, the ungrouped run last
+  (I2).
+- G12. With tabs at the top, a grouped tab carries its group name after the title; an
+  ungrouped tab carries none (replaces "two or more workspaces" of `docs/specs/modules.md` 5).
+  The window subtitle names the group of the selected tab, none for an ungrouped one.
+- G13. Restore: the snapshot entry of the ungrouped group carries `ungrouped: true` and the
+  name "~". In a snapshot without the key, a "~" without a folder or with the
+  home folder becomes the ungrouped tabs, and its tabs are moved natively after the groups. A
+  plain group the user named "~" in such a snapshot is taken as ungrouped too (`isHome` already
+  treats it as the start workspace). Restored "No project" and "Default" stay plain groups.
 
-- Every Ghostty write of `tab.attributedTitle` (`TerminalWindow.swift:402`, `:414`,
-  `TitlebarTabsVenturaTerminalWindow.swift:60`, `:67`) becomes `WorkspaceTabLabel.apply(to: self)`.
+What Ghostty already has, unchanged from T-249 (at `origin/dev` 449a20547): the start
+directory of a new tab and split comes from the inherited config
+(`macos/Sources/Ghostty/Ghostty.App.swift:996`, `:1024`); `window-inherit-working-directory`
+and `tab-inherit-working-directory` (`src/config/Config.zig:2089`, `:2094`); `window-new-tab-position`; `SurfaceConfiguration.workingDirectory`
+(`macos/Sources/Ghostty/Surface View/SurfaceView.swift:581`); native tab order by `move_tab`.
+Ghostty has no groups (issue #1598 closed). Our code adds only the group of a tab, the folder of
+a workspace's first tab and of its "+", and the agent scope. No new insertion point.
 
-Cmd+T and Cmd+D go through Ghostty untouched since D20 was dropped (T-249).
+Canon this spec replaces (each edited with the stage that changes the behaviour):
 
-Prior art: research `tarn-workspace-membership-2026-10-27` (cmux, herdr, aya, WezTerm). cmux and
-herdr give a workspace a folder at creation (`--cwd`) and new panes inherit it; behaviour only,
-cmux is AGPL. Claude desktop and VS Code open a project as a folder (user's reference, 1A). No
-analog moves a tab between groups by itself (survey of T-249), so D21, D22, D26 and D27 went.
-No analog found for a tab-title prefix: searched the same research and the analog base; it is
-ours, kept to pure functions.
+| Canon | Replaced by |
+|---|---|
+| `docs/specs/windows-workspaces.md` D1, D4 (always a workspace), D5 (header always), D10 and D12 (new window with "~"), D13 (delete moves tabs to a neighbour), the life diagram, S1, S6, S18, S20, S21 | G1, G6-G8, G13 |
+| `docs/specs/modules.md` 2 item 6, 5 (new tabs join "~", name with two or more workspaces), 7, 10 | G11, G12 |
+| `docs/modules/workspaces.md` lines on "~", the fallback "first workspace", `sourceTab`, delete, a tab from another window | G3-G8, G5a, I1, I2 |
+| `docs/modules/sidebar.md` "the last workspace has no delete" | G7 |
+| `docs/specs/agent-cli.md` 4.1 `ls` columns and JSON, B3 wording | G9 |
+| this spec's old D19-D25 and Q1-Q3 | G2, G3, G10, G12, G13 |
 
-Decisions:
-
-- D19. A workspace has an optional folder; the user picks it in a folder panel when creating a
-  workspace, and the name is the folder's last component (user, 1A: "as Claude and VS Code do").
-  Dropped: name first, folder later (forgotten like `cd`). Affects: every new-workspace path.
-  Model change: yes.
-- D20. Dropped 2026-10-27 (T-249, user decision: workspaces are a thin layer over Ghostty,
-  `docs/plans/workspace-thin-layer.md`). A new tab or split starts where Ghostty starts it, in
-  the inherited working directory, in every workspace; no analog overrides the focused pane for a
-  split, and cmux and WezTerm inherit for a tab. The "+" of a workspace header inherits from the
-  selected tab of that workspace, else its last tab; an empty workspace gets Cmd+T's config
-  (cmux, `Sources/TabManager.swift:2014-2048`). The folder is used only for the first tab of a
-  workspace created from it. Model change: yes.
-- D21, D22, D26, D27. Dropped 2026-10-27 (T-249, same user decision): an agent tab no longer
-  joins the workspace of its folder, there are no manual marks and no "outside folder" mark. A
-  tab stays in the workspace it was opened in until the user moves it; no analog moves a tab by
-  itself. Snapshots saved with the old `manual` key restore, the key is ignored.
-- D23. Nothing crosses the tab's window set. Dropped: moving a tab to another window (T-142 has
-  no decision on tab order writers). Model change: no.
-- D24. The folderless workspace of a new set is named "No project" instead of "Default"; there
-  every Ghostty behaviour is kept (cwd inheritance, titles). Model change: yes.
-  Renamed 2026-10-27 (T-245, user decision): a new set starts with the workspace "~", the "~" of
-  Workspaces off (`docs/modules/workspaces.md`). "~" has no folder (T-249, user decision
-  2026-10-27): its tabs and splits open where Ghostty opens them; a "~" saved with the home
-  folder loads without it. Restored sets keep their saved names ("No project", "Default").
-- D25. With tabs at the top and two or more workspaces in the set, a native tab title is
-  "<workspace> · <Ghostty title>", the workspace part dimmed (user, 2026-10-27). One workspace:
-  Ghostty's title alone. It shows the workspace of a native tab. Model change: yes.
-  Superseded for the order by the modules decision (2026-10-27, `docs/specs/modules.md` section 5): the
-  name stands after the title in our tab mark, no insertion point; the name shows when Workspaces is on and the set has two or more workspaces (D25's condition kept).
-
-Canon decisions this spec replaces (the stage named edits `docs/specs/windows-workspaces.md`):
-
-| Canon | Now | New text | Stage |
-|---|---|---|---|
-| D3 and S4: a new workspace asks for a name | D19 | a new workspace asks for a folder; the name is the folder's last component | 1 |
-| D1, D10, D12, D13, S1, S18, S20: `Default` | D24 | a new set starts with "~" (no folder; T-245, T-249, was "No project"); restored names are kept | 1 |
-| D14 and S22: no workspaces with tabs at the top | D25 | with two or more workspaces, native titles carry the workspace prefix | 4 |
-
-D11 (no folder rule) and D15 (new tabs inherit the working directory) stand again since T-249.
+The general fallback stays (`docs/modules/workspaces.md`): an unforeseen state is logged as
+`workspace: <reason>` and the tab goes to its target, now the ungrouped run instead of "~".
 
 ## 3. Scenarios
 
-A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`.
+A folder `F` = `~/Dev/self-projects/tarn`; `P` = `~/Dev/self-projects`. Tests are tagged
+`spec: docs/specs/workspace-folder.md S<n>`.
 
-| ID | Scenario | Start and steps | Result and the fact checked | Risk | Tier |
-|---|---|---|---|---|---|
-| S1 | New workspace by folder | Shift+Cmd+T, pick `F` | workspace "tarn" with folder `F`, one new tab; the tab's surface config has `workingDirectory == F` | | fast |
-| S2 | Panel cancelled | Shift+Cmd+T, Cancel | no workspace, no tab | | fast |
-| S3 | Folder already bound | pick `F` while "tarn" has `F` in this window | Q1: no new workspace, the first tab of "tarn" is selected | | fast |
-| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `P` or `F/macos` | the new tab or pane starts at the same folder, Ghostty's inheritance (D20 dropped) | stand: Cmd+T and Cmd+D through Ghostty actions | live |
-| S6 | + on another workspace | selected tab in "~" at `P`, "tarn" has tabs, last at `F/docs`, + on "tarn" | new tab in "tarn" starts at `F/docs`; + on an empty workspace behaves as Cmd+T | NewTabSourceTests | fast |
-| S11 | Agent tab stays | tab in "~" at `F/macos`, `claude` starts | the tab stays in "~", no mark on its row (D21 dropped) | stand | live |
-| S21 | Restore | relaunch with folders; also a snapshot saved before folders and one saved with the old `manual` key | folders come back; an old snapshot decodes with no folder; the `manual` key is ignored | | fast |
-| S22 | No folder change | header menu of any workspace | no Set Folder or Remove Folder: the folder is fixed at creation (Q3) | | fast |
-| S23 | Tab prefix | tabs at the top, set with "No project" and "tarn" | "tarn · zsh"; with one workspace the plain title; switching to the sidebar style drops the prefix | | fast |
-| S24 | Prefix survives | tabs at the top, title font change or fullscreen | prefix kept | | live |
-| S25 | Rename | rename "tarn" to "core" with tabs at the top | titles read "core · ..." | | fast |
-| S26 | Path forms | folder picked through a symlink, a trailing slash, `F-old` next to `F` | matched by standardized resolved path on component boundaries; `F-old` is not inside `F` | | fast |
-| S35 | Prefix writers | tabs at the top: rename, a second workspace appears, a sidebar move, style switch | every native title of the set is rewritten at once | | fast |
-| - | Acceptance by hand | the user creates "tarn" by folder, opens Cmd+T from `P`, starts `claude`, tries tabs at the top | as S1, S4, S11, S23 on the built app | | live |
-
-Dropped with D20 (T-249): S5, S7-S10, S34. Dropped with D21, D22, D26, D27 (T-249): S12-S20,
-S27-S33.
+| ID | Scenario | Start and steps | Result and the fact checked | Tier |
+|---|---|---|---|---|
+| S1 | New workspace by folder | Shift+Cmd+T, Workspace, pick `F` | workspace "tarn" with folder `F` above the ungrouped tabs, one new tab whose config has `workingDirectory == F` | fast |
+| S2 | Cancelled | Shift+Cmd+T, Cancel (dialog or folder panel) | no group, no tab | fast |
+| S3 | Folder already bound | pick `F` while "tarn" has `F` | no new workspace, the first tab of "tarn" is selected | fast |
+| S4 | Cmd+T, Cmd+D | selected tab in "tarn" at `F/macos` | the new tab is right after it in "tarn" (unit test of `reconcile`), started at `F/macos`, the split too (stand) | fast, live |
+| S6 | "+" of a header | selected ungrouped tab at `P`; "+" on "tarn", then on plain group "notes" | "tarn": a tab at its end in `F`; "notes": a tab at its end in `P` | fast |
+| S11 | Agent tab stays | ungrouped tab at `F/macos`, `claude` starts | the tab stays ungrouped, no mark | live |
+| S21 | Restore | relaunch with groups and folders; a snapshot saved before folders; one with the `manual` key | groups, folders and the ungrouped tabs come back; old snapshots decode; `manual` ignored | fast |
+| S22 | No folder change | header menu of any group | no Set Folder or Remove Folder | fast |
+| S23 | Top tab mark | tabs at the top, a tab in "tarn" and an ungrouped tab | "tarn" after the title of the first, no mark on the second | fast |
+| S26 | Path forms | folder picked through a symlink, a trailing slash, `F-old` next to `F` | matched by standardized resolved path on component boundaries | fast |
+| S40 | New window | Cmd+N | one ungrouped tab, no group header | fast |
+| S41 | New plain group | Shift+Cmd+T, Group, name "notes" | group "notes" without folder above the ungrouped tabs, one tab started where Cmd+T would | fast |
+| S42 | Cmd+T ungrouped | Cmd+T in an ungrouped tab | a new ungrouped tab | fast |
+| S43 | Move out and in | drag a tab of "tarn" below all rows; then onto "notes"; then "Remove from group" | ungrouped; in "notes"; ungrouped. No tab moves by itself | fast |
+| S44 | Last tab leaves | move or close the only tab of "notes" | "notes" is gone; Cmd+Z of the close brings it back with the tab | fast |
+| S45 | Delete, keep tabs | "Delete group…" on "tarn" (2 tabs), checkbox off | "tarn" gone, both tabs ungrouped at the top of the ungrouped list, still open | fast |
+| S46 | Delete, close tabs | "Delete group…" on "notes", checkbox on | "notes" and its tabs closed after one confirmation; undo as for several tabs closed from the sidebar | fast |
+| S47 | Groups stay above | drag a group header below the ungrouped tabs; create a group while ungrouped tabs exist | the header lands after the last group; the new group stands above the ungrouped tabs | fast |
+| S48 | `tarn ls` in a group | agent pane in "tarn" | rows of "tarn" only, GROUP "tarn"; JSON `group` "tarn", `folder` `F` | fast |
+| S49 | `tarn ls` ungrouped | agent pane in an ungrouped tab, two other ungrouped tabs | rows of its own tab only, GROUP `-` | fast |
+| S50 | Old "~" restored | snapshot with workspaces "tarn" and "~" (home folder) | "tarn" stays a group; the "~" tabs are ungrouped below it | fast |
+| S52 | Native drag past ungrouped | tabs at the top: drag the only tab of "notes" after the ungrouped tabs; also with one ungrouped tab (a swap of neighbours) | it is ungrouped, "notes" is gone, the other tab stays ungrouped (B1) | fast, live |
+| S53 | Tab from another window | drop a native tab of window 1 between two tabs of "tarn" in window 2; another among ungrouped tabs | first in "tarn", second ungrouped (B2) | fast |
+| S54 | Merge All Windows | two windows, each with a group and ungrouped tabs; also a window of groups only with a window of ungrouped tabs only | one ungrouped run, last, holding all ungrouped tabs; every group above; no tab changes group | fast |
+| S55 | Cmd+T with `end` | `window-new-tab-position = end`, Cmd+T in "tarn" while ungrouped tabs exist | the tab is in "tarn", at its end | fast |
+| S56 | Delete the only group | one group, no ungrouped tab; Delete, checkbox off | the tabs are ungrouped, no header | fast |
+| S57 | Agent scope ungrouped | ungrouped caller; `tarn wait`, `read`, `close` on a pane of another ungrouped tab | exit 4 "no pane matched" for each (B3) | fast |
+| S58 | Drag leaves the sidebar | drag a row out over the terminal, release | the gap closes when the pointer leaves; nothing moves (T-235) | fast |
+| S59 | Undo after the ungrouped run went | close the last ungrouped tab, "Remove from group" another, Cmd+Z | one ungrouped run with both tabs (I1) | fast |
+| S51 | Workspaces off and on | off: Cmd+T, a drag; on again | off: flat list, new tab ungrouped, membership kept; on: groups as before, the new tab ungrouped | fast |
+| - | Acceptance by hand | Cmd+N, a workspace by folder, a plain group, Cmd+T and "+", move out and in, delete both ways, `tarn ls` in and out of a group, relaunch | as S1, S4, S6, S40-S49; the agent on the stand per PR, the user once on the dev build after stage 3 | live |
 
 Limits (what the code never does):
 
 - R1: never moves a tab between windows.
-- R3: never changes the membership of a tab because of a folder or an agent.
+- R3: never changes the group of a tab because of a folder, an agent or `cd`.
 - R5: never changes the start directory Ghostty gives Cmd+T or Cmd+D; only the first tab of a
-  workspace created from a folder and the "+" of a header pass their own config (D19, D20).
+  workspace and its "+" pass the folder.
 - R6: never writes the user's Ghostty config.
+- R7: never lets an agent command reach a pane outside its scope (G9).
 
 ## 4. Data and states
 
 | Entity | Change | Owner | Key or invariant |
 |---|---|---|---|
-| `Workspace.folder` | new, `String?` | `WorkspaceSet` | absolute, standardized, symlinks resolved; nil for "~", a restored "No project" and old workspaces |
-| `WorkspaceBook.isPlain` | changed | `WorkspaceBook` | plain: one unrenamed "~", "No project" or "Default" with no folder |
-| `WorkspaceSnapshot.Entry.folder` | new optional field | `WorkspaceRestore` | missing in old snapshots decodes as nil; version stays 1 |
+| ungrouped group | new rule, no field: `WorkspaceSet.isUngrouped` is `workspace.id == set.id` | `WorkspaceSet` | at most one (I1); run last (I2); name "~", never shown |
+| `Workspace.folder` | unchanged | `WorkspaceSet` | absolute, standardized; nil for plain groups and the ungrouped set |
+| `WorkspaceSnapshot.Entry.ungrouped` | new optional field | `WorkspaceRestore` | missing: a "~" without folder or with the home folder is ungrouped (G13); several merge into one (I1); version stays 1 |
+| `PaneRow.group`, `PaneRow.folder` | new | `AgentCommands` | empty for an ungrouped pane; `PaneRow.workspace` keeps the set's id (a nil one still means the quick terminal), only the JSON `workspace` is empty |
 
-- Input: the folder panel; Ghostty's inherited `SurfaceConfiguration`.
-- Transitions: none of its own; membership changes only by the rules of
-  `docs/modules/workspaces.md` (new tab, sidebar move, native reorder, delete, merge).
+Transitions of a tab: ungrouped and grouped, only by the user (G4-G7); a group lives while it
+has a tab (G6) or until deleted (G7).
 
 ## 5. Code model
 
 ```swift
-/// Pure path rules of D19 and S26.
-enum WorkspaceFolder {
-    /// Absolute, standardized, symlinks resolved; nil for a relative or empty path.
-    static func standardized(_ path: String) -> String?
-    /// True when `path` is `folder` or lies below it, on path component boundaries.
-    static func contains(_ folder: String, _ path: String) -> Bool
-}
-
 struct Workspace {
-    var folder: String?          // D19; nil: no project
+    var folder: String?           // G10; nil: a plain group
 }
 
 extension WorkspaceSet {
-    mutating func create(name: String, folder: String?) -> Workspace.ID?
-}
-
-extension WorkspaceBook {
-    /// The tab a "+" tab of `workspace` inherits from: `selected` when it is in `workspace`, else
-    /// its last tab in `order`; nil for an empty workspace (D20, cmux).
-    func sourceTab(for workspace: Workspace.ID, order: [TabKey], selected: TabKey) -> TabKey?
+    /// The ungrouped group (id == set id), made when missing; the only maker (I1).
+    mutating func ungroupedID() -> Workspace.ID
+    func isUngrouped(_ workspace: Workspace) -> Bool
+    /// G7: the tabs become ungrouped; returns the native moves that put them before the
+    /// first ungrouped tab.
+    mutating func ungroup(_ id: Workspace.ID, order: [TabKey]) -> [Reorder]
+    /// I2: the native moves that put the ungrouped run last; membership unchanged.
+    func settleUngrouped(order: [TabKey]) -> [Reorder]
 }
 
 extension WorkspaceRegistry {
-    /// "+": Ghostty's tab config inherited from `sourceTab`, else Cmd+T.
+    /// G3: the workspace folder, else Cmd+T's config; the tab goes to the end of the group.
     func newTab(in workspace: Workspace.ID, from window: NSWindow)
+    func createWorkspace(named name: String, from window: NSWindow) -> Bool   // G2, kept entry point
     func createWorkspace(folder: String, from window: NSWindow) -> Bool
 }
-
-/// D25.
-enum WorkspaceTabLabel {
-    static func title(_ title: String, workspace: String?, workspaces: Int, style: TabStyle) -> NSAttributedString
-    /// Writes `tab.attributedTitle` of `window`. Without a prefix it writes exactly Ghostty's
-    /// `attributedTitle`, nil included, so one-workspace windows look as in Ghostty. With a
-    /// prefix: Ghostty's font and colour when set, the system title font otherwise. Called by
-    /// Ghostty's former write sites and by tarn on every `publish`, rename and tab style change
-    /// for all windows of the set.
-    @MainActor static func apply(to window: NSWindow)
-}
 ```
 
-Top tab bar (D25):
+`reconcile` keeps a fresh tab without a pending target where Ghostty put it when it touches its
+target run (G4), applies the mover rule to an arrival from another window (G5a), puts a new
+group's first tab before the first ungrouped tab (G8) and counts a group tab below an ungrouped
+tab as a break (I2). `isPlain` and its merge branch go (I1). `sourceTab` (the cmux rule of
+D20) goes. `WorkspaceBook.targetWorkspace` falls back to the ungrouped group instead of the
+first workspace.
 
-```
-| tarn · zsh  (o) | tarn · Claude Code (o)[cc] | No project · zsh |
-  ^^^^ dimmed
-```
+Places that list groups or show a group's name, all of which skip the ungrouped group or name
+none: sidebar headers (`Sidebar.swift`), the tab menu "Move to" and "Remove
+from group", the header menu and the delete dialog, `NativeTabMark` (counts groups, not runs),
+the window subtitle (`WorkspaceTitle.swift`), `TabDragSource` drop slots (the tail is the
+ungrouped run), `tarn ls` GROUP and JSON, the snapshot.
 
 ## 6. Stages
 
-| Stage | Checkable result | Depends on | Excludes | Check |
-|---|---|---|---|---|
-| 0. Demo | the top tab prefix drawn in `demo/`; the user approves the look | none | app code | demo checks |
-| 1. Folder on a workspace | Shift+Cmd+T opens a folder panel; the folder in the header tooltip; folders saved and restored; the first tab of a new workspace starts in its folder | none | | unit S1-S3, S21, S22, S26 |
-| 2. Start directory | built, then dropped with D20 (T-249): Ghostty inherits; "+" inherits from a tab of its workspace | 1 | | unit S6 (`NewTabSourceTests`) |
-| 3. Agent arrival | built, then dropped with D21, D22, D26, D27 (T-249) | 1 | | live S11 |
-| 4. Tab prefix | native titles with the prefix when tabs are at the top | 1 | | unit S23, S25, S35; live S24 |
+| Stage | Checkable result | Excludes | Check |
+|---|---|---|---|
+| 0. Demo | drawn in `demo/`, approved 2026-10-28 | app code | demo checks |
+| 1a. Model | I1, I2, G4, G5a, G8 placement, G13 restore, Merge, frozen; the ungrouped group still drawn with a "~" header, so `dev` is never half done; T-255 (Cmd+N in `~`) | sidebar look, dialogs | unit S4, S11, S21, S42, S50-S55, S59; stand |
+| 1b. Sidebar | no header for ungrouped tabs, rows below the groups; menus, drop slots, `NativeTabMark`, subtitle skip it; S40, S23 | dialogs | unit and stand |
+| 2. Group or workspace | dialog, "+" (G3), "Remove from group", delete with the checkbox; T-235 and T-236 (drag tests) | agent scope | unit S1-S3, S6, S22, S26, S41, S43-S47, S56, S58; stand |
+| 3. Agent scope | G9 for every agent command | | unit S48, S49, S57; CLI test; stand |
 
-Each stage is one PR to `dev` under 400 lines of code; docs (`docs/modules/workspaces.md`,
-`docs/specs/windows-workspaces.md` decisions, `docs/architecture.md` insertion points) go with
-the stage that changes them.
+Each stage is one PR to `dev` under 400 lines of code; `docs/modules/workspaces.md`,
+`docs/specs/windows-workspaces.md` and `docs/specs/agent-cli.md` change with the stage that
+changes the behaviour they describe.
 
 ## 7. Acceptance
 
-- Command: `make -f tarn.mk check`, green, with tests tagged `spec: docs/specs/workspace-folder.md S<n>`.
-- Scenario: the line "Acceptance by hand" of section 3 on a build of the branch.
-- Not automated: the folder panel, the look of the dimmed prefix, S24 (AppKit resets title fonts
-  on fullscreen); the user checks them by hand on the build.
-
-## Questions
-
-Answered by the user's rule (2026-10-27): take the behaviour of VS Code and Claude desktop.
-
-- Q1. Picking a folder a workspace of this window already has selects that workspace (VS Code
-  brings the window of an open folder forward). Scenario S3.
-- Q2. No new folderless workspace: "No project" was the folderless one (since T-245 a new set starts with "~", D24), as VS Code's empty
-  window; Claude desktop always runs a session in a folder. Cancel in the panel creates nothing
-  (S2); old workspaces without a folder stay as they are.
-- Q3 (user decision 2026-10-27, replaces Set Folder... and Remove Folder): the folder is fixed at
-  creation, as a Claude desktop session's. A running shell cannot be moved without typing into
-  it, so a changed folder would leave open tabs in the old one; VS Code reloads the window and
-  closes its terminals instead. Another folder: Shift+Cmd+T and drag the tabs. A workspace without
-  a folder (a restored "No project" or "Default") stays without one.
+- Command: `make -f tarn.mk check`, green, with the tests tagged by scenario.
+- Scenario: "Acceptance by hand" of section 3 on one dev build after stage 3.
+- Not automated: the folder panel, the look of the dialogs.
