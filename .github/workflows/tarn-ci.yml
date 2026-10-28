@@ -1,5 +1,6 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# dev gets the demo checks only, nothing waits on them; main (release PRs from dev) gets both jobs.
+# Both jobs run on every PR and push to dev and main. They are required checks of dev (branch
+# protection): a PR merges only when `app` and `demo` are green.
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
@@ -20,7 +21,8 @@ permissions:
 
 concurrency:
   group: tarn-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR replaces its old run; a run on dev or main is never cancelled.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   demo:
@@ -47,7 +49,6 @@ jobs:
           done
 
   app:
-    if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
     env:
@@ -67,7 +68,7 @@ jobs:
       # The version comes from minimum_zig_version in build.zig.zon.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - name: Linters
-        run: brew install swiftlint shellcheck
+        run: brew install swiftlint shellcheck typos-cli uv
       - name: Build GhosttyKit
         run: zig build -Demit-macos-app=false
       - name: make -f tarn.mk check

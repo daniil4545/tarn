@@ -4,7 +4,8 @@
 # dev      the Debug Tarn.app of this checkout without coverage, the app the stand runs by default
 # live     a second Tarn with its own home and control socket next to the user's (tools/stand/stand.sh), for live checks;
 #          tools/stand/drive.sh types into it, reads its screen and takes screenshots
-# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests
+# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests, shellcheck, typos, ruff;
+#          CI runs this target on every PR into dev and main, nothing else
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
 # bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
 #
@@ -62,6 +63,10 @@ check:
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
 	shellcheck install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
+	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
+		macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
+	uvx ruff check plugin/test
+	uvx ruff format --check plugin/test
 	sh cli/test/install_test.sh
 
 release:
