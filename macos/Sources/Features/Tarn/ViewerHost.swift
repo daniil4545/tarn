@@ -122,32 +122,22 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in a pane (the web
-    /// view takes the key first, so there is one path per focus). It opens and hides, it never closes:
-    /// no viewer opens one with the tree and the keyboard in it; hidden viewers come back as they were
-    /// with the keyboard in them; shown viewers (with files or not) hide whole, tabs, unsaved edits and
-    /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
+    /// Cmd+B, from the terminal or typed in a pane. It opens and hides, it never closes (Cmd+W closes):
+    /// no viewer opens one with the tree; hidden viewers come back; shown ones hide whole.
     func toggleFromKey(root: String?) {
         guard isViewerOn() else { return }
-        guard activeModel != nil else {
-            if isViewerOn() { openTreeOnly(root: root) }
-            return
-        }
+        guard activeModel != nil else { return openTreeOnly(root: root) }
         if hidden { return show() }
         // The page holds an edit back for 120 ms; send it before the page leaves the window.
         for model in models { model.flushPendingEdit() }
         hidePane()
     }
 
-    private func focusTreeSoon() {
+    private func openTreeOnly(root: String?) {
+        makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.revealTree()
         DispatchQueue.main.async { [weak self] in
             self?.activeModel?.focusTreeInPage()
         }
-    }
-
-    private func openTreeOnly(root: String?) {
-        makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.revealTree()
-        focusTreeSoon()
     }
 
     /// Hides the viewers keeping their models; the keyboard goes to the terminal.
@@ -184,7 +174,7 @@ final class ViewerHost: ObservableObject {
         let id = leaf.id
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
-        model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active, undoable: true) }
+        model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active) }
         model.onHidePane = { [weak self] in self?.hidePane() }
         model.onPaneKey = { [weak self] in self?.toggleFromKey(root: nil) }
         model.onLayout = { [weak self] command in self?.layout(command, from: id) }
@@ -239,14 +229,14 @@ final class ViewerHost: ObservableObject {
 
     /// Closes a viewer. A close with files registers an undo that puts the viewer back where it was,
     /// with Ghostty's timeout.
-    private func close(_ id: UUID, saved: [ViewerTab], active: Int, undoable: Bool = false) {
+    private func close(_ id: UUID, saved: [ViewerTab], active: Int) {
         guard let pane = panes[id] else { return }
         let slot = tree.slot(of: pane.leaf)
         let root = pane.model.tree.root
         discard(id)
         if panes.isEmpty { hidden = false }
         returnFocusToTerminal()
-        guard undoable, let controller, let undoManager = controller.undoManager else { return }
+        guard let controller, let undoManager = controller.undoManager else { return }
         undoManager.setActionName("Close Viewer")
         undoManager.registerUndo(withTarget: self, expiresAfter: controller.undoExpiration) { host in
             host.reopen(saved, active: active, root: root, slot: slot)
@@ -420,10 +410,8 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
-    /// A viewer dropped outside every window opens in a new window at the drop point. The window
-    /// comes from Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out: it
-    /// sets the position when the window is presented, after which nothing cascades it back to the
-    /// first screen, and keeps it on the screen that holds the point (`constrainToScreen`).
+    /// A viewer dropped outside every window opens in a new window at the drop point, made by
+    /// Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out.
     private func detach(_ id: UUID, at point: NSPoint) {
         guard let pane = panes[id], let controller, let app = controller.ghostty.app else { return }
         let created = TerminalController.newWindow(

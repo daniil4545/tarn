@@ -58,7 +58,7 @@ final class ViewerPaneView: NSView {
     }
 }
 
-/// The three dots of the viewer, as in the mockup: 0.6 opaque when near, 1.0 on hover. The drag
+/// The three dots of the viewer: 0.6 opaque when near, 1.0 on hover. The drag
 /// session follows `Ghostty.SurfaceDragSourceView` (`Ghostty/Surface View/SurfaceDragSource.swift:82`).
 final class ViewerGripView: NSView, NSDraggingSource {
     static let size = NSSize(width: 80, height: 12)
