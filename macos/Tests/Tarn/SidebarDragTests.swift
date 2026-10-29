@@ -34,6 +34,22 @@ struct SidebarDragTests {
         #expect(model.liftedWorkspace == nil && model.dropSlot == nil && model.groups == groups)
     }
 
+    @Test func aGroupStandsBetweenTwoUngroupedTabsByTheirHalves() {
+        let (_, first, _) = lifted()
+        let (_, second, _) = lifted()
+        let (_, inGroup, _) = lifted()
+        let loose = SidebarModel.Group(workspace: nil, tabs: [first, second])
+        let groups = [loose, .init(workspace: Workspace(name: "G"), tabs: [inGroup])]
+        let slot = { (key: TabKey, lower: Bool) in
+            SidebarModel.dropSlot(dragging: .workspace, over: .tab(key), lowerHalf: lower, in: groups)
+        }
+        #expect(slot(first.key, false) == .beforeWorkspace(loose.id))
+        #expect(slot(first.key, true) == .beforeTab(second.key))
+        #expect(slot(second.key, false) == .beforeTab(second.key))
+        #expect(slot(second.key, true) == .beforeWorkspace(groups[1].id))
+        #expect(slot(inGroup.key, false) == .beforeWorkspace(groups[1].id))
+    }
+
     private func lifted() -> (SidebarModel, SidebarModel.Tab, NSWindow) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
         window.orderFront(nil)

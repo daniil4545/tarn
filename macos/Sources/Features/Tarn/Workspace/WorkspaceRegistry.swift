@@ -420,24 +420,37 @@ final class WorkspaceRegistry {
         return order.firstIndex(of: tab) ?? others.count
     }
 
-    /// Moves a whole workspace before the block `other` (a workspace or a run of ungrouped tabs),
-    /// or to the end: one native move per tab. Ungrouped tabs keep their place.
-    func moveWorkspace(_ workspace: Workspace.ID, before other: UUID?, in window: NSWindow) {
+    /// Moves a group's tabs before the block `other` (nil: to the end), or before the ungrouped tab `beforeTab`.
+    func moveWorkspace(_ workspace: Workspace.ID, before other: UUID? = nil, beforeTab: TabKey? = nil, in window: NSWindow) {
         var order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)
         guard let from = runs.firstIndex(where: { $0.workspace?.id == workspace }) else { return }
         let moving = runs.remove(at: from)
-        runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.id == id } } ?? runs.count)
+        var target: [TabKey]
+        if let beforeTab {
+            target = runs.flatMap(\.tabs)
+            guard let at = target.firstIndex(of: beforeTab) else { return }
+            target.insert(contentsOf: moving.tabs, at: at)
+        } else {
+            runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.id == id } } ?? runs.count)
+            target = runs.flatMap(\.tabs)
+        }
 
         isBusy = true
-        for (place, tab) in runs.flatMap(\.tabs).enumerated() {
-            guard let current = order.firstIndex(of: tab), current != place else { continue }
-            order.remove(at: current)
-            order.insert(tab, at: place)
-            if let tabWindow = self.window(for: tab) { moveNatively(tabWindow, by: place - current) }
-        }
+        // Only the group's own tabs move, the last first when it goes down, so the rest falls into place.
+        let first = moving.tabs.first
+        let down = (first.flatMap(target.firstIndex) ?? 0) > (first.flatMap(order.firstIndex) ?? 0)
+        for tab in down ? moving.tabs.reversed() : moving.tabs { move(tab, to: target, in: &order) }
+        for tab in target { move(tab, to: target, in: &order) }
         isBusy = false
         sync()
+    }
+
+    private func move(_ tab: TabKey, to target: [TabKey], in order: inout [TabKey]) {
+        guard let place = target.firstIndex(of: tab), let current = order.firstIndex(of: tab), current != place else { return }
+        order.remove(at: current)
+        order.insert(tab, at: place)
+        if let tabWindow = window(for: tab) { moveNatively(tabWindow, by: place - current) }
     }
 
     private func edit(_ window: NSWindow, _ change: (inout WorkspaceSet) -> Void) {

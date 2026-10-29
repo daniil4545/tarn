@@ -138,7 +138,7 @@ function moveGap(sb, el, y) {
   }
   const at = tab.workspace ? slot(sb, el, y) : tabSlot(sb, el, y);
   if (!at) return;
-  tab.at = tab.workspace ? { before: at.before } : { ws: at.ws, before: at.before };
+  tab.at = tab.workspace ? { before: at.before, beforeTab: at.beforeTab ?? null } : { ws: at.ws, before: at.before };
   if (at.below !== tab.below) openGap(tab, at.below, true);
 }
 
@@ -147,7 +147,14 @@ function moveGap(sb, el, y) {
 function slot(sb, el, y) {
   const end = document.getElementById("wsNew"), block = el.closest(".wsblock");
   let below = end;
-  if (block && !block.classList.contains("lifted")) {
+  const row = el.closest(".wsblock:not(.group) .tab[data-tabid]");
+  if (row) {
+    // Ungrouped rows split by their own halves, as for a tab.
+    const r = row.getBoundingClientRect();
+    below = y < r.top + r.height / 2 ? row : nextShown(row);
+    if (below.matches(".tab[data-tabid]")) return { before: null, beforeTab: below.dataset.tabid, below };
+    below = nextShown(block);
+  } else if (block && !block.classList.contains("lifted")) {
     const r = block.getBoundingClientRect();
     below = y < r.top + r.height / 2 ? block : nextShown(block);
   } else if (el === sb) {

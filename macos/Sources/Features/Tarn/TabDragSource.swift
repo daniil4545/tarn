@@ -76,8 +76,15 @@ extension SidebarModel {
             return lowerHalf ? slot(after: index, in: groups) : .beforeWorkspace(id)
 
         case (.workspace, .tab(let key)):
-            guard let index = groups.firstIndex(where: { $0.tabs.contains { $0.key == key } })
+            guard let index = groups.firstIndex(where: { $0.tabs.contains { $0.key == key } }),
+                  let row = groups[index].tabs.firstIndex(where: { $0.key == key })
             else { return nil }
+            // A group goes between ungrouped tabs as a tab does, never inside another group.
+            if groups[index].workspace == nil {
+                let tabs = groups[index].tabs
+                if !lowerHalf { return row == 0 ? .beforeWorkspace(groups[index].id) : .beforeTab(key) }
+                return tabs[safe: row + 1].map { .beforeTab($0.key) } ?? slot(after: index, in: groups)
+            }
             return lowerHalf ? slot(after: index, in: groups) : .beforeWorkspace(groups[index].id)
 
         case (.tab, .tail):

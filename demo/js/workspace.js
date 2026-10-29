@@ -444,11 +444,18 @@ const COMMANDS = {
   },
 
   // Before another group or ungrouped block, or at the bottom.
-  "ws.move": ({ id, before = null }) => update((s) => {
+  // `beforeTab`, an ungrouped tab, splits its block: the group stands right above that tab.
+  "ws.move": ({ id, before = null, beforeTab = null }) => update((s) => {
     const ws = s.wss.find((w) => w.id === id);
     if (ws.loose) return;
     s.wss = s.wss.filter((w) => w !== ws);
-    const at = before ? s.wss.findIndex((w) => w.id === before) : -1;
+    const host = beforeTab && s.wss.find((w) => w.loose && w.tabs.includes(beforeTab));
+    if (host && host.tabs.indexOf(beforeTab) > 0) {
+      const tail = { id: nextId("w"), name: "", loose: true, tabs: host.tabs.splice(host.tabs.indexOf(beforeTab)) };
+      s.wss.splice(s.wss.indexOf(host) + 1, 0, ws, tail);
+      return;
+    }
+    const at = host ? s.wss.indexOf(host) : before ? s.wss.findIndex((w) => w.id === before) : -1;
     s.wss.splice(at >= 0 ? at : s.wss.length, 0, ws);
   }),
 
