@@ -829,12 +829,12 @@ def viewer_follows_app_arrows_and_code(base):
 def viewer_switch(base):
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "settings.open", {})
-        pg.click('#setNav [data-sec="viewer"]')
+        pg.click('#setNav [data-sec="modules"]')
         check(
-            "V0 Settings has a File Viewer section with the switch on",
-            pg.is_checked("#g-file-viewer"),
+            "V0 Settings Modules has the File viewer switch on",
+            pg.is_checked("#m-viewer"),
         )
-        pg.uncheck("#g-file-viewer")
+        pg.uncheck("#m-viewer")
         pg.keyboard.press("Escape")
         shell_pane = new_pane(pg, "~/code/tarn")
         until(pg, shell_pane, "%")

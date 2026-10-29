@@ -113,7 +113,7 @@ One environment: the local macOS app. One config file of ours: `~/.config/tarn/g
 | socket path | `~/Library/Application Support/tarn/tarn.sock` | constant in `ControlSocket.path` |
 | sidebar width, collapsed | layout | `UserDefaults` (`TarnSidebarWidth`, `TarnSidebarCollapsed`) |
 | module Sidebar, key `TarnTabStyle`: `sidebar` (default, on) or `top` (off) | sidebar or native tab bar | Settings > Modules, `UserDefaults` |
-| module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules and File Viewer, `UserDefaults` |
+| module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules, `UserDefaults` |
 | modules Permission card, Notifications, keys `TarnModule.permissionCard`, `TarnModule.notifications` | default on; Permission card needs Sidebar; a wrong type counts as on and is logged (category `settings`) | Settings > Modules, `UserDefaults`; launch arguments such as `-TarnModule.notifications NO` win without writing (the bench uses them) |
 | plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.3.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
 

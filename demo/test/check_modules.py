@@ -49,8 +49,10 @@ def show_card(pg, tab):
 
 def sidebar_checks(pg):
     check(
-        "M1 Settings lists Modules first with four rows",
-        pg.locator("#setNav [data-sec]").first.inner_text() == "Modules"
+        "M1 Settings opens Modules with five pages and four module rows",
+        pg.locator("#setNav [data-sec]").all_text_contents()
+        == ["Modules", "Appearance", "Terminal", "Windows", "Help"]
+        and pg.locator("[data-pane=modules]").is_visible()
         and pg.locator(".modrow").count() == 4,
     )
     titles = pg.locator(".modrow label").evaluate_all(
@@ -68,9 +70,10 @@ def sidebar_checks(pg):
         and pg.locator(".agent-line .chk.ok").count() == 3,
     )
     check(
-        "M4 the tab style picker left Tabs: only Row size stays",
+        "M4 Row size is directly under Sidebar in Modules",
         pg.locator("input[name=tabstyle]").count() == 0
-        and pg.locator("input[name=tabrows]").count() == 2,
+        and pg.locator("[data-module=sidebar] + #sidebarOptions input").count() == 2
+        and pg.locator("#sidebarOptions").is_visible(),
     )
     check(
         "M5 all switches start on and nothing is greyed",
@@ -78,7 +81,16 @@ def sidebar_checks(pg):
         and pg.locator(".modrow input:disabled").count() == 0,
     )
 
+    pg.check("input[name=tabrows][value=narrow]")
+    check("M4a Row size applies from Modules", config(pg, "tab-rows") == "narrow")
     flip(pg, "sidebar")
+    check(
+        "M6a Sidebar off keeps Row size visible, disabled and stored",
+        pg.locator("#sidebarOptions").is_visible()
+        and pg.locator("#sidebarOptions input:disabled").count() == 2
+        and pg.locator("input[name=tabrows][value=narrow]").is_checked()
+        and config(pg, "tab-rows") == "narrow",
+    )
     check(
         "M6 Sidebar off shows the tabs at the top and hides the sidebar",
         config(pg, "tab-style") == "top"
@@ -97,6 +109,12 @@ def sidebar_checks(pg):
         and pg.locator("#topTabs .ttab .tw").count() == 5,
     )
     flip(pg, "sidebar")
+    check(
+        "M9a Sidebar on enables Row size without changing the selection",
+        pg.locator("#sidebarOptions input:disabled").count() == 0
+        and pg.locator("input[name=tabrows][value=narrow]").is_checked(),
+    )
+    pg.check("input[name=tabrows][value=wide]")
     check(
         "M9 Sidebar on again brings the sidebar and the card row back",
         pg.is_visible("#sidebar")
@@ -118,18 +136,19 @@ def viewer_checks(pg):
         and pg.locator("#sbViewer").count() == 0
         and pg.evaluate("Object.keys(__tarn.viewer().state().panes).length") == 1,
     )
-    pg.click("#setNav [data-sec='viewer']")
     check(
-        "M11 the File Viewer pane shows the same switch state",
-        not pg.locator("#g-file-viewer").is_checked(),
+        "M11 File viewer has one switch and its description in Modules",
+        pg.locator('[data-gkey="file-viewer"]').count() == 1
+        and not pg.locator("#m-viewer").is_checked()
+        and "When off, path clicks open files in their default app"
+        in pg.locator("[data-module=viewer] small").inner_text(),
     )
-    pg.click("#g-file-viewer")
+    flip(pg, "viewer")
     check(
-        "M12 switching it on in the File Viewer pane brings the pane back",
+        "M12 switching File viewer on in Modules brings the pane back",
         config(pg, "file-viewer") is True
         and pg.locator(".tabview:not([hidden]) .leaf[data-kind=viewer]").count() == 1,
     )
-    pg.click("#setNav [data-sec='modules']")
     check("M13 the Modules row follows", pg.locator("#m-viewer").is_checked())
     flip(pg, "viewer")
     pg.keyboard.press("Escape")
@@ -222,7 +241,6 @@ def main():
                 "M0 the Settings button at the top right of the window opens Settings",
                 pg.locator("#settings .setwin").is_visible(),
             )
-            pg.click("#setNav [data-sec='modules']")
             sidebar_checks(pg)
             viewer_checks(pg)
             card_checks(pg)

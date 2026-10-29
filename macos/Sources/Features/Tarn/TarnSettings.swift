@@ -128,15 +128,13 @@ extension AppDelegate {
 
 struct TarnSettingsView: View {
     enum Section: String, CaseIterable, Identifiable {
-        case modules, tabs, viewer, appearance, terminal, windows, help
+        case modules, appearance, terminal, windows, help
 
         var id: String { rawValue }
 
         var title: String {
             switch self {
             case .modules: "Modules"
-            case .tabs: "Tabs"
-            case .viewer: "File Viewer"
             case .appearance: "Appearance"
             case .terminal: "Terminal"
             case .windows: "Windows"
@@ -147,8 +145,6 @@ struct TarnSettingsView: View {
         var icon: String {
             switch self {
             case .modules: "switch.2"
-            case .tabs: "sidebar.left"
-            case .viewer: "doc.richtext"
             case .appearance: "paintpalette"
             case .terminal: "terminal"
             case .windows: "macwindow"
@@ -170,8 +166,6 @@ struct TarnSettingsView: View {
         } detail: {
             switch section ?? .modules {
             case .modules: ModulesSettingsPane()
-            case .tabs: TabsSettingsPane()
-            case .viewer: ViewerSettingsPane()
             case .appearance: GhosttyOptionsPane(section: .appearance, title: "Appearance", store: store)
             case .terminal: GhosttyOptionsPane(section: .terminal, title: "Terminal", store: store)
             case .windows: GhosttyOptionsPane(section: .windows, title: "Windows", store: store)
@@ -194,49 +188,3 @@ struct TarnSettingsView: View {
     }
 }
 
-private struct TabsSettingsPane: View {
-    @AppStorage(TabRows.key) private var rows: TabRows = .wide
-
-    var body: some View {
-        Form {
-            Picker("Row size", selection: $rows) {
-                ForEach(TabRows.allCases) { rows in
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(rows.title)
-                        Text(rows.detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .tag(rows)
-                }
-            }
-            .pickerStyle(.radioGroup)
-
-            Text("Tabs at the top: switch Sidebar off in Modules.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .formStyle(.grouped)
-        .navigationTitle("Tabs")
-    }
-}
-
-private struct ViewerSettingsPane: View {
-    @AppStorage(FileViewerSetting.key) private var isOn = true
-
-    var body: some View {
-        Form {
-            Toggle(isOn: $isOn) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("File viewer")
-                    Text("Cmd+B, path clicks and agents open files in a pane beside the terminal. "
-                        + "When off, path clicks open files in their default app; open panes are hidden and come back when you switch it on.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-        }
-        .formStyle(.grouped)
-        .navigationTitle("File Viewer")
-    }
-}
