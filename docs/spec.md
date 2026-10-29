@@ -46,7 +46,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R6 | File editing in the viewer pane: one tool for view and edit, file tabs | first (user decision 2026-10-25) | - |
 | R3 | Sidebar with all sessions of a window, grouped in user-named workspaces (`docs/specs/windows-workspaces.md`); a tab running claude, codex or opencode shows the agent's icon and state; the collapsed sidebar shows icons only | first | median 5 parallel sessions, peak 16 |
 | R19 | Pins | removed 2026-10-25 (D17): workspaces group tabs | user request 2026-10-23 |
-| R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
+| R20 | Drag to reorder tabs in the sidebar, as the native tab bar did: over a tab the rows part (halves, as iTerm2), over a group header nothing changes, the strip between group blocks ungroups the tab, leaving the sidebar closes the gap; groups are blocks with their own background, tabs are cards (T-298) | first | user request 2026-10-23, user decisions 2026-10-29 |
 | R21 | Custom groups | built as workspaces, first wave | user request 2026-10-23 |
 | R24 | Settings window (cmd+,); tab style is the Sidebar switch in Settings > Modules (on: sidebar, off: native tabs at the top, where an agent tab shows the workspace name, its state dot and logo at the right edge) | first | user request 2026-10-25 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
