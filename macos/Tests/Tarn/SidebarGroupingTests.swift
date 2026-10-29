@@ -101,8 +101,8 @@ struct SidebarGroupingTests {
     }
 
     @Test(arguments: [
-        // row index in B (3 rows), lower half, expected: before B (true) or after B (false)
-        (0, false, true), (0, true, true), (1, false, true), (1, true, false), (2, false, false), (2, true, false),
+        // Row index in B, lower half of the whole block, expected before B.
+        (0, false, true), (0, true, false), (1, false, true), (1, true, false), (2, false, true), (2, true, false),
     ] as [(Int, Bool, Bool)])
     func aWorkspaceOnARowLandsByTheHalfOfItsWorkspace(row: Int, lowerHalf: Bool, beforeB: Bool) {
         let (groups, _) = layout()

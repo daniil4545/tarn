@@ -53,13 +53,14 @@ final class SidebarModel: ObservableObject {
     /// The modules that are on; a change redraws what depends on them.
     @Published private(set) var modules = TarnModules.effective()
 
-    /// Where a drop in progress would land: a workspace drag draws a line there, a tab drag
-    /// opens a gap.
+    /// Where the lifted row or block would land.
     @Published var dropSlot: SidebarDropSlot?
     var sidebarAnchor: WeakView?
 
     /// The tab of this window being dragged: its row stays in place, translucent.
     @Published private(set) var liftedTab: TabKey?
+    @Published private(set) var liftedWorkspace: UUID?
+    var blockAnchors: [UUID: WeakView] = [:]
 
     /// The height of the lifted row, which the gap takes.
     private(set) var liftedHeight: CGFloat = 0
@@ -67,8 +68,8 @@ final class SidebarModel: ObservableObject {
     /// The slot of the lifted row itself: a drop there changes nothing, so it opens no gap.
     private var liftedSlot: SidebarDropSlot?
 
-    /// The slot the gap stands in, only while a tab of this window is dragged away from its row.
-    var gapSlot: SidebarDropSlot? { liftedTab == nil || dropSlot == liftedSlot ? nil : dropSlot }
+    /// The gap opens away from the lifted row or block's own slot.
+    var gapSlot: SidebarDropSlot? { (liftedTab == nil && liftedWorkspace == nil) || dropSlot == liftedSlot ? nil : dropSlot }
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -228,6 +229,7 @@ final class SidebarModel: ObservableObject {
             })
         }
         if let liftedTab, !newGroups.contains(where: { $0.tabs.contains { $0.key == liftedTab } }) { endLift() }
+        if let liftedWorkspace, !newGroups.contains(where: { $0.id == liftedWorkspace }) { endLift() }
         guard newGroups != groups else { return }
         groups = newGroups
         if cardTab != nil { updateCard() }
@@ -510,8 +512,7 @@ final class SidebarModel: ObservableObject {
 
     // MARK: Drag and drop
 
-    /// A drag is over a row or header. True when the drop would do something: a payload from
-    /// another window shows no line, as its drop is refused.
+    /// A drag is over a row or header; payloads from another window are refused.
     func dragOver(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
         // A header is no target for a lifted tab: the gap stays where it is.
         if kind == .tab, liftedTab != nil, case .header = target { return dropSlot != nil }
@@ -520,6 +521,9 @@ final class SidebarModel: ObservableObject {
             : nil
         if let liftedTab {
             slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
+        }
+        if let liftedWorkspace, slot == .beforeWorkspace(liftedWorkspace) { slot = liftedSlot }
+        if liftedTab != nil || liftedWorkspace != nil {
             if slot != dropSlot { withAnimation(Motion.gap) { dropSlot = slot } }
         } else if dropSlot != slot {
             dropSlot = slot
@@ -535,6 +539,15 @@ final class SidebarModel: ObservableObject {
         liftedSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
         dropSlot = liftedSlot
     }
+
+    func dragBegan(_ workspace: Workspace, height: CGFloat) {
+        liftedHeight = height + Sidebar.blockMargin
+        liftedWorkspace = workspace.id
+        liftedSlot = Self.dropSlot(dragging: .workspace, over: .header(workspace.id), lowerHalf: true, in: groups)
+        dropSlot = liftedSlot
+    }
+
+    func groupDragEnded() { endLift() }
 
     /// The dragged tab or workspace belongs to this window.
     private func isOwn(_ kind: SidebarDragKind, value: String) -> Bool {
@@ -556,7 +569,8 @@ final class SidebarModel: ObservableObject {
     /// is refused: moving tabs between windows is Ghostty's.
     func drop(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
         // A tab lands where its gap is shown, not where the pointer happens to be at release.
-        let slot = liftedTab == nil ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups) : dropSlot
+        let slot = liftedTab == nil && liftedWorkspace == nil
+            ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups) : dropSlot
         return drop(kind, value: value, at: slot)
     }
 
@@ -624,6 +638,7 @@ final class SidebarModel: ObservableObject {
 
     private func endLift() {
         if liftedTab != nil { liftedTab = nil }
+        if liftedWorkspace != nil { liftedWorkspace = nil }
         liftedSlot = nil
         if dropSlot != nil { dropSlot = nil }
     }
@@ -916,6 +931,7 @@ struct Sidebar: View {
                                     groupBlock(group)
                                 }
                                 TabGap(model: model, slot: .tail)
+                                TabGap(model: model, slot: .end)
                             }
                             // Only a fold or unfold animates: a title change or a reorder keeps
                             // its jump, as the rows of a moved tab are not new rows.
@@ -938,7 +954,6 @@ struct Sidebar: View {
             Color.clear.frame(height: Sidebar.blockMargin)
                 .overlay { interaction(over: .margin(group.id)) }
         }
-        .overlay(alignment: .bottom) { dropLine(model.liftedTab == nil && model.dropSlot == .beforeWorkspace(group.id)) }
     }
 
     private func groupBlock(_ group: SidebarModel.Group) -> some View {
@@ -955,15 +970,29 @@ struct Sidebar: View {
         }
         .padding(group.workspace == nil ? 0 : 4)
         .background(RoundedRectangle(cornerRadius: 10).fill(group.workspace == nil ? Color.clear : ink.groupBackground))
+        .background(RowAnchor { model.blockAnchors[group.id] = WeakView(view: $0) })
+        .background {
+            if let workspace = group.workspace {
+                interaction(over: .header(workspace.id), block: group.id)
+            } else if let tab = group.tabs.first {
+                interaction(over: .tab(tab.key), block: group.id)
+            }
+        }
         .padding(.horizontal, Sidebar.listInset)
+        .opacity(model.liftedWorkspace == group.id ? 0.4 : 1)
     }
 
-    private func interaction(over target: SidebarDropTarget) -> SidebarInteraction {
+    private func interaction(over target: SidebarDropTarget, block: UUID? = nil) -> SidebarInteraction {
         SidebarInteraction(
             onClick: {},
-            dragOver: { kind, value, half in model.dragOver(kind, value: value, over: target, lowerHalf: half) },
+            dragOver: { kind, value, half in
+                block != nil && kind == .tab ? false : model.dragOver(kind, value: value, over: target, lowerHalf: half)
+            },
             dragExit: { model.dragExit() },
-            drop: { kind, value, half in model.drop(kind, value: value, over: target, lowerHalf: half) }
+            drop: { kind, value, half in
+                block != nil && kind == .tab ? false : model.drop(kind, value: value, over: target, lowerHalf: half)
+            },
+            blockView: { block.flatMap { model.blockAnchors[$0]?.view } }
         )
     }
 
@@ -1026,7 +1055,7 @@ private struct TabGap: View {
                 .overlay(
                     SidebarInteraction(
                         onClick: {},
-                        dragOver: { kind, _, _ in kind == .tab },
+                        dragOver: { kind, _, _ in kind == (model.liftedWorkspace == nil ? .tab : .workspace) },
                         dragExit: { model.dragExit() },
                         drop: { kind, value, _ in model.drop(kind, value: value, at: slot) }
                     )
@@ -1110,7 +1139,6 @@ private struct SidebarRow: View {
                 scheduleCard()
             }
             .help(isCompact ? tab.title : "")
-            .overlay(alignment: .bottom) { dropLine(endsHere) }
             .padding(.vertical, isCompact ? 1 : Sidebar.rowGap / 2)
             .padding(.leading, isCompact ? 0 : Sidebar.listInset + indent)
             .padding(.trailing, isCompact ? 0 : Sidebar.listInset)
@@ -1125,11 +1153,6 @@ private struct SidebarRow: View {
     private var isLifted: Bool { model.liftedTab == tab.key }
 
     private var indent: CGFloat { isIndented ? Sidebar.groupIndent : 0 }
-
-    /// A workspace dropped after every workspace draws its line under the last tab.
-    private var endsHere: Bool {
-        model.dropSlot == .end && model.groups.last?.tabs.last?.key == tab.key
-    }
 
     private var interaction: some View {
         SidebarInteraction(
@@ -1156,7 +1179,8 @@ private struct SidebarRow: View {
             excludedLeading: isCompact ? 0 : Sidebar.listInset + indent + 22,
             cardInset: isCompact
                 ? NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0)
-                : NSEdgeInsets(top: Sidebar.rowGap / 2, left: Sidebar.listInset + indent, bottom: Sidebar.rowGap / 2, right: Sidebar.listInset)
+                : NSEdgeInsets(top: Sidebar.rowGap / 2, left: Sidebar.listInset + indent, bottom: Sidebar.rowGap / 2, right: Sidebar.listInset),
+            blockView: { model.groups.first { $0.tabs.contains { $0.key == tab.key } }.flatMap { model.blockAnchors[$0.id]?.view } }
         )
     }
 
