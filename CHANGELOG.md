@@ -1,115 +1,127 @@
 # Changelog
 
-Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.Z` tags in this repository belong to upstream Ghostty.
+Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags belong to upstream Ghostty.
 
 ## [Unreleased]
 
+## [tarn-v1.3.0] - 2026-10-29
+
 ### Added
 
-- New Group (Shift+Cmd+T) asks for a group name or a project folder; Delete Group keeps the tabs ungrouped, or closes them with a checkbox; the only group can be deleted too.
-- `tarn wait <pane>` waits until the command in a pane ends: `succeed`, `error` or `closed`, exit 0, 4, 6 or 9 (#59).
-- `tarn read <pane> [--lines N]` prints the last lines of a pane's screen as plain text; `tarn close <pane>` closes a pane without confirmation, focus unchanged (#71).
-- `tarn skill` prints how an agent uses the `tarn` commands, matched to the build; the Claude Code plugin carries a skill that runs it. `tarn module ls` lists the modules: on, off or unavailable (#83).
-- Settings > Modules: switch Sidebar, File viewer, Workspaces, Permission card and Notifications on or off at once; a Claude Code line with its version and checks (#34).
+- New group (Shift+Cmd+T): choose Group with a name or Workspace with a typed project folder path; the folder must exist, accepts `~`, and supplies the workspace name.
+- Delete group keeps its tabs ungrouped in place; check "Also close its N tabs" to close them instead, including the only group's tabs.
+- Sidebar menus offer "Move to" and "Remove from group"; tabs and group headers can be dropped among ungrouped rows or below all rows.
+- `tarn new -- <cmd...>` runs a command in a split below the caller; `--right` splits right, `--cwd` sets its folder, focus stays unchanged (#53).
+- `tarn run` opens a split with the command typed for the user to review, edit and submit with Enter (#105).
+- `tarn new` and `tarn run` accept `--tab [--title T]`: an unselected tab immediately after the caller, in its group; an ungrouped caller or disabled Workspaces is refused with exit 1 before creation.
+- `tarn wait <pane> [--timeout S] [--json]` reports `succeed`, `error` or `closed`; exits 0 on a reported end, 4 for no matching pane, 6 for unavailable exit status, 9 for timeout (#100).
+- `tarn read <pane> [--lines N]` prints plain screen and scrollback text, default 80 lines; `tarn close <pane>` closes without confirmation or changing focus (#118).
+- `tarn skill` prints usage guidance matched to the build; `tarn module ls [--json]` lists modules as on, off or unavailable (#119).
+- Settings > Modules toggles Sidebar, File viewer, Workspaces, Permission card and Notifications, with integration version and status checks (#52).
 
 ### Changed
 
-- An agent in a tab with no workspace sees that tab only: `tarn ls`, `read`, `wait` and `close` on another tab answer exit 4.
-- `tarn ls` has no HOST column and no `host` key: an ssh pane shows by its title and process (#72).
-- `tarn wait` answers `no shell integration` by Ghostty's rule (`shell-integration` setting and the pane's shell), at once, also on a pane from `tarn run`; no false answer before the first prompt.
-- A new window starts with one tab in no workspace, drawn without a header; the rows of a workspace are indented, ungrouped rows sit flush. Saved workspaces keep their names; a saved "~" loads as ungrouped tabs.
-- Tabs and splits open where Ghostty opens them, in the folder of the current pane, in every workspace; a project workspace no longer sends them to its folder. The "+" of a workspace opens a tab in the workspace's folder; the "+" of a plain group opens after its last tab.
-- A new tab (Cmd+T, the New Tab menu item, the "+" of the tab bar or of a workspace) joins the workspace of the tab it was opened from; a tab from anywhere else is ungrouped. Moving the last tab out of a workspace removes the workspace.
-- Workspaces no longer move tabs: a new tab stays where Ghostty puts it, a native reorder changes order only, switching Workspaces back on moves nothing. The "+" of a workspace opens its tab right after the workspace's last tab, a new workspace at the bottom, and the sidebar New Tab button is Cmd+T.
-- A tab dragged in the sidebar leaves the list, and the rows slide apart to a gap where it will land, as in Warp; no accent line for tabs.
-- Sidebar: "Remove from group" in the menu of a grouped row; a tab or a group header can be dropped among ungrouped rows and below all rows. Each is one native move.
+- Groups are optional and membership is explicit: a new window starts with one ungrouped tab; starting a process, changing folders or reordering native tabs never regroups tabs.
+- Grouped sidebar rows are indented; ungrouped rows have no header; restored groups keep their names, while the old home "~" workspace becomes ungrouped tabs.
+- Cmd+T inherits the source tab's group and Ghostty's folder and position; splits keep Ghostty's folder inheritance; a tab opened without a source group is ungrouped.
+- A group's "+" opens from its last tab, using a workspace's fixed folder or a plain group's inherited folder; new groups start at the bottom; the sidebar New Tab button follows Cmd+T.
+- Removing the last tab removes its group; toggling Workspaces off and on preserves membership without moving tabs.
+- `tarn ls [--json]` lists terminal panes in the caller's group, or only its own tab when ungrouped; other tabs are outside `read`, `wait` and `close` scope and return exit 4 (#50).
+- `tarn ls` adds GROUP (`-` when ungrouped) and JSON `group` and `folder` (null when absent); the existing `workspace` key remains the group id.
+- `tarn ls` drops HOST and JSON `host`; SSH panes show their remote title and process (#98, #101, #120).
+- Sidebar tab drags show a visible dragged row and an opening gap between rows (#32).
+- Updated the Ghostty base to v1.4.0 (#114).
+
+### Fixed
+
+- Undo restores a closed tab to its group, recreating the group if needed; ungrouped tabs stay ungrouped and viewers return with their tab.
+- `hook.sh` returns within 100 ms when the app hangs: one detached timer instead of a polling loop (#124).
+- `tarn wait` detects missing shell integration by Ghostty's configuration and shell rules, including `run` panes, without falsely reporting completion before the first prompt (#123).
 
 ## [tarn-v1.2.0] - 2026-10-26
 
 ### Added
 
-- Shift+Cmd+T opens a new workspace; it no longer reopens a closed tab (Cmd+Z still does).
-- Viewer zoom: Cmd+=, Cmd+- and Cmd+0 in a viewer pane, one zoom for every viewer, kept across launches.
-- Find in the viewer: Cmd+F, Cmd+G and Shift+Cmd+G, in the rendered file and in the source.
+- Shift+Cmd+T creates a workspace; Cmd+Z still reopens closed tabs.
+- Viewer zoom with Cmd+=, Cmd+- and Cmd+0, shared across viewers and saved across launches.
+- Viewer find with Cmd+F, Cmd+G and Shift+Cmd+G in rendered files and source.
 - Toggle File Viewer button in the sidebar header.
-- Wide sidebar rows: the tab title, then the folder and the minutes in the agent's state. Settings, Tabs, Row size switches to one line.
+- Wide sidebar rows show title, folder and time in session state; Settings > Tabs > Row size selects one line.
 
 ### Fixed
 
-- With a viewer open, split terminals move among themselves again, also at the window edge.
-- While a viewer has the keyboard, the tab and window keys work (Cmd+1 to Cmd+9, next and previous tab, and the rest), and so do Move Divider and Equalize Splits.
-- A question answered in Claude Code's own dialog leaves the sidebar at once.
-- A tab split into several terminals names, in its sidebar row, the pane its state dot speaks of.
+- Split navigation works with a viewer open, including at window edges.
+- Tab, window, Move Divider and Equalize Splits shortcuts work while the viewer has focus.
+- Questions answered in the terminal's own dialog leave the sidebar immediately.
+- A split tab's sidebar title identifies the pane represented by its state dot.
 
 ## [tarn-v1.1.0] - 2026-10-26
 
 ### Fixed
 
-- Cmd+click on a path that ends a sentence (`/tmp/a/plan.md.`) opens the file without the period, unless a file with the period in its name exists.
-- Cmd+W no longer crashes tarn: closing a tab made the sidebar and the workspaces refresh each other until the stack ran out, which looked like the whole window closing.
-- Workspace and tab menus work again: every item had an action its target did not handle, so Rename, Delete and the rest did nothing.
-- The sidebar edge and the line between the terminal and a viewer are easy to grab: a 14 pt hit strip centered on the line, above both sides, with the resize cursor.
-- Dragging the sidebar edge to its widest stays at 400 pt; only the button collapses the sidebar.
-- A viewer dragged out of the window opens where it was dropped, on any screen, not on the first one.
-- Cmd+W closes the Settings window.
-- A tab title change reads each agent process once, not twice per tab for every tab.
+- Cmd+click strips a sentence-ending period from a path unless that filename exists.
+- Cmd+W no longer crashes through recursive sidebar and workspace refreshes.
+- Workspace and tab menu actions work again.
+- Sidebar and viewer dividers have a 14 pt grab area and resize cursor.
+- Sidebar resizing stops at 400 pt; only the button collapses it.
+- Detached viewers open at the drop position on the correct screen.
+- Cmd+W closes Settings.
+- Tab title updates read each session process once.
 
 ### Changed
 
-- Drop feedback: a 3 pt accent line where the pane goes, and a gray plate with the reason when the drop is refused. A terminal dropped on a terminal keeps Ghostty's own highlight.
-- Settings, Theme: seven base themes on top (Catppuccin Latte and Mocha, Atom One Light and Dark, Gruvbox Light and Dark, Dracula), the full list with a filter below. While `window-theme` is `auto` or `ghostty`, the sidebar and the viewer take their colors from the terminal theme; with `system`, `light` or `dark` they keep the built-in colors.
-- Resizing the sidebar resizes the terminal once, when the mouse is released. Hover and workspace folding animate with one duration and curve.
-- Help lists which paths in terminal output open on Cmd+click: those with a slash.
+- Pane drops show an accent line or a refusal reason; terminal-to-terminal drops keep Ghostty's highlight.
+- Theme settings show seven base themes and a filterable full list; sidebar and viewer follow the terminal theme with `window-theme = auto` or `ghostty`.
+- Sidebar resizing updates the terminal on release; hover and folding share animation timing.
+- Help explains which terminal paths support Cmd+click: those containing a slash.
 
 ## [tarn-v1.0.0] - 2026-10-25
 
-First release. The build is ad-hoc signed and not notarized; see `docs/install.md`.
+First release, ad-hoc signed and not notarized; see `docs/install.md`.
 
 ### Added
 
-- File viewer: a pane beside the terminal with a files tree, file tabs, rendered markdown (with mermaid diagrams), a code view with highlighting, and a text editor with unsaved-edit questions. Cmd+B shows or hides it; it follows file changes on disk.
-- Workspaces and layout: a set of workspaces per window in the sidebar, restored after a restart, with undo for a closed workspace. Terminals and viewers sit in one area tree; drop a tab on a pane edge to split, and drag the grips to resize.
-- Settings window and Help: tab style and a short list of Ghostty options, plus a Help page with the keys in effect. Tarn options live in `~/.config/tarn/ghostty.conf`; your Ghostty config is read, never written.
-- Demo: a static site (`demo/`) that shows the tarn window in a browser, with a scripted `claude` session, workspaces, splits and the viewer.
-- Notifications: one banner per need ("Needs your permission", "Waiting for you", "Failed, see the session"), named by project. Terminal notifications from a tab with a live agent session are suppressed, so you get no duplicates.
-- Jump: Cmd+U (Window, "Jump to Waiting Session") goes to the session that waits for you. Agents never move focus.
-- `tarn` command inside tarn terminals: `tarn open <path>` opens a file in the viewer, `tarn ls [--json]` lists sessions, `tarn notify <text>` marks the session and notifies. It fails with `tarn: <text>` and exit code 1 when no tarn runs.
-- App identity: `Tarn.app`, bundle id `com.daniil4545.tarn`, version 1.0.0, own icon. It installs next to Ghostty and shares its config files.
-- `tarn.mk` with `check`, `release` and `bench`; the release is an ad-hoc signed zip with the `tarn` command inside and a `.sha256` file, `bench` compares it with upstream Ghostty built from the same commit (`docs/bench.md`).
-- `install.sh`: one `curl ... | sh` command installs or upgrades from the latest release, see `docs/install.md`.
+- File viewer with a file tree, tabs, rendered markdown and mermaid, highlighted source, editing with unsaved-change prompts and disk updates; Cmd+B toggles it.
+- Restored per-window workspaces, undo for closed workspaces, terminal and viewer splits with draggable dividers and tab drops.
+- Settings and Help for tab style, Ghostty options and shortcuts; tarn config at `~/.config/tarn/ghostty.conf`, existing Ghostty config read only.
+- Static browser demo of the sidebar, sessions, workspaces, splits and viewer.
+- Project notifications for permission, questions and failures, suppressing duplicate terminal notifications from live sessions.
+- Cmd+U jumps to a waiting session; sessions never move focus themselves.
+- `tarn open`, `tarn ls [--json]` and `tarn notify` for files, sessions and attention; exit 1 when tarn is unavailable.
+- `Tarn.app`, bundle id `com.daniil4545.tarn`, own icon, installed beside Ghostty.
+- `tarn.mk` checks, release zip with CLI and SHA-256 checksum, and benchmarks against the same upstream commit.
+- `install.sh` installs or upgrades from the latest release; see `docs/install.md`.
 
 ### Changed
 
-- No updater: the menu item is gone and no feed is set. Sidebar settings saved by a Debug build under the old Ghostty bundle id are not carried over.
+- Removed the updater; Debug settings under the former Ghostty bundle id are not migrated.
 
 ### Fixed
 
-- Sidebar drag and drop: a workspace or tab can be dropped below the last row, the drop line no longer blinks over the gaps between rows, the only tab of a workspace dropped on it no longer moves the workspace to the end, and a drag from another window shows no line.
+- Sidebar drops work below the last row, avoid flickering feedback and accidental workspace moves, and show no drop line for another window.
 
 ### Known limits
 
-- Startup is about 17 ms (7%) slower than upstream Ghostty built from the same commit, over the +5% of `docs/spec.md` section 7: the first layout of the sidebar. Idle CPU and memory are within it; the `cat` result moves by about 6% between runs. Numbers in `docs/bench.md`.
+- Startup is about 17 ms (7%) slower than upstream, above the 5% target; idle CPU and memory meet it. See `docs/bench.md` for results and variation.
 
 ## [tarn-v0.0.1] - 2026-10-23
 
-First preview, built from source. The sidebar and Claude Code session state work; the rest of the first version (markdown panel, `tarn` CLI, notifications, app identity, benchmark) is not in yet.
+First source-built preview: sidebar and session state; viewer, CLI, notifications, app identity and benchmarks not yet included.
 
 ### Added
 
-- Vertical sidebar in place of the native tab bar: tabs of a window with their shortcuts, close on hover, right-click menu, rename, resizable width, collapse to an icon strip.
-- Agent groups: a tab where `claude`, `codex` or `opencode` runs moves into the group of its project, keyed by the git root, with the agent's icon; it returns below the divider when the agent exits. Two projects with the same folder name show their parent folder.
-- Claude Code session state through the `tarn` plugin: working, needs permission, asks a question, done, done but not seen, stopped with an error, as a colored dot.
-- A card beside a tab answers a permission request or a single-choice question; the answer goes back through the waiting hook, so it reaches exactly that request.
+- Resizable vertical tab sidebar with shortcuts, close on hover, context menu, rename and collapsed icon strip.
+- Detected sessions grouped by project git root with icons; same-named projects show their parent folder; tabs return below the divider when sessions exit.
+- Plugin session state dots for working, permission, questions, done, unseen completion and errors.
+- Permission and single-choice question cards reply through the waiting hook.
 
 ### Setup
 
-1. Build the app: `macos/build.nu --configuration Debug --action build`, then open `macos/build/Debug/Ghostty.app`.
-2. Add the plugin: `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn`.
-3. Start `claude` in a tab of the app; the plugin does nothing outside tarn.
+Build with `macos/build.nu --configuration Debug --action build`, open `macos/build/Debug/Ghostty.app` and install the plugin from `<repo>/plugin`.
 
 ### Known limits
 
-- The app still builds as `Ghostty.app` with Ghostty's debug bundle id, so it shares notifications and defaults with an installed Ghostty debug build.
-- codex and opencode get a group and an icon but no state.
-- Agents inside tmux or ssh, or behind a wrapper script, are not detected.
-- After you approve a long command, the session shows "needs permission" until the command ends.
+- Uses `Ghostty.app` and Ghostty's debug bundle id, sharing notifications and defaults.
+- Only the primary integration reports state; other detected sessions have groups and icons only.
+- Sessions inside tmux or SSH, or behind wrappers, are not detected.
+- Permission state persists until an approved command ends.
