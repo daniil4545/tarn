@@ -27,7 +27,7 @@ struct ListModulesTests {
     }
 
     @Test func textIsAPaddedTableWithAHeader() {
-        let text = ListModules.text([["viewer", "on"], ["permission-card", "unavailable"]])
+        let text = ListPanes.table([ListModules.columns, ["viewer", "on"], ["permission-card", "unavailable"]])
         #expect(text == "MODULE           STATE\nviewer           on\npermission-card  unavailable\n")
     }
 

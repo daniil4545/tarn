@@ -22,14 +22,14 @@ struct RunPaneTests {
         let cases: [(String, AgentRefusal)] = [
             ("a\nb", NewPane.notOneLine),
             ("a\rb", NewPane.notOneLine),
-            ("a\u{0F}", RunPane.controlCharacter),
-            ("a\tb", RunPane.controlCharacter),
-            ("\u{1B}[A", RunPane.controlCharacter),
-            ("a\u{7F}", RunPane.controlCharacter),
-            ("a\u{85}b", RunPane.controlCharacter),
+            ("a\u{0F}", NewPane.controlCharacter),
+            ("a\tb", NewPane.controlCharacter),
+            ("\u{1B}[A", NewPane.controlCharacter),
+            ("a\u{7F}", NewPane.controlCharacter),
+            ("a\u{85}b", NewPane.controlCharacter),
         ]
         for (argument, refusal) in cases {
-            let result = RunPane.run(["argv": ["echo", argument]], scope)
+            let result = NewPane.open(["argv": ["echo", argument]], scope, kind: .run)
             #expect(throws: refusal, "\(argument.debugDescription)") { try result.get() }
         }
     }
@@ -38,7 +38,7 @@ struct RunPaneTests {
     @Test @MainActor func aPrintableLineReachesTheSplit() {
         let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: UUID())
         let scope = AgentScope(caller: caller, panes: [caller])
-        let result = RunPane.run(["argv": ["echo", "it's café"]], scope)
+        let result = NewPane.open(["argv": ["echo", "it's café"]], scope, kind: .run)
         #expect(throws: AgentRefusal.notInTab) { try result.get() }
     }
 }

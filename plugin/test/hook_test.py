@@ -10,6 +10,7 @@ Run: python3 -I plugin/test/hook_test.py
 import contextlib
 import json
 import os
+import select
 import shutil
 import socket
 import subprocess
@@ -21,8 +22,7 @@ from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 LIMIT = 0.1
-# A hung app costs hook.sh 166-404 ms on the 3-core CI runner (30-40 ms per process start), so CI
-# raises the limit of those cases only with TARN_HOOK_LIMIT_MS; on the Mac they keep 100 ms.
+# TARN_HOOK_LIMIT_MS raises the limit of the hung-app cases for a slow machine; default 100 ms.
 HUNG_LIMIT = float(os.environ.get("TARN_HOOK_LIMIT_MS", "100")) / 1000
 STOP = b'{"hook_event_name":"Stop"}'
 ASK = b'{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"make"}}'
@@ -138,6 +138,33 @@ def check_stop(socket_path: Path, home: Path) -> str | None:
     return None
 
 
+def check_order(socket_path: Path, home: Path) -> str | None:
+    """By the time hook.sh exits, its event is already queued at a live app's socket."""
+    names = ["Start", "Pre", "Post", "Stop"]
+    received: list[bytes] = []
+    try:
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(socket_path))
+            server.listen(8)
+            server.settimeout(3)
+            for name in names:
+                payload = json.dumps({"hook_event_name": name}).encode()
+                if failure := silent("hook.sh", home, "x", payload):
+                    return f"{name}: {failure}"
+                if not select.select([server], [], [], 0)[0]:
+                    return f"{name}: hook exited before it connected"
+                client, _ = server.accept()
+                with client:
+                    client.settimeout(3)
+                    received.append(read_line(client))
+    finally:
+        socket_path.unlink(missing_ok=True)
+    if not all(received):
+        return f"received nothing for some event: {received!r}"
+    got = [json.loads(line)["event"]["hook_event_name"] for line in received]
+    return None if got == names else f"received {got}"
+
+
 def main() -> int:
     # A short path: a unix socket path is limited to 104 bytes.
     home = Path(tempfile.mkdtemp(dir="/tmp", prefix="th."))
@@ -164,6 +191,9 @@ def main() -> int:
 
         if failure := check_stop(socket_path, home):
             failures.append(f"permission.sh, stopped: {failure}")
+
+        if failure := check_order(socket_path, home):
+            failures.append(f"hook.sh, order: {failure}")
 
         # A socket that accepts and never reads, as a hung app does.
         with socket.socket(socket.AF_UNIX) as server:
