@@ -32,6 +32,9 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 - `tarn ls` adds GROUP (`-` when ungrouped) and JSON `group` and `folder` (null when absent); the existing `workspace` key remains the group id.
 - `tarn ls` drops HOST and JSON `host`; SSH panes show their remote title and process (#98, #101, #120).
 - Sidebar tab drags show a visible dragged row and an opening gap between rows (#32).
+- Sidebar groups are blocks with their own background and tabs are cards; a tab joins a group when dropped among its tabs and leaves it on the strip between groups (#149-#152).
+- A group drags like a tab: its block lifts, other rows part to a gap, and it drops between groups or ungrouped tabs, never into a group (#154, #155).
+- A group move reorders the native tabs in one pass, without visible renumbering or lag (#156).
 - Updated the Ghostty base to v1.4.0 (#114).
 
 ### Fixed
