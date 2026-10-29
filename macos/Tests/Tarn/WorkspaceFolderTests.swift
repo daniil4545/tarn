@@ -60,6 +60,18 @@ struct WorkspaceFolderTests {
         #expect(WorkspaceFolder.display("/Users/x/Dev/tarn", home: "/Users/x") == "~/Dev/tarn")
         #expect(WorkspaceFolder.display("/Users/xy/Dev", home: "/Users/x") == "/Users/xy/Dev")
         #expect(WorkspaceFolder.display("/opt/tarn", home: "/Users/x") == "/opt/tarn")
+        #expect(WorkspaceFolder.display("/Users/x", home: "/Users/x") == "~")
+    }
+
+    /// A path outside home that links into it stays as typed: `~` stands only for the home prefix.
+    @Test func aLinkIntoHomeIsShownAsItsOwnPath() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-display-\(UUID().uuidString)")
+        let home = root.appendingPathComponent("home/proj")
+        try FileManager.default.createDirectory(at: home, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let link = root.appendingPathComponent("p")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: home)
+        #expect(WorkspaceFolder.display(link.path, home: root.appendingPathComponent("home").path) == link.path)
     }
 
     // spec: docs/specs/workspace-folder.md S6. "+" opens after the last tab of the group, in its folder.

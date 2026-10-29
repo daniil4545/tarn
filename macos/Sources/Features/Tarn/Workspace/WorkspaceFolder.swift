@@ -24,6 +24,6 @@ enum WorkspaceFolder {
 
     /// The folder as shown to the user, with `~` for the home directory.
     static func display(_ folder: String, home: String = NSHomeDirectory()) -> String {
-        contains(home, folder) ? "~" + folder.dropFirst(home.count) : folder
+        folder == home || folder.hasPrefix(home + "/") ? "~" + folder.dropFirst(home.count) : folder
     }
 }
