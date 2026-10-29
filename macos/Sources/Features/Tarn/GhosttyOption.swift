@@ -127,3 +127,8 @@ struct GhosttyOption: Identifiable, Equatable {
                       help: "The three dots that drag a pane: on hover, always or never."),
     ]
 }
+
+extension Double {
+    /// The shortest text of a float as the config file writes it: 13, 0.7, 0.35.
+    var optionText: String { String(format: "%g", self) }
+}

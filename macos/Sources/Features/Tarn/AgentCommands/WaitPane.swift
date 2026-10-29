@@ -62,11 +62,8 @@ enum WaitRule {
         guard integrated || marked || facts.integrationExpected else { return .failure(.noShellIntegration) }
         // Never answer idle early: without a readable prompt the next finish is the only sign.
         guard facts.promptReadable else { return nil }
-        if facts.atPrompt {
-            // A `run` pane looks idle before Enter; an old command's code is not this wait's.
-            return mark?.kind == .run ? nil : .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0))
-        }
-        return nil
+        // A `run` pane looks idle before Enter; an old command's code is not this wait's.
+        return facts.atPrompt && mark?.kind != .run ? .success(WaitOutcome(state: "succeed", exitCode: nil, durationMs: 0)) : nil
     }
 }
 

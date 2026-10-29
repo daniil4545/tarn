@@ -10,8 +10,7 @@ struct ThemePicker: View {
 
     @State private var filter = ""
 
-    /// The theme folders are read once per process, as the earlier list was: the row is built
-    /// again on each write and reload. A theme added while tarn runs shows after a restart.
+    /// Read once per process: the row is rebuilt on each write. A theme added later shows after a restart.
     private static let names = ThemeCatalog.shared.names
     private static let base = ThemeCatalog.shared.base(among: names)
     private static let rest = ThemeCatalog.shared.rest(among: names)

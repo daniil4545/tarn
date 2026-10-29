@@ -127,7 +127,7 @@ final class AreaDropView: NSView {
     // MARK: The line
 
     /// A drop shows a line in the system accent where the border of the new pane will be, as a
-    /// split in macOS apps does; no fill and no frame of our own (T-151 bug 4). A refusal shows a
+    /// split in macOS apps does; no fill and no frame of our own. A refusal shows a
     /// gray plate with the reason and no line. Line and plate move in one animation.
     private func showFrame(_ target: AreaDropTarget) {
         let refused = target.refusal != nil || target.plan == nil

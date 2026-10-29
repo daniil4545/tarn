@@ -9,13 +9,15 @@ event=$(tr -d '\n')
 exec </dev/null >/dev/null 2>&1
 printf '{"version":1,"surface":"%s","event":%s}\n' "$TARN_SURFACE" "$event" \
   | nc -U -w 1 "$sock" >/dev/null 2>&1 &
-# A live app reads the line in a few ms, which keeps events in order. A hung app never
-# reads, and nc ignores -w on a blocked write, so the sender is dropped after about 40 ms.
+# A live app reads the line in a few ms: wait for the sender, which keeps events in order.
+# A hung app never reads, and nc ignores -w on a blocked write, so a detached timer kills
+# the sender after 40 ms. A hung app costs one extra process start, not a polling loop.
 sender=$!
-tries=0
-while kill -0 "$sender" 2>/dev/null && [ "$tries" -lt 4 ]; do
-  sleep 0.01
-  tries=$((tries + 1))
-done
-kill "$sender" 2>/dev/null
+(
+  sleep 0.04
+  kill "$sender"
+) 2>/dev/null &
+timer=$!
+wait "$sender" 2>/dev/null
+kill "$timer" 2>/dev/null
 exit 0

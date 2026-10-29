@@ -80,8 +80,6 @@ jobs:
           uvx ruff@0.17.2 check plugin/test
           uvx ruff@0.17.2 format --check plugin/test
       - name: Script tests
-        env:
-          TARN_HOOK_LIMIT_MS: "800"
         run: |
           python3 -I plugin/test/hook_test.py
           python3 -I cli/test/cli_test.py
@@ -92,8 +90,8 @@ jobs:
     runs-on: xcode-27
     timeout-minutes: 60
     env:
-      # A hung app costs hook.sh 166-404 ms on these runners; 800 ms still catches a wait on nc's
-      # 1 s timeout. The 100 ms contract is checked on the Mac.
+      # A hung app costs hook.sh up to 404 ms on these runners (T-182 measured the old loop);
+      # 800 ms still catches a wait on nc's 1 s timeout. The 100 ms contract is checked on the Mac.
       TARN_HOOK_LIMIT_MS: "800"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
