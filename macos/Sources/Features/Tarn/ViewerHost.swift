@@ -17,7 +17,7 @@ final class ViewerHost: ObservableObject {
     @Published private(set) var tree: AreaTree
     /// What the user is dragging over this tab, if it is a pane.
     @Published private(set) var drag: AreaPayload?
-    /// The viewers are hidden with Cmd+B: their models, tabs and unsaved edits live on in `panes`
+    /// The viewers are hidden: their models, tabs and unsaved edits live on in `panes`
     /// (so `models` and the close check still see them), only the layout shows the terminal alone.
     @Published private(set) var hidden = false
     private var blockLeaf: AreaLeaf
@@ -122,15 +122,14 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B, from the terminal or typed in a pane. It opens and hides, it never closes (Cmd+W closes):
-    /// no viewer opens one with the tree; hidden viewers come back; shown ones hide whole.
+    /// Cmd+B opens a tree-only viewer, shows hidden viewers, or toggles the active viewer's tree.
+    /// A shown viewer with no file closes.
     func toggleFromKey(root: String?) {
         guard isViewerOn() else { return }
-        guard activeModel != nil else { return openTreeOnly(root: root) }
+        guard let model = activeModel else { return openTreeOnly(root: root) }
         if hidden { return show() }
-        // The page holds an edit back for 120 ms; send it before the page leaves the window.
-        for model in models { model.flushPendingEdit() }
-        hidePane()
+        if model.snapshot.isEmpty { return model.closeActiveTab() }
+        model.toggleTree()
     }
 
     private func openTreeOnly(root: String?) {
