@@ -1,6 +1,5 @@
-// The settings window: Modules, Tabs, three sections of Ghostty options, Help. Counterpart of
-// TarnSettings.swift. A changed option always writes its line to tarn's own config file
-// (shown under Windows); only Reset removes it.
+// Settings window as TarnSettings.swift. A changed option writes its line to tarn's own
+// config file (shown under Windows); only Reset removes it.
 import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { OPTIONS, DEFAULTS, isWritten } from "./config.js";
@@ -15,7 +14,7 @@ const ALL = Object.values(GHOSTTY).flat();
 
 let rows = [];
 let root = null;
-let section = "tabs"; // the section Settings opens at; Modules is first in the list
+let section = "modules";
 let opener = null;
 let replacing = false;
 const problems = new Map(); // option key -> the line shown under a rejected input
@@ -85,13 +84,12 @@ function optionSection(name, title) {
 }
 
 // One row per module: title, detail, switch. A module whose needed module is off keeps its
-// stored value, is greyed out and says "needs <module>". File viewer and the viewer pane share
-// one key; the Sidebar switch writes `tab-style`.
+// stored value, is greyed out and says "needs <module>". The Sidebar switch writes `tab-style`.
 function moduleRow(m) {
   const config = read("config"), needed = MODULES.find((x) => x.id === m.needs);
   const blocked = needed !== undefined && !isOn(needed.id, config);
   const attr = m.key ? `data-gkey="${m.key}"` : "data-sidebar";
-  return `<div class="modrow${blocked ? " blocked" : ""}" data-module="${m.id}"><label for="m-${m.id}">${m.title}<small>${m.detail}</small></label><span class="needs">${blocked ? `needs ${needed.title}` : ""}</span><input type="checkbox" role="switch" id="m-${m.id}" ${attr}${stored(m.id, config) ? " checked" : ""}${blocked ? " disabled" : ""}></div>`;
+  return `<div class="modrow${blocked ? " blocked" : ""}" data-module="${m.id}"><label for="m-${m.id}">${m.title}<small>${m.detail}</small></label><span class="needs">${blocked ? `needs ${needed.title}` : ""}</span><input type="checkbox" role="switch" id="m-${m.id}" ${attr}${stored(m.id, config) ? " checked" : ""}${blocked ? " disabled" : ""}></div>${m.id === "sidebar" ? sidebarOptions() : ""}`;
 }
 
 function agentLine(a) {
@@ -115,20 +113,16 @@ function syncModules() {
     row.querySelector("input").disabled = blocked;
     row.querySelector(".needs").textContent = blocked ? `needs ${needed.title}` : "";
   });
-  const viewer = root.querySelector("#g-file-viewer");
-  if (viewer) viewer.checked = config["file-viewer"];
+  const options = root.querySelector("#sidebarOptions");
+  options.disabled = !isOn("sidebar", config);
+  options.querySelectorAll("input").forEach((input) => { input.checked = input.value === config["tab-rows"]; });
 }
 
-function tabsSection() {
+function sidebarOptions() {
   const rows = read("config")["tab-rows"];
   const sizes = TAB_ROWS.map(([value, name, text]) =>
     `<label><input type="radio" name="tabrows" value="${value}"${rows === value ? " checked" : ""}><span><b>${name}</b><small>${text}</small></span></label>`);
-  return `<section data-pane="tabs" hidden><h3>Tabs</h3><div class="setgroup"><div class="setrow"><span>Row size</span><div class="radios">${sizes.join("")}</div></div></div><p class="setnote">Applies to every open window at once. Tabs at the top: switch Sidebar off in Modules.</p></section>`;
-}
-
-function viewerSection() {
-  const on = read("config")["file-viewer"];
-  return `<section data-pane="viewer" hidden><h3>File Viewer</h3><div class="setgroup"><div class="setrow"><label for="g-file-viewer">File viewer<small>Cmd+B, path clicks and agents open files in a pane beside the terminal. When off, path clicks open files in their default app; open panes are hidden and come back when you switch it on.</small></label><input type="checkbox" id="g-file-viewer" data-gkey="file-viewer"${on ? " checked" : ""}></div></div></section>`;
+  return `<fieldset id="sidebarOptions"${isOn("sidebar") ? "" : " disabled"}><legend>Row size</legend><div class="radios">${sizes.join("")}</div></fieldset>`;
 }
 
 function helpSection() {
@@ -141,7 +135,7 @@ function helpSection() {
 
 function build() {
   const nav = SECTIONS.map(([name, title]) => `<button class="setitem" data-sec="${name}">${title}</button>`).join("");
-  const sections = modulesSection() + tabsSection() + viewerSection() + ["appearance", "terminal", "windows"].map((n) => optionSection(n, SECTIONS.find(([k]) => k === n)[1])).join("") + helpSection();
+  const sections = modulesSection() + ["appearance", "terminal", "windows"].map((n) => optionSection(n, SECTIONS.find(([k]) => k === n)[1])).join("") + helpSection();
   root.innerHTML = `<div class="setwin" role="dialog" aria-modal="true" aria-label="Settings"><div class="setside"><div class="lights"><i id="settingsClose" title="Close"></i><i></i><i></i></div><nav id="setNav" aria-label="Settings sections">${nav}</nav><button class="setcfg" id="ghosttyConfig" title="All Ghostty options, keys included. Opens the Ghostty config file.">Ghostty Config…</button></div><div class="setmain" id="setMain">${sections}</div></div>`;
 }
 

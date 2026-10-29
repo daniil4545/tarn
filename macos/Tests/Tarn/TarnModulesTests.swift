@@ -19,6 +19,13 @@ struct TarnModulesTests {
         #expect(TarnModules.effective(in: defaults) == Set(TarnModule.allCases))
     }
 
+    // spec: docs/modules/settings.md "How it works"
+    @Test func moduleSettingsShareTheFirstPageWithoutDuplicatePages() {
+        #expect(TarnSettingsView.Section.allCases.map(\.title) == [
+            "Modules", "Appearance", "Terminal", "Windows", "Help"
+        ])
+    }
+
     @Test func sidebarFollowsTheTabStyleKeyOfEarlierVersions() {
         defaults.set("top", forKey: "TarnTabStyle")
         #expect(!TarnModules.isOn(.sidebar, in: defaults))

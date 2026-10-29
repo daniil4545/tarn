@@ -17,7 +17,9 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 - `tarn wait <pane> [--timeout S] [--json]` reports `succeed`, `error` or `closed`; exits 0 on a reported end, 4 for no matching pane, 6 for unavailable exit status, 9 for timeout (#100).
 - `tarn read <pane> [--lines N]` prints plain screen and scrollback text, default 80 lines; `tarn close <pane>` closes without confirmation or changing focus (#118).
 - `tarn skill` prints usage guidance matched to the build; `tarn module ls [--json]` lists modules as on, off or unavailable (#119).
-- Settings > Modules toggles Sidebar, File viewer, Permission card and Notifications, with integration version and status checks (#52).
+- Settings > Modules toggles Sidebar, File viewer, Permission card and Notifications, with integration version and status checks (#52); each module's options stand under its switch, and the Tabs and File Viewer pages are gone.
+- Cmd+B opens the file viewer with its tree; with a file open it toggles the tree, with none it closes the viewer. Cmd+W closes the active file, on the last file the viewer.
+- New group takes the workspace folder from the macOS folder panel (Choose...) or a typed path.
 
 ### Changed
 
