@@ -273,6 +273,13 @@ final class WorkspaceRegistry {
 
     // MARK: Sidebar commands
 
+    /// M1, the insertion point of `AppDelegate.ghosttyNewTab`: the tab Ghostty just opened from
+    /// `window` takes its workspace, when the two share a native tab group.
+    func opened(_ controller: TerminalController?, from window: NSWindow) {
+        guard !book.frozen, let tab = controller?.window, group(of: window).contains(tab) else { return }
+        publish(book.opened(key(for: tab), from: key(for: window)))
+    }
+
     /// A new tab in `workspace`, right after its last tab: Ghostty's `newTab(from:)` with that tab as
     /// the parent, inheriting from it as Cmd+T inherits from the focused tab.
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
@@ -280,19 +287,16 @@ final class WorkspaceRegistry {
             (window.windowController as? TerminalController)?.newTab(nil)
             return
         }
-        let tab = key(for: window)
-        book.setPendingTarget(workspace, for: tab)
-        let set = book.set(of: tab)
+        let set = book.set(of: key(for: window))
         let order = group(of: window).map(key(for:))
         let last = set?.lastTab(of: workspace, order: order).flatMap { self.window(for: $0) } ?? window
-        openTab(after: last, inheritingFrom: last, folder: set?.workspace(workspace)?.folder)
-        expirePendingTarget(of: tab)
+        opened(openTab(after: last, inheritingFrom: last, folder: set?.workspace(workspace)?.folder), from: last)
     }
 
     /// Ghostty's new tab with `parent` as the parent, configured as a tab of `source` would be;
-    /// `folder` replaces the working directory.
-    private func openTab(after parent: NSWindow, inheritingFrom source: NSWindow, folder: String? = nil) {
-        guard let controller = parent.windowController as? TerminalController else { return }
+    /// `folder` replaces the working directory. Nil when no tab came.
+    private func openTab(after parent: NSWindow, inheritingFrom source: NSWindow, folder: String? = nil) -> TerminalController? {
+        guard let controller = parent.windowController as? TerminalController else { return nil }
         let sourceController = source.windowController as? TerminalController
         var config = (sourceController?.focusedSurface ?? sourceController?.surfaceTree.first)?.surface.map {
             Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB))
@@ -301,11 +305,8 @@ final class WorkspaceRegistry {
             config = config ?? Ghostty.SurfaceConfiguration()
             config?.workingDirectory = folder
         }
-        guard let config else {
-            controller.newTab(nil)
-            return
-        }
-        _ = TerminalController.newTab(controller.ghostty, from: parent, withBaseConfig: config)
+        guard let config else { return nil }
+        return TerminalController.newTab(controller.ghostty, from: parent, withBaseConfig: config)
     }
 
     /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for
@@ -342,25 +343,18 @@ final class WorkspaceRegistry {
     }
 
     private func openWorkspace(name: String, folder: String?, from window: NSWindow) -> Bool {
-        guard !book.frozen else { return false }
-        let tab = key(for: window)
-        var created: Workspace.ID?
-        let changed = book.edit(tab) { created = $0.create(name: name, folder: folder) }
-        guard let created else { return false }
-        book.setPendingTarget(created, for: tab)
-        publish(changed.map { [$0] } ?? [])
+        guard !book.frozen, WorkspaceSet.cleaned(name) != nil else { return false }
         // The group stands at the bottom: its tab opens from the last tab of the window (G8).
-        openTab(after: group(of: window).last ?? window, inheritingFrom: window, folder: folder)
-        expirePendingTarget(of: tab)
-        return true
-    }
-
-    /// A new tab that never came (the window was refused) must not steer a later one: the target
-    /// ends a second after the request, and an empty workspace made for it goes with it.
-    private func expirePendingTarget(of tab: TabKey) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
-            if book.clearPendingTarget(for: tab) { sync() }
+        guard let tabWindow = openTab(after: group(of: window).last ?? window, inheritingFrom: window, folder: folder)?.window,
+              group(of: window).contains(tabWindow)
+        else { return false }
+        sync()
+        let tab = key(for: tabWindow)
+        let changed = book.edit(tab) { set in
+            if let created = set.create(name: name, folder: folder) { set.join(tab, to: created) }
         }
+        publish(changed.map { [$0] } ?? [])
+        return changed != nil
     }
 
     @discardableResult

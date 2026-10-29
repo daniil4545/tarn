@@ -17,6 +17,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 - `tarn wait` answers `no shell integration` by Ghostty's rule (`shell-integration` setting and the pane's shell), at once, also on a pane from `tarn run`; no false answer before the first prompt.
 - A new window starts in the workspace "~" instead of "No project"; saved workspaces keep their names.
 - Tabs and splits open where Ghostty opens them, in the folder of the current pane, in every workspace; a project workspace no longer sends them to its folder. The "+" of a workspace opens a tab in the workspace's folder; the "+" of a plain group opens after its last tab.
+- A new tab (Cmd+T, the New Tab menu item, the "+" of the tab bar or of a workspace) joins the workspace of the tab it was opened from; a tab from anywhere else joins "~". Moving the last tab out of a workspace removes the workspace.
 - Workspaces no longer move tabs: a new tab stays where Ghostty puts it, a native reorder changes order only, switching Workspaces back on moves nothing. The "+" of a workspace opens its tab right after the workspace's last tab, a new workspace at the bottom, and the sidebar New Tab button is Cmd+T.
 - A tab dragged in the sidebar leaves the list, and the rows slide apart to a gap where it will land, as in Warp; no accent line for tabs.
 

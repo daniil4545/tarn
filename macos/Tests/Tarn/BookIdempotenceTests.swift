@@ -32,11 +32,15 @@ struct BookIdempotenceTests {
                 switch op {
                 case 0, 1:
                     // A new tab, after a random tab (Ghostty puts it after the selected one).
-                    if op == 1, let tab = order.randomElement(using: &rng) {
-                        book.setPendingTarget(book.newWorkspace("W\(order.count)", in: tab), for: tab)
-                    }
+                    let source = order.randomElement(using: &rng)
                     let fresh = TabKey()
                     order.insert(fresh, at: Int.random(in: 1...order.count, using: &rng))
+                    if op == 1, let source {
+                        // Announced by the insertion point, as a second workspace's tab.
+                        _ = book.edit(source) { $0.join(source, to: $0.create(name: "W\(order.count)")!) }
+                        _ = book.pass([order])
+                        _ = book.opened(fresh, from: source)
+                    }
                     log.append("new")
                 case 2:
                     guard order.count > 1, let tab = order.randomElement(using: &rng) else { continue }

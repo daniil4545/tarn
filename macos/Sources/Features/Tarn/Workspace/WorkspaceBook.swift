@@ -37,8 +37,6 @@ struct WorkspaceBook {
     /// may put their windows into one group only later.
     private var settled = Set<TabKey>()
     private var live = Set<TabKey>()
-    private var pendingTarget: [UUID: Workspace.ID] = [:]
-    private var lastSelected: [UUID: Workspace.ID] = [:]
     private var lastSelectedTab: [UUID: TabKey] = [:]
 
     // MARK: Queries
@@ -100,17 +98,15 @@ struct WorkspaceBook {
             if oldTabs.isSubset(of: members), let loser = sets[old], var won = sets[winner], !isPlain(loser) {
                 // Merge All Windows: the loser's workspaces come whole, with their names. A window
                 // that holds only its stock "No project" has nothing to keep: it is the same as a tab
-                // dragged in and joins the target.
+                // dragged in and joins "~".
                 won.absorb(loser)
                 sets[winner] = won
                 sets[old] = nil
-                pendingTarget[old] = nil
-                lastSelected[old] = nil
                 lastSelectedTab[old] = nil
                 for moved in oldTabs { setOf[moved] = winner }
                 touched.insert(old)
             } else {
-                // One tab dragged in, or out: it joins the new group's target.
+                // One tab dragged in, or out: it joins "~" of the new group.
                 remove(tab, from: old)
                 touched.insert(old)
             }
@@ -119,25 +115,13 @@ struct WorkspaceBook {
         let before = sets[winner]?.revision
         var set = sets[winner] ?? WorkspaceSet(id: winner)
         let fresh = group.tabs.filter { setOf[$0] == nil }
-        let target = targetWorkspace(in: set, group: group, winner: winner)
         for tab in fresh { setOf[tab] = winner }
 
-        if frozen {
-            set.reconcileFrozen(current: group.tabs)
-        } else {
-            set.reconcile(current: group.tabs, target: target)
-        }
-        if !fresh.isEmpty {
-            if let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
-            pendingTarget[winner] = nil
-        }
-        set.removeEmpty(keeping: pendingTarget[winner])
+        set.reconcile(current: group.tabs)
+        if !fresh.isEmpty, let id = set.workspace(of: fresh[0])?.id { set.setCollapsed(id, false) }
         sets[winner] = set
 
         if live.filter({ setOf[$0] == winner }).isSubset(of: members) { settled.formUnion(members) }
-        if lastSelected[winner] == nil, let selected = group.selected, let id = set.workspace(of: selected)?.id {
-            lastSelected[winner] = id
-        }
 
         if set.revision != before { touched.insert(winner) }
         outcome.changed.formUnion(touched.filter { sets[$0] != nil })
@@ -184,15 +168,6 @@ struct WorkspaceBook {
         }
     }
 
-    /// Where a new tab goes: the workspace the sidebar named, else the one of the selected
-    /// tab, else the first one (section 4).
-    private func targetWorkspace(in set: WorkspaceSet, group: Group, winner: UUID) -> Workspace.ID {
-        if let id = pendingTarget[winner], set.workspace(id) != nil { return id }
-        if let id = lastSelected[winner], set.workspace(id) != nil { return id }
-        if let selected = group.selected, let id = set.workspace(of: selected)?.id { return id }
-        return set.runs(order: group.tabs).first?.workspace.id ?? set.workspaces.first?.id ?? UUID()
-    }
-
     // MARK: Closing and coming back
 
     /// Notes a tab that is about to close. Returns what is needed to put it back.
@@ -233,8 +208,6 @@ struct WorkspaceBook {
         set.remove(tab)
         if set.workspaces.isEmpty {
             sets[id] = nil
-            pendingTarget[id] = nil
-            lastSelected[id] = nil
             lastSelectedTab[id] = nil
         } else {
             sets[id] = set
@@ -243,23 +216,26 @@ struct WorkspaceBook {
 
     // MARK: Sidebar commands
 
-    /// The next new tab of the window's set goes to `workspace`.
-    mutating func setPendingTarget(_ workspace: Workspace.ID, for tab: TabKey) {
-        guard let id = setOf[tab] else { return }
-        pendingTarget[id] = workspace
-    }
-
-    /// Forgets a target that nobody used. True when there was one.
-    mutating func clearPendingTarget(for tab: TabKey) -> Bool {
-        guard let id = setOf[tab] else { return false }
-        return pendingTarget.removeValue(forKey: id) != nil
+    /// M1: `tab`, which Ghostty just opened from `source`, takes the workspace of `source`
+    /// and unfolds it. Returns the sets that changed.
+    mutating func opened(_ tab: TabKey, from source: TabKey) -> Set<UUID> {
+        guard let id = setOf[source], var set = sets[id], let workspace = set.workspace(of: source) else { return [] }
+        var changed: Set<UUID> = [id]
+        if let old = setOf[tab], old != id {
+            remove(tab, from: old)
+            changed.insert(old)
+        }
+        setOf[tab] = id
+        set.join(tab, to: workspace.id)
+        set.setCollapsed(workspace.id, false)
+        sets[id] = set
+        return changed.filter { sets[$0] != nil }
     }
 
     /// The selection moved to `tab`. A collapsed workspace opens when the selection enters
     /// it. Returns the set when its table changed.
     mutating func selected(_ tab: TabKey) -> UUID? {
         guard let id = setOf[tab], var set = sets[id], let workspace = set.workspace(of: tab) else { return nil }
-        lastSelected[id] = workspace.id
         let entered = lastSelectedTab[id] != tab
         lastSelectedTab[id] = tab
         guard entered, workspace.collapsed else { return nil }

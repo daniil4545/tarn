@@ -147,10 +147,11 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Puts `tab` in `workspace`, leaving the one it was in.
+    /// Puts `tab` in `workspace`, leaving the one it was in; a workspace left empty goes.
     mutating func join(_ tab: TabKey, to workspace: Workspace.ID) {
         guard self.workspace(workspace) != nil, members[tab] != workspace else { return }
-        members[tab] = workspace
+        let old = members.updateValue(workspace, forKey: tab)
+        if let old, !members.values.contains(old) { workspaces.removeAll { $0.id == old } }
         revision += 1
     }
 
@@ -194,29 +195,11 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Drops workspaces that hold no tab, except `keep`.
-    mutating func removeEmpty(keeping keep: Workspace.ID? = nil) {
-        let used = Set(members.values)
-        let before = workspaces.count
-        workspaces.removeAll { !used.contains($0.id) && $0.id != keep }
-        if workspaces.count != before { revision += 1 }
-    }
-
     // MARK: Following Ghostty
 
-    /// A tab with no workspace joins `target` (section 4), or the first workspace, or a new "~".
-    /// The order of the tabs is Ghostty's and decides nothing here.
-    mutating func reconcile(current: [TabKey], target: Workspace.ID) {
-        let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
-        guard !fresh.isEmpty else { return }
-        let heir = ensureWorkspace(target)
-        for tab in fresh { members[tab] = heir }
-        revision += 1
-    }
-
-    /// Workspaces are off: a tab with no workspace joins "~"; a new "~" is made when the set has
-    /// none. Nothing else moves, whatever the order of the tabs.
-    mutating func reconcileFrozen(current: [TabKey]) {
+    /// A tab with no workspace joins "~"; a new "~" is made when the set has none. The order of
+    /// the tabs is Ghostty's and decides nothing here.
+    mutating func reconcile(current: [TabKey]) {
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
         guard !fresh.isEmpty else { return }
         let target: Workspace.ID
@@ -239,16 +222,7 @@ struct WorkspaceSet: Equatable {
         workspace.name == homeName && workspace.folder == nil
     }
 
-    /// `target` when it exists, else the first workspace, else a new "~".
-    private mutating func ensureWorkspace(_ target: Workspace.ID) -> Workspace.ID {
-        if workspace(target) != nil { return target }
-        if let first = workspaces.first { return first.id }
-        let created = Self.makeHome()
-        workspaces.append(created)
-        return created.id
-    }
-
-    private static func cleaned(_ name: String) -> String? {
+    static func cleaned(_ name: String) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
