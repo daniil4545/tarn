@@ -126,7 +126,7 @@ Decisions (each names its source):
   keeps `tarn: not in a workspace`. Source: Tellurion, cmux (behaviour only, AGPL); user
   decision 2026-10-28 (3a, 4). The ungrouped-caller filter ships with PR 3, so the default tab
   never answers `not in a workspace`. `tarn new/run --tab` (U5 of `docs/specs/agent-cli.md`)
-  is open: Q4.
+  refuses an ungrouped caller before creation: `tarn: put this tab in a group first`, exit 1 (Q4 c).
 - G10. The folder of a workspace is fixed at creation; a plain group never gets one.
 - G11. Workspaces off (Settings > Modules): the sidebar is one flat list in native order; a new
   tab is ungrouped (M1 does not apply); groups keep their tabs and come back when it is on
@@ -158,7 +158,7 @@ Canon this spec replaces (each edited with the PR that changes the behaviour):
 | `docs/specs/modules.md` 2 item 6, 5, 7, 10 | G11, G12 |
 | `docs/modules/workspaces.md`: "~", target, `sourceTab`, repair, step 5 moves, regroup, delete, a tab from another window | M1-M4, G3-G8 |
 | `docs/modules/sidebar.md` "the last workspace has no delete" | G7 |
-| `docs/specs/agent-cli.md` 4.1 `ls` columns and JSON; U5 `--tab` (after Q4) | G9 |
+| `docs/specs/agent-cli.md` 4.1 `ls` columns and JSON; U5 `--tab` | G9 |
 | `docs/architecture.md` insertion point table | new row for `ghosttyNewTab` (PR 2) |
 
 The general fallback stays: an unforeseen state is logged as `workspace: <reason>` and the tab
@@ -275,8 +275,8 @@ PR 1 is deletion and PR 2 nearly so; both keep "~", so `dev` never shows a half-
 Repair and regroup go in one PR: without repair, on again would regroup by moves, and without
 regroup, repair would rewrite membership after a drag made while off. Accepted between PR 1 and
 PR 3: a tab dragged in from another window joins the target where it is dropped, without a
-move, and may split a group until PR 3 makes it ungrouped. PR 1 to PR 5 do not depend on Q4;
-PR 6 and its CLI test wait for the user's answer.
+move, and may split a group until PR 3 makes it ungrouped. Q4 is closed as option c; PR 6 and
+its CLI test follow that refusal.
 
 ## 7. Acceptance
 
@@ -290,15 +290,7 @@ Closed (user decisions 2026-10-28, option a each): Q1, `end` puts the tab at the
 its group, no move; Q2, a new group stands at the bottom (G8); Q3, the insertion point in
 `AppDelegate.ghosttyNewTab`.
 
-Open, blocks PR 6 only:
-
-- Q4. `tarn new/run --tab` (U5 of `docs/specs/agent-cli.md`: "opens a tab right below the
-  caller's row", built on `newTab(in:from:)`, which G3 now puts at the group's end). For an
-  ungrouped caller the new tab is ungrouped, outside its scope (G9), so `tarn new --tab`, then
-  `tarn read` ends with exit 4. Options:
-  - a) `--tab` goes the Cmd+T path (Ghostty's `newTab` from the caller's window, then `opened`):
-    right below the caller's row, in its group; an ungrouped caller's scope also holds the tabs
-    it opened with `--tab` (a new state to keep);
-  - b) the scope of an ungrouped caller is every ungrouped tab of its window (as Tellurion;
-    reverses 3a);
-  - c) `--tab` from an ungrouped caller is refused: "put this tab in a group first".
+Closed (user decision 2026-10-29): Q4, option c. `tarn new/run --tab` from an ungrouped
+caller is refused before creation: `tarn: put this tab in a group first`, exit 1. Frozen
+workspaces refuse the same way. A grouped caller opens an unselected tab right below its row,
+in its group (U5 of `docs/specs/agent-cli.md`), using direct native attachment and `opened`.

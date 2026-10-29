@@ -5,6 +5,26 @@ import Testing
 /// `tarn new`: the command line and the split that keeps the focus (`docs/specs/agent-cli.md` 4.2-4.4, B1, B2).
 @Suite
 struct NewPaneTests {
+    // spec: docs/specs/agent-cli.md U5
+    @Test @MainActor func anUngroupedCallerCannotOpenATab() {
+        let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
+        let scope = AgentScope(caller: caller, panes: [caller])
+        let result = NewPane.run(["tab": true, "argv": ["echo", "hi"]], scope)
+        #expect(throws: AgentRefusal(text: "put this tab in a group first")) { try result.get() }
+    }
+
+    // spec: docs/specs/agent-cli.md U5
+    @Test func aNewTabJoinsTheCallersGroup() throws {
+        let caller = TabKey(), child = TabKey()
+        var book = WorkspaceBook()
+        _ = book.reconcile([.init(tabs: [caller], selected: caller)])
+        let group = book.group("project", [caller])
+        _ = book.opened(child, from: caller)
+        _ = book.reconcile([.init(tabs: [caller, child], selected: caller)])
+        #expect(try #require(book.workspace(of: child)).id == group)
+        #expect(book.workspace(of: child) == book.workspace(of: caller))
+    }
+
     /// Expected values are the output of Python `shlex.join` on the same arguments.
     @Test func argumentsAreQuotedAsShlexJoin() {
         let cases: [([String], String)] = [

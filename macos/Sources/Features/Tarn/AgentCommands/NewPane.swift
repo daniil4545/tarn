@@ -19,6 +19,11 @@ enum NewPane {
         guard let command = ShellQuote.join(argv) else { return .failure(notOneLine) }
         // Typed input reaches the line editor as keys: Ctrl+O submits in zsh and bash, Tab completes (B2).
         if kind == .run, Ghostty.Shell.containsControlCharacters(command) { return .failure(RunPane.controlCharacter) }
+        let tab = message["tab"] as? Bool == true
+        if !tab, message["title"] != nil { return .failure(AgentRefusal(text: "--title needs --tab")) }
+        if tab, let refusal = NewTab.refusal(group: scope.caller.workspace, frozen: WorkspaceRegistry.shared.isFrozen) {
+            return .failure(refusal)
+        }
         guard let caller = SessionRegistry.surfaceView(scope.caller.pane),
               let controller = BaseTerminalController.controller(owning: caller)
         else { return .failure(.notInTab) }
@@ -26,8 +31,17 @@ enum NewPane {
         var config = configuration(kind, command: command)
         config.workingDirectory = (message["cwd"] as? String) ?? caller.workingDirectory
         let direction: SplitTree<Ghostty.SurfaceView>.NewDirection = message["right"] as? Bool == true ? .right : .down
-        guard let pane = split(controller, at: caller, direction: direction, config: config) else {
-            return .failure(AgentRefusal(text: "split failed"))
+        let pane: Ghostty.SurfaceView
+        if tab {
+            switch NewTab.open(controller, config: config, title: message["title"] as? String) {
+            case .success(let surface): pane = surface
+            case .failure(let refusal): return .failure(refusal)
+            }
+        } else {
+            guard let surface = split(controller, at: caller, direction: direction, config: config) else {
+                return .failure(AgentRefusal(text: "split failed"))
+            }
+            pane = surface
         }
         PaneWaits.shared.marks[pane.id] = RunMark(kind: kind, command: command)
         return .success(["pane": pane.id.uuidString])

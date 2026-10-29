@@ -213,6 +213,36 @@ def main() -> int:
                 err,
             )
 
+        # spec: docs/specs/agent-cli.md U5
+        for cmd in ["new", "run"]:
+            (code, out, err), req = with_server(
+                home,
+                reply(pane=SURFACE),
+                [cmd, "--tab", "--title", 'a "tab"', "--cwd", "w", "--", "echo", "hi"],
+            )
+            check(
+                f"{cmd} tab",
+                (code, out, err) == (0, SURFACE + "\n", "")
+                and req[0]["tab"] is True
+                and req[0]["title"] == 'a "tab"'
+                and req[0]["cwd"] == f"{home}/w"
+                and req[0]["cmd"] == cmd
+                and req[0]["argv"] == ["echo", "hi"],
+                req,
+            )
+            (code, out, err), _ = with_server(
+                home, reply(error="put this tab in a group first"), [cmd, "--tab", "--", "ls"]
+            )
+            check(
+                f"{cmd} ungrouped",
+                (code, out, err) == (1, "", "tarn: put this tab in a group first\n"),
+            )
+            code, out, err = run(home, [cmd, "--title", "t", "--", "ls"])
+            check(
+                f"{cmd} title needs tab",
+                (code, out, err) == (1, "", "tarn: --title needs --tab\n"),
+            )
+
         # error replies: decoded text, stderr only, exit 1.
         err_text = 'no such file: /x "y" \\ z\nline'
         (code, out, err), _ = with_server(home, reply(error=err_text), ["open", "/x"])
@@ -466,12 +496,11 @@ def main() -> int:
             ["new"],
             ["new", "ls"],
             ["new", "--"],
-            ["new", "--tab", "--", "ls"],
+            ["new", "--title"],
             ["new", "--cwd"],
             ["run"],
             ["run", "--"],
-            ["run", "--tab", "--", "ls"],
-            ["run", "--title", "t", "--", "ls"],
+            ["run", "--title"],
             ["wait"],
             ["wait", "a", "b"],
             ["wait", "a", "--timeout"],
