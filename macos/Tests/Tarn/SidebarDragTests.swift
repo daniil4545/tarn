@@ -36,4 +36,49 @@ struct SidebarDragTests {
         #expect(model.liftedTab == nil)
         #expect(model.dropSlot == nil)
     }
+
+    @Test(arguments: [false, true])
+    func aHeaderAppendsWithAnOutlineAndNoGap(collapsed: Bool) {
+        let (_, tab, _) = lifted()
+        var workspace = Workspace(name: "Target")
+        workspace.collapsed = collapsed
+        let model = SidebarModel(groups: [.init(workspace: workspace, tabs: [tab])])
+        model.dragBegan(tab, height: 24)
+        for half in [false, true] {
+            #expect(model.dragOver(.tab, value: tab.key.uuidString, over: .header(workspace.id), lowerHalf: half))
+            #expect(model.dropSlot == .endOfWorkspace(workspace.id))
+            #expect(model.outlinedGroup == workspace.id)
+            #expect(model.gapSlot == nil)
+        }
+        #expect(model.dragOver(.tab, value: tab.key.uuidString, over: .margin(workspace.id), lowerHalf: false))
+        #expect(model.dropSlot == .beforeWorkspace(workspace.id))
+        #expect(model.gapSlot == model.dropSlot)
+        #expect(model.outlinedGroup == nil)
+        model.dragExit(at: .zero)
+        #expect(model.dropSlot == nil && model.gapSlot == nil && model.liftedTab == tab.key)
+        #expect(model.dragOver(.tab, value: tab.key.uuidString, over: .header(workspace.id), lowerHalf: false))
+        model.dragExit(at: .zero)
+        #expect(model.outlinedGroup == nil && model.dropSlot == nil)
+        #expect(model.dragOver(.tab, value: tab.key.uuidString, over: .header(workspace.id), lowerHalf: false))
+        model.dragEnded(tab, at: .zero, accepted: true)
+        #expect(model.liftedTab == nil && model.dropSlot == nil && model.outlinedGroup == nil)
+    }
+
+    @Test func onlyLeavingTheWholeSidebarClosesTheGap() {
+        let (model, tab, window) = lifted()
+        let anchor = NSView(frame: NSRect(x: 0, y: 0, width: 100, height: 200))
+        window.contentView?.addSubview(anchor)
+        model.sidebarAnchor = WeakView(view: anchor)
+        model.dragExit(at: window.convertPoint(toScreen: NSPoint(x: 50, y: 50)))
+        #expect(model.gapSlot == .tail)
+        model.dragExit(at: window.convertPoint(toScreen: NSPoint(x: 150, y: 50)))
+        #expect(model.dropSlot == nil && model.gapSlot == nil)
+        #expect(model.liftedTab == tab.key)
+    }
+
+    @Test func refreshClearsAStaleLiftAndDropTarget() {
+        let (model, _, _) = lifted()
+        model.refresh()
+        #expect(model.liftedTab == nil && model.dropSlot == nil && model.gapSlot == nil)
+    }
 }

@@ -44,6 +44,7 @@ enum SidebarDropSlot: Equatable {
 enum SidebarDropTarget: Equatable {
     case tab(TabKey)
     case header(Workspace.ID)
+    case margin(UUID)
     /// The empty sidebar below the last row.
     case tail
 }
@@ -60,6 +61,9 @@ extension SidebarModel {
         in groups: [Group]
     ) -> SidebarDropSlot? {
         switch (kind, target) {
+        case (_, .margin(let id)):
+            return groups.contains { $0.id == id } ? .beforeWorkspace(id) : nil
+
         case (.tab, .header(let id)):
             return groups.contains { $0.workspace?.id == id } ? .endOfWorkspace(id) : nil
 
@@ -101,22 +105,6 @@ extension SidebarModel {
         guard slot == .beforeTab(lifted) else { return slot }
         return dropSlot(dragging: .tab, over: .tab(lifted), lowerHalf: true, in: groups)
     }
-
-    /// Moving the gap from above the header of workspace `id` to its end would pull the header
-    /// up a row and leave its first row under the pointer, which then takes the gap. So the gap
-    /// stays; the header takes it only when its workspace is folded or empty.
-    nonisolated static func gapPullsUp(_ id: Workspace.ID, gap: SidebarDropSlot?, in groups: [Group]) -> Bool {
-        guard let header = groups.firstIndex(where: { $0.workspace?.id == id }),
-              groups[header].workspace?.collapsed == false, !groups[header].tabs.isEmpty
-        else { return false }
-        let owner: Workspace.ID?
-        switch gap {
-        case .beforeTab(let key): owner = groups.first { $0.tabs.contains { $0.key == key } }?.workspace?.id
-        case .endOfWorkspace(let workspace): owner = workspace
-        default: owner = nil
-        }
-        return owner.flatMap { owner in groups.firstIndex { $0.workspace?.id == owner } }.map { $0 < header } ?? false
-    }
 }
 
 /// The AppKit layer over a sidebar row or header: it owns left clicks, drags out of the row,
@@ -134,6 +122,7 @@ struct SidebarInteraction: NSViewRepresentable {
     var dragBegan: (_ height: CGFloat) -> Void = { _ in }
     /// The drag ended at a screen point; true when somebody took it.
     var dragEnded: (_ screenPoint: NSPoint, _ accepted: Bool) -> Void = { _, _ in }
+    var dragMoved: (NSPoint) -> Void = { _ in }
     /// Strips at the sides that stay clickable for SwiftUI buttons below.
     var excludedLeading: CGFloat = 0
     var excludedTrailing: CGFloat = 0
@@ -158,6 +147,7 @@ struct SidebarInteraction: NSViewRepresentable {
         view.drop = drop
         view.dragBegan = dragBegan
         view.dragEnded = dragEnded
+        view.dragMoved = dragMoved
         view.excludedLeading = excludedLeading
         view.excludedTrailing = excludedTrailing
         view.toolTip = toolTip
@@ -172,6 +162,7 @@ struct SidebarInteraction: NSViewRepresentable {
         var drop: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
         var dragBegan: (CGFloat) -> Void = { _ in }
         var dragEnded: (NSPoint, Bool) -> Void = { _, _ in }
+        var dragMoved: (NSPoint) -> Void = { _ in }
         var excludedLeading: CGFloat = 0
         var excludedTrailing: CGFloat = 0
 
@@ -260,6 +251,10 @@ struct SidebarInteraction: NSViewRepresentable {
 
         func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
             dragBegan(bounds.height)
+        }
+
+        func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
+            dragMoved(screenPoint)
         }
 
         func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
