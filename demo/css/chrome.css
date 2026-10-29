@@ -31,7 +31,6 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .wsblock { display: flex; flex-direction: column; gap: 2px; flex: none; margin-top: 8px; }
 .wsblock.group { background: var(--menu); border-radius: 8px; padding: 4px; }
 .wsblock .wsh { margin-top: 0; }
-.wsblock.group.dropgroup { outline: 2px solid var(--sys-accent); outline-offset: -1px; }
 /* 14 px grab zone over the sidebar edge: 11 px inside the sidebar, 3 px into the terminal so the
    first text column stays selectable; the line shows on hover */
 .sbgrip { flex: none; width: 14px; margin: 0 -3px 0 -11px; cursor: col-resize; position: relative; z-index: 4; }

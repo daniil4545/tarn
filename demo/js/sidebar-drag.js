@@ -1,4 +1,4 @@
-// Sidebar drag as in Warp: rows part to a gap, a header outlines its group, margins between
+// Sidebar drag as in Warp: rows part to a gap, a header is no target, margins between
 // blocks ungroup. Tab rows use pointer events (HTML5 drag loses drops); headers use HTML5 drag.
 import { bus } from "./bus.js";
 
@@ -98,7 +98,6 @@ function endTab() {
   if (!tab) return;
   tab.row.classList.remove("lifted");
   if (tab.below) tab.below.style.marginTop = "";
-  tab.outline?.classList.remove("dropgroup");
   tab.ghost.remove();
   tab = null;
   document.body.classList.remove("dragging");
@@ -139,9 +138,7 @@ function tabSlot(sb, el, y) {
     return { ws: "loose", before: null, below: end };
   }
   const head = el.closest(".wsh[data-wsh]"), row = el.closest(".tab[data-tabid]");
-  if (head) {
-    return { ws: head.dataset.wsh, before: null, outline: head.parentElement };
-  }
+  if (head) return null;
   if (el === sb) {
     const below = [...sb.querySelectorAll(".wsblock")].find((b) => y < b.getBoundingClientRect().top) || end;
     return { ws: "loose", before: below.dataset.block || null, below };
@@ -156,20 +153,13 @@ function tabSlot(sb, el, y) {
 function moveGap(sb, el, y) {
   if (!el || !sb.contains(el)) {
     if (tab.below) tab.below.style.marginTop = "";
-    tab.outline?.classList.remove("dropgroup");
-    tab.below = tab.outline = tab.at = null;
+    tab.below = tab.at = null;
     return;
   }
   const at = tabSlot(sb, el, y);
   if (!at) return;
   tab.at = { ws: at.ws, before: at.before };
-  if (at.below === tab.below && at.outline === tab.outline) return;
-  tab.outline?.classList.remove("dropgroup");
-  if (tab.below) tab.below.style.marginTop = "";
-  tab.below = null;
-  tab.outline = at.outline;
-  if (at.outline) at.outline.classList.add("dropgroup");
-  else openGap(tab, at.below, true);
+  if (at.below !== tab.below) openGap(tab, at.below, true);
 }
 
 // Slot i is the gap before block i: a group from its header, an ungrouped block (hidden header)

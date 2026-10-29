@@ -56,7 +56,6 @@ final class SidebarModel: ObservableObject {
     /// Where a drop in progress would land: a workspace drag draws a line there, a tab drag
     /// opens a gap.
     @Published var dropSlot: SidebarDropSlot?
-    @Published private(set) var outlinedGroup: Workspace.ID?
     var sidebarAnchor: WeakView?
 
     /// The tab of this window being dragged: its row stays in place, translucent.
@@ -69,7 +68,7 @@ final class SidebarModel: ObservableObject {
     private var liftedSlot: SidebarDropSlot?
 
     /// The slot the gap stands in, only while a tab of this window is dragged away from its row.
-    var gapSlot: SidebarDropSlot? { liftedTab == nil || outlinedGroup != nil || dropSlot == liftedSlot ? nil : dropSlot }
+    var gapSlot: SidebarDropSlot? { liftedTab == nil || dropSlot == liftedSlot ? nil : dropSlot }
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -514,12 +513,11 @@ final class SidebarModel: ObservableObject {
     /// A drag is over a row or header. True when the drop would do something: a payload from
     /// another window shows no line, as its drop is refused.
     func dragOver(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
+        // A header is no target for a lifted tab: the gap stays where it is.
+        if kind == .tab, liftedTab != nil, case .header = target { return dropSlot != nil }
         var slot = isOwn(kind, value: value)
             ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
             : nil
-        let outline: Workspace.ID?
-        if kind == .tab, slot != nil, case .header(let id) = target { outline = id } else { outline = nil }
-        if outlinedGroup != outline { outlinedGroup = outline }
         if let liftedTab {
             slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
             if slot != dropSlot { withAnimation(Motion.fold) { dropSlot = slot } }
@@ -532,7 +530,6 @@ final class SidebarModel: ObservableObject {
     /// A drag of a tab row of this window began: the row dims and no gap opens until the pointer
     /// leaves the row's own slot.
     func dragBegan(_ tab: Tab, height: CGFloat) {
-        outlinedGroup = nil
         liftedHeight = height
         liftedTab = tab.key
         liftedSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
@@ -553,7 +550,6 @@ final class SidebarModel: ObservableObject {
         if let view = sidebarAnchor?.view, let window = view.window,
            view.bounds.contains(view.convert(window.convertPoint(fromScreen: screenPoint), from: nil)) { return }
         dropSlot = nil
-        outlinedGroup = nil
     }
 
     /// Carries out a drop; `value` is the payload of the drag. A payload from another window
@@ -627,7 +623,6 @@ final class SidebarModel: ObservableObject {
     }
 
     private func endLift() {
-        outlinedGroup = nil
         if liftedTab != nil { liftedTab = nil }
         liftedSlot = nil
         if dropSlot != nil { dropSlot = nil }
@@ -959,11 +954,6 @@ struct Sidebar: View {
         }
         .padding(group.workspace == nil ? 0 : 4)
         .background(RoundedRectangle(cornerRadius: 8).fill(group.workspace == nil ? Color.clear : ink.groupBackground))
-        .overlay {
-            RoundedRectangle(cornerRadius: 8)
-                .strokeBorder(ink.accent, lineWidth: model.outlinedGroup == group.id ? 2 : 0)
-                .allowsHitTesting(false)
-        }
         .padding(.horizontal, Sidebar.listInset)
     }
 

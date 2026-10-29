@@ -490,9 +490,15 @@ def run(base):
             point(dst, fy)
             pg.mouse.up()
 
-        mouse_drag(n(f"{TAB}[data-tabid='t3']"), n(".wsh[data-wsh='w2']"), 0.5)
+        last = ws_tabs("w2")[-1]
+        press_row(n(f"{TAB}[data-tabid='t3']"))
+        point(n(f"{TAB}[data-tabid='{last}']"), 0.75)
+        point(
+            n(f"{TAB}[data-tabid='{last}']"), 0.75
+        )  # again once the source gap has closed
+        pg.mouse.up()
         check(
-            "W7 drop onto a workspace header appends at its end",
+            "W7 drop below the last row of a group appends at its end",
             ws_tabs("w2")[-1] == "t3",
         )
         n(f"{TAB}[data-tabid='t3']").click(button="right")
@@ -570,15 +576,17 @@ def run(base):
         moving = ws_tabs("w2")[0]
         press_row(n(f"{TAB}[data-tabid='{moving}']"))
         point(n(".wsh[data-wsh='w1']"), 0.5)
+        before_head = pg.evaluate(gap_at)
+        point(n(".wsh[data-wsh='w1']"), 0.5, 0.8)
+        pg.wait_for_timeout(250)
         at = pg.evaluate(gap_at)
         check(
-            "W10c header hover outlines the whole group without a gap or line",
-            at is None
-            and count("[data-block='w1'].dropgroup") == 1
+            "W10c header hover changes nothing: the gap stays, no line or outline",
+            (at or {}).get("below") == (before_head or {}).get("below")
             and count(".wsline") == 0
-            and n(".dropgroup").evaluate("e => getComputedStyle(e).outlineColor")
-            == "rgb(10, 132, 255)",
-            str(at),
+            and n("[data-block='w1']").evaluate("e => getComputedStyle(e).outlineStyle")
+            == "none",
+            f"{before_head} -> {at}",
         )
         pg.keyboard.press("Escape")
         pg.mouse.up()
@@ -593,22 +601,17 @@ def run(base):
         press_row(n(f"{TAB}[data-tabid='{moving}']"))
         point(n("#ws"), 0.5, 0.5)
         check(
-            "W10m leaving the sidebar closes the gap and outline but keeps the lifted row and ghost",
+            "W10m leaving the sidebar closes the gap but keeps the lifted row and ghost",
             pg.evaluate(gap_at) is None
-            and count(".dropgroup") == 0
             and count(f"{TAB}.lifted") == 1
             and count(".dragghost") == 1,
         )
         point(n(".wsh[data-wsh='w1']"), 0.5)
         check(
-            "W10n returning to the sidebar recomputes the header target",
-            count(".dropgroup") == 1,
+            "W10n returning over a header opens no gap",
+            pg.evaluate(gap_at) is None,
         )
         point(n("#ws"), 0.5, 0.5)
-        check(
-            "W10s leaving a header for the terminal closes its outline",
-            count(".dropgroup") == 0,
-        )
         pg.mouse.up()
         check(
             "W10h a tab let go outside the sidebar stays where it was",
@@ -648,8 +651,7 @@ def run(base):
         pg.wait_for_timeout(250)
         check(
             "W10o a margin opens a gap outside the blocks",
-            n("[data-block='w2']").evaluate("e => parseFloat(e.style.marginTop) > 8")
-            and count(".dropgroup") == 0,
+            n("[data-block='w2']").evaluate("e => parseFloat(e.style.marginTop) > 8"),
         )
         pg.mouse.up()
         groups = snap()["wss"]
