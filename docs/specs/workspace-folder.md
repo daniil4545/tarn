@@ -32,7 +32,9 @@ flowchart LR
 
 A tab belongs to its window's set and to at most one group. Membership is a table `tab -> group`
 that only explicit actions write (M1-M4). Ghostty keeps the tab order; our code asks for a
-`move_tab` only for a user's sidebar command (R2). A group lives while it has a tab: every
+`move_tab` only for a user's sidebar command (R2). One exception (user decision 2026-10-29,
+T-308): a group move reorders the native tab group in one pass, as AppKit's own tab drag and
+Ghostty's pre-26 `move_tab` path do, because `move_tab` per tab froze the app for 1-2 s. A group lives while it has a tab: every
 writer of membership (`remove`, `join`, `leave`) drops a group it leaves empty (G6).
 
 Membership (source: user decision 2026-10-28, "explicit"; Warp "Move to group", "Remove from
