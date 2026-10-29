@@ -23,9 +23,9 @@ Commands and their writers (the main ones; `rg "bus.handle\(" demo/js` lists all
 
 | Command | Payload | Writer |
 | --- | --- | --- |
-| `tab.new`, `tab.close`, `tab.go`, `tab.move` | `{ws?, id?, n?, to?, header?}`; `ws: "loose"` in `tab.move` ungroups | `workspace.js` |
+| `tab.new`, `tab.close`, `tab.go`, `tab.move` | `{ws?, id?, n?, to?, header?, after?}`; `ws: "loose"` in `tab.move` ungroups, below group `after` or at the tail | `workspace.js` |
 | `pane.split`, `pane.close`, `pane.focus`, `pane.zoom`, `pane.resize`, `pane.equalize`, `pane.undo` | `{id?, dir}` | `workspace.js` |
-| `ws.new`, `ws.rename`, `ws.delete` | `{id?, name, folder?, closeTabs?}`; ungrouped tabs are one `loose` set, always last | `workspace.js` |
+| `ws.new`, `ws.rename`, `ws.delete` | `{id?, name, folder?, closeTabs?}`; ungrouped tabs are headerless `loose` blocks anywhere in `wss`; two never touch | `workspace.js` |
 | `hook` | `{pane, name, event}` | `registry.js` |
 | `card.answer` | `{pane, allow}` | `term-pane.js` (the pane's shell answers; the script then emits `hook`) |
 | `viewer.open` | `{path, line?, pane?}` | `viewer.js` |

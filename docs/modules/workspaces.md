@@ -31,28 +31,26 @@ Reading: Ghostty alone writes tab order; this module writes only membership, nam
 | In | restorable state of a window (key `tarn.workspaces`) | `WorkspaceRestore.decode` |
 | In | undo of a closed tab or window | `TombstoneShelf`, Ghostty's undo manager |
 | Out | `runs(for:)`: workspaces of a window top to bottom with their tab windows | `SidebarModel.refresh` |
-| Out | native moves through Ghostty's `move_tab` action | `moveNatively` |
+| Out | native moves through Ghostty's `move_tab` action, only for a sidebar move | `moveNatively` |
 | Out | window subtitle with the workspace name (empty with the top tab bar) | `WorkspaceTitle.apply` |
 | Out | snapshot saved with each window | `WorkspaceRestore.encode` |
 | Out | `terminalTabsDidChange` (object: the registry, which its own observer ignores) and a restorable-state refresh for changed sets | `publish`. A publish made while observers run (a redraw must not call `sync`: the sidebar only reads, and asks for a `sync` once, when it gets its window; the cap is a safety net) asks for one more round instead of nesting; at most 3 rounds, then an error is logged |
 
 ## How it works
 
-State: `WorkspaceSet` per Ghostty window (id, workspaces, membership `TabKey` to workspace id, revision). A `TabKey` is a UUID made by us for each tab window and saved in the snapshot. A workspace is a contiguous run of the native tab order, so sidebar row N is native tab N and Cmd+N lands on row N. Workspace order is derived from tab order and never stored.
+State: `WorkspaceSet` per Ghostty window (id, workspaces, membership `TabKey` to workspace id, revision). A `TabKey` is a UUID made by us for each tab window and saved in the snapshot. Ghostty alone writes tab order; membership never follows it (`docs/specs/workspace-folder.md` M3). Workspaces are drawn in the order of their first tab, so row N is native tab N and Cmd+N lands on row N while each workspace is one run; a native reorder or `window-new-tab-position = end` can split a workspace, and nothing heals it. Workspace order is derived and never stored.
 
 Following Ghostty (`sync`, run on every tab notification):
 1. Gone windows leave their set; a workspace with no tab left closes.
 2. Each tab group follows the set that holds most of its live tabs; ties go to the group with more settled tabs, then to the smallest tab key, so group order does not matter.
 3. A tab with no workspace is new. It joins the target: the workspace the sidebar named (`pendingTarget`, used once, expires after 1 s), else the workspace of the selected tab (`lastSelected`), else the first workspace.
-4. Ghostty moves one tab at a time. The mover is the one tab whose removal leaves the others in order; it joins the workspace of its upper neighbour, or of its lower one if first. The mover is sought only when the order really changed. If the order is still broken, each tab outside the first run of its workspace joins the workspace above it.
-5. A new tab that is not at the end of its run gets one native move there.
-6. Sets that changed are published.
+4. Sets that changed are published.
 
-Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`, absolute with symlinks resolved. New workspace (Shift+Cmd+T or the sidebar button) opens a folder panel as a sheet; the workspace is named after the folder and its first tab starts there through `TerminalController.newTab(_:from:withBaseConfig:)`. A folder that a workspace of the window already holds selects that workspace's first tab and creates nothing; Cancel creates nothing. The folder is fixed at creation: no menu item changes or removes it. The header tooltip shows the folder (`~` for home) and the tab count. Start directory: Cmd+T and Cmd+D are Ghostty's own, they inherit the focused pane's directory in every workspace (D20 dropped, T-249). The "+" of a header (`newTab(in:from:)`) opens the tab through `TerminalController.newTab(_:from:withBaseConfig:)` with Ghostty's tab config inherited from `WorkspaceBook.sourceTab`: the selected tab when it is in that workspace, else its last tab (cmux); an empty workspace gets Cmd+T.
+Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`, absolute with symlinks resolved. New workspace (Shift+Cmd+T or the sidebar button) opens a folder panel as a sheet; the workspace is named after the folder and its first tab starts there through `TerminalController.newTab(_:from:withBaseConfig:)`. A folder that a workspace of the window already holds selects that workspace's first tab and creates nothing; Cancel creates nothing. The folder is fixed at creation: no menu item changes or removes it. The header tooltip shows the folder (`~` for home) and the tab count. Start directory: Cmd+T and Cmd+D are Ghostty's own, they inherit the focused pane's directory in every workspace (D20 dropped, T-249). The "+" of a header (`newTab(in:from:)`) opens the tab through `TerminalController.newTab(_:from:withBaseConfig:)` with the parent and the inherited tab config taken from the last tab of that workspace; an empty workspace gets Cmd+T. A new workspace opens its tab from the last tab of the window, so it stands at the bottom and splits no workspace (G8); its config is inherited from the selected tab. The sidebar New Tab button is Cmd+T.
 
 Sidebar commands: new tab and new workspace set the pending target and call Ghostty's `newTab`; a new workspace is empty until its tab joins. Rename refuses a blank name. Delete moves tabs to the workspace above (below for the first); the last workspace is never deleted. Move tab changes membership, then makes one `move_tab`; move workspace makes one `move_tab` per tab. `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace or change the target.
 
-Workspaces off (T-205, Settings > Modules): `WorkspaceBook.frozen`. The workspaces stay exactly as they are. A tab with no workspace joins "~" (no folder, created at the end when missing; the same "~" is the first workspace of every new set, on or off: T-245, T-249, user decisions 2026-10-27); step 4 (repair) and step 5 (native moves) do not run, so a new tab lands where Ghostty puts it and a drag changes only the order. New Workspace (button, menu item, Shift+Cmd+T) is hidden or does nothing; the sidebar is one flat list in native order, and no workspace name shows in the window subtitle or the native tabs. A tab that closes leaves its frozen workspace as usual. On again (`regroupPending`): the next pass skips the repair and makes one native move per misplaced tab so that every workspace is one run, workspaces in the order of first appearance, tabs in native order; membership does not change, "~" stays with the tabs opened while off.
+Workspaces off (T-205, Settings > Modules): `WorkspaceBook.frozen`. The workspaces stay exactly as they are. A tab with no workspace joins "~" (no folder, created at the end when missing; the same "~" is the first workspace of every new set, on or off: T-245, T-249, user decisions 2026-10-27); no native move ever runs from `sync`, so a new tab lands where Ghostty puts it and a drag changes only the order. New Workspace (button, menu item, Shift+Cmd+T) is hidden or does nothing; the sidebar is one flat list in native order, and no workspace name shows in the window subtitle or the native tabs. A tab that closes leaves its frozen workspace as usual. On again: membership does not change and no tab moves; the sidebar draws by membership, "~" stays with the tabs opened while off.
 
 No tab moves by itself: an agent tab stays in the workspace it was opened in, and the sidebar draws no folder mark (D21, D22, D26, D27 dropped, T-249, user decision 2026-10-27).
 
@@ -118,15 +116,14 @@ All in `macos/Tests/Tarn/`; `BookSupport.swift` holds helpers.
 | Suite | Pins |
 |---|---|
 | `WorkspaceFolderTests` | folder path rules (symlink, trailing slash, `F-old`), set and remove folder, folder choice by workspace, snapshot with and without the field, plain set with both names |
-| `NewTabSourceTests` | the tab a "+" tab inherits from: the selected one of that workspace, its last tab, none for an empty workspace |
 | `WorkspaceSetTests` | delete up or down, last workspace kept, last tab closes workspace, blank names, fold, runs follow tab order, snapshot round trip, rejects and the dropped `manual` key |
-| `ReconcileTests` | foreign moves, native drag, two changes at once, new tab to the end of its run, idempotence |
+| `ReconcileTests` | a native reorder changes no membership, a new tab joins the target where Ghostty put it, missing target, idempotence |
 | `TargetTests` | "~" on launch, target by selection, pending target used once, new workspace, unfold on select, drag out and across windows, target expiry |
 | `MergeTests` | Merge All Windows, reopened tab and window, higher revision wins, restore in any group order |
 | `FailureTests` | broken or foreign-version snapshot, missing workspace, vanished window |
 | `TombstoneTests` | match by surface ids only after undo, most shared surfaces wins, unclaimed dropped, runs inside Ghostty's undo group, expiry, window and tab undo |
 | `WorkspaceTitleTests` | subtitle while Workspaces is on, whatever the tab style; none while off; the name in the native tab mark; settings text |
-| `WorkspaceFreezeTests` | frozen: new tab joins "~" (an existing one is reused), a drag changes no membership, closing keeps the rest; on again: regroup in order of first appearance, "~" stays |
+| `WorkspaceFreezeTests` | frozen: new tab joins "~" (an existing one is reused), a drag changes no membership, closing keeps the rest; on again: no move, drawn by membership, "~" stays |
 
 ## Extending it
 

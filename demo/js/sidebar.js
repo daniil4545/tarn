@@ -68,16 +68,17 @@ function render() {
   }
   const key = (id) => { const i = order.indexOf(id); return i < 8 ? `⌘${i + 1}` : i === order.length - 1 ? "⌘9" : ""; };
   const wide = read("config")["tab-rows"] === "wide";
+  // Rows of a group stand indented under its header; ungrouped rows have no header and no indent.
   const row = (w) => (id) => {
-    const t = s.tabs[id], status = tabStatus(t, reg);
+    const t = s.tabs[id], status = tabStatus(t, reg), cls = w.loose ? "tab loose" : "tab";
     const line = `<span class="t">${esc(t.title)}</span>${dot(status)}<span class="key">${key(id)}</span><button class="x" data-tabclose="${id}" aria-label="Close tab">✕</button>`;
     const attrs = `role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.cwd)}"`;
-    if (!wide) return `<div class="tab" ${attrs}>${icon(t)}${line}</div>`;
+    if (!wide) return `<div class="${cls}" ${attrs}>${icon(t)}${line}</div>`;
     const l2 = `<div class="l2">${esc(detail(t, reg))}</div>`;
-    return `<div class="tab wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
+    return `<div class="${cls} wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
-  // Flat list: every tab in list order, whatever its frozen group. Ungrouped tabs come last, under
-  // a hidden header so the drag code finds the owner of a row.
+  // Flat list: every tab in list order, whatever its frozen group. An ungrouped block, between the
+  // groups or at the bottom, has a hidden header so the drag code finds the owner of a row.
   const lists = grouped ? s.wss.filter((w) => w.tabs.length) : [{ id: "loose", loose: true, tabs: order }];
   sb.innerHTML = top + lists.map((w) => {
     const n = w.tabs.length;
@@ -164,7 +165,7 @@ function onContextMenu(e) {
     const id = row.dataset.tabid, here = wss.find((w) => w.tabs.includes(id));
     const moves = !isOn("workspaces") ? [] : [
       ...wss.filter((w) => w !== here && !w.loose && w.tabs.length).map((w) => ({ label: `Move to ${w.name}`, attrs: `data-mmove="${id}" data-to="${w.id}"`, run: () => bus.cmd("tab.move", { id, ws: w.id }) })),
-      ...(here.loose ? [] : [{ label: "Remove from group", attrs: `data-mmove="${id}" data-to="loose"`, run: () => bus.cmd("tab.move", { id, ws: "loose" }) }]),
+      ...(here.loose ? [] : [{ label: "Remove from group", attrs: `data-mmove="${id}" data-to="loose"`, run: () => bus.cmd("tab.move", { id, ws: "loose", after: here.id }) }]),
     ];
     showMenu([...moves, { label: "Close tab", attrs: `data-tabclose="${id}"`, run: () => bus.cmd("tab.close", { id }) }], e);
   } else {

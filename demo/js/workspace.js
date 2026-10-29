@@ -62,13 +62,11 @@ function usable(state) {
   return ok;
 }
 
-// A store from before groups has a workspace "~" without a folder: its tabs become the ungrouped
-// tabs, below the groups.
+// A store from before groups has a workspace "~" without a folder: its tabs become ungrouped
+// tabs where they stand.
 function migrateHome(state) {
   if (state.wss.some((w) => w.loose)) return;
-  const home = state.wss.filter((w) => w.name === "~" && !w.folder);
-  if (!home.length) return;
-  state.wss = [...state.wss.filter((w) => !home.includes(w)), { id: home[0].id, name: "", loose: true, tabs: home.flatMap((w) => w.tabs) }];
+  state.wss = state.wss.map((w) => (w.name === "~" && !w.folder ? { id: w.id, name: "", loose: true, tabs: w.tabs } : w));
 }
 
 function scanIds(state) {
@@ -143,6 +141,7 @@ function syncViewers(s) {
 function update(fn) {
   const draft = structuredClone(read("workspaces"));
   const result = fn(draft);
+  mergeLoose(draft);
   write(draft);
   if (cfg("window-save-state") !== "never") save("workspaces", draft);
   return result;
@@ -157,12 +156,24 @@ const short = (cwd) => cwd.replace("~/code/", "~/c/");
 // Workspaces off (or Sidebar off): the registry stops grouping. New tabs are ungrouped; the frozen
 // groups stay untouched.
 const flat = () => !isOn("workspaces");
-// Ungrouped tabs live in one headerless set, always last: groups sit above them.
-const looseOf = (s) => {
-  let ws = s.wss.find((w) => w.loose);
-  if (!ws) { ws = { id: nextId("w"), name: "", loose: true, tabs: [] }; s.wss.push(ws); }
+// Ungrouped tabs sit in headerless blocks anywhere between the groups (docs/specs/workspace-folder.md
+// G5). The block at list index `at` (the tail by default), or the one just above it, else a new one there.
+const looseAt = (s, at = s.wss.length) => {
+  if (s.wss[at]?.loose) return s.wss[at];
+  if (s.wss[at - 1]?.loose) return s.wss[at - 1];
+  const ws = { id: nextId("w"), name: "", loose: true, tabs: [] };
+  s.wss.splice(at, 0, ws);
   return ws;
 };
+// Two ungrouped blocks that meet are one; an empty one goes.
+function mergeLoose(s) {
+  s.wss = s.wss.reduce((out, w) => {
+    if (w.loose && !w.tabs.length) return out;
+    if (w.loose && out.at(-1)?.loose) out.at(-1).tabs.push(...w.tabs);
+    else out.push(w);
+    return out;
+  }, []);
+}
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
 function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
@@ -176,7 +187,7 @@ function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` }
 // A new window starts with one ungrouped tab in the home folder.
 function openWindow(s) {
   s.wss = [];
-  s.cur = addTab(s, looseOf(s), { cwd: "~" });
+  s.cur = addTab(s, looseAt(s), { cwd: "~" });
 }
 
 // Undo: a closed pane or tab stays alive until the undo window ends, then it is freed.
@@ -255,8 +266,9 @@ function restore(s, rec) {
   if (rec.kind === "tab") {
     let ws = s.wss.find((w) => w.id === rec.ws.id);
     if (!ws) {
-      ws = rec.ws.loose ? looseOf(s) : structuredClone(rec.ws);
-      if (!rec.ws.loose) s.wss.splice(Math.min(rec.wsAt, groupCount(s)), 0, ws);
+      const at = Math.min(rec.wsAt, s.wss.length);
+      ws = rec.ws.loose ? looseAt(s, at) : structuredClone(rec.ws);
+      if (!rec.ws.loose) s.wss.splice(at, 0, ws);
     }
     ws.tabs.splice(Math.min(rec.index, ws.tabs.length), 0, rec.tab.id);
     ws.collapsed = false;
@@ -270,17 +282,17 @@ function restore(s, rec) {
 }
 
 const leafCount = (tab) => tree.leaves(tab.layout).length;
-const groupCount = (s) => s.wss.filter((w) => !w.loose).length;
 const ZONE = { right: "right", down: "bottom" };
 
 const NEEDS_TAB = /^(pane\.(?!undo)|tab\.(close|step)|viewer\.(hide|show))/;
 
 const COMMANDS = {
-  // Cmd+T joins the group of the current tab and starts in its folder (Ghostty). A group's "+"
-  // (`header`) starts in the workspace folder, or in the current tab's folder for a plain group.
+  // Cmd+T takes the group of the tab it opens from, right after it, in its folder (Ghostty). A
+  // group's "+" (`header`) adds at the end of the group, in the workspace folder or, for a plain
+  // group, in the current tab's folder.
   "tab.new": ({ ws, pane, cwd, title, header = false, select = true }) => update((s) => {
     if (!s.wss.length) return openWindow(s);
-    const target = flat() ? looseOf(s) : (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || looseOf(s);
+    const target = flat() ? looseAt(s) : (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || looseAt(s);
     const id = addTab(s, target, { cwd: cwd ?? ((header && target.folder) || undefined), title });
     const at = target.tabs.indexOf(s.cur);
     if (!header && !ws && at >= 0) target.tabs.splice(at + 1, 0, target.tabs.pop()); // Cmd+T: next to the current tab
@@ -302,18 +314,20 @@ const COMMANDS = {
     select(s, order[(order.indexOf(s.cur) + delta + order.length) % order.length]);
   }),
 
-  // Before another tab or at the end of a workspace.
-  "tab.move": ({ id, ws, before = null }) => update((s) => {
+  // Before another tab or at the end of a group or ungrouped block. `ws: "loose"` ungroups: with
+  // `after` (Remove from group) the tab stands right below that group, else at the tail.
+  "tab.move": ({ id, ws, before = null, after = null }) => update((s) => {
     if (flat()) { // a drag only changes the order of the flat list; the frozen groups stay
       const rest = flatTabs(s).filter((x) => x !== id), at = before ? rest.indexOf(before) : -1;
       rest.splice(at >= 0 ? at : rest.length, 0, id);
       s.order = rest;
       return;
     }
-    const to = ws === "loose" ? looseOf(s) : s.wss.find((w) => w.id === ws), from = wsOf(s, id);
+    const below = after ? s.wss.findIndex((w) => w.id === after) + 1 : 0;
+    const to = ws === "loose" ? looseAt(s, below || s.wss.length) : s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
     from.tabs = from.tabs.filter((x) => x !== id);
-    const at = before ? to.tabs.indexOf(before) : -1;
+    const at = before ? to.tabs.indexOf(before) : below ? 0 : -1;
     if (at >= 0) to.tabs.splice(at, 0, id); else to.tabs.push(id);
     if (from !== to) {
       to.collapsed = false;
@@ -409,12 +423,12 @@ const COMMANDS = {
     toast(`Restored: ${rec.what}`);
   },
 
-  // A group with one new tab, above the ungrouped tabs. With a folder it is a workspace: the tab
+  // A group with one new tab, at the bottom of the list. With a folder it is a workspace: the tab
   // starts in the folder; a plain group's tab starts where Cmd+T would.
   "ws.new": ({ name, folder }) => update((s) => {
     if (flat()) return;
     const ws = { id: nextId("w"), name, tabs: [], ...(folder ? { folder } : {}) };
-    s.wss.splice(groupCount(s), 0, ws);
+    s.wss.push(ws);
     s.cur = addTab(s, ws, { cwd: folder ?? inheritedCwd(s) });
   }),
 
@@ -427,15 +441,15 @@ const COMMANDS = {
     if (!flat() && !w.loose) w.collapsed = !w.collapsed;
   }),
 
-  // Ungroup, as Warp does: the tabs stay, ungrouped, at the top of that list. With `closeTabs`
-  // the tabs close too, each with its own undo.
+  // Ungroup, as Warp does: the tabs stay where they are, ungrouped. With `closeTabs` the tabs
+  // close too, each with its own undo.
   "ws.delete": ({ id, closeTabs = false }) => {
     const ws = read("workspaces").wss.find((w) => w.id === id);
     if (flat() || !ws || ws.loose) return;
     if (!closeTabs) {
       update((s) => {
-        const at = s.wss.findIndex((w) => w.id === id), [gone] = s.wss.splice(at, 1);
-        looseOf(s).tabs.unshift(...gone.tabs);
+        const at = s.wss.findIndex((w) => w.id === id);
+        s.wss[at] = { id, name: "", loose: true, tabs: s.wss[at].tabs };
       });
       return;
     }
@@ -443,14 +457,14 @@ const COMMANDS = {
     if (tabs.every((t) => allowClose(tree.terminals(t.layout).map((x) => x.pane)))) settleViewers(tabs, () => update((s) => tabs.forEach((t) => closeTab(s, t.id))));
   },
 
-  // Before another group, or at the end of the groups.
+  // Before another group or ungrouped block, or at the bottom.
   "ws.move": ({ id, before = null }) => update((s) => {
     if (flat()) return;
     const ws = s.wss.find((w) => w.id === id);
     if (ws.loose) return;
     s.wss = s.wss.filter((w) => w !== ws);
-    const at = before ? s.wss.findIndex((w) => w.id === before && !w.loose) : -1;
-    s.wss.splice(at >= 0 ? at : groupCount(s), 0, ws);
+    const at = before ? s.wss.findIndex((w) => w.id === before) : -1;
+    s.wss.splice(at >= 0 ? at : s.wss.length, 0, ws);
   }),
 
   "window.new": () => {

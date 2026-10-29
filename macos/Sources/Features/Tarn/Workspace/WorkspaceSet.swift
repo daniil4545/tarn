@@ -15,9 +15,9 @@ struct Workspace: Equatable, Identifiable, Codable {
 
 /// The workspaces of one Ghostty window and which tab sits in which one.
 ///
-/// Ghostty alone writes the order of tabs; this value stores only membership. A workspace is
-/// a contiguous run of the native tab order, so workspace order is derived from the order of
-/// tabs and never stored (`docs/modules/workspaces.md`).
+/// Ghostty alone writes the order of tabs; this value stores only membership. Workspaces are
+/// drawn in the order of their first tab, so their order is derived and never stored
+/// (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
     static let defaultName = "No project"
     /// The name sets had before "No project"; restored sets keep it.
@@ -30,13 +30,6 @@ struct WorkspaceSet: Equatable {
     struct Run: Equatable {
         let workspace: Workspace
         let tabs: [TabKey]
-    }
-
-    /// A single native move Ghostty has to make so a new tab ends its workspace's run:
-    /// `delta` is the amount of the `move_tab` action.
-    struct Reorder: Equatable {
-        let tab: TabKey
-        let delta: Int
     }
 
     /// What closing a tab did to its workspace.
@@ -103,20 +96,6 @@ struct WorkspaceSet: Equatable {
         }
     }
 
-    /// Each workspace of `order` forms one unbroken run.
-    func isContiguous(_ order: [TabKey]) -> Bool {
-        var closed = Set<Workspace.ID>()
-        var current: Workspace.ID?
-        for tab in order {
-            guard let id = members[tab] else { continue }
-            if id == current { continue }
-            if closed.contains(id) { return false }
-            if let current { closed.insert(current) }
-            current = id
-        }
-        return true
-    }
-
     // MARK: Edits
 
     /// Adds an empty workspace and returns it, or nil for a blank name or a folder that is not
@@ -146,6 +125,11 @@ struct WorkspaceSet: Equatable {
     /// The first tab of the workspace that holds `folder` (Q1).
     func firstTab(inFolder folder: String, order: [TabKey]) -> TabKey? {
         runs(order: order).first { $0.workspace.folder == folder }?.tabs.first
+    }
+
+    /// The last tab of workspace `id` in `order`: the parent of its "+" tab (S6).
+    func lastTab(of id: Workspace.ID, order: [TabKey]) -> TabKey? {
+        runs(order: order).last { $0.workspace.id == id }?.tabs.last
     }
 
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {
@@ -220,41 +204,14 @@ struct WorkspaceSet: Equatable {
 
     // MARK: Following Ghostty
 
-    /// Brings membership in line with a native order that changed behind our back
-    /// (`docs/modules/workspaces.md`).
-    ///
-    /// - Parameters:
-    ///   - previous: the relative order of the tabs at the last look.
-    ///   - current: the native order now, new tabs included.
-    ///   - target: where a tab with no workspace goes (section 4).
-    /// - Returns: the native moves that put each new tab at the end of its workspace's run.
-    ///   Membership is already final; the caller makes the moves.
-    mutating func reconcile(previous: [TabKey], current: [TabKey], target: Workspace.ID) -> [Reorder] {
-        let before = self
+    /// A tab with no workspace joins `target` (section 4), or the first workspace, or a new "~".
+    /// The order of the tabs is Ghostty's and decides nothing here.
+    mutating func reconcile(current: [TabKey], target: Workspace.ID) {
         let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
-        if !fresh.isEmpty {
-            let heir = ensureWorkspace(target)
-            for tab in fresh { members[tab] = heir }
-        }
-
-        let known = current.filter { !fresh.contains($0) }
-        if !isContiguous(known) {
-            repair(known, previous: previous.filter(known.contains))
-        }
-
-        var reorders: [Reorder] = []
-        var order = current
-        for tab in fresh {
-            guard let index = order.firstIndex(of: tab), let id = members[tab] else { continue }
-            order.remove(at: index)
-            let lastPeer = order.lastIndex { members[$0] == id }
-            let destination = lastPeer.map { $0 + 1 } ?? order.count
-            order.insert(tab, at: destination)
-            if destination != index { reorders.append(Reorder(tab: tab, delta: destination - index)) }
-        }
-
-        if members != before.members || workspaces != before.workspaces { revision = before.revision + 1 }
-        return reorders
+        guard !fresh.isEmpty else { return }
+        let heir = ensureWorkspace(target)
+        for tab in fresh { members[tab] = heir }
+        revision += 1
     }
 
     /// Workspaces are off: a tab with no workspace joins "~"; a new "~" is made when the set has
@@ -272,53 +229,6 @@ struct WorkspaceSet: Equatable {
         }
         for tab in fresh { members[tab] = target }
         revision += 1
-    }
-
-    /// Workspaces are on again: the native moves that make every workspace one run, in the order of
-    /// first appearance. Membership does not change.
-    func regroup(order: [TabKey]) -> [Reorder] {
-        var current = order
-        var moves: [Reorder] = []
-        for (place, tab) in runs(order: order).flatMap(\.tabs).enumerated() {
-            guard let at = current.firstIndex(of: tab), at != place else { continue }
-            current.remove(at: at)
-            current.insert(tab, at: place)
-            moves.append(Reorder(tab: tab, delta: place - at))
-        }
-        return moves
-    }
-
-    /// Makes the workspaces of `known` contiguous again. Ghostty moves one tab at a time, so
-    /// first look for the tab whose removal leaves the others in their old order; it joins
-    /// the workspace of its upper neighbour, or its lower one when it is first. If that does
-    /// not heal the order, every tab outside the first run of its workspace joins the
-    /// workspace above it.
-    private mutating func repair(_ known: [TabKey], previous: [TabKey]) {
-        if previous.count == known.count, previous != known {
-            let mover = known.first { tab in
-                known.filter { $0 != tab } == previous.filter { $0 != tab }
-            }
-            if let mover, let index = known.firstIndex(of: mover) {
-                let neighbour = index > 0 ? known[index - 1] : known[safe: index + 1]
-                if let id = neighbour.flatMap({ members[$0] }) {
-                    members[mover] = id
-                }
-                if isContiguous(known) { return }
-            }
-        }
-
-        var closed = Set<Workspace.ID>()
-        var current: Workspace.ID?
-        for (index, tab) in known.enumerated() {
-            guard let id = members[tab] else { continue }
-            if id == current { continue }
-            if closed.contains(id), index > 0, let above = members[known[index - 1]] {
-                members[tab] = above
-                continue
-            }
-            if let current { closed.insert(current) }
-            current = id
-        }
     }
 
     static func makeHome() -> Workspace {

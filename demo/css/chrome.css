@@ -172,7 +172,7 @@ body.dragging iframe { pointer-events: none; }
    and takes no room; the rows sit flush. The end spacer stands where "+ New group" was, so a tab
    can still be dropped at the end. */
 .sidebar .wsh.flat { display: none; }
-.sidebar:not(.rail) .wsh.flat ~ .tab[data-tabid] { margin-left: 0; width: 100%; }
+.sidebar:not(.rail) .tab.loose[data-tabid] { margin-left: 0; width: 100%; }
 .sidebar:not(.flatlist) .wsh.flat + .tab[data-tabid] { margin-top: 10px; }
 .sidebar .flatend { flex: none; height: 28px; }
 

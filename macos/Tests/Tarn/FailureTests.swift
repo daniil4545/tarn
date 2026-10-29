@@ -31,7 +31,7 @@ struct FailureTests {
 
     @Test func aTabWhoseWorkspaceIsMissingIsPlacedAgain() {
         var set = WorkspaceSet(members: [t[0]: UUID(), t[1]: UUID()])
-        _ = set.reconcile(previous: [], current: [t[0], t[1]], target: UUID())
+        set.reconcile(current: [t[0], t[1]], target: UUID())
         #expect(set.runs(order: [t[0], t[1]]).flatMap(\.tabs) == [t[0], t[1]])
     }
 
