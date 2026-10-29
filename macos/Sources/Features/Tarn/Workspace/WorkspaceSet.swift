@@ -19,17 +19,11 @@ struct Workspace: Equatable, Identifiable, Codable {
 /// drawn in the order of their first tab, so their order is derived and never stored
 /// (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
-    static let defaultName = "No project"
-    /// The name sets had before "No project"; restored sets keep it.
-    static let legacyDefaultName = "Default"
-    /// The start workspace of a fresh set and the target of Workspaces off. It has no folder, so
-    /// its tabs and splits open where Ghostty opens them.
-    static let homeName = "~"
-
-    /// One window's workspaces. Not part of the stored state.
+    /// One block of the sidebar. Not part of the stored state: a workspace with its tabs, or
+    /// the ungrouped tabs between two workspaces (`workspace` is nil, no header).
     struct Run: Equatable {
-        let workspace: Workspace
-        let tabs: [TabKey]
+        let workspace: Workspace?
+        fileprivate(set) var tabs: [TabKey]
     }
 
     /// What closing a tab did to its workspace.
@@ -58,15 +52,6 @@ struct WorkspaceSet: Equatable {
         self.revision = revision
     }
 
-    /// A set with `No project` holding `tabs`.
-    static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
-        let workspace = Workspace(name: defaultName)
-        return WorkspaceSet(
-            workspaces: [workspace],
-            members: Dictionary(uniqueKeysWithValues: tabs.map { ($0, workspace.id) })
-        )
-    }
-
     // MARK: Queries
 
     func workspace(_ id: Workspace.ID) -> Workspace? {
@@ -81,19 +66,27 @@ struct WorkspaceSet: Equatable {
         members.filter { $0.value == workspace }.map(\.key)
     }
 
-    /// The workspaces of `order` from top to bottom, each with its tabs in tab order.
-    /// A workspace without a tab in `order` is left out; so is a tab without a workspace.
+    /// The blocks of `order` from top to bottom. A workspace stands where its first tab is and holds
+    /// all its tabs; a tab with no workspace joins the ungrouped block it follows. A workspace
+    /// without a tab in `order` is left out.
     func runs(order: [TabKey]) -> [Run] {
-        var ids: [Workspace.ID] = []
-        var byWorkspace: [Workspace.ID: [TabKey]] = [:]
+        var runs: [Run] = []
+        var place: [Workspace.ID: Int] = [:]
         for tab in order {
-            guard let id = members[tab], workspace(id) != nil else { continue }
-            if byWorkspace[id] == nil { ids.append(id) }
-            byWorkspace[id, default: []].append(tab)
+            if let id = members[tab], let workspace = workspace(id) {
+                if let at = place[id] {
+                    runs[at].tabs.append(tab)
+                } else {
+                    place[id] = runs.count
+                    runs.append(Run(workspace: workspace, tabs: [tab]))
+                }
+            } else if let last = runs.indices.last, runs[last].workspace == nil {
+                runs[last].tabs.append(tab)
+            } else {
+                runs.append(Run(workspace: nil, tabs: [tab]))
+            }
         }
-        return ids.compactMap { id in
-            workspace(id).map { Run(workspace: $0, tabs: byWorkspace[id] ?? []) }
-        }
+        return runs
     }
 
     // MARK: Edits
@@ -124,12 +117,12 @@ struct WorkspaceSet: Equatable {
 
     /// The first tab of the workspace that holds `folder` (Q1).
     func firstTab(inFolder folder: String, order: [TabKey]) -> TabKey? {
-        runs(order: order).first { $0.workspace.folder == folder }?.tabs.first
+        runs(order: order).first { $0.workspace?.folder == folder }?.tabs.first
     }
 
     /// The last tab of workspace `id` in `order`: the parent of its "+" tab (S6).
     func lastTab(of id: Workspace.ID, order: [TabKey]) -> TabKey? {
-        runs(order: order).last { $0.workspace.id == id }?.tabs.last
+        runs(order: order).last { $0.workspace?.id == id }?.tabs.last
     }
 
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {
@@ -171,10 +164,10 @@ struct WorkspaceSet: Equatable {
     @discardableResult
     mutating func delete(_ id: Workspace.ID, order: [TabKey]) -> Bool {
         guard workspaces.count > 1, workspace(id) != nil else { return false }
-        let runs = runs(order: order)
-        if let index = runs.firstIndex(where: { $0.workspace.id == id }) {
+        let runs = runs(order: order).filter { $0.workspace != nil }
+        if let index = runs.firstIndex(where: { $0.workspace?.id == id }) {
             let neighbour = index > 0 ? runs[index - 1] : runs[safe: index + 1]
-            if let heir = neighbour?.workspace.id {
+            if let heir = neighbour?.workspace?.id {
                 for tab in runs[index].tabs { members[tab] = heir }
             }
         }
@@ -193,33 +186,6 @@ struct WorkspaceSet: Equatable {
         workspaces.append(contentsOf: other.workspaces)
         members.merge(other.members) { current, _ in current }
         revision += 1
-    }
-
-    // MARK: Following Ghostty
-
-    /// A tab with no workspace joins "~"; a new "~" is made when the set has none. The order of
-    /// the tabs is Ghostty's and decides nothing here.
-    mutating func reconcile(current: [TabKey]) {
-        let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
-        guard !fresh.isEmpty else { return }
-        let target: Workspace.ID
-        if let existing = workspaces.first(where: Self.isHome) {
-            target = existing.id
-        } else {
-            let created = Self.makeHome()
-            workspaces.append(created)
-            target = created.id
-        }
-        for tab in fresh { members[tab] = target }
-        revision += 1
-    }
-
-    static func makeHome() -> Workspace {
-        Workspace(name: homeName)
-    }
-
-    static func isHome(_ workspace: Workspace) -> Bool {
-        workspace.name == homeName && workspace.folder == nil
     }
 
     static func cleaned(_ name: String) -> String? {

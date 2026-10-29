@@ -2,9 +2,10 @@ import AppKit
 import GhosttyKit
 import OSLog
 
-/// A workspace and the tab windows in it, top to bottom.
+/// A workspace and the tab windows in it, top to bottom; the ungrouped tabs between two
+/// workspaces are a run with no workspace.
 struct WorkspaceRun {
-    let workspace: Workspace
+    let workspace: Workspace?
     let windows: [NSWindow]
 }
 
@@ -397,6 +398,19 @@ final class WorkspaceRegistry {
         publish(changed.map { [$0] } ?? [])
     }
 
+    /// Moves a tab among ungrouped tabs, or in the flat list of Workspaces off: one native move, no
+    /// membership change (M3). Before `neighbour`, or after the last of `block`.
+    func reorderTab(_ window: NSWindow, before neighbour: NSWindow? = nil, behind block: [NSWindow] = []) {
+        let tab = key(for: window)
+        let order = group(of: window).map(key(for:))
+        guard let index = order.firstIndex(of: tab) else { return }
+        let members = Set(block.map(key(for:)))
+        isBusy = true
+        moveNatively(window, by: Self.destination(of: tab, in: order, before: neighbour.map(key(for:)), isMember: members.contains) - index)
+        isBusy = false
+        sync()
+    }
+
     /// The place of `tab` among the other tabs of `order` after a move: before `neighbour`, or
     /// after the last other member of the workspace. A tab that is the only member of the
     /// workspace stays where it is.
@@ -416,9 +430,9 @@ final class WorkspaceRegistry {
     func moveWorkspace(_ workspace: Workspace.ID, before other: Workspace.ID?, in window: NSWindow) {
         var order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)
-        guard let from = runs.firstIndex(where: { $0.workspace.id == workspace }) else { return }
+        guard let from = runs.firstIndex(where: { $0.workspace?.id == workspace }) else { return }
         let moving = runs.remove(at: from)
-        runs.insert(moving, at: runs.firstIndex { $0.workspace.id == other } ?? runs.count)
+        runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.workspace?.id == id } } ?? runs.count)
 
         isBusy = true
         for (place, tab) in runs.flatMap(\.tabs).enumerated() {

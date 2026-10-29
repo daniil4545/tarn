@@ -88,15 +88,15 @@ Common rules, for every command except `skill`:
 
 - Request and reply are one JSON line each, with `version` (`docs/spec.md` 2.2). Source: herdr "newline-delimited JSON over a local socket".
 - Error: stderr `tarn: <text>`, nothing on stdout, exit code 1 (current rule, `cli/tarn`).
-- No `TARN_SURFACE`: `tarn: not in a tarn tab`, exit 1. Source: herdr `--current` "errors when HERDR_PANE_ID is unavailable". The caller in no workspace (quick terminal): `tarn: not in a workspace`.
-- A pane id that matches no pane of the caller's workspace: `tarn: no pane matched: <id>`, exit 4, never a fallback to the selected pane. Source: Otty "a non-matching selector fails with No pane/tab matched selector (exit 4) rather than falling back to the active one".
+- No `TARN_SURFACE`: `tarn: not in a tarn tab`, exit 1. Source: herdr `--current` "errors when HERDR_PANE_ID is unavailable". The caller in no window set (quick terminal): `tarn: not in a workspace`. A caller in a tab that is in no workspace (`docs/specs/workspace-folder.md` G9) has its own tab as its scope.
+- A pane id that matches no pane of the caller's scope (its workspace; for a caller in a tab with no workspace, its own tab): `tarn: no pane matched: <id>`, exit 4, never a fallback to the selected pane. Source: Otty "a non-matching selector fails with No pane/tab matched selector (exit 4) rather than falling back to the active one".
 - `--json` prints the reply object instead of text. Source: Otty `--json`, current `tarn ls --json`.
 
 | Command | What it does | Stdout | Source |
 | --- | --- | --- | --- |
 | `tarn open <path> [:line]` | opens a file in the viewer (exists) | nothing | current `cli/tarn` |
 | `tarn notify <text>` | marks the caller and notifies (exists) | nothing | current `cli/tarn` |
-| `tarn ls [--json]` | terminal panes of the caller's workspace | table | WezTerm `cli list` |
+| `tarn ls [--json]` | terminal panes of the caller's workspace, or of its own tab when the tab has no workspace | table | WezTerm `cli list` |
 | `tarn new [--tab] [--right] [--cwd D] [--title T] -- <cmd...>` | new pane with the command started | pane id | kitty `launch --keep-focus`, WezTerm `split-pane` |
 | `tarn run [--tab] [--right] [--cwd D] -- <cmd...>` | new pane with a shell, the command typed, not submitted | pane id | herdr `send-text` (non-submitting) |
 | `tarn wait <pane> [--timeout S]` | waits for the end of the command | state line | Otty `pane wait`, `pane run --format json` |
@@ -167,7 +167,7 @@ What the CLI never does, for any input. App tests live in `macos/Tests/Tarn`, ru
 | --- | --- |
 | B1. No command changes the active app, the key window, the selected tab or the first responder | app test with the user's pane focused: every command, all four checked after two run loop ticks; with another app active and a minimized caller window: a manual check at acceptance, written in the PR |
 | B2. No command writes a newline or Enter into any surface | unit test of the command line rule in the CLI and in the app |
-| B3. No command reaches a pane outside the caller's workspace | two workspaces in one window and one in a second window (D10) |
+| B3. No command reaches a pane outside the caller's workspace; a caller in a tab with no workspace reaches only the panes of its own tab | two workspaces in one window and one in a second window (D10) |
 | B4. No command writes into an existing pane | there is no command for it; the socket refuses unknown commands |
 | B5. A wrong id never falls back to the selected pane | test with a missing id: exit 4 |
 | B6. `hook.sh` stays within 100 ms | the hook test is unchanged |

@@ -19,7 +19,7 @@ Issue #34, task T-205. Every tarn feature is a module the user switches on or of
 3. A switch applies at once, with no restart, as the File viewer and tab style switches do today.
 4. An off module shows no UI and does not react to events. Light observers (the control socket, the session registry) may keep running; zero cost is not required.
 5. State lives in UserDefaults, like the current switches.
-6. Workspaces off imitates a tarn with no workspaces: windows and tabs behave as if workspaces did not exist. The current workspaces are frozen, tabs of frozen workspaces stay visible, new work goes to the workspace "~" with no folder (an existing "~" takes it). On again the frozen workspaces come back and "~" stays.
+6. Workspaces off imitates a tarn with no workspaces: windows and tabs behave as if workspaces did not exist. The current workspaces are frozen, tabs of frozen workspaces stay visible, new tabs are ungrouped. On again the frozen workspaces come back and the tabs opened meanwhile stay ungrouped.
 7. Claude Code: the Modules section shows one agent line, Claude Code, with its version and checks that tarn works with it; no module is gated by the version. Other agents (Codex, pi, OpenCode) come when tarn supports them.
 8. One PR into `dev`.
 9. Benchmark: all modules off against all on goes into the report, with no threshold.
@@ -51,7 +51,7 @@ Tellurion has no dependencies between features; "needs X" is ours. Upstream Ghos
 |---|---|---|---|
 | Sidebar | `TarnTabStyle` (kept: on = `sidebar`, off = `top`, saved values survive) | none | the native tab bar at the top, as in Ghostty: today's "Tabs at the top" style with agent marks in native tabs, plus the workspace name while Workspaces is on |
 | File viewer | `TarnFileViewer` (kept) | none | viewer panes are not drawn; their tabs, areas and unsaved edits stay and come back when the module is on; Cmd+B does nothing, a path click goes to the system opener (today's behavior), `tarn open` answers "the file viewer is off in Settings" (today's text); the sidebar Toggle File Viewer button and the menu item are hidden |
-| Workspaces | `TarnModule.workspaces` | none | one flat list with no headers; all tabs visible, in today's order; the registry stops grouping and moving tabs, so a new tab lands where Ghostty puts it and a drag only changes order; new tabs join the workspace "~"; New Workspace (button, menu item, Shift+Cmd+T) is hidden or does nothing; no workspace name in the window subtitle or native tabs. On again: frozen workspaces come back with their tabs that still exist, "~" holds the tabs opened while off, and the tabs are drawn by membership, none moves |
+| Workspaces | `TarnModule.workspaces` | none | one flat list with no headers; all tabs visible, in today's order; the registry stops grouping and moving tabs, so a new tab lands where Ghostty puts it and a drag only changes order; new tabs are ungrouped; New Workspace (button, menu item, Shift+Cmd+T) is hidden or does nothing; no workspace name in the window subtitle or native tabs. On again: frozen workspaces come back with their tabs that still exist, the tabs opened while off are ungrouped, and the tabs are drawn by membership, none moves |
 | Permission card | `TarnModule.permissionCard` | Sidebar | the hover card has no Allow, Deny or answer buttons (title, folder and state stay); a `PermissionRequest`, pending or new, gets an empty reply at once, the path a question with no options takes today (`SessionRegistry.swift:277`), so Claude Code shows its own dialog |
 | Notifications | `TarnModule.notifications` | none | no new banners (delivered ones stay in Notification Center); Cmd+U does nothing and its menu item is hidden; `tarn notify` answers "notifications are off in Settings"; Claude Code's own terminal notifications (OSC 9 and 777) are no longer suppressed (`Attention.suppresses`) |
 
@@ -105,7 +105,7 @@ flowchart LR
 - `TarnModule: String, CaseIterable`: title, detail, key, `needs`. `TarnModules.isOn(_:)` returns the effective state.
 - Sidebar: `TabStyle` stays the store; `TabStyle.applyToOpenWindows` stays the apply path.
 - File viewer: a pane is drawn when `!hidden && isOn(.viewer)`, so the user's Cmd+B hide (`ViewerHost.hidden`, `ViewerHost.swift:22`) stays its own state.
-- Workspaces: off sets a frozen flag in `WorkspaceRegistry`; `sync` (`WorkspaceRegistry.swift:90-108`) then assigns new tabs to "~" (no folder, made when missing) and moves nothing; on clears the flag and runs `sync`. The workspaces themselves are the frozen state. `WorkspaceTitle` (`Workspace/WorkspaceTitle.swift:7`) and `NativeTabMark` show the name when the module is on, whatever the tab style.
+- Workspaces: off sets a frozen flag in `WorkspaceRegistry`; `sync` (`WorkspaceRegistry.swift`) then leaves new tabs ungrouped and moves nothing; on clears the flag and runs `sync`. The workspaces themselves are the frozen state. `WorkspaceTitle` (`Workspace/WorkspaceTitle.swift:7`) and `NativeTabMark` show the name when the module is on, whatever the tab style.
 - Permission card: `SessionRegistry.closePending` (`SessionRegistry.swift:452-471`) gives the empty reply.
 - Menu items (New Workspace, Toggle File Viewer, Jump to waiting session) are hidden from our code by walking `NSApp.mainMenu` for their actions at the first `SidebarModel` and on each change; no new insertion point in Ghostty files.
 
@@ -123,10 +123,10 @@ flowchart LR
 1. Each switch applies at once in every open window, with no restart; the File Viewer pane switch does the same.
 2. Off: the module draws none of the UI of section 5 and reacts to none of its events, including after Cmd+B, undo of a closed tab, restore at start and reopen of a closed viewer. On again: viewer tabs, areas and unsaved edits are as before.
 3. Sidebar off greys out Permission card with "needs Sidebar", its stored value survives; Workspaces stay on and each native tab shows its workspace name. Saved `TarnTabStyle` and `TarnFileViewer` values from 1.2.0 keep working.
-4. Workspaces off, then: Cmd+T, a drag, closing a tab, Shift+Cmd+T. The list stays flat and no tab moves by itself. On again: the frozen workspaces with their surviving tabs and "~" with the new ones.
+4. Workspaces off, then: Cmd+T, a drag, closing a tab, Shift+Cmd+T. The list stays flat and no tab moves by itself. On again: the frozen workspaces with their surviving tabs and the new tabs ungrouped.
 5. Permission card off: Claude Code shows its own permission dialog at once; no request hangs.
 6. The pane shows the Claude Code version and three checks, each with its hint when it fails.
-7. Unit tests: effective state and needs; empty reply on switch-off; viewer visibility with the user hide; workspaces freeze, "~" and draw by membership on again; workspace name in the tab mark with tabs at the top. Demo checks walk the Modules section.
+7. Unit tests: effective state and needs; empty reply on switch-off; viewer visibility with the user hide; workspaces freeze, new tabs ungrouped and draw by membership on again; workspace name in the tab mark with tabs at the top. Demo checks walk the Modules section.
 8. Manual run by the user on the release build: rows 1 to 5 with a live Claude Code session.
 9. `docs/bench.md` gains all modules off against all on; the bench turns modules off by launch arguments (`-TarnModule.workspaces NO`, `-TarnTabStyle top` and the like, the UserDefaults argument domain), so the user's settings are not written.
 10. Texts and docs of section 9 match the new behavior.
