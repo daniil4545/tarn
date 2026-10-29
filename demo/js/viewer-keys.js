@@ -1,9 +1,5 @@
-// Cmd+B of the app (View menu "Toggle Pane"), by the state of the pane. Counterpart of
-// ViewerHost.swift. It never closes (Cmd+W does) and never toggles the tree (the Files button and Esc do).
-//   no pane      opens the pane with the tree, the keyboard in the tree
-//   pane hidden  shows it as it was hidden, the keyboard in the pane
-//   pane shown   hides the whole pane (tabs, unsaved text, tree state kept), the keyboard in the terminal
-// `host` is viewer.js: { target(), idOf(entry) }.
+// Cmd+B as ViewerHost.toggleFromKey: opens a pane with the tree, shows a hidden one, toggles the
+// tree when files are open, closes a pane with no file. `host` is viewer.js: { target(), idOf(entry) }.
 import { bus } from "./bus.js";
 import { toast } from "./toast.js";
 import * as tree from "./layout.js";
@@ -53,7 +49,7 @@ export function viewerKey(name, host) {
     if (opened) whenReady(opened, (page) => { intoPane(host, opened); page.focusTree(); });
     return undefined;
   }
-  entry.frame.contentWindow?.tarn?.flush?.(); // the page holds an edit back for a moment: send it before it leaves
-  bus.cmd("viewer.hide", { id: host.idOf(entry) });
+  if (entry.model.state().tabs.length) return entry.model.toggleTree();
+  entry.model.closeActiveTab();
   return toTerminal();
 }
