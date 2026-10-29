@@ -8,7 +8,7 @@ struct RunPaneTests {
     // spec: docs/specs/agent-cli.md U5
     @Test @MainActor func anUngroupedRunCannotOpenATab() {
         let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
-        let result = RunPane.run(["tab": true, "argv": ["echo", "hi"]], AgentScope(caller: caller, panes: [caller]))
+        let result = NewPane.open(["tab": true, "argv": ["echo", "hi"]], AgentScope(caller: caller, panes: [caller]), kind: .run)
         #expect(throws: AgentRefusal(text: "put this tab in a group first")) { try result.get() }
     }
 
