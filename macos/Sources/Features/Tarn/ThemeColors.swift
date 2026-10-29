@@ -1,8 +1,8 @@
 import GhosttyKit
 import SwiftUI
 
-/// One color of a terminal theme, 8 bits per channel. The window colors are derived from it with
-/// the rule of the demo (`demo/js/color.js`, `demo/js/chrome-theme.js`); `docs/modules/settings.md`.
+/// One color of a terminal theme, 8 bits per channel. Window colors derive from it by the demo's
+/// rule (`demo/js/chrome-theme.js`).
 struct ThemeColor: Equatable, Hashable {
     let r: Int
     let g: Int
@@ -141,7 +141,7 @@ struct ThemePalette: Equatable {
 struct ThemeChrome: Equatable {
     /// How far the text color is mixed into the background for each surface.
     enum Mix {
-        static let surface = 0.06, menu = 0.10, line = 0.16, code = 0.05
+        static let surface = 0.06, line = 0.16, code = 0.05
         static let muted = 0.38, key = 0.55
         static let dividerLight = 0.22, dividerDark = 0.45
         /// `muted` mixes less where `Mix.muted` falls below this contrast (light themes).
@@ -162,7 +162,6 @@ struct ThemeChrome: Equatable {
     let foreground: ThemeColor
     /// Sidebar and title bar.
     let surface: ThemeColor
-    let menu: ThemeColor
     let line: ThemeColor
     /// The line between the sidebar and the terminal.
     let divider: ThemeColor
@@ -178,7 +177,6 @@ struct ThemeChrome: Equatable {
         background = bg
         foreground = fg
         surface = bg.mixed(with: fg, by: Mix.surface)
-        menu = bg.mixed(with: fg, by: Mix.menu)
         line = bg.mixed(with: fg, by: Mix.line)
         divider = bg.mixed(with: .black, by: bg.isLight ? Mix.dividerLight : Mix.dividerDark)
         muted = Self.fade(fg, toward: bg, by: Mix.muted, floor: Mix.mutedContrast)

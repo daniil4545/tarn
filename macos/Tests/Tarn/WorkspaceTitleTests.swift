@@ -13,11 +13,6 @@ struct WorkspaceTitleTests {
         #expect(WorkspaceTitle.subtitle(workspace: "Work", workspacesOn: false) == "")
     }
 
-    @Test func theSettingsTextNamesTheTabs() {
-        #expect(TabStyle.sidebar.detail.hasPrefix("Tabs with agent state"))
-        #expect(TabStyle.top.detail.contains("workspace name"))
-    }
-
     // Tabs at the top: the tab mark carries the workspace name while Workspaces is on.
     @Test func theNativeTabMarkNamesTheWorkspace() {
         #expect(NativeTabMark.workspaceName("Work", workspacesOn: true, workspaces: 2) == "Work")

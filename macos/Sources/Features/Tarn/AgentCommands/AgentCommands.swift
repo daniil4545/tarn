@@ -59,8 +59,8 @@ enum AgentCommands {
     @MainActor
     static let handlers: [String: Handler] = [
         "ls": ListPanes.run,
-        "new": NewPane.run,
-        "run": RunPane.run,
+        "new": { NewPane.open($0, $1, kind: .new) },
+        "run": { NewPane.open($0, $1, kind: .run) },
         "read": ReadPane.run,
         "close": ClosePane.run,
         "modules": ListModules.run,

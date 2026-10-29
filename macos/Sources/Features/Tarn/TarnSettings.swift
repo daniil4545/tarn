@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Where a terminal window lists its tabs.
-enum TabStyle: String, CaseIterable, Identifiable {
+enum TabStyle: String {
     /// The tarn sidebar on the left; the native tab bar is hidden.
     case sidebar
     /// The native tab bar at the top, as in Ghostty; no sidebar.
@@ -14,22 +14,6 @@ enum TabStyle: String, CaseIterable, Identifiable {
 
     static func current(in defaults: UserDefaults) -> TabStyle {
         defaults.string(forKey: key).flatMap(TabStyle.init(rawValue:)) ?? .sidebar
-    }
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .sidebar: "Sidebar"
-        case .top: "Tabs at the top"
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .sidebar: "Tabs with agent state, on the left of the window."
-        case .top: "The native tab bar, as in Ghostty, with agent marks and the workspace name in the tabs."
-        }
     }
 
     /// Shows or hides the native tab bar of every open terminal window to match the style.
@@ -125,9 +109,8 @@ final class TarnSettingsController: NSWindowController, NSWindowDelegate {
         window?.performClose(sender)
     }
 
-    /// The menu items Close (Cmd+W) and Close Window send `close:` and `closeWindow:` down the
-    /// responder chain. `NSWindow` answers neither, so without these the items stay disabled and
-    /// Cmd+W does nothing. `AboutController` does the same.
+    /// Close and Close Window send `close:` and `closeWindow:` down the responder chain;
+    /// `NSWindow` answers neither, so without these Cmd+W does nothing.
     @IBAction func close(_ sender: Any?) {
         window?.performClose(sender)
     }
