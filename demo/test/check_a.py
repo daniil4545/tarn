@@ -775,7 +775,9 @@ def selection_and_urls(base):
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
             pg.mouse.up()
-            time.sleep(0.4)
+            pg.wait_for_function(
+                "__tarn.term('p7').getSelection() === 'you'", timeout=5000
+            )
 
         pg.evaluate("navigator.clipboard.writeText('untouched')")
         select_word()
@@ -787,8 +789,15 @@ def selection_and_urls(base):
             "window.bus.cmd('config.set', {key: 'copy-on-select', value: 'clipboard'})"
         )
         pg.mouse.click(5, 5)
-        time.sleep(0.4)
+        pg.wait_for_function(
+            "__tarn.term('p7').getSelection() === ''", timeout=5000
+        )
         select_word()
+        # Selection settles before the asynchronous clipboard write completes.
+        pg.wait_for_function(
+            "async () => (await navigator.clipboard.readText()) === 'you'",
+            timeout=5000,
+        )
         check(
             "copy-on-select clipboard copies the selection",
             pg.evaluate("navigator.clipboard.readText()") == "you",
