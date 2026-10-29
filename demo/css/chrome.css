@@ -83,7 +83,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* a dragged tab leaves the list; the rows slide apart to the gap where it lands, as in Warp */
 .sidebar .tab[data-tabid] { user-select: none; }
 .sidebar .tab.lifted { display: none; }
-body.dragging .sidebar > *, body.dragging .wsblock > * { transition: margin-top .15s ease-out; }
+body.dragging .sidebar > *, body.dragging .wsblock > * { transition: margin-top .1s ease-out; }
 .tab.dragghost { position: fixed; z-index: 30; pointer-events: none; color: var(--fg); box-shadow: inset 0 0 0 1px var(--tab-border), 0 6px 18px rgba(0, 0, 0, .35); }
 .tab.dragghost[aria-selected="true"] { box-shadow: inset 0 0 0 1px var(--tab-selected-border), 0 6px 18px rgba(0, 0, 0, .35); }
 .tab.dragghost .x { opacity: 1; }
