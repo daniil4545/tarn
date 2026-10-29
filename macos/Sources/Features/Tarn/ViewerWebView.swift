@@ -47,7 +47,7 @@ final class ViewerWebView: WKWebView {
     /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
     /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
     static let keyTable: [Key] = [
-        Key(key: "b", command: "tree", help: "Toggle File Viewer (also in the terminal: View menu)"),
+        Key(key: "b", command: "tree", help: "Toggle File Viewer: open, show, toggle tree or close empty viewer"),
         Key(key: "e", command: "mode", help: "View or source"),
         Key(key: "s", command: "save", help: "Save the file"),
     ]

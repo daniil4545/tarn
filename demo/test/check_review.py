@@ -587,9 +587,17 @@ def keys_table(base):
         )
         press(pg, CMD_B)
         check(
-            "B2 Cmd+B on a shown pane with no file hides it (never closes), keyboard in the terminal",
-            n_panes(pg) == 0 and n_hidden(pg) == 1 and where(pg) == "p1",
+            "B2 Cmd+B on a shown pane with no file closes it, keyboard in the terminal",
+            n_panes(pg) == 0 and n_hidden(pg) == 0 and where(pg) == "p1",
             f"{n_panes(pg)} {n_hidden(pg)} {where(pg)}",
+        )
+        press(pg, CMD_B, False)
+        pg.wait_for_function(LOADED)
+        settle(pg)
+        cmd(
+            pg,
+            "viewer.hide",
+            {"id": pg.locator(VIEWER).first.get_attribute("data-leaf")},
         )
         press(pg, CMD_B, False)
         pg.wait_for_function(LOADED)
@@ -630,16 +638,24 @@ def keys_table(base):
         with_file(pg)
         press(pg, CMD_B)
         check(
-            "B4 Cmd+B on a pane with files hides the whole pane, keyboard in the terminal",
-            n_panes(pg) == 0 and n_hidden(pg) == 1 and where(pg) == "p1",
-            f"{n_panes(pg)} {n_hidden(pg)} {where(pg)}",
+            "B4 Cmd+B with a file and hidden tree shows the tree and keeps the file",
+            n_panes(pg) == 1
+            and n_hidden(pg) == 0
+            and f"{REPO}/docs/spec.md" in file_tabs(pg)
+            and pg.frame_locator(f"{VIEWER} iframe")
+            .first.locator("#vtree .tree")
+            .is_visible(),
+            str(file_tabs(pg)),
         )
-        press(pg, CMD_B, False)
-        pg.wait_for_function(LOADED)
-        settle(pg)
+        press(pg, CMD_B)
         check(
-            "B5 Cmd+B shows it back with its tabs",
-            n_panes(pg) == 1 and f"{REPO}/docs/spec.md" in file_tabs(pg),
+            "B5 Cmd+B with a file and visible tree hides only the tree",
+            n_panes(pg) == 1
+            and n_hidden(pg) == 0
+            and f"{REPO}/docs/spec.md" in file_tabs(pg)
+            and not pg.frame_locator(f"{VIEWER} iframe")
+            .first.locator("#vtree .tree")
+            .is_visible(),
             str(file_tabs(pg)),
         )
     with app_page(base) as (pg, _e, _r):
@@ -678,7 +694,7 @@ def keys_fallback_help_hidden_edits(base):
         press(pg, "Control+Alt+b")
         check(
             "F1 Ctrl+Alt+B does what Cmd+B does",
-            opened and n_panes(pg) == 0 and n_hidden(pg) == 1,
+            opened and n_panes(pg) == 0 and n_hidden(pg) == 0,
             f"{opened} {n_panes(pg)}",
         )
         for gone in ("Alt+Cmd+B", "Shift+Cmd+E"):
@@ -700,7 +716,11 @@ def keys_fallback_help_hidden_edits(base):
         )
     with app_page(base) as (pg, _e, _r):
         dirty_viewer(pg)
-        press(pg, CMD_B)
+        cmd(
+            pg,
+            "viewer.hide",
+            {"id": pg.locator(VIEWER).first.get_attribute("data-leaf")},
+        )
         hid = n_hidden(pg, "t3")
         cmd(pg, "tab.close", {"id": "t3"})
         buttons = pg.locator(".ask-dialog button").all_inner_texts()
