@@ -371,7 +371,7 @@ final class SidebarModel: ObservableObject {
 
     func rename(_ workspace: Workspace) {
         guard let window else { return }
-        WorkspacePrompt.askName(title: "Rename Workspace", message: "", initial: workspace.name, in: window) { [weak self] name in
+        WorkspacePrompt.askName(title: "Rename Group", message: "", initial: workspace.name, in: window) { [weak self] name in
             guard let self, let window = self.window else { return }
             self.registry.rename(workspace.id, to: name, in: window)
         }
@@ -503,7 +503,7 @@ final class SidebarModel: ObservableObject {
             self?.toggleFold(workspace)
         })
         menu.addItem(.separator())
-        menu.addItem(menuItem("Rename Workspace...") { [weak self] in
+        menu.addItem(menuItem("Rename Group...") { [weak self] in
             self?.rename(workspace)
         })
         menu.addItem(menuItem("Delete Group...") { [weak self] in
@@ -893,7 +893,7 @@ struct Sidebar: View {
             } else {
                 HStack {
                     collapseButton
-                    // New Workspace sits next to Hide Sidebar, as in the demo.
+                    // New Group sits next to Hide Sidebar, as in the demo.
                     if model.modules.contains(.workspaces) { newWorkspaceButton }
                     Spacer()
                     if model.modules.contains(.viewer) { viewerButton }
