@@ -129,7 +129,7 @@ Failures: bad stored JSON gives the seed and a toast; blocked storage is tolerat
 | `check_c.py` | viewer, settings, theme picker and window colors, Help |
 | `check_e2e.py` | the whole user story, README lists built and planned |
 | `check_review.py` | regressions from the code reviews (undo, drag, keys, storage, settings), no personal data in the demo |
-| `check_modules.py` | Settings > Modules: five switches, greyed Permission card, Workspaces off and on |
+| `check_modules.py` | Settings > Modules: four switches, greyed Permission card, always-on groups |
 | `node --test demo/test/unit` | the shell and the theme data and color rule, without a browser |
 
 Run (Chrome installed; under load put `nice -n 10` in front):

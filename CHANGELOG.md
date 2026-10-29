@@ -13,11 +13,11 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 - Sidebar menus offer "Move to" and "Remove from group"; tabs and group headers can be dropped among ungrouped rows or below all rows.
 - `tarn new -- <cmd...>` runs a command in a split below the caller; `--right` splits right, `--cwd` sets its folder, focus stays unchanged (#53).
 - `tarn run` opens a split with the command typed for the user to review, edit and submit with Enter (#105).
-- `tarn new` and `tarn run` accept `--tab [--title T]`: an unselected tab immediately after the caller, in its group; an ungrouped caller or disabled Workspaces is refused with exit 1 before creation.
+- `tarn new` and `tarn run` accept `--tab [--title T]`: an unselected tab immediately after the caller, in its group; an ungrouped caller is refused with exit 1 before creation.
 - `tarn wait <pane> [--timeout S] [--json]` reports `succeed`, `error` or `closed`; exits 0 on a reported end, 4 for no matching pane, 6 for unavailable exit status, 9 for timeout (#100).
 - `tarn read <pane> [--lines N]` prints plain screen and scrollback text, default 80 lines; `tarn close <pane>` closes without confirmation or changing focus (#118).
 - `tarn skill` prints usage guidance matched to the build; `tarn module ls [--json]` lists modules as on, off or unavailable (#119).
-- Settings > Modules toggles Sidebar, File viewer, Workspaces, Permission card and Notifications, with integration version and status checks (#52).
+- Settings > Modules toggles Sidebar, File viewer, Permission card and Notifications, with integration version and status checks (#52).
 
 ### Changed
 
@@ -25,7 +25,7 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 - Grouped sidebar rows are indented; ungrouped rows have no header; restored groups keep their names; a window saved by 1.2.0 keeps its "Default" group, and Delete group without the box ungroups its tabs.
 - Cmd+T inherits the source tab's group and Ghostty's folder and position; splits keep Ghostty's folder inheritance; a tab opened without a source group is ungrouped.
 - A group's "+" opens from its last tab, using a workspace's fixed folder or a plain group's inherited folder; new groups start at the bottom; the sidebar New Tab button follows Cmd+T.
-- Removing the last tab removes its group; toggling Workspaces off and on preserves membership without moving tabs.
+- Removing the last tab removes its group.
 - `tarn ls [--json]` lists terminal panes in the caller's group, or only its own tab when ungrouped; other tabs are outside `read`, `wait` and `close` scope and return exit 4 (#50).
 - `tarn ls` adds GROUP (`-` when ungrouped) and JSON `group` and `folder` (null when absent); the existing `workspace` key remains the group id.
 - `tarn ls` drops HOST and JSON `host`; SSH panes show their remote title and process (#98, #101, #120).

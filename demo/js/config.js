@@ -36,7 +36,6 @@ export const OPTIONS = Object.freeze({
   "tab-style": pick("sidebar", ["sidebar", "top"]),
   "tab-rows": pick("wide", ["wide", "narrow"]),
   "file-viewer": bool(true),
-  "module-workspaces": bool(true),
   "module-permission-card": bool(true),
   "module-notifications": bool(true),
 });

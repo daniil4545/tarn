@@ -157,9 +157,8 @@ struct SidebarGroupingTests {
         )
     }
 
-    /// spec: docs/specs/workspace-folder.md S51
-    /// A row without a group takes a tab drag like any row (native order only), also in the flat list
-    /// of Workspaces off.
+    /// spec: docs/specs/workspace-folder.md G5
+    /// A row without a group takes a tab drag like any row (native order only).
     @Test func aTabDraggedOverAnUngroupedRowLandsByTheHalfOfThatRow() {
         let (groups, tabs) = withUngrouped()
         let key = tabs[2].key

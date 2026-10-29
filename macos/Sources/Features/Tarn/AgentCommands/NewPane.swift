@@ -21,7 +21,7 @@ enum NewPane {
             return .failure(AgentRefusal(text: "--right and --tab exclude each other"))
         }
         if !tab, message["title"] != nil { return .failure(AgentRefusal(text: "--title needs --tab")) }
-        if tab, let refusal = NewTab.refusal(group: scope.caller.workspace, frozen: WorkspaceRegistry.shared.isFrozen) {
+        if tab, let refusal = NewTab.refusal(group: scope.caller.workspace) {
             return .failure(refusal)
         }
         guard let caller = SessionRegistry.surfaceView(scope.caller.pane),

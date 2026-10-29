@@ -3,7 +3,7 @@ import OSLog
 
 /// A tarn feature with one switch in Settings > Modules (`docs/modules/settings.md`).
 enum TarnModule: String, CaseIterable, Identifiable {
-    case sidebar, viewer, workspaces, permissionCard, notifications
+    case sidebar, viewer, permissionCard, notifications
 
     var id: String { rawValue }
 
@@ -11,7 +11,6 @@ enum TarnModule: String, CaseIterable, Identifiable {
         switch self {
         case .sidebar: "Sidebar"
         case .viewer: "File viewer"
-        case .workspaces: "Workspaces"
         case .permissionCard: "Permission card"
         case .notifications: "Notifications"
         }
@@ -21,7 +20,6 @@ enum TarnModule: String, CaseIterable, Identifiable {
         switch self {
         case .sidebar: "Tabs in workspaces with agent state, on the left. Off: the native tab bar at the top."
         case .viewer: "Files, markdown and code next to the terminal."
-        case .workspaces: "Tab groups per project. Without the sidebar the top tabs carry the workspace name."
         case .permissionCard: "Allow or deny from the sidebar card."
         case .notifications: "A banner when an agent needs you; Cmd+U jumps to it."
         }
@@ -32,7 +30,7 @@ enum TarnModule: String, CaseIterable, Identifiable {
         switch self {
         case .sidebar: TabStyle.key
         case .viewer: FileViewerSetting.key
-        case .workspaces, .permissionCard, .notifications: "TarnModule.\(rawValue)"
+        case .permissionCard, .notifications: "TarnModule.\(rawValue)"
         }
     }
 
@@ -101,7 +99,6 @@ enum TarnModules {
 
     /// The menu actions that belong to a module; the item is hidden while the module is off.
     static let menuActions: [String: TarnModule] = [
-        "newWorkspace:": .workspaces,
         "toggleViewer:": .viewer,
         "jumpToWaitingSession:": .notifications,
     ]
@@ -123,7 +120,6 @@ enum TarnModules {
 /// What each owner does when its module flips. Tests replace the closures with spies.
 struct ModuleOwners {
     var tabStyle: @MainActor () -> Void = { TabStyle.applyToOpenWindows() }
-    var freezeWorkspaces: @MainActor (Bool) -> Void = { WorkspaceRegistry.shared.setFrozen($0) }
     var releasePermissions: @MainActor () -> Void = { SessionRegistry.shared.permissionCardChanged() }
     var viewerChanged: @MainActor () -> Void = {
         for controller in TerminalController.all { controller.viewerHost.moduleChanged() }
@@ -164,12 +160,11 @@ final class TarnModuleWatcher {
         let changed = now.symmetricDifference(last)
         guard !changed.isEmpty else { return }
         last = now
-        apply(changed, now: now)
+        apply(changed)
     }
 
-    func apply(_ changed: Set<TarnModule>, now: Set<TarnModule>) {
+    func apply(_ changed: Set<TarnModule>) {
         if changed.contains(.sidebar) { owners.tabStyle() }
-        if changed.contains(.workspaces) { owners.freezeWorkspaces(!now.contains(.workspaces)) }
         if changed.contains(.permissionCard) { owners.releasePermissions() }
         if changed.contains(.viewer) { owners.viewerChanged() }
         owners.menus()

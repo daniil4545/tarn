@@ -42,22 +42,21 @@ struct TarnModulesTests {
         #expect(TarnModule.allCases.filter { $0.needs != nil } == [.permissionCard])
     }
 
-    @Test func workspacesAndNotificationsWorkWithoutTheSidebar() {
+    @Test func notificationsWorkWithoutTheSidebar() {
         defaults.set("top", forKey: "TarnTabStyle")
-        #expect(TarnModules.isOn(.workspaces, in: defaults))
         #expect(TarnModules.isOn(.notifications, in: defaults))
     }
 
     @Test func aValueOfTheWrongTypeCountsAsOn() {
-        defaults.set(["x"], forKey: TarnModule.workspaces.key)
+        defaults.set(["x"], forKey: TarnModule.viewer.key)
         defaults.set("maybe", forKey: TarnModule.notifications.key)
         defaults.set(7, forKey: TarnModule.permissionCard.key)
-        #expect(TarnModules.isOn(.workspaces, in: defaults))
+        #expect(TarnModules.isOn(.viewer, in: defaults))
         #expect(TarnModules.isOn(.notifications, in: defaults))
         #expect(TarnModules.isOn(.permissionCard, in: defaults))
     }
 
-    // `-TarnModule.workspaces NO` on the command line is a string in the argument domain; the
+    // `-TarnFileViewer NO` on the command line is a string in the argument domain; the
     // domain is process-wide, so the test reads the parser the flag uses for it.
     @Test(arguments: [("NO", false), ("YES", true), ("false", false), ("1", true), ("0", false)])
     func launchArgumentWordsAreRead(word: String, expected: Bool) {
@@ -68,8 +67,8 @@ struct TarnModulesTests {
     // Stored elsewhere, a word or an integer is a wrong type and counts as on.
     @Test(arguments: ["NO", "false", "0"] as [Any])
     func wordsAndIntegersOutsideTheLaunchArgumentsCountAsOn(value: Any) {
-        defaults.set(value, forKey: TarnModule.workspaces.key)
-        #expect(TarnModules.isOn(.workspaces, in: defaults))
+        defaults.set(value, forKey: TarnModule.viewer.key)
+        #expect(TarnModules.isOn(.viewer, in: defaults))
     }
 
     @Test func aSwitchedBoolIsRead() {
@@ -91,7 +90,7 @@ struct TarnModulesTests {
         sub.submenu?.addItem(NSMenuItem(title: "v", action: NSSelectorFromString("toggleViewer:"), keyEquivalent: ""))
         menu.addItem(sub)
 
-        TarnModules.applyMenus(menu) { $0 == .workspaces }
+        TarnModules.applyMenus(menu) { _ in false }
         #expect(menu.items.map(\.isHidden) == [false, true, true, false, false])
         #expect(sub.submenu?.items.first?.isHidden == true)
 
@@ -155,7 +154,6 @@ struct TarnModulesTests {
 struct ModuleWatcherTests {
     private final class Spy {
         var tabStyle = 0
-        var frozen: [Bool] = []
         var released = 0
         var viewer = 0
         var menus = 0
@@ -173,7 +171,6 @@ struct ModuleWatcherTests {
         let spy = spy
         watcher = TarnModuleWatcher(defaults: defaults, owners: ModuleOwners(
             tabStyle: { spy.tabStyle += 1 },
-            freezeWorkspaces: { spy.frozen.append($0) },
             releasePermissions: { spy.released += 1 },
             viewerChanged: { spy.viewer += 1 },
             menus: { spy.menus += 1 }
@@ -182,18 +179,7 @@ struct ModuleWatcherTests {
 
     @Test func nothingHappensWithoutAChange() {
         watcher.check()
-        #expect(spy.tabStyle + spy.frozen.count + spy.released + spy.viewer + spy.menus == 0)
-    }
-
-    @Test func workspacesFreezeAndThawThroughTheWatcher() {
-        defaults.set(false, forKey: TarnModule.workspaces.key)
-        watcher.check()
-        #expect(spy.frozen == [true])
-        defaults.set(true, forKey: TarnModule.workspaces.key)
-        watcher.check()
-        #expect(spy.frozen == [true, false])
-        watcher.check()
-        #expect(spy.frozen.count == 2)
+        #expect(spy.tabStyle + spy.released + spy.viewer + spy.menus == 0)
     }
 
     @Test func switchingThePermissionCardOffReleasesWaitingHooks() {
@@ -207,7 +193,6 @@ struct ModuleWatcherTests {
         watcher.check()
         #expect(spy.tabStyle == 1)
         #expect(spy.released == 1)
-        #expect(spy.frozen.isEmpty)
         defaults.set("sidebar", forKey: TabStyle.key)
         watcher.check()
         #expect(spy.tabStyle == 2)

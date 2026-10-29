@@ -129,7 +129,6 @@ enum WorkspacePrompt {
 
     /// Asks for a group name or a project folder (G2) and creates it. Cancel does nothing (S2).
     static func newGroup(in window: NSWindow) {
-        guard TarnModules.isOn(.workspaces) else { return }
         let form = NewGroupForm()
         let alert = NSAlert()
         alert.messageText = "New group"

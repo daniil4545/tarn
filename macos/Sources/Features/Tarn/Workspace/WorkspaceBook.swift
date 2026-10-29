@@ -30,8 +30,6 @@ struct WorkspaceBook {
     }
 
     private(set) var sets: [UUID: WorkspaceSet] = [:]
-    /// Workspaces are off: a new tab stays ungrouped and no tab or workspace moves (`docs/modules/workspaces.md`).
-    var frozen = false
     private var setOf: [TabKey: UUID] = [:]
     /// Tabs seen in a group that held every live tab of their set. A settled tab that shows
     /// up in a group without its set has left it. Restored tabs start unsettled: AppKit

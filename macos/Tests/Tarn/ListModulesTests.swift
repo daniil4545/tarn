@@ -14,7 +14,7 @@ struct ListModulesTests {
     }
 
     @Test func namesAreKebabCase() {
-        #expect(TarnModule.allCases.map(ListModules.name) == ["sidebar", "viewer", "workspaces", "permission-card", "notifications"])
+        #expect(TarnModule.allCases.map(ListModules.name) == ["sidebar", "viewer", "permission-card", "notifications"])
     }
 
     @Test func stateIsOnOffOrUnavailableWhenANeededModuleIsOff() {

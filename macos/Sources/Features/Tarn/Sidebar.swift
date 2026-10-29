@@ -209,17 +209,13 @@ final class SidebarModel: ObservableObject {
         WorkspaceTitle.apply(to: window)
         let effective = TarnModules.effective()
         if modules != effective { modules = effective }
-        let flat = !effective.contains(.workspaces)
 
         // The window only carries a key equivalent label while it is in a tab group, so a
         // lone tab would have none. Look the shortcuts up from the keybinds instead.
         let config = (window.windowController as? BaseTerminalController)?.ghostty.config
         let positions = Dictionary(uniqueKeysWithValues: tabWindows.enumerated().map { (ObjectIdentifier($1), $0 + 1) })
 
-        // Workspaces off: one flat list in the order of the native tabs, whatever the frozen workspaces say.
-        let runs = flat
-            ? [WorkspaceRun(workspace: nil, windows: tabWindows)]
-            : registry.runs(for: window)
+        let runs = registry.runs(for: window)
         let newGroups = runs.map { run in
             Group(workspace: run.workspace, tabs: run.windows.compactMap { tabWindow -> Tab? in
                 guard let index = positions[ObjectIdentifier(tabWindow)], let key = registry.tabKey(of: tabWindow)
@@ -474,16 +470,14 @@ final class SidebarModel: ObservableObject {
         }
         moveTo.submenu = submenu
         moveTo.isEnabled = canMove
-        if modules.contains(.workspaces) {
-            menu.addItem(moveTo)
-            if workspaces.contains(where: { $0.tabs.contains { $0.id == tab.id } }) {
-                menu.addItem(menuItem("Remove from group") { [weak self] in
-                    guard let window = self?.tabWindow(for: tab) else { return }
-                    self?.registry.moveTab(window, to: nil)
-                })
-            }
-            menu.addItem(.separator())
+        menu.addItem(moveTo)
+        if workspaces.contains(where: { $0.tabs.contains { $0.id == tab.id } }) {
+            menu.addItem(menuItem("Remove from group") { [weak self] in
+                guard let window = self?.tabWindow(for: tab) else { return }
+                self?.registry.moveTab(window, to: nil)
+            })
         }
+        menu.addItem(.separator())
         menu.addItem(menuItem("Rename Tab...") { [weak self] in
             self?.select(tab)
             self?.controller(for: tab)?.promptTabTitle()
@@ -831,7 +825,7 @@ struct Sidebar: View {
     static let rowGap: CGFloat = 2
     /// The indent of the rows under a workspace header (`demo/css/chrome.css`).
     static let groupIndent: CGFloat = 12
-    /// The space above a block of ungrouped rows while Workspaces is on.
+    /// The space above a block of ungrouped rows.
     static let ungroupedGap: CGFloat = 10
 
     /// `width` held in `widthRange`. A stored value outside the range, or not a number, would
@@ -894,7 +888,7 @@ struct Sidebar: View {
                 HStack {
                     collapseButton
                     // New Group sits next to Hide Sidebar, as in the demo.
-                    if model.modules.contains(.workspaces) { newWorkspaceButton }
+                    newWorkspaceButton
                     Spacer()
                     if model.modules.contains(.viewer) { viewerButton }
                     newTabButton
@@ -909,7 +903,7 @@ struct Sidebar: View {
                                 ForEach(model.groups) { group in
                                     if let workspace = group.workspace {
                                         WorkspaceHeader(model: model, group: group, workspace: workspace)
-                                    } else if model.modules.contains(.workspaces) {
+                                    } else {
                                         // Where a header would stand: the demo's gap above ungrouped rows.
                                         Color.clear.frame(height: Sidebar.ungroupedGap)
                                             .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.id)) }
@@ -1268,7 +1262,7 @@ struct NativeTabMark: View {
 
     var body: some View {
         if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }) {
-            let name = Self.workspaceName(tab.workspace, workspacesOn: model.modules.contains(.workspaces), workspaces: model.groups.count)
+            let name = Self.workspaceName(tab.workspace, workspaces: model.groups.count)
             if name != nil || tab.agentProcess != nil {
                 HStack(spacing: 6) {
                     if let name {
@@ -1291,9 +1285,9 @@ struct NativeTabMark: View {
         }
     }
 
-    /// The workspace name a native tab shows, or nil while Workspaces is off, the window set has one workspace, or the name is empty.
-    nonisolated static func workspaceName(_ name: String, workspacesOn: Bool, workspaces: Int) -> String? {
-        workspacesOn && workspaces >= 2 && !name.isEmpty ? name : nil
+    /// The workspace name a native tab shows, or nil when the window set has one workspace or the name is empty.
+    nonisolated static func workspaceName(_ name: String, workspaces: Int) -> String? {
+        workspaces >= 2 && !name.isEmpty ? name : nil
     }
 
     /// Puts the mark first in the accessory stack Ghostty gives every native tab.

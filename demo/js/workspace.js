@@ -25,12 +25,8 @@ export const paneOf = (id) => panes.get(id);
 // Ids of every pane of a tab, shown or hidden (a viewer hidden with Toggle Pane stays alive).
 // `stashed` holds the viewers of a tab while File viewer is off; `hidden` is the user's Cmd+B hide.
 export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node)), ...(tab.stashed ?? []).map((h) => tree.leafId(h.node))];
-// The tab order down the list. Workspaces off: `s.order` (set by a drag) wins over the frozen groups; membership never changes.
-export const flatTabs = (s) => {
-  const grouped = s.wss.flatMap((w) => w.tabs);
-  if (isOn("workspaces") || !s.order) return grouped;
-  return [...s.order.filter((id) => grouped.includes(id)), ...grouped.filter((id) => !s.order.includes(id))];
-};
+// The tab order down the list.
+export const flatTabs = (s) => s.wss.flatMap((w) => w.tabs);
 export const currentTab = (s = read("workspaces")) => s.tabs[s.cur] ?? null;
 const wsOf = (s, tabId) => s.wss.find((w) => w.tabs.includes(tabId));
 const tabOfLeaf = (s, id) => Object.values(s.tabs).find((t) => tree.pathOf(t.layout, id) !== null);
@@ -117,7 +113,6 @@ export function startWorkspaces({ createPane, createViewer }) {
   // on again they return to their seats. Cmd+B's own hide (`hidden`) is a separate list.
   bus.on("config:changed", ({ key }) => {
     if (key === "file-viewer") update(syncViewers);
-    if (key === "module-workspaces" && isOn("workspaces")) update((s) => { delete s.order; }); // regroup into the frozen groups
   });
   if (!isOn("viewer")) update(syncViewers);
   Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => (NEEDS_TAB.test(name) && !currentTab() ? undefined : fn(payload))));
@@ -153,9 +148,6 @@ function ensurePane(id, cwd) {
 }
 
 const short = (cwd) => cwd.replace("~/code/", "~/c/");
-// Workspaces off (or Sidebar off): the registry stops grouping. New tabs are ungrouped; the frozen
-// groups stay untouched.
-const flat = () => !isOn("workspaces");
 // Ungrouped tabs sit in headerless blocks anywhere between the groups (docs/specs/workspace-folder.md
 // G5). The block at list index `at` (the tail by default), or the one just above it, else a new one there.
 const looseAt = (s, at = s.wss.length) => {
@@ -292,7 +284,7 @@ const COMMANDS = {
   // group, in the current tab's folder.
   "tab.new": ({ ws, pane, cwd, title, header = false, select = true }) => update((s) => {
     if (!s.wss.length) return openWindow(s);
-    const target = flat() ? looseAt(s) : (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || looseAt(s);
+    const target = (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || looseAt(s);
     const id = addTab(s, target, { cwd: cwd ?? ((header && target.folder) || undefined), title });
     const at = target.tabs.indexOf(s.cur);
     if (!header && !ws && at >= 0) target.tabs.splice(at + 1, 0, target.tabs.pop()); // Cmd+T: next to the current tab
@@ -317,12 +309,6 @@ const COMMANDS = {
   // Before another tab or at the end of a group or ungrouped block. `ws: "loose"` ungroups: with
   // `after` (Remove from group) the tab stands right below that group, else at the tail.
   "tab.move": ({ id, ws, before = null, after = null }) => update((s) => {
-    if (flat()) { // a drag only changes the order of the flat list; the frozen groups stay
-      const rest = flatTabs(s).filter((x) => x !== id), at = before ? rest.indexOf(before) : -1;
-      rest.splice(at >= 0 ? at : rest.length, 0, id);
-      s.order = rest;
-      return;
-    }
     const below = after ? s.wss.findIndex((w) => w.id === after) + 1 : 0;
     const to = ws === "loose" ? looseAt(s, below || s.wss.length) : s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
@@ -426,7 +412,6 @@ const COMMANDS = {
   // A group with one new tab, at the bottom of the list. With a folder it is a workspace: the tab
   // starts in the folder; a plain group's tab starts where Cmd+T would.
   "ws.new": ({ name, folder }) => update((s) => {
-    if (flat()) return;
     const ws = { id: nextId("w"), name, tabs: [], ...(folder ? { folder } : {}) };
     s.wss.push(ws);
     s.cur = addTab(s, ws, { cwd: folder ?? inheritedCwd(s) });
@@ -434,18 +419,18 @@ const COMMANDS = {
 
   "ws.rename": ({ id, name }) => update((s) => {
     const w = s.wss.find((x) => x.id === id);
-    if (!flat() && !w.loose) w.name = name;
+    if (!w.loose) w.name = name;
   }),
   "ws.fold": ({ id }) => update((s) => {
     const w = s.wss.find((x) => x.id === id);
-    if (!flat() && !w.loose) w.collapsed = !w.collapsed;
+    if (!w.loose) w.collapsed = !w.collapsed;
   }),
 
   // Ungroup, as Warp does: the tabs stay where they are, ungrouped. With `closeTabs` the tabs
   // close too, each with its own undo.
   "ws.delete": ({ id, closeTabs = false }) => {
     const ws = read("workspaces").wss.find((w) => w.id === id);
-    if (flat() || !ws || ws.loose) return;
+    if (!ws || ws.loose) return;
     if (!closeTabs) {
       update((s) => {
         const at = s.wss.findIndex((w) => w.id === id);
@@ -459,7 +444,6 @@ const COMMANDS = {
 
   // Before another group or ungrouped block, or at the bottom.
   "ws.move": ({ id, before = null }) => update((s) => {
-    if (flat()) return;
     const ws = s.wss.find((w) => w.id === id);
     if (ws.loose) return;
     s.wss = s.wss.filter((w) => w !== ws);

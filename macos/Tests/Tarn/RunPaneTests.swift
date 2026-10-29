@@ -13,10 +13,9 @@ struct RunPaneTests {
     }
 
     // spec: docs/specs/agent-cli.md U5
-    @Test func frozenWorkspacesRefuseEvenAGroupedCaller() {
-        #expect(NewTab.refusal(group: UUID(), frozen: true) == AgentRefusal(text: "put this tab in a group first"))
-        #expect(NewTab.refusal(group: nil, frozen: false) == AgentRefusal(text: "put this tab in a group first"))
-        #expect(NewTab.refusal(group: UUID(), frozen: false) == nil)
+    @Test func onlyAnUngroupedCallerIsRefused() {
+        #expect(NewTab.refusal(group: nil) == AgentRefusal(text: "put this tab in a group first"))
+        #expect(NewTab.refusal(group: UUID()) == nil)
     }
 
     /// spec: agent-cli 4.5 - no command, so Ghostty starts the login shell; the line is typed input.
