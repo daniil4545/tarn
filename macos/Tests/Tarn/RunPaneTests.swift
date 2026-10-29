@@ -5,6 +5,20 @@ import Testing
 /// `tarn run`: the login shell gets the line typed and never submitted (`docs/specs/agent-cli.md` 4.5, B2).
 @Suite
 struct RunPaneTests {
+    // spec: docs/specs/agent-cli.md U5
+    @Test @MainActor func anUngroupedRunCannotOpenATab() {
+        let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
+        let result = NewPane.open(["tab": true, "argv": ["echo", "hi"]], AgentScope(caller: caller, panes: [caller]), kind: .run)
+        #expect(throws: AgentRefusal(text: "put this tab in a group first")) { try result.get() }
+    }
+
+    // spec: docs/specs/agent-cli.md U5
+    @Test func frozenWorkspacesRefuseEvenAGroupedCaller() {
+        #expect(NewTab.refusal(group: UUID(), frozen: true) == AgentRefusal(text: "put this tab in a group first"))
+        #expect(NewTab.refusal(group: nil, frozen: false) == AgentRefusal(text: "put this tab in a group first"))
+        #expect(NewTab.refusal(group: UUID(), frozen: false) == nil)
+    }
+
     /// spec: agent-cli 4.5 - no command, so Ghostty starts the login shell; the line is typed input.
     @Test func theLineIsTypedIntoTheLoginShell() {
         let run = NewPane.configuration(.run, command: "sudo make install")
