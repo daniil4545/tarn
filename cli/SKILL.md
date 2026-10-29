@@ -23,8 +23,10 @@ or 4 when a pane id matches no pane.
 
 `tarn notify <text>` marks your session and notifies the user.
 
-`tarn ls [--json]` lists the terminal panes of your workspace: `PANE TAB TITLE CWD PROCESS BRANCH
-STATE`; `STATE` is the agent state of a pane that runs an agent, else `-`.
+`tarn ls [--json]` lists the terminal panes of your workspace: `PANE TAB GROUP TITLE CWD PROCESS BRANCH
+STATE`; `GROUP` is the group name or `-` when ungrouped. JSON adds `group` (name or null) and
+`folder` (workspace folder path or null; a plain group has no folder).
+`STATE` is the agent state of a pane that runs an agent, else `-`.
 
 `tarn new [--right] [--cwd D] -- <cmd...>` opens a split below your pane (`--right`: to the right)
 that runs the command, and prints its pane id. After the command exits the last screen stays.

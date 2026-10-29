@@ -97,7 +97,7 @@ struct AgentCommandsTests {
     @Test @MainActor func jsonCarriesThePaneFields() throws {
         let mine = pane(in: left, state: "waiting")
         let entry = try #require((try ls(mine.pane.uuidString, in: [mine])["panes"] as? [[String: Any]])?.first)
-        #expect(Set(entry.keys) == ["pane", "tab", "workspace", "title", "cwd", "process", "branch", "state"])
+        #expect(Set(entry.keys) == ["pane", "tab", "workspace", "group", "folder", "title", "cwd", "process", "branch", "state"])
         #expect(entry["workspace"] as? String == left.uuidString)
         #expect(entry["state"] as? String == "waiting")
     }
@@ -109,10 +109,36 @@ struct AgentCommandsTests {
         let row = PaneRow(pane: id, tab: tab, workspace: left, title: "a\nb", cwd: "/w", process: "claude", branch: "", state: "permission")
         let lines = ListPanes.text([row]).split(separator: "\n").map(String.init)
         #expect(lines.count == 2)
-        #expect(lines[0].split(separator: " ").map(String.init) == ["PANE", "TAB", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"])
-        #expect(lines[1].split(separator: " ").map(String.init) == [id.uuidString, tab.uuidString, "a", "b", "/w", "claude", "-", "permission"])
+        #expect(lines[0].split(separator: " ").map(String.init) == ["PANE", "TAB", "GROUP", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"])
+        #expect(lines[1].split(separator: " ").map(String.init) == [id.uuidString, tab.uuidString, "-", "a", "b", "/w", "claude", "-", "permission"])
         #expect(lines[0].range(of: "TAB")?.lowerBound.utf16Offset(in: lines[0]) == id.uuidString.count + 2)
         #expect(ListPanes.text([]) == ListPanes.columns.joined(separator: "  ") + "\n")
+    }
+
+    // spec: docs/specs/workspace-folder.md S48
+    @Test @MainActor func lsShowsGroupAndFolder() throws {
+        let rows = [
+            PaneRow(pane: UUID(), tab: UUID(), workspace: left, group: "tarn", folder: "/work/tarn"),
+            PaneRow(pane: UUID(), tab: UUID(), workspace: right, group: "plain"),
+            PaneRow(pane: UUID(), tab: UUID(), workspace: nil),
+        ]
+        for row in rows {
+            let text = try #require(try ls(row.pane.uuidString, json: false, in: rows)["text"] as? String)
+            let lines = text.split(separator: "\n")
+            #expect(lines.count == 2)
+            #expect(lines[1].split(separator: " ")[2] == Substring(row.group ?? "-"))
+            let entry = try #require((try ls(row.pane.uuidString, in: rows)["panes"] as? [[String: Any]])?.first)
+            if let group = row.group {
+                #expect(entry["group"] as? String == group)
+            } else {
+                #expect(entry["group"] is NSNull)
+            }
+            if let folder = row.folder {
+                #expect(entry["folder"] as? String == folder)
+            } else {
+                #expect(entry["folder"] is NSNull)
+            }
+        }
     }
 
     /// Cells of more than one UTF-16 unit or scalar are neither cut nor shifted.

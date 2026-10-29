@@ -126,7 +126,10 @@ def main() -> int:
         )
 
         # ls: names the caller, text rows are decoded, --json prints the reply line.
-        rows = 'PANE  TITLE\n1     a"b\n'
+        rows = (
+            "PANE  TAB  GROUP  TITLE  CWD  PROCESS  BRANCH  STATE\n"
+            '1     2    tarn   a"b    /w   zsh      main    -\n'
+        )
         (code, out, _), req = with_server(home, reply(text=rows), ["ls"])
         check("ls text", code == 0 and out == rows, (code, out))
         check(
@@ -134,7 +137,9 @@ def main() -> int:
             req == [{"version": 1, "cmd": "ls", "surface": SURFACE, "json": False}],
             req,
         )
-        line = reply(panes=[{"pane": SURFACE, "title": "x\\ny"}])
+        line = reply(
+            panes=[{"pane": SURFACE, "group": "tarn", "folder": None, "title": "x\\ny"}]
+        )
         (code, out, _), req = with_server(home, line, ["ls", "--json"])
         check(
             "ls json",
