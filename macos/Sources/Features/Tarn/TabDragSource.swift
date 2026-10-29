@@ -126,6 +126,8 @@ struct SidebarInteraction: NSViewRepresentable {
     /// Strips at the sides that stay clickable for SwiftUI buttons below.
     var excludedLeading: CGFloat = 0
     var excludedTrailing: CGFloat = 0
+    /// The padding around the drawn card, left out of the drag image.
+    var cardInset = NSEdgeInsetsZero
     var toolTip: String?
 
     func makeNSView(context: Context) -> InteractionView {
@@ -150,6 +152,7 @@ struct SidebarInteraction: NSViewRepresentable {
         view.dragMoved = dragMoved
         view.excludedLeading = excludedLeading
         view.excludedTrailing = excludedTrailing
+        view.cardInset = cardInset
         view.toolTip = toolTip
     }
 
@@ -165,6 +168,7 @@ struct SidebarInteraction: NSViewRepresentable {
         var dragMoved: (NSPoint) -> Void = { _ in }
         var excludedLeading: CGFloat = 0
         var excludedTrailing: CGFloat = 0
+        var cardInset = NSEdgeInsetsZero
 
         private var mouseDownEvent: NSEvent?
         private var didDrag = false
@@ -217,7 +221,12 @@ struct SidebarInteraction: NSViewRepresentable {
             let item = NSPasteboardItem()
             item.setString(payload.value, forType: payload.kind.pasteboardType)
             let dragging = NSDraggingItem(pasteboardWriter: item)
-            dragging.setDraggingFrame(bounds, contents: snapshot())
+            let card = NSRect(
+                x: bounds.minX + cardInset.left, y: bounds.minY + cardInset.bottom,
+                width: bounds.width - cardInset.left - cardInset.right,
+                height: bounds.height - cardInset.top - cardInset.bottom
+            )
+            dragging.setDraggingFrame(card, contents: snapshot(of: card))
             beginDraggingSession(with: [dragging], event: start, source: self)
         }
 
@@ -233,16 +242,19 @@ struct SidebarInteraction: NSViewRepresentable {
 
         /// The row as drawn, for the drag image. SwiftUI draws the row in its hosting view: the
         /// representable's own host draws nothing, and its snapshot is blank.
-        private func snapshot() -> NSImage {
+        private func snapshot(of card: NSRect) -> NSImage {
             let host = window?.contentView ?? self
-            let rect = host.convert(bounds, from: self)
+            let rect = host.convert(card, from: self)
             guard let rep = host.bitmapImageRepForCachingDisplay(in: rect) else {
-                return NSImage(size: bounds.size)
+                return NSImage(size: card.size)
             }
             host.cacheDisplay(in: rect, to: rep)
-            let image = NSImage(size: rect.size)
-            image.addRepresentation(rep)
-            return image
+            // Clipped to the card's corners, so no sidebar shows at its edges.
+            return NSImage(size: rect.size, flipped: false) { frame in
+                NSBezierPath(roundedRect: frame, xRadius: Sidebar.cardRadius, yRadius: Sidebar.cardRadius).addClip()
+                rep.draw(in: frame)
+                return true
+            }
         }
 
         func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {

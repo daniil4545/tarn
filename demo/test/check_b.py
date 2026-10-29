@@ -479,7 +479,7 @@ def run(base):
         def point(dst, fy, fx=0.3):
             pg.wait_for_timeout(
                 250
-            )  # the rows end their 150 ms slide before the target is measured
+            )  # the rows end their 100 ms slide before the target is measured
             box = dst.bounding_box()
             pg.mouse.move(
                 box["x"] + box["width"] * fx, box["y"] + box["height"] * fy, steps=5

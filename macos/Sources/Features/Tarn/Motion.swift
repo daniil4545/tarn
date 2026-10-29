@@ -12,4 +12,7 @@ enum Motion {
     static var hover: Animation { .easeOut(duration: fast) }
 
     static var fold: Animation { .easeInOut(duration: base) }
+
+    /// The rows part for a dragged tab: short and without a slow start, so they keep up with the pointer.
+    static var gap: Animation { .easeOut(duration: fast) }
 }

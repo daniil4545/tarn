@@ -520,7 +520,7 @@ final class SidebarModel: ObservableObject {
             : nil
         if let liftedTab {
             slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
-            if slot != dropSlot { withAnimation(Motion.fold) { dropSlot = slot } }
+            if slot != dropSlot { withAnimation(Motion.gap) { dropSlot = slot } }
         } else if dropSlot != slot {
             dropSlot = slot
         }
@@ -836,6 +836,7 @@ struct Sidebar: View {
     /// The indent of the rows under a workspace header (`demo/css/chrome.css`).
     static let groupIndent: CGFloat = 12
     static let blockMargin: CGFloat = 8
+    static let cardRadius: CGFloat = 6
 
     /// `width` held in `widthRange`. A stored value outside the range, or not a number, would
     /// draw a sidebar that is hidden, too wide or of no width, so it falls back instead.
@@ -1083,17 +1084,17 @@ private struct SidebarRow: View {
             .foregroundStyle(ink.text(tab.isSelected ? 1 : 0.7))
             // Scoped to the fill: the close button and the card logic still switch at once.
             .background {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: Sidebar.cardRadius)
                     .fill(fill)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(ink.sidebarSurface))
+                    .background(RoundedRectangle(cornerRadius: Sidebar.cardRadius).fill(ink.sidebarSurface))
                     .overlay {
-                        RoundedRectangle(cornerRadius: 6)
+                        RoundedRectangle(cornerRadius: Sidebar.cardRadius)
                             .fill(ink.accent.opacity(tab.isSelected ? 0.18 : 0))
                     }
                     .animation(Motion.hover, value: fill)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 6)
+                RoundedRectangle(cornerRadius: Sidebar.cardRadius)
                     .strokeBorder(tab.isSelected ? ink.accent.opacity(0.45) : ink.tabBorder, lineWidth: 1)
                     .allowsHitTesting(false)
             }
@@ -1152,7 +1153,10 @@ private struct SidebarRow: View {
             dragEnded: { point, accepted in model.dragEnded(tab, at: point, accepted: accepted) },
             dragMoved: { model.dragExit(at: $0) },
             // The close button of an expanded row sits in its first 22 points after the inset.
-            excludedLeading: isCompact ? 0 : Sidebar.listInset + indent + 22
+            excludedLeading: isCompact ? 0 : Sidebar.listInset + indent + 22,
+            cardInset: isCompact
+                ? NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0)
+                : NSEdgeInsets(top: Sidebar.rowGap / 2, left: Sidebar.listInset + indent, bottom: Sidebar.rowGap / 2, right: Sidebar.listInset)
         )
     }
 
