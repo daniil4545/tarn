@@ -234,7 +234,11 @@ def run(base):
         check("25c dots show in the top band of the pane", dots() == "0.6", dots())
         pg.mouse.move(box["x"] + box["width"] * 0.8, box["y"] + box["height"] * 0.8)
         pg.wait_for_timeout(250)
-        check("D6 dots stay hidden below the top 20% of the pane, as in Ghostty", dots() == "0", dots())
+        check(
+            "D6 dots stay hidden below the top 20% of the pane, as in Ghostty",
+            dots() == "0",
+            dots(),
+        )
         grip = n(f"{TERM} .grip").first.bounding_box()
         check(
             "D7 the grab handle keeps Ghostty's size, 80x12",
@@ -268,7 +272,8 @@ def run(base):
         check("D10 the divider grab zone is 14 px across", all(hit), str(hit))
         check(
             "D11 the divider shows a resize cursor",
-            pg.evaluate("getComputedStyle(document.querySelector('.sdiv.row')).cursor") == "col-resize",
+            pg.evaluate("getComputedStyle(document.querySelector('.sdiv.row')).cursor")
+            == "col-resize",
         )
         check("N5 the dragged ratio is in the state", layout("tab.layout.ratio") != 0.5)
 
@@ -436,7 +441,8 @@ def run(base):
             "W2 a folded workspace hides its tabs, shows count and state",
             len(side_tabs()) == 2
             and "4" in pg.inner_text(".wsh[data-wsh='w1']")
-            and count(".wsh[data-wsh='w1'] .dot") == 1,
+            and count(".wsh[data-wsh='w1'] .dot") == 1
+            and count("[data-block='w1'].group") == 1,
         )
         pg.click(".wsh[data-wsh='w1']")
         check("W3 unfold shows them again", len(side_tabs()) == 6)
@@ -462,6 +468,7 @@ def run(base):
             len(ws_tabs("w2")) == 3
             and pg.get_attribute(".wsh[data-wsh='w2']", "aria-expanded") == "true",
         )
+
         # Tab rows drag with the real mouse: synthetic HTML5 events once passed while the drag was broken.
         def press_row(src):
             box = src.bounding_box()
@@ -470,9 +477,13 @@ def run(base):
             pg.mouse.move(box["x"] + 30, box["y"] + box["height"] / 2 + 6, steps=2)
 
         def point(dst, fy, fx=0.3):
-            pg.wait_for_timeout(250)  # the rows end their 150 ms slide before the target is measured
+            pg.wait_for_timeout(
+                250
+            )  # the rows end their 150 ms slide before the target is measured
             box = dst.bounding_box()
-            pg.mouse.move(box["x"] + box["width"] * fx, box["y"] + box["height"] * fy, steps=5)
+            pg.mouse.move(
+                box["x"] + box["width"] * fx, box["y"] + box["height"] * fy, steps=5
+            )
 
         def mouse_drag(src, dst, fy):
             press_row(src)
@@ -481,8 +492,8 @@ def run(base):
 
         mouse_drag(n(f"{TAB}[data-tabid='t3']"), n(".wsh[data-wsh='w2']"), 0.5)
         check(
-            "W7 drag a tab onto a workspace header moves it there",
-            "t3" in ws_tabs("w2"),
+            "W7 drop onto a workspace header appends at its end",
+            ws_tabs("w2")[-1] == "t3",
         )
         n(f"{TAB}[data-tabid='t3']").click(button="right")
         pg.click("#ctx [data-mmove][data-to='w1']")
@@ -498,7 +509,7 @@ def run(base):
         # The open gap: the element it stands above, the shown element over it, and its height.
         gap_at = (
             "() => { const shown = (e, step) => { while (e && e.classList.contains('lifted')) e = e[step]; return e; };"
-            " const b = [...document.querySelectorAll('.sidebar > *')].filter((e) => e.style.marginTop);"
+            " const b = [...document.querySelectorAll('.sidebar *')].filter((e) => e.style.marginTop);"
             " if (b.length !== 1) return null; const p = shown(b[0].previousElementSibling, 'previousElementSibling');"
             " return {below: b[0].dataset.tabid || b[0].dataset.wsh || b[0].id, above: p.dataset.tabid || p.dataset.wsh,"
             " h: b[0].getBoundingClientRect().top - p.getBoundingClientRect().bottom}; }"
@@ -512,16 +523,26 @@ def run(base):
         at = pg.evaluate(gap_at)
         check(
             "W10d a dragged tab leaves the list and a gap of its height stays in its place",
-            at is not None and at["below"] == slot_h[0] and abs(at["h"] - slot_h[1]) < 1 and count(f"{TAB}[data-tabid='t4']:visible") == 0,
+            at is not None
+            and at["below"] == slot_h[0]
+            and abs(at["h"] - slot_h[1]) < 1
+            and count(f"{TAB}[data-tabid='t4']:visible") == 0,
             str((at, slot_h)),
         )
         moved = []
         for x, y in ((60, 200), (110, 290)):
             pg.mouse.move(x, y)
-            moved.append(n(".dragghost").bounding_box() if count(".dragghost") == 1 else None)
+            moved.append(
+                n(".dragghost").bounding_box() if count(".dragghost") == 1 else None
+            )
         check(
             "W10g a solid copy of the row follows the pointer",
-            None not in moved and (round(moved[1]["x"] - moved[0]["x"]), round(moved[1]["y"] - moved[0]["y"])) == (50, 90),
+            None not in moved
+            and (
+                round(moved[1]["x"] - moved[0]["x"]),
+                round(moved[1]["y"] - moved[0]["y"]),
+            )
+            == (50, 90),
             str(moved),
         )
         for frac, side, name in ((0.25, "below", "top"), (0.75, "above", "bottom")):
@@ -534,29 +555,65 @@ def run(base):
             )
         pg.wait_for_timeout(300)
         at = pg.evaluate(gap_at)
-        check("W10e the rows slide apart: the gap grows to the slot of a row", at is not None and abs(at["h"] - slot_h[1]) < 1, str(at))
+        check(
+            "W10e the rows slide apart: the gap grows to the slot of a row",
+            at is not None and abs(at["h"] - slot_h[1]) < 1,
+            str(at),
+        )
         pg.mouse.up()
         order = ws_tabs("w1")
-        check("W10b a drop in the lower half puts the tab after the row", order.index("t4") == order.index("t1") + 1, str(order))
+        check(
+            "W10b a drop in the lower half puts the tab after the row",
+            order.index("t4") == order.index("t1") + 1,
+            str(order),
+        )
         moving = ws_tabs("w2")[0]
         press_row(n(f"{TAB}[data-tabid='{moving}']"))
         point(n(".wsh[data-wsh='w1']"), 0.5)
         at = pg.evaluate(gap_at)
         check(
-            "W10c a tab over a workspace header opens the gap at the end of that workspace, no frame, no line",
-            at is not None and at["above"] == ws_tabs("w1")[-1] and count(".dropmark") == 0 and count(".wsline") == 0,
+            "W10c header hover outlines the whole group without a gap or line",
+            at is None
+            and count("[data-block='w1'].dropgroup") == 1
+            and count(".wsline") == 0
+            and n(".dropgroup").evaluate("e => getComputedStyle(e).outlineColor")
+            == "rgb(10, 132, 255)",
             str(at),
         )
         pg.keyboard.press("Escape")
         pg.mouse.up()
         check(
             "W10f Esc ends the drag: the gap and the copy go away, the row comes back, nothing moves",
-            pg.evaluate(gap_at) is None and count(f"{TAB}.lifted") == 0 and count(".dragghost") == 0 and moving in ws_tabs("w2"),
+            pg.evaluate(gap_at) is None
+            and count(f"{TAB}.lifted") == 0
+            and count(".dragghost") == 0
+            and moving in ws_tabs("w2"),
         )
+        before_outside = snap()["wss"]
         press_row(n(f"{TAB}[data-tabid='{moving}']"))
         point(n("#ws"), 0.5, 0.5)
+        check(
+            "W10m leaving the sidebar closes the gap and outline but keeps the lifted row and ghost",
+            pg.evaluate(gap_at) is None
+            and count(".dropgroup") == 0
+            and count(f"{TAB}.lifted") == 1
+            and count(".dragghost") == 1,
+        )
+        point(n(".wsh[data-wsh='w1']"), 0.5)
+        check(
+            "W10n returning to the sidebar recomputes the header target",
+            count(".dropgroup") == 1,
+        )
+        point(n("#ws"), 0.5, 0.5)
+        check(
+            "W10s leaving a header for the terminal closes its outline",
+            count(".dropgroup") == 0,
+        )
         pg.mouse.up()
-        check("W10h a tab let go outside the sidebar stays where it was", moving in ws_tabs("w2") and count(".dragghost") == 0)
+        check(
+            "W10h a tab let go outside the sidebar stays where it was",
+            snap()["wss"] == before_outside and count(".dragghost") == 0,
+        )
         n(f"{TAB}[data-tabid='t1']").click()
         check("W10i a plain click still selects a tab", cur() == "t1")
         # A release after a drag lands on the gap, not the row it left, except after Esc: W10k.
@@ -566,11 +623,66 @@ def run(base):
         pg.keyboard.press("Escape")
         pg.mouse.move(start["x"] + 30, start["y"] + start["height"] / 2)
         pg.mouse.up()
-        check("W10k Esc and a release over the row it left select nothing and move nothing", cur() == "t1" and ws_tabs("w1") == order, cur())
+        check(
+            "W10k Esc and a release over the row it left select nothing and move nothing",
+            cur() == "t1" and ws_tabs("w1") == order,
+            cur(),
+        )
         mouse_drag(n(f"{TAB}[data-tabid='t2']"), n("#wsNew"), 2.5)
-        check("W10l a tab let go below the rows leaves its group for the ungrouped tabs", ws_tabs("w0")[-1] == "t2", str(ws_tabs("w0")))
+        check(
+            "W10l a tab let go below the rows leaves its group for the ungrouped tabs",
+            ws_tabs("w0")[-1] == "t2",
+            str(ws_tabs("w0")),
+        )
         after_t2 = order[order.index("t2") + 1 :]
-        cmd(pg, "tab.move", {"id": "t2", "ws": "w1", "before": after_t2[0] if after_t2 else None})
+        cmd(
+            pg,
+            "tab.move",
+            {"id": "t2", "ws": "w1", "before": after_t2[0] if after_t2 else None},
+        )
+
+        press_row(n(f"{TAB}[data-tabid='{moving}']"))
+        upper = n("[data-block='w1']").bounding_box()
+        lower = n("[data-block='w2']").bounding_box()
+        pg.mouse.move(lower["x"] + 20, (upper["y"] + upper["height"] + lower["y"]) / 2)
+        pg.wait_for_timeout(250)
+        check(
+            "W10o a margin opens a gap outside the blocks",
+            n("[data-block='w2']").evaluate("e => parseFloat(e.style.marginTop) > 8")
+            and count(".dropgroup") == 0,
+        )
+        pg.mouse.up()
+        groups = snap()["wss"]
+        check(
+            "W10p drop between groups makes the tab ungrouped there",
+            groups[1].get("loose")
+            and moving in groups[1]["tabs"]
+            and groups[0]["id"] == "w1"
+            and groups[2]["id"] == "w2",
+            str(groups),
+        )
+        cmd(pg, "tab.move", {"id": moving, "ws": "w2"})
+        press_row(n(f"{TAB}[data-tabid='{moving}']"))
+        first = n("[data-block='w1']").bounding_box()
+        pg.mouse.move(first["x"] + 20, first["y"] - 4)
+        pg.mouse.up()
+        groups = snap()["wss"]
+        check(
+            "W10r drop above the first group ungroups the tab before it",
+            groups[0].get("loose")
+            and moving in groups[0]["tabs"]
+            and groups[1]["id"] == "w1",
+        )
+        cmd(pg, "tab.move", {"id": moving, "ws": "w2"})
+        for theme in ("light", "dark"):
+            set_config("window-theme", theme)
+            check(
+                f"W10q {theme} group blocks have a distinct background and inner padding",
+                n(".group").first.evaluate(
+                    "e => { const s = getComputedStyle(e); return s.backgroundColor !== getComputedStyle(e.parentElement).backgroundColor && parseFloat(s.paddingTop) > 0 && parseFloat(s.borderRadius) > 0; }"
+                ),
+            )
+        cmd(pg, "config.reset", {"key": "window-theme"})
 
         def new_group(field, text):
             pg.click("#wsNew")
@@ -611,7 +723,8 @@ def run(base):
         pg.click(".ask-dialog button:text('Delete')")
         check(
             "W12 deleting a group keeps its tabs ungrouped where they stood, after the ungrouped tab above",
-            ws_tabs("w0")[-1] == home["tabs"][0] and count(f".wsh[data-wsh='{home['id']}']") == 0,
+            ws_tabs("w0")[-1] == home["tabs"][0]
+            and count(f".wsh[data-wsh='{home['id']}']") == 0,
         )
         n(f".wsh[data-wsh='{notes['id']}']").click(button="right")
         pg.click("#ctx [data-wsdel]")
@@ -619,7 +732,8 @@ def run(base):
         pg.click(".ask-dialog button:text('Delete')")
         check(
             "W12a deleting a group with Also close its tabs closes them",
-            notes["tabs"][0] not in snap()["tabs"] and count(f".wsh[data-wsh='{notes['id']}']") == 0,
+            notes["tabs"][0] not in snap()["tabs"]
+            and count(f".wsh[data-wsh='{notes['id']}']") == 0,
         )
         for tab_id in ws_tabs("w0"):
             pg.click(f"{TAB}[data-tabid='{tab_id}'] .x")
@@ -641,7 +755,9 @@ def run(base):
             {"dataTransfer": dt, "clientX": head["x"] + 20, "clientY": head["y"] + 4},
         )
         line = n(".wsline").bounding_box()
-        line_color = pg.evaluate("getComputedStyle(document.querySelector('.wsline')).backgroundColor")
+        line_color = pg.evaluate(
+            "getComputedStyle(document.querySelector('.wsline')).backgroundColor"
+        )
         check(
             "D5 the sidebar drop line is the system accent",
             line_color == "rgb(10, 132, 255)",
@@ -735,7 +851,8 @@ def run(base):
         side = n("#sidebar").bounding_box()
         check(
             "W22b the edge grab zone is 14 px wide and reaches both sides of the sidebar edge",
-            grip["width"] >= 14 and grip["x"] < side["x"] + side["width"] < grip["x"] + grip["width"],
+            grip["width"] >= 14
+            and grip["x"] < side["x"] + side["width"] < grip["x"] + grip["width"],
             str((grip, side)),
         )
         check(
@@ -816,23 +933,38 @@ def run(base):
             "N17 a working agent's card shows its state",
             "Working" in pg.inner_text("#tabcard"),
         )
-        pg.wait_for_function("__tarn.snapshot().registry.p1.state === 'waiting'", timeout=15000)
+        pg.wait_for_function(
+            "__tarn.snapshot().registry.p1.state === 'waiting'", timeout=15000
+        )
         n('[data-pane="p1"] canvas').first.click()
         pg.keyboard.type("which style?")
         pg.keyboard.press("Enter")
-        pg.wait_for_function("__tarn.snapshot().registry.p1.state === 'permission'", timeout=10000)
+        pg.wait_for_function(
+            "__tarn.snapshot().registry.p1.state === 'permission'", timeout=10000
+        )
         pg.hover(f"{TAB}[data-tabid='t1']")
         pg.wait_for_timeout(700)
         card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
-        check("Q1 two questions: the card shows the first with its options", "Question 1 of 2" in card and count("#tabcard [data-qopt]") == 2, card[:80])
+        check(
+            "Q1 two questions: the card shows the first with its options",
+            "Question 1 of 2" in card and count("#tabcard [data-qopt]") == 2,
+            card[:80],
+        )
         pg.click("#tabcard [data-qopt='0']")
         card = pg.inner_text("#tabcard") if vis("#tabcard") else ""
-        check("Q2 an option moves the card to the next question", "Question 2 of 2" in card and "rows" in card, card[:80])
+        check(
+            "Q2 an option moves the card to the next question",
+            "Question 2 of 2" in card and "rows" in card,
+            card[:80],
+        )
         pg.click("#tabcard [data-qopt='1']")
-        pg.wait_for_function("__tarn.screen('p1').includes('Rows: Narrow')", timeout=10000)
+        pg.wait_for_function(
+            "__tarn.screen('p1').includes('Rows: Narrow')", timeout=10000
+        )
         check(
             "Q3 the last option sends all answers in one reply and closes the card",
-            "Tabs: Sidebar" in pg.evaluate("__tarn.screen('p1')") and not vis("#tabcard"),
+            "Tabs: Sidebar" in pg.evaluate("__tarn.screen('p1')")
+            and not vis("#tabcard"),
         )
         pg.mouse.move(700, 500)
 
@@ -865,7 +997,8 @@ def run(base):
         pg.keyboard.press("Meta+n")
         check(
             "O5 a new window starts with one ungrouped tab and no group",
-            [(w.get("loose", False), len(w["tabs"])) for w in snap()["wss"]] == [(True, 1)]
+            [(w.get("loose", False), len(w["tabs"])) for w in snap()["wss"]]
+            == [(True, 1)]
             and count(".wsh:not(.flat)") == 0,
         )
 
@@ -986,7 +1119,8 @@ def run(base):
         check(
             "A1 a file at the left edge of the tab area draws the line in the middle of the area",
             frame is not None
-            and abs(frame["x"] + frame["width"] / 2 - (box["x"] + box["width"] / 2)) <= 2
+            and abs(frame["x"] + frame["width"] / 2 - (box["x"] + box["width"] / 2))
+            <= 2
             and abs(frame["height"] - box["height"]) <= 3,
             str(frame),
         )
@@ -1008,7 +1142,8 @@ def run(base):
             "A3 the top left corner of a split area draws a line across its top left part, at the half",
             frame is not None
             and abs(frame["width"] - box["width"] * ratio) <= 3
-            and abs(frame["y"] + frame["height"] / 2 - (box["y"] + box["height"] / 2)) <= 2,
+            and abs(frame["y"] + frame["height"] / 2 - (box["y"] + box["height"] / 2))
+            <= 2,
             f"{frame} ratio={ratio}",
         )
         area_drop(pos, dt)
@@ -1025,7 +1160,9 @@ def run(base):
         look = drop_look()
         check(
             "D4 a refused drop has no line, only a gray chip with the reason",
-            look["bg"] == "rgba(0, 0, 0, 0)" and look["chip"] == "rgb(110, 112, 120)" and look["text"] != "",
+            look["bg"] == "rgba(0, 0, 0, 0)"
+            and look["chip"] == "rgb(110, 112, 120)"
+            and look["text"] != "",
             str(look),
         )
         pg.evaluate("document.dispatchEvent(new Event('dragend'))")
@@ -1040,20 +1177,28 @@ def run(base):
         rows = count(TAB)
         check(
             "R1 rows are wide by default: a second line with the folder",
-            rows > 0 and count(f"{TAB}.wide") == rows and "~" in n(f"{TAB} .l2").first.inner_text(),
+            rows > 0
+            and count(f"{TAB}.wide") == rows
+            and "~" in n(f"{TAB} .l2").first.inner_text(),
         )
         pg.evaluate("document.activeElement.blur()")
         pg.keyboard.press("Meta+Comma")
         pg.click("#settings input[name='tabrows'][value='narrow']")
         pg.click("#settingsClose")
-        check("R2 Settings, Row size, Narrow gives one-line rows", count(f"{TAB}.wide") == 0 and count(TAB) == rows)
+        check(
+            "R2 Settings, Row size, Narrow gives one-line rows",
+            count(f"{TAB}.wide") == 0 and count(TAB) == rows,
+        )
         pg.reload()
         pg.wait_for_selector(TAB)
         check("R2a Row size survives a reload", count(f"{TAB}.wide") == 0)
         cmd(pg, "config.set", {"key": "tab-rows", "value": "wide"})
         before = count(VIEWER)
         pg.click("#sbViewer")
-        check("R3 the header viewer button opens the pane, as Cmd+B", count(VIEWER) == before + 1)
+        check(
+            "R3 the header viewer button opens the pane, as Cmd+B",
+            count(VIEWER) == before + 1,
+        )
         pg.click("#sbViewer")
         check("R4 a second press hides it", not vis(VIEWER))
         pg.click("#sbToggle")
@@ -1065,8 +1210,10 @@ def run(base):
         pg.keyboard.press("Control+Alt+Shift+T")
         pg.fill("#ngName", "keyed")
         pg.keyboard.press("Enter")
-        check("R4b Shift+Cmd+T (fallback Ctrl+Alt+Shift+T) asks a name and opens the group",
-              any(w["name"] == "keyed" for w in snap()["wss"]))
+        check(
+            "R4b Shift+Cmd+T (fallback Ctrl+Alt+Shift+T) asks a name and opens the group",
+            any(w["name"] == "keyed" for w in snap()["wss"]),
+        )
         pg.click("#wsNewTop")
         pg.fill("#ngName", "top")
         pg.click(".ask-dialog button:text('Create')")

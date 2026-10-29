@@ -307,13 +307,14 @@ const COMMANDS = {
   }),
 
   // Before another tab or at the end of a group or ungrouped block. `ws: "loose"` ungroups: with
-  // `after` (Remove from group) the tab stands right below that group, else at the tail.
+  // `after` (Remove from group) it stands below that group; `before` a block places it above.
   "tab.move": ({ id, ws, before = null, after = null }) => update((s) => {
     const below = after ? s.wss.findIndex((w) => w.id === after) + 1 : 0;
-    const to = ws === "loose" ? looseAt(s, below || s.wss.length) : s.wss.find((w) => w.id === ws), from = wsOf(s, id);
+    const block = s.wss.findIndex((w) => w.id === before);
+    const to = ws === "loose" ? looseAt(s, block >= 0 ? block : below || s.wss.length) : s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
     from.tabs = from.tabs.filter((x) => x !== id);
-    const at = before ? to.tabs.indexOf(before) : below ? 0 : -1;
+    const at = block >= 0 && s.wss[block] === to ? 0 : before ? to.tabs.indexOf(before) : below ? 0 : -1;
     if (at >= 0) to.tabs.splice(at, 0, id); else to.tabs.push(id);
     if (from !== to) {
       to.collapsed = false;

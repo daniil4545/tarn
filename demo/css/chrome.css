@@ -28,6 +28,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* sidebar */
 .sidebar { position: relative; width: 200px; flex: none; overflow: auto; background: var(--chrome); border-right: 1px solid var(--div); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.wsblock { display: flex; flex-direction: column; gap: 2px; flex: none; margin-top: 8px; }
+.wsblock.group { background: var(--menu); border-radius: 8px; padding: 4px; }
+.wsblock .wsh { margin-top: 0; }
+.wsblock.group.dropgroup { outline: 2px solid var(--sys-accent); outline-offset: -1px; }
 /* 14 px grab zone over the sidebar edge: 11 px inside the sidebar, 3 px into the terminal so the
    first text column stays selectable; the line shows on hover */
 .sbgrip { flex: none; width: 14px; margin: 0 -3px 0 -11px; cursor: col-resize; position: relative; z-index: 4; }
@@ -73,7 +77,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* a dragged tab leaves the list; the rows slide apart to the gap where it lands, as in Warp */
 .sidebar .tab[data-tabid] { user-select: none; }
 .sidebar .tab.lifted { display: none; }
-body.dragging .sidebar > * { transition: margin-top .15s ease-out; }
+body.dragging .sidebar > *, body.dragging .wsblock > * { transition: margin-top .15s ease-out; }
 .tab.dragghost { position: fixed; z-index: 30; pointer-events: none; color: var(--fg); background: var(--menu); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
 .tab.dragghost .x { opacity: 1; }
 .tab.dragghost .key { display: none; }
@@ -171,7 +175,6 @@ body.dragging iframe { pointer-events: none; }
 /* Ungrouped tabs: the header stays in the DOM for the drag code and takes no room; the rows sit flush. */
 .sidebar .wsh.flat { display: none; }
 .sidebar:not(.rail) .tab.loose[data-tabid] { margin-left: 0; width: 100%; }
-.sidebar .wsh.flat + .tab[data-tabid] { margin-top: 10px; }
 
 /* Notifications: the demo's banner for an agent that needs you */
 .banner { position: fixed; top: 44px; right: 16px; z-index: 40; width: 280px; padding: 9px 12px; border-radius: 10px; background: var(--menu); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .45); font-size: 12.5px; pointer-events: none; }
