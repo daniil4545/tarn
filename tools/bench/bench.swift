@@ -10,6 +10,12 @@ guard args.count == 4 else {
     exit(2)
 }
 let apps = [("tarn", URL(fileURLWithPath: args[1])), ("upstream", URL(fileURLWithPath: args[2]))]
+// TARN_BENCH_MODULES=off starts tarn with every module off. Launch arguments land in the
+// UserDefaults argument domain, so the user's own settings are not written.
+let tarnArguments = ProcessInfo.processInfo.environment["TARN_BENCH_MODULES"] == "off"
+    ? ["-TarnTabStyle", "top", "-TarnFileViewer", "NO", "-TarnModule.workspaces", "NO",
+       "-TarnModule.permissionCard", "NO", "-TarnModule.notifications", "NO"]
+    : []
 let work = URL(fileURLWithPath: args[3])
 let throughputScript = URL(fileURLWithPath: #filePath).deletingLastPathComponent().appendingPathComponent("throughput.sh")
 
@@ -38,6 +44,7 @@ func launch(_ app: URL, xdg: URL) -> NSRunningApplication {
     config.activates = true
     config.addsToRecentItems = false
     config.environment = ["XDG_CONFIG_HOME": xdg.path]
+    if app.path == apps[0].1.path { config.arguments = tarnArguments }
     var result: Result<NSRunningApplication, Error>?
     NSWorkspace.shared.openApplication(at: app, configuration: config) { running, error in
         result = running.map { .success($0) } ?? .failure(error ?? CocoaError(.fileNoSuchFile))
@@ -181,6 +188,9 @@ let rows: [(String, Double, Double, String, Bool)] = [
     ("cat 100 MB, s (median of \(throughputRuns))", tarn.cat, upstream.cat,
      String(format: "%+.1f%%", percent(tarn.cat, upstream.cat)), percent(tarn.cat, upstream.cat) <= 5),
 ]
+let modulesLine = tarnArguments.isEmpty ? "Modules: all on." : "Modules: all off (launch arguments " + tarnArguments.joined(separator: " ") + ")."
+print(modulesLine)
+print()
 print("| Metric | tarn | upstream | Difference | Within threshold |")
 print("| --- | --- | --- | --- | --- |")
 for (metric, a, b, diff, ok) in rows {

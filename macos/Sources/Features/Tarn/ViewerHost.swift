@@ -17,13 +17,17 @@ final class ViewerHost: ObservableObject {
     @Published private(set) var tree: AreaTree
     /// What the user is dragging over this tab, if it is a pane.
     @Published private(set) var drag: AreaPayload?
-    /// The viewers are hidden with Cmd+B: their models, tabs and unsaved edits live on in `panes`
+    /// The viewers are hidden: their models, tabs and unsaved edits live on in `panes`
     /// (so `models` and the close check still see them), only the layout shows the terminal alone.
     @Published private(set) var hidden = false
     private var blockLeaf: AreaLeaf
     private var panes: [UUID: Pane] = [:]
     private var lastViewer: UUID?
     private var focusObserver: NSKeyValueObservation?
+    /// Whether the File viewer module is on; tests replace it.
+    var isViewerOn: () -> Bool = { FileViewerSetting.isOn }
+    /// Restores and reopens that came while the module was off: state is kept, objects are made on switch-on.
+    private var deferred: [() -> Void] = []
 
     weak var window: NSWindow? {
         didSet {
@@ -57,6 +61,21 @@ final class ViewerHost: ObservableObject {
 
     private var lastPane: Pane? {
         lastViewer.flatMap { panes[$0] } ?? tree.viewers.first.flatMap { panes[$0.id] }
+    }
+
+    /// Whether the layout draws the viewers: not hidden by the user and the module is on. The
+    /// panes themselves stay in `panes` either way.
+    nonisolated static func isShown(hidden: Bool, moduleOn: Bool) -> Bool { !hidden && moduleOn }
+
+    /// The File viewer switch flipped: the keyboard leaves a pane that is no longer drawn.
+    func moduleChanged() {
+        if !isViewerOn(), focusedPane != nil { returnFocusToTerminal() }
+        if isViewerOn() {
+            let waiting = deferred
+            deferred = []
+            waiting.forEach { $0() }
+        }
+        objectWillChange.send()
     }
 
     private func noteFocus() {
@@ -103,31 +122,21 @@ final class ViewerHost: ObservableObject {
         }
     }
 
-    /// Cmd+B, from the terminal (the View menu item "Toggle File Viewer") or typed in a pane (the web
-    /// view takes the key first, so there is one path per focus). It opens and hides, it never closes:
-    /// no viewer opens one with the tree and the keyboard in it; hidden viewers come back as they were
-    /// with the keyboard in them; shown viewers (with files or not) hide whole, tabs, unsaved edits and
-    /// tree state kept, and the keyboard goes to the terminal. Cmd+W closes.
+    /// Cmd+B opens a tree-only viewer, shows hidden viewers, or toggles the active viewer's tree.
+    /// A shown viewer with no file closes.
     func toggleFromKey(root: String?) {
-        guard activeModel != nil else {
-            if FileViewerSetting.isOn { openTreeOnly(root: root) }
-            return
-        }
+        guard isViewerOn() else { return }
+        guard let model = activeModel else { return openTreeOnly(root: root) }
         if hidden { return show() }
-        // The page holds an edit back for 120 ms; send it before the page leaves the window.
-        for model in models { model.flushPendingEdit() }
-        hidePane()
-    }
-
-    private func focusTreeSoon() {
-        DispatchQueue.main.async { [weak self] in
-            self?.activeModel?.focusTreeInPage()
-        }
+        if model.snapshot.isEmpty { return model.closeActiveTab() }
+        model.toggleTree()
     }
 
     private func openTreeOnly(root: String?) {
         makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6).model.revealTree()
-        focusTreeSoon()
+        DispatchQueue.main.async { [weak self] in
+            self?.activeModel?.focusTreeInPage()
+        }
     }
 
     /// Hides the viewers keeping their models; the keyboard goes to the terminal.
@@ -164,7 +173,7 @@ final class ViewerHost: ObservableObject {
         let id = leaf.id
         let model = ViewerModel(root: root)
         let web = ViewerWebController(model: model)
-        model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active, undoable: true) }
+        model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active) }
         model.onHidePane = { [weak self] in self?.hidePane() }
         model.onPaneKey = { [weak self] in self?.toggleFromKey(root: nil) }
         model.onLayout = { [weak self] command in self?.layout(command, from: id) }
@@ -196,6 +205,11 @@ final class ViewerHost: ObservableObject {
 
     /// Brings the viewers of a closed tab back into a tab that has none (undo of a tab close).
     func restore(_ snapshot: ViewerSnapshot) {
+        // File viewer off: no web view is made; the snapshot waits until the module is on.
+        guard isViewerOn() else {
+            deferred.append { [weak self] in self?.restore(snapshot) }
+            return
+        }
         guard panes.isEmpty, let decoded = try? JSONDecoder().decode(AreaTree.self, from: snapshot.layout),
               let block = decoded.block
         else { return }
@@ -214,14 +228,14 @@ final class ViewerHost: ObservableObject {
 
     /// Closes a viewer. A close with files registers an undo that puts the viewer back where it was,
     /// with Ghostty's timeout.
-    private func close(_ id: UUID, saved: [ViewerTab], active: Int, undoable: Bool = false) {
+    private func close(_ id: UUID, saved: [ViewerTab], active: Int) {
         guard let pane = panes[id] else { return }
         let slot = tree.slot(of: pane.leaf)
         let root = pane.model.tree.root
         discard(id)
         if panes.isEmpty { hidden = false }
         returnFocusToTerminal()
-        guard undoable, let controller, let undoManager = controller.undoManager else { return }
+        guard let controller, let undoManager = controller.undoManager else { return }
         undoManager.setActionName("Close Viewer")
         undoManager.registerUndo(withTarget: self, expiresAfter: controller.undoExpiration) { host in
             host.reopen(saved, active: active, root: root, slot: slot)
@@ -231,6 +245,10 @@ final class ViewerHost: ObservableObject {
     /// The undo of a close: the viewer comes back where it was, shown (a viewer opened and hidden
     /// since the close takes the tabs too).
     func reopen(_ saved: [ViewerTab], active: Int, root: String, slot: AreaTree.Slot? = nil) {
+        guard isViewerOn() else {
+            deferred.append { [weak self] in self?.reopen(saved, active: active, root: root, slot: slot) }
+            return
+        }
         hidden = false
         let anchor = slot.flatMap { tree.leaf(id: $0.anchor.id) }
         let reopened = makeViewer(
@@ -282,7 +300,7 @@ final class ViewerHost: ObservableObject {
 
     /// Moves the keyboard from the terminal block to the neighbour viewer. False when there is none.
     func focusFromBlock(_ direction: AreaTree.FocusDirection) -> Bool {
-        focus(from: blockLeaf, direction)
+        isViewerOn() && focus(from: blockLeaf, direction)
     }
 
     private func focus(from leaf: AreaLeaf, _ direction: AreaTree.FocusDirection) -> Bool {
@@ -391,10 +409,8 @@ final class ViewerHost: ObservableObject {
         DispatchQueue.main.async { destination.model.onFocus?() }
     }
 
-    /// A viewer dropped outside every window opens in a new window at the drop point. The window
-    /// comes from Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out: it
-    /// sets the position when the window is presented, after which nothing cascades it back to the
-    /// first screen, and keeps it on the screen that holds the point (`constrainToScreen`).
+    /// A viewer dropped outside every window opens in a new window at the drop point, made by
+    /// Ghostty's `newWindow(_:tree:position:)`, the path of a terminal pane dragged out.
     private func detach(_ id: UUID, at point: NSPoint) {
         guard let pane = panes[id], let controller, let app = controller.ghostty.app else { return }
         let created = TerminalController.newWindow(
@@ -496,9 +512,9 @@ enum ViewerRouter {
     }
 
     @MainActor
-    private static func openFromSocket(_ message: [String: Any]) -> String? {
+    static func openFromSocket(_ message: [String: Any], viewerOn: Bool = FileViewerSetting.isOn) -> String? {
         guard message["version"] as? Int == 1 else { return "unsupported version" }
-        guard FileViewerSetting.isOn else { return "the file viewer is off in Settings" }
+        guard viewerOn else { return "the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
             return "the path must be absolute"
         }

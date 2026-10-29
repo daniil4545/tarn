@@ -9,6 +9,9 @@ tarn is an agent-first terminal for macOS, a fork of Ghostty. It keeps the Ghost
 ## Principles
 
 - Simplicity: a part stays only if something breaks without it. Features outside `docs/spec.md` section 1 are cut, not hidden behind a setting.
+- A hard feature is a reason to rethink it (user decision 2026-10-28): when a feature is hard to build, its behavior is unclear or it conflicts with others, simplify it or cut it, as workspaces became optional tab groups. The agent proposes the cut with options; the user decides.
+- Small steps (user decision 2026-10-28): every step is its own small PR; a large piece is split before work starts.
+- Sidebar frozen (user decision 2026-10-29): its look and drag behavior as of T-308 (#148-#156) stay; no sidebar changes without the user's explicit request.
 - Speed: startup, input latency, idle CPU and memory stay at the level of upstream Ghostty built from the same commit; `make -f tarn.mk bench` decides, not impressions.
 - Agent-first: an agent opens files, lists sessions and asks for attention through the `tarn` CLI; focus and keystrokes stay with the human.
 - Local only: no account, cloud, telemetry, subscription or built-in AI model.
@@ -49,9 +52,13 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | CLI and installer tests | `python3 -I cli/test/cli_test.py`, `sh cli/test/install_test.sh` |
 | viewer bundle | `node --test viewer-web/licenses.test.mjs`, `uv run --with playwright python -I viewer-web/test-mermaid.py` |
 | acceptance | `make -f tarn.mk check` |
+| task worktree | `make -f tarn.mk worktree NAME=<branch>` in the main checkout: branch from `origin/dev`, links to the built core |
+| dev build | `make -f tarn.mk dev`: Debug `Tarn.app` without coverage, 4 jobs, log `macos/build/dev.log` |
+| stand | `make -f tarn.mk live [STAND_APP=<built Tarn.app>]`: a second Tarn with its own socket; prints `HOME` and `TARN_SURFACE` for `cli/tarn`; `sh tools/stand/stand.sh stop` |
+| drive the stand | `sh tools/stand/drive.sh type\|key\|action\|screen\|shot\|tarn ...`; the path is skill `stand` |
 | release build | `make -f tarn.mk release` (ad-hoc signed `dist/tarn-<version>-macos.zip` with `.sha256`) |
 | benchmark | `make -f tarn.mk bench` (report `docs/bench.md`) |
-| demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e,review}.py` and `node --test demo/test/unit` (installed Chrome; how to run: `demo/README.md`) |
+| demo checks | `uv run --with playwright python -I demo/test/check_{0,a,b,c,e2e,review,modules}.py` and `node --test demo/test/unit` (Playwright's chromium-headless-shell; how to run: `demo/README.md`) |
 
 ## Workflow
 
@@ -60,19 +67,22 @@ Project profile for `~/.claude/docs/pipeline.md`:
 | Parameter | Value |
 | --- | --- |
 | Autonomy | agent decides technical questions within the spec; behavior questions, irreversible steps and spending subscription limits go to the user |
-| Subagents | a stage runs through `orchestrate`: plan, `spec-reviewer`, workers, `code-reviewer` thorough, `skeptic` by `regress` |
+| Subagents | a stage runs through `orchestrate`: plan, `spec-reviewer`, workers, `code-reviewer` thorough; no `skeptic` (user decision 2026-10-28) |
 | Tracker | tix, project `tarn`; stage plan in `docs/plans/<stage>.md` |
 | Subagent brief | `~/.claude/templates/subagent-brief.md` |
-| Findings file | `docs/findings.jsonl` |
+| Findings file | none: no rule lines from reviews, no `pr-metrics.jsonl` (user decision 2026-10-28: only a reliable gate for now; bring them back when needed) |
 
 - Feature pipeline (user decision 2026-10-23): approve the feature, survey how other projects built it (read their code and architecture), approve our architecture, then write code. Take proven parts from other projects, then optimize and cut the excess; do not invent what exists. tarn stays MIT so anyone may reuse it (user decision 2026-10-25): copied code must be MIT or Apache-2.0; from GPL and AGPL projects (cmux, Tellurion) we follow structure and behavior and write the code ourselves; Warp is closed source, so only its behavior is followed.
 - Demo first (user decision 2026-10-25): `demo/` is one living browser demo of the whole terminal, built features plus planned ones (the README of the demo lists which). A step that changes the UI is first drawn in the demo, the user approves the look, then it is built in the app; once built, the demo marks it as built. The checks in `demo/test/` walk its user paths and must pass before the demo goes to the user.
 - Ghostty first (user decision 2026-10-25): we do not build our own systems next to Ghostty's. Before a feature or a mechanism, list what Ghostty already has for it (actions, config options, `SplitTree`, `SplitView`, undo, restore, menus, palette, notifications) with file:line, and build on that; our code only fills what Ghostty lacks. A parallel mechanism (own split tree, own undo, own title, own notification path) needs the user's yes with the reason Ghostty's cannot be used.
+- Behavior comes from analogs (user decision 2026-10-27). Before a spec states how a feature behaves (a command's semantics, a wait rule, an exit code, an output format, a refusal), find how analogs do it and take their behavior; each rule in the spec names its source. Own behavior only where no analog has one, with the line "Prior art: searched where - found what", and the user decides. This applies to specs and answers, not only to code.
 - No own mechanism where an analog exists. Before the first line of code of a feature or a fix of a mechanism, the plan names the analog project, file and commit it follows (analog base: OpenViking `agent-terminal/docs/research/landscape*`, then GitHub). No analog found: the plan says "Prior art: searched where - found what" and the user decides. A second fix of our own mechanism stops the work: survey the analogs again before a third.
-- Branches (user decision 2026-10-26): `dev` is the working branch, every task branch starts from `origin/dev` and its PR goes into `dev` (`gh pr create --base dev`); the agent merges it after review without waiting for CI. One small PR at a time. `main` takes only release PRs from `dev`, on the user's command, with the full CI green.
+- Branches (user decision 2026-10-26): `dev` is the working branch, every task branch starts from `origin/dev` and its PR goes into `dev` (`gh pr create --base dev`); the agent merges it after review, when the CI check `demo` is green and the agent's own `make -f tarn.mk check` on the Mac is green (user decision 2026-10-28: the `xcode-27` runner queues PRs for 20+ min, so `app` gates only `main`; branch protection of `dev` requires `demo` and `lint`). One small PR at a time.
+- Agent testing (user decision 2026-10-27): the agent builds dev apps and runs the checks itself, live on the stand by skill `stand`: build, drive, read the screen as text and screenshots. After merges into `dev` it runs the dev build check of that skill.
+- Acceptance (user decision 2026-10-27): before a merge the agent checks the change live on the stand (`make -f tarn.mk live`) and posts the result as a `Stand:` line in the PR, next to the `Review:` line; `~/.claude/scripts/merge-gate.py` merges only with both, with green CI checks, and with a `Stand:` line that names no unchecked scenario. The user checks by hand once per batch: after several PRs, one `dev` build, everything changed since the last hand check. Parallel windows take items of `docs/plans/<milestone>.toml` from `plan.py ready`. `main` takes only release PRs from `dev`, on the user's command, with the full CI green.
 - Work record is the GitHub PR (user decision 2026-10-25): acceptance and review remarks, blocking questions and their answers go as comments on the PR, not into files or session messages; a peer session is pointed to the comment link.
 - Upstream: `upstream/main` is merged into `main` on a schedule, one merge commit; conflicts at insertion points get their own commit.
-- Hosting: GitHub `daniil4545/tarn`. CI: `tarn-ci.yml` runs the demo checks (Linux, about 5 min) on PRs and pushes to `dev`, nothing waits on them; on PRs and pushes to `main` it also runs `make -f tarn.mk check` (runner `xcode-27`, about 11 min), and `main` merges only with both green. A tag `tarn-v<version>` builds the release zip in `tarn-release.yml` and attaches it to the release (a missing one is created as a draft); a failed build reruns by `gh workflow run tarn-release.yml -f tag=<tag>`, never by moving the tag; release notes stay hand-written. `tarn-upstream.yml` runs the same CI weekly on `main` with `upstream/main` merged in, as an early warning. Upstream workflows are disabled in the repository settings; a new one an upstream merge brings starts enabled, disable it. `gh` resolves to `ghostty-org/ghostty` by default: always pass `-R daniil4545/tarn`.
+- Hosting: GitHub `daniil4545/tarn`. CI: `tarn-ci.yml` runs the demo checks (Linux, about 5 min) and `make -f tarn.mk check` (runner `xcode-27`, 8-14 min: swiftlint, app tests, hook, CLI and installer tests, shellcheck, typos, ruff); `demo` (browser checks) and `lint` (Linux, about 2 min: shellcheck, typos, ruff, hook and CLI tests) run on PRs and pushes to `dev` and `main`, `app` only on PRs into `main` and pushes to `main`; `dev` merges only with `demo` and `lint` green, `main` with all three. Before a merge into `dev` the agent runs the full `make -f tarn.mk check` on the Mac (also the two GUI tests CI skips) and names the result in the `Review:` or `Stand:` comment. A tag `tarn-v<version>` builds the release zip in `tarn-release.yml` and attaches it to the release (a missing one is created as a draft); a failed build reruns by `gh workflow run tarn-release.yml -f tag=<tag>`, never by moving the tag; release notes stay hand-written. `tarn-upstream.yml` runs the same CI weekly on `main` with `upstream/main` merged in, as an early warning. Upstream workflows are disabled in the repository settings; a new one an upstream merge brings starts enabled, disable it. `gh` resolves to `ghostty-org/ghostty` by default: always pass `-R daniil4545/tarn`.
 - Linters: upstream gets `typos` and `prettier` from `nix develop`; here they come from brew. `prettier` is not run on our markdown: padded tables push `docs/` over its size limits.
 
 ## Critical invariants

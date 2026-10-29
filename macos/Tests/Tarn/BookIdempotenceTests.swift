@@ -4,7 +4,7 @@ import Testing
 
 /// `WorkspaceRegistry.sync` publishes whenever a pass reports a change, and every redraw calls
 /// `sync` again. A pass that keeps reporting changes on the same groups loops without end, so
-/// once the native moves are made, the next pass over the same groups must report nothing.
+/// the second pass over the same groups must report nothing.
 @Suite
 struct BookIdempotenceTests {
     /// A small deterministic generator, so a failure replays.
@@ -16,28 +16,11 @@ struct BookIdempotenceTests {
         }
     }
 
-    /// Passes over `order` until the native moves are made; returns the last outcome.
-    private func settle(_ book: inout WorkspaceBook, _ order: inout [TabKey], moves: Bool = true) -> WorkspaceBook.Outcome {
-        var outcome = book.pass([order])
-        for reorder in outcome.reorders where moves {
-            guard let index = order.firstIndex(of: reorder.tab) else { continue }
-            let tab = order.remove(at: index)
-            order.insert(tab, at: min(max(index + reorder.delta, 0), order.count))
-        }
-        if !outcome.reorders.isEmpty { outcome = book.pass([order]) }
-        return book.pass([order])
-    }
-
     @Test func aSecondPassOnTheSameGroupChangesNothing() {
-        run(moves: true)
+        run()
     }
 
-    /// The native move may not take effect (AppKit refuses it): the book still settles.
-    @Test func aRefusedNativeMoveDoesNotKeepTheBookChanging() {
-        run(moves: false)
-    }
-
-    private func run(moves: Bool) {
+    private func run() {
         for seed in 1...300 {
             var rng = Lcg(state: UInt64(seed))
             var book = WorkspaceBook()
@@ -49,11 +32,15 @@ struct BookIdempotenceTests {
                 switch op {
                 case 0, 1:
                     // A new tab, after a random tab (Ghostty puts it after the selected one).
-                    if op == 1, let tab = order.randomElement(using: &rng) {
-                        book.setPendingTarget(book.newWorkspace("W\(order.count)", in: tab), for: tab)
-                    }
+                    let source = order.randomElement(using: &rng)
                     let fresh = TabKey()
                     order.insert(fresh, at: Int.random(in: 1...order.count, using: &rng))
+                    if op == 1, let source {
+                        // Announced by the insertion point, as a second workspace's tab.
+                        _ = book.edit(source) { $0.join(source, to: $0.create(name: "W\(order.count)")!) }
+                        _ = book.pass([order])
+                        _ = book.opened(fresh, from: source)
+                    }
                     log.append("new")
                 case 2:
                     guard order.count > 1, let tab = order.randomElement(using: &rng) else { continue }
@@ -72,10 +59,10 @@ struct BookIdempotenceTests {
                     order.remove(at: Int.random(in: 0..<order.count, using: &rng))
                     log.append("vanish")
                 }
-                let last = settle(&book, &order, moves: moves)
-                #expect(last.changed.isEmpty && last.reorders.isEmpty,
-                        "seed \(seed) after \(log): changed \(last.changed.count) reorders \(last.reorders.count)")
-                if !last.changed.isEmpty || !last.reorders.isEmpty { break }
+                _ = book.pass([order])
+                let last = book.pass([order])
+                #expect(last.changed.isEmpty, "seed \(seed) after \(log): changed \(last.changed.count)")
+                if !last.changed.isEmpty { break }
             }
         }
     }

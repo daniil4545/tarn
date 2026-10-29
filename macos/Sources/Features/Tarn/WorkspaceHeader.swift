@@ -7,6 +7,7 @@ import SwiftUI
 struct WorkspaceHeader: View {
     @ObservedObject var model: SidebarModel
     let group: SidebarModel.Group
+    let workspace: Workspace
 
     @State private var isHovering = false
     @Environment(\.chromeInk) private var ink
@@ -16,20 +17,20 @@ struct WorkspaceHeader: View {
             // One arrow turned a quarter: the fold animates it instead of swapping two symbols.
             Image(systemName: "chevron.right")
                 .font(.system(size: 8, weight: .bold))
-                .rotationEffect(.degrees(group.workspace.collapsed ? 0 : 90))
-                .animation(Motion.fold, value: group.workspace.collapsed)
+                .rotationEffect(.degrees(workspace.collapsed ? 0 : 90))
+                .animation(Motion.fold, value: workspace.collapsed)
                 .frame(width: 10)
-            Text(group.workspace.name)
+            Text(workspace.name)
                 .lineLimit(1)
             Spacer(minLength: 4)
-            if group.workspace.collapsed {
+            if workspace.collapsed {
                 if let agent = group.worstAgent { AgentBadge(agent: agent) }
                 Text("\(group.tabs.count)")
                     .foregroundStyle(ink.faint)
             }
             if isHovering {
                 Button {
-                    model.newTab(in: group)
+                    model.newTab(in: workspace)
                 } label: {
                     Image(systemName: "plus")
                         .font(.system(size: 9, weight: .bold))
@@ -37,61 +38,53 @@ struct WorkspaceHeader: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("New Tab in \(group.workspace.name)")
-                .accessibilityLabel("New Tab in \(group.workspace.name)")
+                .help("New Tab in \(workspace.name)")
+                .accessibilityLabel("New Tab in \(workspace.name)")
             }
         }
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(ink.muted)
         .padding(.horizontal, 6)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
+        .padding(.vertical, 5)
         .frame(height: 26)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.workspace.id)) }
-        .overlay(alignment: .bottom) { dropLine(endsHere) }
-        .padding(.vertical, Sidebar.rowGap / 2)
+        .padding(.vertical, 1)
         .padding(.horizontal, Sidebar.listInset)
         .overlay(
             SidebarInteraction(
-                payload: { (.workspace, group.workspace.id.uuidString) },
-                onClick: { model.toggleFold(group) },
-                menu: { model.contextMenu(for: group) },
+                payload: { (.workspace, workspace.id.uuidString) },
+                onClick: { model.toggleFold(workspace) },
+                menu: { model.contextMenu(for: workspace) },
                 dragOver: { kind, value, lowerHalf in
-                    model.dragOver(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
+                    model.dragOver(kind, value: value, over: .header(workspace.id), lowerHalf: lowerHalf)
                 },
                 dragExit: { model.dragExit() },
                 drop: { kind, value, lowerHalf in
-                    model.drop(kind, value: value, over: .header(group.workspace.id), lowerHalf: lowerHalf)
+                    model.drop(kind, value: value, over: .header(workspace.id), lowerHalf: lowerHalf)
                 },
-                dragEnded: { _, _ in model.dragExit() },
-                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0
+                dragBegan: { model.dragBegan(workspace, height: $0) },
+                dragEnded: { _, _ in model.groupDragEnded() },
+                dragMoved: { model.dragExit(at: $0) },
+                excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0,
+                blockView: { model.blockAnchors[group.id]?.view },
+                toolTip: Self.tip(group, workspace)
             )
         )
         .accessibilityAddTraits(.isButton)
-        .accessibilityLabel(group.workspace.collapsed ? "Expand \(group.workspace.name)" : "Collapse \(group.workspace.name)")
-        .accessibilityAction { model.toggleFold(group) }
+        .accessibilityLabel(workspace.collapsed ? "Expand \(workspace.name)" : "Collapse \(workspace.name)")
+        .accessibilityAction { model.toggleFold(workspace) }
     }
 
-    /// The drop line goes under a header only when nothing else of the workspace is shown.
-    private var endsHere: Bool {
-        guard group.workspace.collapsed else { return false }
-        return model.dropSlot == .endOfWorkspace(group.workspace.id)
-            || (model.dropSlot == .end && model.groups.last?.id == group.id)
+    /// The folder with `~` for home, and the number of tabs (the demo's tooltip).
+    static func tip(_ group: SidebarModel.Group, _ workspace: Workspace) -> String {
+        let count = "\(group.tabs.count) tab\(group.tabs.count == 1 ? "" : "s")"
+        return workspace.folder.map { "\(WorkspaceFolder.display($0)) \u{B7} \(count)" } ?? count
     }
+
 }
 
-/// The line that shows where a drop lands.
-func dropLine(_ isShown: Bool) -> some View {
-    Rectangle()
-        .fill(Color.accentColor)
-        .frame(height: 2)
-        .opacity(isShown ? 1 : 0)
-        .allowsHitTesting(false)
-}
-
-/// The sheets of the workspace commands: a name, and a delete confirmation.
+/// The sheets of the workspace commands: a folder, a name, and a delete confirmation.
 @MainActor
 enum WorkspacePrompt {
     /// Asks for a name; `done` gets the trimmed text of an OK, never a blank one.
@@ -121,40 +114,156 @@ enum WorkspacePrompt {
         }
     }
 
-    /// Asks for a name and creates the workspace with one new tab in `window`.
-    static func newWorkspace(in window: NSWindow) {
-        askName(title: "New Workspace", message: "The workspace opens with one new tab.", initial: "", in: window) { [weak window] name in
-            guard let window else { return }
-            WorkspaceRegistry.shared.createWorkspace(named: name, from: window)
+    /// Asks for a group name or a project folder (G2) and creates it. Cancel does nothing (S2).
+    static func newGroup(in window: NSWindow) {
+        let form = NewGroupForm()
+        let alert = NSAlert()
+        alert.messageText = "New group"
+        alert.accessoryView = form
+        let create = alert.addButton(withTitle: "Create")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = form.nameField
+        form.onChange = { [weak create, weak form] in create?.isEnabled = form?.choice(confirmed: true) != nil }
+        alert.beginSheetModal(for: window) { [weak window] response in
+            guard let window, let choice = form.choice(confirmed: response == .alertFirstButtonReturn) else { return }
+            WorkspaceRegistry.shared.create(choice, from: window)
         }
     }
 
-    /// Names the count of tabs that move.
+    /// Asks before a group goes; `done` gets whether its tabs close with it (G7), unchecked by default.
     static func confirmDelete(
         _ name: String,
         tabCount: Int,
-        heir: String,
         in window: NSWindow,
-        done: @escaping () -> Void
+        done: @escaping (_ closeTabs: Bool) -> Void
     ) {
         let alert = NSAlert()
-        alert.messageText = "Delete Workspace \u{201C}\(name)\u{201D}?"
-        alert.informativeText = tabCount == 0
-            ? "The workspace is empty."
-            : "Its \(tabCount == 1 ? "tab moves" : "\(tabCount) tabs move") to \u{201C}\(heir)\u{201D}. No tab is closed."
+        alert.messageText = "Delete group \(name)?"
         alert.alertStyle = .warning
+        let close = NSButton(checkboxWithTitle: "Also close its \(tabCount) tab\(tabCount == 1 ? "" : "s")", target: nil, action: nil)
+        alert.accessoryView = close
         alert.addButton(withTitle: "Delete")
         alert.addButton(withTitle: "Cancel")
         alert.beginSheetModal(for: window) { response in
-            if response == .alertFirstButtonReturn { done() }
+            if response == .alertFirstButtonReturn { done(close.state == .on) }
         }
     }
 }
 
+/// What the New Group dialog asks for: a plain group by name, or a workspace by folder (G2).
+enum NewGroupChoice: Equatable {
+    case group(name: String)
+    case workspace(folder: String)
+
+    /// The choice of a closed dialog; nil for Cancel and for a workspace whose folder is not an
+    /// existing directory (`~` is the home folder). The sheet disables Create for such a path.
+    static func make(confirmed: Bool, isWorkspace: Bool, name: String, folder: String) -> NewGroupChoice? {
+        guard confirmed else { return nil }
+        if !isWorkspace { return .group(name: WorkspaceSet.cleaned(name) ?? "Group") }
+        guard let typed = WorkspaceSet.cleaned(folder) else { return nil }
+        let path = (typed as NSString).expandingTildeInPath
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
+        return .workspace(folder: URL(fileURLWithPath: path).standardized.path)
+    }
+
+    /// Opens the folder panel at the typed directory, or home when the path is unusable.
+    static func startDirectory(folder: String) -> URL {
+        if case let .workspace(path) = make(confirmed: true, isWorkspace: true, name: "", folder: folder) {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
+}
+
+/// The accessory of the New Group dialog: the kind, a name and a typed or chosen folder path.
+@MainActor
+final class NewGroupForm: NSView {
+    let nameField = NSTextField(string: "")
+    let folderField = NSTextField(string: "")
+    /// Called when the kind or a field changes, to enable Create only for a usable choice.
+    var onChange: () -> Void = {}
+    let groupRadio = NSButton(radioButtonWithTitle: "Group", target: nil, action: nil)
+    let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
+
+    init() {
+        super.init(frame: NSRect(x: 0, y: 0, width: 420, height: 56))
+        nameField.placeholderString = "Name"
+        folderField.placeholderString = "~/code/project"
+        for radio in [groupRadio, workspaceRadio] {
+            radio.target = self
+            radio.action = #selector(kindChanged)
+            radio.widthAnchor.constraint(equalToConstant: 90).isActive = true
+        }
+        groupRadio.state = .on
+        folderField.delegate = self
+        nameField.delegate = self
+        let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseFolder))
+        let rows = NSStackView(views: [
+            NSStackView(views: [groupRadio, nameField]),
+            NSStackView(views: [workspaceRadio, folderField, choose]),
+        ])
+        rows.orientation = .vertical
+        rows.alignment = .leading
+        rows.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(rows)
+        NSLayoutConstraint.activate([
+            rows.leadingAnchor.constraint(equalTo: leadingAnchor),
+            rows.trailingAnchor.constraint(equalTo: trailingAnchor),
+            rows.topAnchor.constraint(equalTo: topAnchor),
+        ])
+    }
+
+    @available(*, unavailable) required init?(coder: NSCoder) { fatalError() }
+
+    func choice(confirmed: Bool) -> NewGroupChoice? {
+        .make(confirmed: confirmed, isWorkspace: workspaceRadio.state == .on, name: nameField.stringValue, folder: folderField.stringValue)
+    }
+
+    @objc private func chooseFolder() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        panel.directoryURL = NewGroupChoice.startDirectory(folder: folderField.stringValue)
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let self, let url = panel.url else { return }
+            self.folderField.stringValue = WorkspaceFolder.display(url.path)
+            self.workspaceRadio.state = .on
+            self.groupRadio.state = .off
+            self.onChange()
+        }
+    }
+
+    @objc private func kindChanged(_ sender: NSButton) {
+        defer { onChange() }
+        // The radios stand in different stacks, so AppKit does not pair them.
+        groupRadio.state = sender === groupRadio ? .on : .off
+        workspaceRadio.state = sender === groupRadio ? .off : .on
+        window?.makeFirstResponder(sender === groupRadio ? nameField : folderField)
+    }
+}
+
 extension TerminalController {
-    /// The File menu item "New Workspace" (Shift+Cmd+T), found through the responder chain.
+    /// The File menu item "New Group..." (Shift+Cmd+T), found through the responder chain.
     @IBAction func newWorkspace(_ sender: Any?) {
         guard let window else { return }
-        WorkspacePrompt.newWorkspace(in: window)
+        WorkspacePrompt.newGroup(in: window)
+    }
+}
+
+extension NewGroupForm: NSTextFieldDelegate {
+    /// A field takes the kind it belongs to, as in the demo.
+    func controlTextDidBeginEditing(_ obj: Notification) {
+        let isFolder = (obj.object as? NSTextField) === folderField
+        workspaceRadio.state = isFolder ? .on : .off
+        groupRadio.state = isFolder ? .off : .on
+    }
+
+    func controlTextDidChange(_ obj: Notification) {
+        onChange()
     }
 }

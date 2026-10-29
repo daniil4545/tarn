@@ -1,9 +1,11 @@
 import AppKit
+import GhosttyKit
 import OSLog
 
-/// A workspace and the tab windows in it, top to bottom.
+/// A workspace and the tab windows in it, top to bottom; the ungrouped tabs between two
+/// workspaces are a run with no workspace.
 struct WorkspaceRun {
-    let workspace: Workspace
+    let workspace: Workspace?
     let windows: [NSWindow]
 }
 
@@ -94,15 +96,8 @@ final class WorkspaceRegistry {
         claimTombstones()
         cacheSurfaces()
 
-        var outcome = book.reconcile(bookGroups())
+        let outcome = book.reconcile(bookGroups())
         for note in outcome.notes { Self.logger.error("\(note, privacy: .public)") }
-        if !outcome.reorders.isEmpty {
-            for reorder in outcome.reorders {
-                guard let window = window(for: reorder.tab) else { continue }
-                moveNatively(window, by: reorder.delta)
-            }
-            outcome.changed.formUnion(book.reconcile(bookGroups()).changed)
-        }
         isBusy = false
         publish(outcome.changed)
     }
@@ -265,34 +260,91 @@ final class WorkspaceRegistry {
 
     // MARK: Sidebar commands
 
-    /// A new tab in `workspace`, after its last tab.
-    func newTab(in workspace: Workspace.ID, from window: NSWindow) {
-        let tab = key(for: window)
-        book.setPendingTarget(workspace, for: tab)
-        (window.windowController as? TerminalController)?.newTab(nil)
-        expirePendingTarget(of: tab)
+    /// M1, the insertion point of `AppDelegate.ghosttyNewTab`: the tab Ghostty just opened from
+    /// `window` takes its workspace, when the two share a native tab group.
+    func opened(_ controller: TerminalController?, from window: NSWindow) {
+        guard let tab = controller?.window, group(of: window).contains(tab) else { return }
+        publish(book.opened(key(for: tab), from: key(for: window)))
     }
 
-    /// A new workspace with one new tab. False for a blank name.
+    /// A new tab in `workspace`, right after its last tab: Ghostty's `newTab(from:)` with that tab as
+    /// the parent, inheriting from it as Cmd+T inherits from the focused tab.
+    func newTab(in workspace: Workspace.ID, from window: NSWindow) {
+        let set = book.set(of: key(for: window))
+        let order = group(of: window).map(key(for:))
+        let last = set?.lastTab(of: workspace, order: order).flatMap { self.window(for: $0) } ?? window
+        opened(openTab(after: last, inheritingFrom: last, folder: set?.workspace(workspace)?.folder), from: last)
+    }
+
+    /// Ghostty's new tab with `parent` as the parent, configured as a tab of `source` would be;
+    /// `folder` replaces the working directory. Nil when no tab came.
+    private func openTab(after parent: NSWindow, inheritingFrom source: NSWindow, folder: String? = nil) -> TerminalController? {
+        guard let controller = parent.windowController as? TerminalController else { return nil }
+        let sourceController = source.windowController as? TerminalController
+        var config = (sourceController?.focusedSurface ?? sourceController?.surfaceTree.first)?.surface.map {
+            Ghostty.SurfaceConfiguration(from: ghostty_surface_inherited_config($0, GHOSTTY_SURFACE_CONTEXT_TAB))
+        }
+        if let folder {
+            config = config ?? Ghostty.SurfaceConfiguration()
+            config?.workingDirectory = folder
+        }
+        guard let config else { return nil }
+        return TerminalController.newTab(controller.ghostty, from: parent, withBaseConfig: config)
+    }
+
+    /// Creates what the New Group dialog chose (G2).
+    @discardableResult
+    func create(_ choice: NewGroupChoice, from window: NSWindow) -> Bool {
+        switch choice {
+        case .group(let name): createWorkspace(named: name, from: window)
+        case .workspace(let folder): createWorkspace(folder: folder, from: window)
+        }
+    }
+
+    /// A new plain group named `name` with one new tab (G2). False for a blank name.
     @discardableResult
     func createWorkspace(named name: String, from window: NSWindow) -> Bool {
-        let tab = key(for: window)
-        var created: Workspace.ID?
-        let changed = book.edit(tab) { created = $0.create(name: name) }
-        guard let created else { return false }
-        book.setPendingTarget(created, for: tab)
-        publish(changed.map { [$0] } ?? [])
-        (window.windowController as? TerminalController)?.newTab(nil)
-        expirePendingTarget(of: tab)
+        openWorkspace(name: name, folder: nil, from: window)
+    }
+
+    /// A workspace for `folder` with one new tab that starts in it (D19). A folder this window's
+    /// set already has selects that workspace's first tab and creates nothing (Q1). False for a
+    /// path that is not absolute.
+    @discardableResult
+    func createWorkspace(folder: String, from window: NSWindow) -> Bool {
+        guard let path = WorkspaceFolder.standardized(folder) else {
+            Self.logger.error("workspace: folder not absolute value=\(folder, privacy: .public)")
+            return false
+        }
+        if selectFirstTab(inFolder: path, from: window) { return true }
+        // The name comes from the folder as picked: a symlink `proj` names the workspace `proj`.
+        let name = WorkspaceFolder.name(of: URL(fileURLWithPath: folder).standardized.path)
+        return openWorkspace(name: name, folder: path, from: window)
+    }
+
+    private func selectFirstTab(inFolder folder: String, from window: NSWindow) -> Bool {
+        let order = group(of: window).map(key(for:))
+        guard let set = book.set(of: key(for: window)),
+              let tab = set.firstTab(inFolder: folder, order: order),
+              let target = self.window(for: tab)
+        else { return false }
+        target.makeKeyAndOrderFront(nil)
         return true
     }
 
-    /// A new tab that never came (the window was refused) must not steer a later one: the target
-    /// ends a second after the request, and an empty workspace made for it goes with it.
-    private func expirePendingTarget(of tab: TabKey) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1) { [self] in
-            if book.clearPendingTarget(for: tab) { sync() }
+    private func openWorkspace(name: String, folder: String?, from window: NSWindow) -> Bool {
+        guard WorkspaceSet.cleaned(name) != nil else { return false }
+        // The group stands at the bottom: its tab opens from the last tab of the window (G8).
+        guard let tabWindow = openTab(after: group(of: window).last ?? window, inheritingFrom: window, folder: folder)?.window,
+              group(of: window).contains(tabWindow)
+        else { return false }
+        sync()
+        let tab = key(for: tabWindow)
+        let changed = book.edit(tab) { set in
+            if let created = set.create(name: name, folder: folder) { set.join(tab, to: created) }
         }
+        publish(changed.map { [$0] } ?? [])
+        return changed != nil
     }
 
     @discardableResult
@@ -306,33 +358,51 @@ final class WorkspaceRegistry {
         edit(window) { $0.setCollapsed(workspace, collapsed) }
     }
 
-    /// Deletes the workspace; its tabs move up, or down for the first one.
+    /// Deletes the group; its tabs stay where they stand, ungrouped (G7).
     @discardableResult
-    func delete(_ workspace: Workspace.ID, in window: NSWindow) -> Bool {
-        let order = group(of: window).map(key(for:))
+    func ungroup(_ workspace: Workspace.ID, in window: NSWindow) -> Bool {
         var deleted = false
-        edit(window) { deleted = $0.delete(workspace, order: order) }
+        edit(window) { deleted = $0.ungroup(workspace) }
         return deleted
     }
 
-    /// Puts `window` in `workspace`, before `neighbour` or at the end of the workspace:
-    /// membership first, then one native move.
-    func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil) {
+    /// Puts `window` in `workspace`, or in none (Remove from group, G5), and moves it natively once:
+    /// before `neighbour`, else after the last of `block`, else after the last other tab of the
+    /// group it ends in (the group it leaves, for none). Membership first, then the move.
+    func moveTab(_ window: NSWindow, to workspace: Workspace.ID?, before neighbour: NSWindow? = nil, behind block: [NSWindow]? = nil) {
         let tab = key(for: window)
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
-        isBusy = true
-        let changed = book.edit(tab) { $0.join(tab, to: workspace) }
-        let destination = Self.destination(
-            of: tab,
-            in: order,
-            before: neighbour.map(key(for:)),
-            isMember: { book.workspace(of: $0)?.id == workspace }
+        let members = Dictionary(uniqueKeysWithValues: order.compactMap { key in book.workspace(of: key).map { (key, $0.id) } })
+        let place = Self.place(
+            of: tab, in: order, members: members, to: workspace,
+            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) }
         )
-        moveNatively(window, by: destination - index)
+        isBusy = true
+        let changed = book.edit(tab) { set in
+            if let workspace { set.join(tab, to: workspace) } else { set.remove(tab) }
+        }
+        moveNatively(window, by: place - index)
         isBusy = false
         sync()
         publish(changed.map { [$0] } ?? [])
+    }
+
+    /// The place a sidebar move gives `tab`: before `neighbour`, else after the last of `behind`, else
+    /// after the last other tab of the group it ends in (the one it leaves, for `workspace` nil).
+    /// `members` is the membership before the move.
+    nonisolated static func place(
+        of tab: TabKey,
+        in order: [TabKey],
+        members: [TabKey: Workspace.ID],
+        to workspace: Workspace.ID?,
+        before neighbour: TabKey?,
+        behind: Set<TabKey>?
+    ) -> Int {
+        let anchor = workspace ?? members[tab]
+        return destination(of: tab, in: order, before: neighbour) {
+            behind?.contains($0) ?? (members[$0] == anchor)
+        }
     }
 
     /// The place of `tab` among the other tabs of `order` after a move: before `neighbour`, or
@@ -350,21 +420,57 @@ final class WorkspaceRegistry {
         return order.firstIndex(of: tab) ?? others.count
     }
 
-    /// Moves a whole workspace before `other`, or to the end: one native move per tab.
-    func moveWorkspace(_ workspace: Workspace.ID, before other: Workspace.ID?, in window: NSWindow) {
-        var order = group(of: window).map(key(for:))
+    /// Moves a group's tabs before the block `other` (nil: to the end), or before the ungrouped tab `beforeTab`.
+    func moveWorkspace(_ workspace: Workspace.ID, before other: UUID? = nil, beforeTab: TabKey? = nil, in window: NSWindow) {
+        let order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)
-        guard let from = runs.firstIndex(where: { $0.workspace.id == workspace }) else { return }
+        guard let from = runs.firstIndex(where: { $0.workspace?.id == workspace }) else { return }
         let moving = runs.remove(at: from)
-        runs.insert(moving, at: runs.firstIndex { $0.workspace.id == other } ?? runs.count)
-
-        isBusy = true
-        for (place, tab) in runs.flatMap(\.tabs).enumerated() {
-            guard let current = order.firstIndex(of: tab), current != place else { continue }
-            order.remove(at: current)
-            order.insert(tab, at: place)
-            if let tabWindow = self.window(for: tab) { moveNatively(tabWindow, by: place - current) }
+        var target: [TabKey]
+        if let beforeTab {
+            target = runs.flatMap(\.tabs)
+            guard let at = target.firstIndex(of: beforeTab) else { return }
+            target.insert(contentsOf: moving.tabs, at: at)
+        } else {
+            runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.id == id } } ?? runs.count)
+            target = runs.flatMap(\.tabs)
         }
+
+        guard target != order, let first = moving.tabs.first,
+              let start = target.firstIndex(of: first), let native = window.tabGroup
+        else { return }
+        let windows = moving.tabs.compactMap(self.window(for:))
+        guard windows.count == moving.tabs.count else { return }
+        // Anchor outside the moving block. Only its own windows leave and rejoin the group.
+        let before = start == 0
+        guard var anchor = self.window(for: target[before ? moving.tabs.count : start - 1]) else { return }
+        let selected = native.selectedWindow
+        let wasKey = selected?.isKeyWindow == true
+        isBusy = true
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        for tabWindow in windows {
+            let current = native.windows
+            guard let index = current.firstIndex(of: tabWindow), current.count > 1 else { break }
+            let neighbour = current[index == 0 ? 1 : index - 1]
+            native.removeWindow(tabWindow)
+            guard anchor.addTabbedWindowSafely(tabWindow, ordered: before ? .below : .above) else {
+                // A caught AppKit exception must not leave the tab detached from its workspace.
+                if !neighbour.addTabbedWindowSafely(tabWindow, ordered: index == 0 ? .below : .above) {
+                    Self.logger.error("workspace: could not reattach tab after group move failed")
+                }
+                break
+            }
+            if !before { anchor = tabWindow }
+        }
+        if let selected {
+            selected.tabGroup?.selectedWindow = selected
+            if wasKey { selected.makeKey() }
+        }
+        NSAnimationContext.endGrouping()
+        // Use the same relabeling as a native drag, even when the tab bar is hidden.
+        (window.windowController as? TerminalController)?.relabelTabs()
+        for tabWindow in native.windows { tabWindow.invalidateRestorableState() }
         isBusy = false
         sync()
     }

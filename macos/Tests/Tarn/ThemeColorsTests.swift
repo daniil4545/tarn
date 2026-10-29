@@ -95,7 +95,7 @@ struct ThemeColorsTests {
     /// Every derived color of a theme, as `#rrggbb`, in the order of the demo's `deriveChrome`.
     private func derived(_ chrome: ThemeChrome) -> [String: String] {
         [
-            "surface": chrome.surface.hex, "menu": chrome.menu.hex, "line": chrome.line.hex,
+            "surface": chrome.surface.hex, "line": chrome.line.hex,
             "divider": chrome.divider.hex, "muted": chrome.muted.hex, "key": chrome.key.hex,
             "code": chrome.code.hex, "accent": chrome.accent.hex,
         ]
@@ -107,7 +107,7 @@ struct ThemeColorsTests {
         let chrome = ThemeChrome(try #require(ThemePalette(themeFile: Self.dracula)))
         #expect(!chrome.isLight)
         #expect(derived(chrome) == [
-            "surface": "#343641", "menu": "#3d3f49", "line": "#494b54", "divider": "#16171e",
+            "surface": "#343641", "line": "#494b54", "divider": "#16171e",
             "muted": "#a9aaab", "key": "#86878b", "code": "#32343f", "accent": "#bd93f9",
         ])
     }
@@ -117,7 +117,7 @@ struct ThemeColorsTests {
         let chrome = ThemeChrome(try #require(ThemePalette(themeFile: Self.latte)))
         #expect(chrome.isLight)
         #expect(derived(chrome) == [
-            "surface": "#e5e7ed", "menu": "#dfe1e7", "line": "#d5d7df", "divider": "#babcbf",
+            "surface": "#e5e7ed", "line": "#d5d7df", "divider": "#babcbf",
             "muted": "#696c82", "key": "#a6a8b6", "code": "#e7e9ee", "accent": "#1e66f5",
         ])
         #expect(chrome.muted.contrast(with: chrome.background) >= 4.5)

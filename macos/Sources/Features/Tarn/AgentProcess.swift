@@ -71,14 +71,80 @@ enum AgentProcess {
     private static let interpreters: Set<String> = ["node", "bun", "deno", "python", "python3"]
     private static let scriptExtensions: Set<String> = ["js", "mjs", "cjs", "ts", "py"]
 
+    /// Whether `pid` is an ssh client. Ghostty drops OSC 7 with a remote host, so the tab's
+    /// folder stays the local one ssh started in while the title is the remote shell's.
+    static func isSSH(pid: pid_t) -> Bool {
+        isSSH(comm: comm(pid: pid)) { argv(pid: pid) }
+    }
+
+    /// ssh itself, or the wrapper every shell integration of Ghostty runs in its place
+    /// (`ghostty +ssh [flags] -- host`, src/shell-integration/zsh/ghostty-integration),
+    /// which leads the group with ssh as a child. Only a `ghostty` process costs an argv read.
+    static func isSSH(comm: String?, argv: () -> [String]?) -> Bool {
+        if comm == "ssh" { return true }
+        guard comm == "ghostty" else { return false }
+        return argv()?.dropFirst().first == "+ssh"
+    }
+
     /// The kernel name of `pid`: the executable's basename cut to 15 characters.
     static func comm(pid: pid_t) -> String? {
-        var info = proc_bsdshortinfo()
-        let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
-        guard proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size else { return nil }
+        guard var info = shortInfo(pid) else { return nil }
         return withUnsafeBytes(of: &info.pbsi_comm) { raw in
             raw.bindMemory(to: CChar.self).baseAddress.map { String(cString: $0) }
         }
+    }
+
+    /// The process that stands for a foreground process group: its leader, as WezTerm
+    /// `get_foreground_process_info` takes `process_group_leader` (`mux/src/localpane.rs`). The one exception is a command Ghostty starts
+    /// through `/usr/bin/login -flp` (`src/termio/Exec.zig`): without job control it stays in
+    /// login's group, so the leader is login and the command is login's child in the group. The
+    /// members come from `proc_listpids(PROC_PGRP_ONLY)`, as kitty `processes_in_group` reads them.
+    static func foreground(group: pid_t) -> pid_t {
+        guard comm(pid: group) == "login" else { return group }
+        let count = proc_listpids(UInt32(PROC_PGRP_ONLY), UInt32(group), nil, 0) / Int32(MemoryLayout<pid_t>.size)
+        guard count > 0 else { return group }
+        var pids = [pid_t](repeating: 0, count: Int(count) + 8)
+        let size = proc_listpids(
+            UInt32(PROC_PGRP_ONLY), UInt32(group), &pids, Int32(pids.count * MemoryLayout<pid_t>.size))
+        let members = pids.prefix(Int(size) / MemoryLayout<pid_t>.size)
+        return members.first { $0 > 0 && $0 != group && parent($0) == group } ?? group
+    }
+
+    /// The command Ghostty started in a pane: the child of its `/usr/bin/login` above `pid`, or nil.
+    static func paneShell(below pid: pid_t) -> String? {
+        var current = pid
+        for _ in 0..<32 {
+            guard let up = parent(current), up > 1 else { return nil }
+            if comm(pid: up) == "login" { return launched(path: path(pid: current), argv: argv(pid: current)) }
+            current = up
+        }
+        return nil
+    }
+
+    /// Before its `exec`, Ghostty's wrapper `/bin/bash --noprofile --norc -c "exec -l <command>"`
+    /// (`src/termio/Exec.zig`) stands for the command it is about to become.
+    static func launched(path: String?, argv: [String]?) -> String? {
+        guard let argv else { return path == "/bin/bash" ? nil : path }
+        guard argv.count == 5, argv[0] == "/bin/bash", argv[1...3] == ["--noprofile", "--norc", "-c"],
+              argv[4].hasPrefix("exec -l ")
+        else { return path }
+        return argv[4].dropFirst("exec -l ".count).split(separator: " ").first.map(String.init)
+    }
+
+    private static func path(pid: pid_t) -> String? {
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
+        guard proc_pidpath(pid, &buffer, UInt32(buffer.count)) > 0 else { return nil }
+        return String(cString: buffer)
+    }
+
+    private static func parent(_ pid: pid_t) -> pid_t? {
+        shortInfo(pid).map { pid_t($0.pbsi_ppid) }
+    }
+
+    private static func shortInfo(_ pid: pid_t) -> proc_bsdshortinfo? {
+        var info = proc_bsdshortinfo()
+        let size = Int32(MemoryLayout<proc_bsdshortinfo>.size)
+        return proc_pidinfo(pid, PROC_PIDT_SHORTBSDINFO, 0, &info, size) == size ? info : nil
     }
 
     /// The arguments of `pid` from `KERN_PROCARGS2`:
@@ -118,19 +184,20 @@ enum AgentProcess {
 
 /// Answers of `AgentProcess.agent(pid:)` kept for the current run loop turn. Every tab window
 /// has its own sidebar model, and one tab event (a title change) makes all N of them rebuild
-/// their tabs; without this each model re-read every process, 2*N^2 reads per event
-/// (T-106). A pid read once in a turn is shared, so a pass costs one read per pid; an event has two passes (2*N reads, not 2*N^2). The
-/// next turn starts empty: the second refresh after a tab event and the 2 s timer see a
+/// their tabs: a pid read once in a turn is shared, so an event costs about 2*N reads, not 2*N^2.
+/// The next turn starts empty, so the second refresh after a tab event and the 2 s timer see a
 /// process that was replaced by `exec`.
 @MainActor
 enum AgentProcessCache {
     /// How a pid is read. Tests replace it to count the reads.
     static var reader: (pid_t) -> String? = { AgentProcess.agent(pid: $0) }
+    static var sshReader: (pid_t) -> Bool = { AgentProcess.isSSH(pid: $0) }
 
     /// The reads that missed the cache since the last `reset`.
     private(set) static var misses = 0
 
     private static var entries: [pid_t: String?] = [:]
+    private static var sshEntries: [pid_t: Bool] = [:]
     private static var isClearScheduled = false
 
     static func agent(pid: pid_t) -> String? {
@@ -142,9 +209,18 @@ enum AgentProcessCache {
         return agent
     }
 
+    static func isSSH(pid: pid_t) -> Bool {
+        if let hit = sshEntries[pid] { return hit }
+        let isSSH = sshReader(pid)
+        sshEntries[pid] = isSSH
+        scheduleClear()
+        return isSSH
+    }
+
     /// Forgets every answer and the miss count.
     static func reset() {
         entries.removeAll()
+        sshEntries.removeAll()
         misses = 0
     }
 
@@ -155,6 +231,7 @@ enum AgentProcessCache {
             MainActor.assumeIsolated {
                 isClearScheduled = false
                 entries.removeAll()
+                sshEntries.removeAll()
             }
         }
     }

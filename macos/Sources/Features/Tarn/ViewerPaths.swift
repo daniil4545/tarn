@@ -1,9 +1,10 @@
 import Foundation
 
 extension Ghostty.SurfaceView {
-    /// The reported working directory (OSC 7), or the foreground process's when the shell reports none.
+    /// The reported working directory (OSC 7), or the foreground process's when the shell reports none:
+    /// for a command Ghostty started, the command's, not login's (`AgentProcess.foreground`).
     var workingDirectory: String? {
-        pwd ?? surfaceModel?.foregroundPID.flatMap { ViewerPaths.cwd(ofPid: pid_t($0)) }
+        pwd ?? surfaceModel?.foregroundPID.flatMap { ViewerPaths.cwd(ofPid: AgentProcess.foreground(group: pid_t($0))) }
     }
 }
 

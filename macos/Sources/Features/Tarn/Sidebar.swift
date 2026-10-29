@@ -35,13 +35,14 @@ final class SidebarModel: ObservableObject {
         let folder: String?
     }
 
-    /// A workspace and its tabs in tab order. A folded workspace still lists its tabs here;
-    /// the view hides them.
+    /// A workspace and its tabs in tab order, or a block of ungrouped tabs (no workspace, no
+    /// header). A folded workspace still lists its tabs here; the view hides them.
     struct Group: Identifiable, Equatable {
-        let workspace: Workspace
+        let workspace: Workspace?
         let tabs: [Tab]
 
-        var id: Workspace.ID { workspace.id }
+        /// The workspace, or the first ungrouped tab, which no workspace shares.
+        var id: UUID { workspace?.id ?? tabs.first?.key ?? UUID(uuidString: "00000000-0000-0000-0000-00000000F1A7")! }
 
         /// The session among the tabs that needs the user most.
         var worstAgent: AgentSession? { SidebarModel.mostUrgent(tabs.compactMap(\.agent)) }
@@ -49,8 +50,26 @@ final class SidebarModel: ObservableObject {
 
     @Published private(set) var groups: [Group] = []
 
-    /// Where a drop in progress would land; the rows draw a line there.
+    /// The modules that are on; a change redraws what depends on them.
+    @Published private(set) var modules = TarnModules.effective()
+
+    /// Where the lifted row or block would land.
     @Published var dropSlot: SidebarDropSlot?
+    var sidebarAnchor: WeakView?
+
+    /// The tab of this window being dragged: its row stays in place, translucent.
+    @Published private(set) var liftedTab: TabKey?
+    @Published private(set) var liftedWorkspace: UUID?
+    var blockAnchors: [UUID: WeakView] = [:]
+
+    /// The height of the lifted row, which the gap takes.
+    private(set) var liftedHeight: CGFloat = 0
+
+    /// The slot of the lifted row itself: a drop there changes nothing, so it opens no gap.
+    private var liftedSlot: SidebarDropSlot?
+
+    /// The gap opens away from the lifted row or block's own slot.
+    var gapSlot: SidebarDropSlot? { (liftedTab == nil && liftedWorkspace == nil) || dropSlot == liftedSlot ? nil : dropSlot }
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -100,8 +119,10 @@ final class SidebarModel: ObservableObject {
     private var closeObserver: NSObjectProtocol?
     private var processTimer: Timer?
 
-    init() {
+    init(groups: [Group] = []) {
+        self.groups = groups
         SessionRegistry.shared.start()
+        TarnModuleWatcher.shared.start()
 
         pressureMonitor = NSEvent.addLocalMonitorForEvents(matching: .pressure) { [weak self] event in
             MainActor.assumeIsolated {
@@ -180,29 +201,50 @@ final class SidebarModel: ObservableObject {
         return window.tabbedWindows ?? [window]
     }
 
+    /// Set while a group moves tab by tab, so the rows do not renumber at every step.
+    private var isMovingGroup = false
+
+    /// Runs a group move and redraws once its last native move has settled.
+    private func moveGroup(_ move: () -> Void) {
+        isMovingGroup = true
+        move()
+        // Ghostty returns the key window one turn after a move on macOS 26.
+        DispatchQueue.main.async { DispatchQueue.main.async { [weak self] in
+            self?.isMovingGroup = false
+            self?.refresh()
+        } }
+    }
+
     func refresh() {
+        guard !isMovingGroup else { return }
         // Read only: the registry follows Ghostty by its own observers. A redraw that asked it to
         // look again made `sync` -> `publish` -> redraw -> `sync` a loop.
         let registry = WorkspaceRegistry.shared
         guard let window else {
+            endLift()
             if !groups.isEmpty { groups = [] }
             return
         }
         WorkspaceTitle.apply(to: window)
+        let effective = TarnModules.effective()
+        if modules != effective { modules = effective }
 
         // The window only carries a key equivalent label while it is in a tab group, so a
         // lone tab would have none. Look the shortcuts up from the keybinds instead.
         let config = (window.windowController as? BaseTerminalController)?.ghostty.config
         let positions = Dictionary(uniqueKeysWithValues: tabWindows.enumerated().map { (ObjectIdentifier($1), $0 + 1) })
 
-        let newGroups = registry.runs(for: window).map { run in
+        let runs = registry.runs(for: window)
+        let newGroups = runs.map { run in
             Group(workspace: run.workspace, tabs: run.windows.compactMap { tabWindow -> Tab? in
                 guard let index = positions[ObjectIdentifier(tabWindow)], let key = registry.tabKey(of: tabWindow)
                 else { return nil }
                 let shortcut = index <= 9 ? config?.keyboardShortcut(for: "goto_tab:\(index)") : nil
-                return makeTab(tabWindow, key: key, index: index, workspace: run.workspace.name, shortcut: shortcut.map { "\($0)" })
+                return makeTab(tabWindow, key: key, index: index, workspace: run.workspace?.name ?? "", shortcut: shortcut.map { "\($0)" })
             })
         }
+        if let liftedTab, !newGroups.contains(where: { $0.tabs.contains { $0.key == liftedTab } }) { endLift() }
+        if let liftedWorkspace, !newGroups.contains(where: { $0.id == liftedWorkspace }) { endLift() }
         guard newGroups != groups else { return }
         groups = newGroups
         if cardTab != nil { updateCard() }
@@ -218,7 +260,11 @@ final class SidebarModel: ObservableObject {
         }
         let pane = Self.textPane(views.map(\.id), agents: agents, sessions: SessionRegistry.shared.sessions)
         let agent = pane.flatMap { agents[$0] } ?? agents.lazy.compactMap { $0 }.first
-        let pwd = (pane.map { views[$0] } ?? controller?.focusedSurface)?.workingDirectory
+        let textView = pane.map { views[$0] } ?? controller?.focusedSurface
+        let isSSH = agent == nil && textView?.surfaceModel?.foregroundPID
+            .flatMap { pid_t(exactly: $0) }
+            .map(AgentProcessCache.isSSH) == true
+        let pwd = Self.shownFolder(textView?.workingDirectory, isSSH: isSSH)
         // The window title is the focused pane's; a split tab names the pane of its dot.
         let paneTitle = views.count > 1 ? pane.map { views[$0].title }.flatMap { $0.isEmpty ? nil : $0 } : nil
         return Tab(
@@ -283,6 +329,12 @@ final class SidebarModel: ObservableObject {
         return mostUrgent(controller.surfaceTree.compactMap { sessions[$0.id] })
     }
 
+    /// The folder the row and its card speak of. Under ssh there is none: Ghostty drops the
+    /// remote OSC 7, so the folder is the local one and a path title is the remote shell's.
+    nonisolated static func shownFolder(_ pwd: String?, isSSH: Bool) -> String? {
+        isSSH ? nil : pwd
+    }
+
     /// The tab title to show: a shell's path title becomes the full working directory with "~";
     /// under an agent, a shell title becomes the agent's name and an own title loses its mark.
     nonisolated static func displayTitle(_ title: String, pwd: String?, agent: String? = nil) -> String {
@@ -312,19 +364,14 @@ final class SidebarModel: ObservableObject {
 
     private var registry: WorkspaceRegistry { .shared }
 
-    /// A tab in the current workspace.
+    /// Cmd+T: Ghostty places the tab, our registry gives it the workspace of the selected one.
     func newTab() {
-        guard let window else { return }
-        if let workspace = registry.workspace(of: window) {
-            registry.newTab(in: workspace.id, from: window)
-        } else {
-            (window.windowController as? TerminalController)?.newTab(nil)
-        }
+        (window?.windowController as? TerminalController)?.newTab(nil)
     }
 
-    func newTab(in group: Group) {
+    func newTab(in workspace: Workspace) {
         guard let window else { return }
-        registry.newTab(in: group.workspace.id, from: window)
+        registry.newTab(in: workspace.id, from: window)
     }
 
     /// Opens, shows or hides the viewer pane of the window, as Cmd+B does.
@@ -334,29 +381,35 @@ final class SidebarModel: ObservableObject {
 
     func newWorkspace() {
         guard let window else { return }
-        WorkspacePrompt.newWorkspace(in: window)
+        WorkspacePrompt.newGroup(in: window)
     }
 
-    func rename(_ group: Group) {
+    func rename(_ workspace: Workspace) {
         guard let window else { return }
-        WorkspacePrompt.askName(title: "Rename Workspace", message: "", initial: group.workspace.name, in: window) { [weak self] name in
+        WorkspacePrompt.askName(title: "Rename Group", message: "", initial: workspace.name, in: window) { [weak self] name in
             guard let self, let window = self.window else { return }
-            self.registry.rename(group.workspace.id, to: name, in: window)
+            self.registry.rename(workspace.id, to: name, in: window)
         }
     }
 
-    func delete(_ group: Group) {
-        guard let window, let index = groups.firstIndex(where: { $0.id == group.id }), groups.count > 1 else { return }
-        let heir = groups[index > 0 ? index - 1 : index + 1].workspace.name
-        WorkspacePrompt.confirmDelete(group.workspace.name, tabCount: group.tabs.count, heir: heir, in: window) { [weak self] in
+    /// The workspaces, headers only: the ungrouped blocks between them are not workspaces.
+    private var workspaces: [Group] { groups.filter { $0.workspace != nil } }
+
+    func delete(_ workspace: Workspace) {
+        guard let window, let group = workspaces.first(where: { $0.id == workspace.id }) else { return }
+        WorkspacePrompt.confirmDelete(workspace.name, tabCount: group.tabs.count, in: window) { [weak self] closeTabs in
             guard let self, let window = self.window else { return }
-            self.registry.delete(group.workspace.id, in: window)
+            if closeTabs, let first = group.tabs.first {
+                self.close(group.tabs, title: "Close Group Tabs", from: first)
+            } else {
+                self.registry.ungroup(workspace.id, in: window)
+            }
         }
     }
 
-    func toggleFold(_ group: Group) {
+    func toggleFold(_ workspace: Workspace) {
         guard let window else { return }
-        registry.setCollapsed(group.workspace.id, !group.workspace.collapsed, in: window)
+        registry.setCollapsed(workspace.id, !workspace.collapsed, in: window)
     }
 
     func select(_ tab: Tab) {
@@ -372,10 +425,12 @@ final class SidebarModel: ObservableObject {
         let controllers = tabs.compactMap { controller(for: $0) }
         guard let anchor = controller(for: tab), !controllers.isEmpty else { return }
         let closeAll = {
-            anchor.undoManager?.beginUndoGrouping()
+            // Taken once: the anchor may close too, and a closed tab answers with another manager.
+            let undo = anchor.undoManager
+            undo?.beginUndoGrouping()
             for controller in controllers { controller.closeTabImmediately(registerRedo: false) }
-            anchor.undoManager?.setActionName(title)
-            anchor.undoManager?.endUndoGrouping()
+            undo?.setActionName(title)
+            undo?.endUndoGrouping()
         }
         // Unsaved viewer edits of any closing tab are settled first (never lost).
         let settled = { [window] in
@@ -422,16 +477,25 @@ final class SidebarModel: ObservableObject {
         let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
         let submenu = NSMenu()
         submenu.autoenablesItems = false
-        for group in groups {
+        var canMove = false
+        for group in workspaces {
+            guard let workspace = group.workspace else { continue }
             let isCurrent = group.tabs.contains { $0.id == tab.id }
-            submenu.addItem(menuItem(group.workspace.name, isEnabled: !isCurrent) { [weak self] in
+            canMove = canMove || !isCurrent
+            submenu.addItem(menuItem(workspace.name, isEnabled: !isCurrent) { [weak self] in
                 guard let window = self?.tabWindow(for: tab) else { return }
-                self?.registry.moveTab(window, to: group.workspace.id)
+                self?.registry.moveTab(window, to: workspace.id)
             })
         }
         moveTo.submenu = submenu
-        moveTo.isEnabled = groups.count > 1
+        moveTo.isEnabled = canMove
         menu.addItem(moveTo)
+        if workspaces.contains(where: { $0.tabs.contains { $0.id == tab.id } }) {
+            menu.addItem(menuItem("Remove from group") { [weak self] in
+                guard let window = self?.tabWindow(for: tab) else { return }
+                self?.registry.moveTab(window, to: nil)
+            })
+        }
         menu.addItem(.separator())
         menu.addItem(menuItem("Rename Tab...") { [weak self] in
             self?.select(tab)
@@ -442,36 +506,63 @@ final class SidebarModel: ObservableObject {
     }
 
     /// The right-click menu for a workspace header.
-    func contextMenu(for group: Group) -> NSMenu {
+    func contextMenu(for workspace: Workspace) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
         menu.addItem(menuItem("New Tab") { [weak self] in
-            self?.newTab(in: group)
+            self?.newTab(in: workspace)
         })
-        menu.addItem(menuItem(group.workspace.collapsed ? "Expand" : "Collapse") { [weak self] in
-            self?.toggleFold(group)
+        menu.addItem(menuItem(workspace.collapsed ? "Expand" : "Collapse") { [weak self] in
+            self?.toggleFold(workspace)
         })
         menu.addItem(.separator())
-        menu.addItem(menuItem("Rename Workspace...") { [weak self] in
-            self?.rename(group)
+        menu.addItem(menuItem("Rename Group...") { [weak self] in
+            self?.rename(workspace)
         })
-        menu.addItem(menuItem("Delete Workspace...", isEnabled: groups.count > 1) { [weak self] in
-            self?.delete(group)
+        menu.addItem(menuItem("Delete Group...") { [weak self] in
+            self?.delete(workspace)
         })
         return menu
     }
 
     // MARK: Drag and drop
 
-    /// A drag is over a row or header. True when the drop would do something: a payload from
-    /// another window shows no line, as its drop is refused.
+    /// A drag is over a row or header; payloads from another window are refused.
     func dragOver(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
-        let slot = isOwn(kind, value: value)
+        // A header is no target for a lifted tab: the gap stays where it is.
+        if kind == .tab, liftedTab != nil, case .header = target { return dropSlot != nil }
+        var slot = isOwn(kind, value: value)
             ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
             : nil
-        if dropSlot != slot { dropSlot = slot }
+        if let liftedTab {
+            slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
+        }
+        if let liftedWorkspace, slot == .beforeWorkspace(liftedWorkspace) { slot = liftedSlot }
+        if liftedTab != nil || liftedWorkspace != nil {
+            if slot != dropSlot { withAnimation(Motion.gap) { dropSlot = slot } }
+        } else if dropSlot != slot {
+            dropSlot = slot
+        }
         return slot != nil
     }
+
+    /// A drag of a tab row of this window began: the row dims and no gap opens until the pointer
+    /// leaves the row's own slot.
+    func dragBegan(_ tab: Tab, height: CGFloat) {
+        liftedHeight = height
+        liftedTab = tab.key
+        liftedSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
+        dropSlot = liftedSlot
+    }
+
+    func dragBegan(_ workspace: Workspace, height: CGFloat) {
+        liftedHeight = height + Sidebar.blockMargin
+        liftedWorkspace = workspace.id
+        liftedSlot = Self.dropSlot(dragging: .workspace, over: .header(workspace.id), lowerHalf: true, in: groups)
+        dropSlot = liftedSlot
+    }
+
+    func groupDragEnded() { endLift() }
 
     /// The dragged tab or workspace belongs to this window.
     private func isOwn(_ kind: SidebarDragKind, value: String) -> Bool {
@@ -482,16 +573,26 @@ final class SidebarModel: ObservableObject {
         }
     }
 
-    func dragExit() {
-        if dropSlot != nil { dropSlot = nil }
+    /// Row transitions keep the target; leaving the sidebar clears it without ending the lift.
+    func dragExit(at screenPoint: NSPoint = NSEvent.mouseLocation) {
+        if let view = sidebarAnchor?.view, let window = view.window,
+           view.bounds.contains(view.convert(window.convertPoint(fromScreen: screenPoint), from: nil)) { return }
+        dropSlot = nil
     }
 
     /// Carries out a drop; `value` is the payload of the drag. A payload from another window
     /// is refused: moving tabs between windows is Ghostty's.
     func drop(_ kind: SidebarDragKind, value: String, over target: SidebarDropTarget, lowerHalf: Bool) -> Bool {
-        guard let window, let id = UUID(uuidString: value),
-              let slot = Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
-        else { return false }
+        // A tab lands where its gap is shown, not where the pointer happens to be at release.
+        let slot = liftedTab == nil && liftedWorkspace == nil
+            ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups) : dropSlot
+        return drop(kind, value: value, at: slot)
+    }
+
+    /// Carries out a drop into `slot`; a tab drag ends with its gap closed and its row back.
+    func drop(_ kind: SidebarDragKind, value: String, at slot: SidebarDropSlot?) -> Bool {
+        defer { endLift() }
+        guard let window, let id = UUID(uuidString: value), let slot else { return false }
 
         switch (kind, slot) {
         case (.tab, .beforeTab(let key)):
@@ -499,22 +600,45 @@ final class SidebarModel: ObservableObject {
                   let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
                   let neighbour = group.tabs.first(where: { $0.key == key }).flatMap(tabWindow(for:))
             else { return false }
-            if moving !== neighbour { registry.moveTab(moving, to: group.workspace.id, before: neighbour) }
+            guard moving !== neighbour else { return true }
+            registry.moveTab(moving, to: group.workspace?.id, before: neighbour)
             return true
 
-        case (.tab, .endOfWorkspace(let workspace)):
+        case (.tab, .endOfWorkspace(let block)):
             guard let moving = tab(withKey: id).flatMap(tabWindow(for:)) else { return false }
-            registry.moveTab(moving, to: workspace)
+            if let group = groups.first(where: { $0.id == block && $0.workspace == nil }) {
+                registry.moveTab(moving, to: nil, behind: group.tabs.compactMap(tabWindow(for:)))
+            } else {
+                registry.moveTab(moving, to: block)
+            }
+            return true
+
+        case (.tab, .tail):
+            guard let moving = tab(withKey: id).flatMap(tabWindow(for:)) else { return false }
+            registry.moveTab(moving, to: nil, behind: tabWindows)
+            return true
+
+        case (.tab, .beforeWorkspace(let block)):
+            guard let moving = tab(withKey: id).flatMap(tabWindow(for:)),
+                  let index = groups.firstIndex(where: { $0.id == block }) else { return false }
+            let before = groups[index...].flatMap(\.tabs).compactMap(tabWindow(for:)).first { $0 !== moving }
+            let behind = groups[..<index].flatMap(\.tabs).compactMap(tabWindow(for:))
+            registry.moveTab(moving, to: nil, before: before, behind: behind)
             return true
 
         case (.workspace, .beforeWorkspace(let other)):
             guard groups.contains(where: { $0.id == id }) else { return false }
-            if other != id { registry.moveWorkspace(id, before: other, in: window) }
+            if other != id { moveGroup { registry.moveWorkspace(id, before: other, in: window) } }
             return true
 
         case (.workspace, .end):
             guard groups.contains(where: { $0.id == id }) else { return false }
-            registry.moveWorkspace(id, before: nil, in: window)
+            moveGroup { registry.moveWorkspace(id, before: nil, in: window) }
+            return true
+
+        case (.workspace, .beforeTab(let key)):
+            guard groups.contains(where: { $0.id == id }) else { return false }
+            moveGroup { registry.moveWorkspace(id, beforeTab: key, in: window) }
             return true
 
         default:
@@ -525,11 +649,18 @@ final class SidebarModel: ObservableObject {
     /// A tab drag ended. Nobody took it and it is outside every window: the tab leaves for a
     /// window of its own.
     func dragEnded(_ tab: Tab, at screenPoint: NSPoint, accepted: Bool) {
-        dragExit()
+        endLift()
         guard !accepted, tabWindows.count > 1,
               !NSApp.windows.contains(where: { $0.isVisible && $0.frame.contains(screenPoint) })
         else { return }
         tabWindow(for: tab)?.moveTabToNewWindow(nil)
+    }
+
+    private func endLift() {
+        if liftedTab != nil { liftedTab = nil }
+        if liftedWorkspace != nil { liftedWorkspace = nil }
+        liftedSlot = nil
+        if dropSlot != nil { dropSlot = nil }
     }
 
     private func tab(withKey key: TabKey) -> Tab? {
@@ -657,7 +788,7 @@ struct SidebarLayout<Content: View>: View {
     /// The colors of the terminal theme (`window-theme` auto or ghostty), or nil for the built-in
     /// palettes. Config changes arrive through `ghostty.config`, so a theme change repaints at once.
     private var ink: ChromeInk {
-        ChromeInk(theme: ThemeChrome.current(for: ghostty.config))
+        ChromeInk(theme: ThemeChrome.current(for: ghostty.config), sidebarSurface: ghostty.config.backgroundColor)
     }
 
     private var isLightTheme: Bool {
@@ -736,7 +867,11 @@ struct Sidebar: View {
     /// with it instead of the list, so their drop targets touch and a drag over a gap keeps
     /// its line.
     static let listInset: CGFloat = 6
-    static let rowGap: CGFloat = 2
+    static let rowGap: CGFloat = 4
+    /// The indent of the rows under a workspace header (`demo/css/chrome.css`).
+    static let groupIndent: CGFloat = 12
+    static let blockMargin: CGFloat = 8
+    static let cardRadius: CGFloat = 6
 
     /// `width` held in `widthRange`. A stored value outside the range, or not a number, would
     /// draw a sidebar that is hidden, too wide or of no width, so it falls back instead.
@@ -770,13 +905,14 @@ struct Sidebar: View {
 
     @ObservedObject var model: SidebarModel
     @Binding var isCollapsed: Bool
+    @Environment(\.chromeInk) private var ink
 
     var body: some View {
         VStack(spacing: 0) {
             if isCollapsed {
                 VStack(spacing: 4) {
                     collapseButton
-                    viewerButton
+                    if model.modules.contains(.viewer) { viewerButton }
                     newTabButton
                 }
                 .padding(.vertical, 6)
@@ -786,17 +922,21 @@ struct Sidebar: View {
                         // The rail has no headers, so it lists every tab, folded or not.
                         ForEach(model.groups) { group in
                             ForEach(group.tabs) { tab in
+                                TabGap(model: model, slot: .beforeTab(tab.key))
                                 SidebarRow(model: model, tab: tab, isCompact: true)
                             }
+                            TabGap(model: model, slot: .endOfWorkspace(group.id))
                         }
+                        TabGap(model: model, slot: .tail)
                     }
                 }
             } else {
                 HStack {
                     collapseButton
-                    Spacer()
-                    viewerButton
+                    // New Group sits next to Hide Sidebar, as in the demo.
                     newWorkspaceButton
+                    Spacer()
+                    if model.modules.contains(.viewer) { viewerButton }
                     newTabButton
                 }
                 .padding(.horizontal, 6)
@@ -807,12 +947,11 @@ struct Sidebar: View {
                         VStack(spacing: 0) {
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(model.groups) { group in
-                                    WorkspaceHeader(model: model, group: group)
-                                    ForEach(visibleTabs(of: group)) { tab in
-                                        SidebarRow(model: model, tab: tab, isCompact: false)
-                                            .transition(.opacity)
-                                    }
+                                    blockMargin(before: group)
+                                    groupBlock(group)
                                 }
+                                TabGap(model: model, slot: .tail)
+                                TabGap(model: model, slot: .end)
                             }
                             // Only a fold or unfold animates: a title change or a reorder keeps
                             // its jump, as the rows of a moved tab are not new rows.
@@ -826,16 +965,65 @@ struct Sidebar: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(RowAnchor { model.sidebarAnchor = WeakView(view: $0) })
+    }
+
+    private func blockMargin(before group: SidebarModel.Group) -> some View {
+        VStack(spacing: 0) {
+            TabGap(model: model, slot: .beforeWorkspace(group.id))
+            Color.clear.frame(height: Sidebar.blockMargin)
+                .overlay { interaction(over: .margin(group.id)) }
+        }
+    }
+
+    private func groupBlock(_ group: SidebarModel.Group) -> some View {
+        VStack(spacing: 0) {
+            if let workspace = group.workspace {
+                WorkspaceHeader(model: model, group: group, workspace: workspace)
+            }
+            ForEach(visibleTabs(of: group)) { tab in
+                TabGap(model: model, slot: .beforeTab(tab.key))
+                SidebarRow(model: model, tab: tab, isCompact: false, isIndented: group.workspace != nil)
+                    .transition(.opacity)
+            }
+            TabGap(model: model, slot: .endOfWorkspace(group.id))
+        }
+        .padding(group.workspace == nil ? 0 : 4)
+        .background(RoundedRectangle(cornerRadius: 10).fill(group.workspace == nil ? Color.clear : ink.groupBackground))
+        .background(RowAnchor { model.blockAnchors[group.id] = WeakView(view: $0) })
+        .background {
+            if let workspace = group.workspace {
+                interaction(over: .header(workspace.id), block: group.id)
+            } else if let tab = group.tabs.first {
+                interaction(over: .tab(tab.key), block: group.id)
+            }
+        }
+        .padding(.horizontal, Sidebar.listInset)
+        .opacity(model.liftedWorkspace == group.id ? 0.4 : 1)
+    }
+
+    private func interaction(over target: SidebarDropTarget, block: UUID? = nil) -> SidebarInteraction {
+        SidebarInteraction(
+            onClick: {},
+            dragOver: { kind, value, half in
+                block != nil && kind == .tab ? false : model.dragOver(kind, value: value, over: target, lowerHalf: half)
+            },
+            dragExit: { model.dragExit() },
+            drop: { kind, value, half in
+                block != nil && kind == .tab ? false : model.drop(kind, value: value, over: target, lowerHalf: half)
+            },
+            blockView: { block.flatMap { model.blockAnchors[$0]?.view } }
+        )
     }
 
     /// The workspaces that are folded, which the fold animation follows.
     private var foldedWorkspaces: [Workspace.ID] {
-        model.groups.filter(\.workspace.collapsed).map(\.id)
+        model.groups.filter { $0.workspace?.collapsed == true }.map(\.id)
     }
 
     /// A folded workspace shows no tabs; selecting one of them unfolds it.
     private func visibleTabs(of group: SidebarModel.Group) -> [SidebarModel.Tab] {
-        group.workspace.collapsed ? [] : group.tabs
+        group.workspace?.collapsed == true ? [] : group.tabs
     }
 
     private var tail: some View {
@@ -862,7 +1050,7 @@ struct Sidebar: View {
     }
 
     private var newWorkspaceButton: some View {
-        SidebarButton(systemName: "folder.badge.plus", label: "New Workspace") {
+        SidebarButton(systemName: "folder.badge.plus", label: "New Group") {
             model.newWorkspace()
         }
     }
@@ -870,6 +1058,28 @@ struct Sidebar: View {
     private var newTabButton: some View {
         SidebarButton(systemName: "plus", label: "New Tab") {
             model.newTab()
+        }
+    }
+}
+
+/// The space a dragged tab lands in, one row high, as in Warp. It takes the drop itself, so a
+/// pointer over it keeps the slot instead of closing the gap.
+private struct TabGap: View {
+    @ObservedObject var model: SidebarModel
+    let slot: SidebarDropSlot
+
+    var body: some View {
+        if model.gapSlot == slot {
+            Color.clear
+                .frame(height: model.liftedHeight)
+                .overlay(
+                    SidebarInteraction(
+                        onClick: {},
+                        dragOver: { kind, _, _ in kind == (model.liftedWorkspace == nil ? .tab : .workspace) },
+                        dragExit: { model.dragExit() },
+                        drop: { kind, value, _ in model.drop(kind, value: value, at: slot) }
+                    )
+                )
         }
     }
 }
@@ -910,6 +1120,8 @@ private struct SidebarRow: View {
     @ObservedObject var model: SidebarModel
     let tab: SidebarModel.Tab
     let isCompact: Bool
+    /// The row stands under a workspace header; an ungrouped row sits flush.
+    var isIndented = false
 
     @State private var isHovering = false
     @AppStorage(TabRows.key) private var rows: TabRows = .wide
@@ -920,7 +1132,21 @@ private struct SidebarRow: View {
             .font(.system(size: 13))
             .foregroundStyle(ink.text(tab.isSelected ? 1 : 0.7))
             // Scoped to the fill: the close button and the card logic still switch at once.
-            .background(RoundedRectangle(cornerRadius: 5).fill(fill).animation(Motion.hover, value: fill))
+            .background {
+                RoundedRectangle(cornerRadius: Sidebar.cardRadius)
+                    .fill(fill)
+                    .background(RoundedRectangle(cornerRadius: Sidebar.cardRadius).fill(ink.sidebarSurface))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: Sidebar.cardRadius)
+                            .fill(ink.accent.opacity(tab.isSelected ? 0.18 : 0))
+                    }
+                    .animation(Motion.hover, value: fill)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: Sidebar.cardRadius)
+                    .strokeBorder(tab.isSelected ? ink.accent.opacity(0.45) : ink.tabBorder, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
             .background(RowAnchor { model.rowAnchors[tab.id] = WeakView(view: $0) })
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -933,28 +1159,20 @@ private struct SidebarRow: View {
                 scheduleCard()
             }
             .help(isCompact ? tab.title : "")
-            .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeTab(tab.key)) }
-            .overlay(alignment: .bottom) { dropLine(endsHere) }
-            .padding(.vertical, Sidebar.rowGap / 2)
-            .padding(.horizontal, isCompact ? 0 : Sidebar.listInset)
+            .padding(.vertical, isCompact ? 1 : Sidebar.rowGap / 2)
+            .padding(.leading, isCompact ? 0 : Sidebar.listInset + indent)
+            .padding(.trailing, isCompact ? 0 : Sidebar.listInset)
             .overlay(interaction)
+            .opacity(isLifted ? 0.4 : 1)
             .accessibilityElement(children: .combine)
             .accessibilityLabel(rows == .wide && !folder.isEmpty ? "\(tab.title), \(folder)" : tab.title)
             .accessibilityAddTraits(tab.isSelected ? [.isButton, .isSelected] : .isButton)
             .accessibilityAction { model.select(tab) }
     }
 
-    /// The drop line goes under the last tab of a workspace dropped at its end, and under the
-    /// last tab of the last workspace for a drop after every workspace.
-    private var endsHere: Bool {
-        let group: SidebarModel.Group?
-        switch model.dropSlot {
-        case .endOfWorkspace(let id): group = model.groups.first { $0.id == id }
-        case .end: group = model.groups.last
-        default: group = nil
-        }
-        return group?.tabs.last?.key == tab.key
-    }
+    private var isLifted: Bool { model.liftedTab == tab.key }
+
+    private var indent: CGFloat { isIndented ? Sidebar.groupIndent : 0 }
 
     private var interaction: some View {
         SidebarInteraction(
@@ -974,9 +1192,19 @@ private struct SidebarRow: View {
             drop: { kind, value, lowerHalf in
                 model.drop(kind, value: value, over: .tab(tab.key), lowerHalf: lowerHalf)
             },
+            dragBegan: { height in model.dragBegan(tab, height: height) },
             dragEnded: { point, accepted in model.dragEnded(tab, at: point, accepted: accepted) },
+            dragMoved: { model.dragExit(at: $0) },
             // The close button of an expanded row sits in its first 22 points after the inset.
-            excludedLeading: isCompact ? 0 : Sidebar.listInset + 22
+            excludedLeading: isCompact ? 0 : Sidebar.listInset + indent + 22,
+            cardInset: isCompact
+                ? NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0)
+                : NSEdgeInsets(top: Sidebar.rowGap / 2, left: Sidebar.listInset + indent, bottom: Sidebar.rowGap / 2, right: Sidebar.listInset),
+            // An ungrouped row measures its own halves for a group drag, so a group can stand between two such rows.
+            blockView: {
+                model.groups.first { $0.tabs.contains { $0.key == tab.key } }
+                    .flatMap { $0.workspace == nil ? nil : model.blockAnchors[$0.id]?.view }
+            }
         )
     }
 
@@ -1002,8 +1230,7 @@ private struct SidebarRow: View {
     }
 
     private var fill: Color {
-        if tab.isSelected { return ink.text(0.14) }
-        return ink.text(isHovering ? 0.07 : 0)
+        isHovering ? ink.tabCardHover : ink.tabCard
     }
 
     @ViewBuilder
@@ -1135,16 +1362,33 @@ struct NativeTabMark: View {
     @AppStorage(TabStyle.key) private var tabStyle: TabStyle = .sidebar
 
     var body: some View {
-        if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }),
-           tab.agentProcess != nil {
-            HStack(spacing: 6) {
-                if let agent = tab.agent {
-                    AgentBadge(agent: agent)
+        if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }) {
+            let name = Self.workspaceName(tab.workspace, workspaces: model.groups.count)
+            if name != nil || tab.agentProcess != nil {
+                HStack(spacing: 6) {
+                    if let name {
+                        Text(name)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: 90)
+                    }
+                    if let agent = tab.agent {
+                        AgentBadge(agent: agent)
+                    }
+                    if tab.agentProcess != nil {
+                        TabIcon(agentProcess: tab.agentProcess, size: 12)
+                    }
                 }
-                TabIcon(agentProcess: tab.agentProcess, size: 12)
+                .padding(.horizontal, 4)
             }
-            .padding(.horizontal, 4)
         }
+    }
+
+    /// The workspace name a native tab shows, or nil when the window set has one workspace or the name is empty.
+    nonisolated static func workspaceName(_ name: String, workspaces: Int) -> String? {
+        workspaces >= 2 && !name.isEmpty ? name : nil
     }
 
     /// Puts the mark first in the accessory stack Ghostty gives every native tab.

@@ -1,10 +1,28 @@
 #!/bin/sh
 # tarn: client of the running tarn app (docs/spec.md 2.2, 11). One JSON line to the control
-# socket, one back. Errors: stderr "tarn: <text>", exit 1, nothing on stdout.
+# socket, one back. Errors: stderr "tarn: <text>", nothing on stdout, exit 1 or the "code" of the
+# reply (4: no pane matched, docs/specs/agent-cli.md 4).
 #   tarn open <path>        open a text file in the viewer; never moves focus
-#   tarn ls [--json]        list sessions
+#   tarn ls [--json]        list the terminal panes of your group
 #   tarn notify <text>      mark this session and notify the user; never moves focus
-# TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer.
+#   tarn new [--right | --tab [--title T]] [--cwd D] -- <cmd...>
+#                           a split below this pane (right with --right) running the command;
+#                           --tab opens an unselected tab in the caller's group; --title names it
+#                           prints its pane id; never moves focus
+#   tarn run [--right | --tab [--title T]] [--cwd D] -- <cmd...>
+#                           as new, but a shell with the command typed, not submitted: the user
+#                           presses Enter; never presses it
+#   tarn wait <pane> [--timeout S] [--json]
+#                           blocks until the command in the pane ends; prints
+#                           "<state>  exit <code>  <duration>"; exit 6: the pane cannot report the
+#                           code, 9: timeout
+#   tarn read <pane> [--lines N]
+#                           prints the last N lines (default 80) of the pane's screen and
+#                           scrollback as plain text
+#   tarn close <pane>       closes the pane at once, without confirmation; never moves focus
+#   tarn module ls [--json] list the tarn modules and their state: on, off or unavailable
+#   tarn skill              print the agent skill of this build; needs no running app
+# TARN_TIMEOUT (seconds, default 5) bounds the wait for the app's answer; `wait` ignores it.
 LC_ALL=C
 export LC_ALL
 
@@ -13,8 +31,33 @@ fail() {
   exit 1
 }
 
+# Prints the error of the reply in $reply and exits with its "code", 1 when it has none.
+refused() {
+  text=$(json_field error)
+  # Keys are sorted, so "code" is the first one; a later match could sit inside the text.
+  code=$(printf '%s' "$reply" | sed -n 's/^{"code":\([0-9][0-9]*\),.*/\1/p')
+  printf 'tarn: %s\n' "$text" >&2
+  exit "${code:-1}"
+}
+
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text>"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right | --tab [--title T]] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane> | module ls [--json] | skill"
+}
+
+# Prints the reply of list command $1: text with no argument, the whole reply with --json.
+list_reply() {
+  name=$1
+  shift
+  need_surface
+  if [ $# -eq 0 ]; then
+    ask "{\"version\":1,\"cmd\":\"$name\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":false}"
+    json_field text
+  elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
+    ask "{\"version\":1,\"cmd\":\"$name\",\"surface\":$(json_str "$TARN_SURFACE"),\"json\":true}"
+    printf '%s\n' "$reply"
+  else
+    usage
+  fi
 }
 
 # Prints $1 as a JSON string.
@@ -80,17 +123,21 @@ json_field() {
 ask() {
   sock="$HOME/Library/Application Support/tarn/tarn.sock"
   [ -S "$sock" ] || fail "tarn is not running"
-  reply=$(printf '%s\n' "$1" | nc -U -w "${TARN_TIMEOUT:-5}" "$sock" 2>/dev/null) || fail "tarn is not running"
+  if [ -n "$hold" ]; then
+    reply=$(printf '%s\n' "$1" | nc -U "$sock" 2>/dev/null) || fail "tarn is not running"
+  else
+    reply=$(printf '%s\n' "$1" | nc -U -w "${TARN_TIMEOUT:-5}" "$sock" 2>/dev/null) || fail "tarn is not running"
+  fi
   [ -n "$reply" ] || fail "no answer from tarn"
   case $reply in
     *'"ok":true'*) return 0 ;;
-    *'"error":"'*) fail "$(json_field error)" ;;
+    *'"error":"'*) refused ;;
     *) fail "bad answer from tarn" ;;
   esac
 }
 
 need_surface() {
-  [ -n "$TARN_SURFACE" ] || fail "TARN_SURFACE is not set (run inside a tarn surface)"
+  [ -n "$TARN_SURFACE" ] || fail "not in a tarn tab"
 }
 
 [ $# -gt 0 ] || usage
@@ -107,15 +154,134 @@ case $cmd in
     ask "{\"version\":1,\"cmd\":\"open\",\"surface\":$(json_str "$TARN_SURFACE"),\"path\":$(json_str "$path")}"
     ;;
   ls)
-    if [ $# -eq 0 ]; then
-      ask '{"version":1,"cmd":"ls","json":false}'
-      json_field text
-    elif [ $# -eq 1 ] && [ "$1" = "--json" ]; then
-      ask '{"version":1,"cmd":"ls","json":true}'
+    list_reply ls "$@"
+    ;;
+  new | run)
+    need_surface
+    right=false
+    tab=
+    title=
+    cwd=
+    while [ $# -gt 0 ] && [ "$1" != "--" ]; do
+      case $1 in
+        --right) right=true ;;
+        --tab) tab=',"tab":true' ;;
+        --title)
+          [ $# -gt 1 ] || usage
+          shift
+          title=",\"title\":$(json_str "$1")"
+          ;;
+        --cwd)
+          [ $# -gt 1 ] || usage
+          shift
+          case $1 in
+            /*) cwd=$1 ;;
+            *) cwd=${PWD%/}/$1 ;;
+          esac
+          ;;
+        *) usage ;;
+      esac
+      shift
+    done
+    [ "$right" = false ] || [ -z "$tab" ] || fail "--right and --tab exclude each other"
+    [ -z "$title" ] || [ -n "$tab" ] || fail "--title needs --tab"
+    [ $# -gt 1 ] || usage
+    shift
+    # A newline or a carriage return in the command would press Enter (docs/specs/agent-cli.md B2).
+    nl='
+'
+    cr=$(printf '\r')
+    argv=
+    for arg in "$@"; do
+      case $arg in
+        *"$nl"* | *"$cr"*) fail "command must be one line" ;;
+      esac
+      argv="${argv:+$argv,}$(json_str "$arg")"
+    done
+    dir=
+    [ -z "$cwd" ] || dir=",\"cwd\":$(json_str "$cwd")"
+    ask "{\"version\":1,\"cmd\":\"$cmd\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$tab$title$dir,\"argv\":[$argv]}"
+    json_field pane
+    printf '\n'
+    ;;
+  wait)
+    need_surface
+    timeout=
+    as_json=false
+    pane=
+    while [ $# -gt 0 ]; do
+      case $1 in
+        --json) as_json=true ;;
+        --timeout)
+          [ $# -gt 1 ] || usage
+          shift
+          # ^(0|[1-9][0-9]*)(\.[0-9]+)?$: valid JSON number text
+          case $1 in
+            '' | *[!0-9.]* | .* | *. | *.*.* | 0[0-9]*) fail "bad timeout" ;;
+          esac
+          timeout=$1
+          ;;
+        -*) usage ;;
+        *) [ -z "$pane" ] || usage; pane=$1 ;;
+      esac
+      shift
+    done
+    [ -n "$pane" ] || usage
+    limit=
+    [ -z "$timeout" ] || limit=",\"timeout\":$timeout"
+    hold=1
+    ask "{\"version\":1,\"cmd\":\"wait\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$pane")$limit}"
+    if $as_json; then
       printf '%s\n' "$reply"
     else
-      usage
+      json_field text
+      printf '\n'
     fi
+    ;;
+  read)
+    need_surface
+    lines=
+    pane=
+    while [ $# -gt 0 ]; do
+      case $1 in
+        --lines)
+          [ $# -gt 1 ] || usage
+          shift
+          # A positive integer without leading zeros: valid JSON number text.
+          case $1 in
+            '' | *[!0-9]* | 0*) fail "bad lines" ;;
+          esac
+          lines=$1
+          ;;
+        -*) usage ;;
+        *) [ -z "$pane" ] || usage; pane=$1 ;;
+      esac
+      shift
+    done
+    [ -n "$pane" ] || usage
+    count=
+    [ -z "$lines" ] || count=",\"lines\":$lines"
+    ask "{\"version\":1,\"cmd\":\"read\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$pane")$count}"
+    json_field text
+    ;;
+  close)
+    [ $# -eq 1 ] || usage
+    need_surface
+    ask "{\"version\":1,\"cmd\":\"close\",\"surface\":$(json_str "$TARN_SURFACE"),\"pane\":$(json_str "$1")}"
+    ;;
+  module)
+    [ "${1-}" = ls ] || usage
+    shift
+    list_reply modules "$@"
+    ;;
+  skill)
+    [ $# -eq 0 ] || usage
+    # The app bundle keeps the skill in Contents/Resources/tarn, a checkout next to this script.
+    dir=$(dirname "$0")
+    for file in "$dir/../Resources/tarn/SKILL.md" "$dir/SKILL.md"; do
+      [ -f "$file" ] && exec cat "$file"
+    done
+    fail "no skill in this build"
     ;;
   notify)
     [ $# -gt 0 ] || usage

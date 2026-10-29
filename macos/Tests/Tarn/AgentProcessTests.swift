@@ -33,7 +33,7 @@ struct AgentProcessTests {
         #expect(!AgentProcess.looksLikeVersion("python3.12"))
     }
 
-    /// Runs `program` from a link named `file` with `argv`, so the kernel name is `file`.
+    /// Runs `program` from a link named `file` with `argv`; the kernel name stays `program`'s.
     private func withProcess(
         file: String,
         program: String = "/bin/sleep",
@@ -90,6 +90,131 @@ struct AgentProcessTests {
             #expect(AgentProcess.comm(pid: pid) != nil)
             #expect(AgentProcess.agent(pid: pid) == nil)
         }
+    }
+
+    /// Runs `argv` as the leader of a new process group, as a pane's process is.
+    private func withGroup(_ argv: [String], _ body: (pid_t) throws -> Void) throws {
+        var attr: posix_spawnattr_t?
+        posix_spawnattr_init(&attr)
+        defer { posix_spawnattr_destroy(&attr) }
+        posix_spawnattr_setflags(&attr, Int16(POSIX_SPAWN_SETPGROUP))
+        posix_spawnattr_setpgroup(&attr, 0)
+        var cArgs = argv.map { strdup($0) } + [nil]
+        defer { cArgs.forEach { free($0) } }
+        var pid: pid_t = 0
+        try #require(posix_spawn(&pid, argv[0], nil, &attr, &cArgs, environ) == 0)
+        defer {
+            killpg(pid, SIGKILL)
+            waitpid(pid, nil, 0)
+        }
+        try body(pid)
+    }
+
+    /// `pid` once it is not `group` and `comm` names it, or nil after 5 s.
+    private func settled(_ group: pid_t, comm: String) -> pid_t? {
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let pid = AgentProcess.foreground(group: group)
+            if pid != group, AgentProcess.comm(pid: pid) == comm { return pid }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return nil
+    }
+
+    /// spec: T-218 - a pane `tarn new` opened shows its command and folder, not login's.
+    @Test func aCommandStartedThroughLoginIsTheForegroundProcess() throws {
+        let user = String(cString: getpwuid(getuid()).pointee.pw_name)
+        // `exec` as Ghostty's `exec -l`: login's child becomes the command (`/bin/sh` is bash by kernel name).
+        try withGroup(["/usr/bin/login", "-flp", user, "/bin/sh", "-c", "cd /tmp && exec sleep 30"]) { login in
+            #expect(AgentProcess.comm(pid: login) == "login")
+            let command = try #require(settled(login, comm: "sleep"), "login's child never appeared")
+            #expect(ViewerPaths.cwd(ofPid: command) == "/private/tmp")
+        }
+    }
+
+    /// spec: T-218 - an agent keeps its group while its tools run: the leader still stands for it.
+    @Test func aGroupLeaderThatIsNotLoginStandsForItsGroup() throws {
+        try withGroup(["/bin/sh", "-c", "sleep 30; :"]) { shell in
+            // sleep, the tool, must be in the group before the check means anything.
+            let deadline = Date().addingTimeInterval(5)
+            var pids = [pid_t](repeating: 0, count: 16)
+            func members() -> Int {
+                Int(proc_listpids(UInt32(PROC_PGRP_ONLY), UInt32(shell), &pids, Int32(pids.count * 4))) / 4
+            }
+            while members() < 2, Date() < deadline { Thread.sleep(forTimeInterval: 0.05) }
+            try #require(members() == 2, "sleep never joined the group")
+            #expect(AgentProcess.foreground(group: shell) == shell)
+        }
+    }
+
+    /// spec: T-250 - Ghostty's shell integration runs ssh under `ghostty +ssh`, which leads the group.
+    @Test(arguments: [
+        ("ssh", nil, true),
+        ("ghostty", ["/Applications/Tarn.app/Contents/MacOS/ghostty", "+ssh", "--", "pi@10.0.0.2"], true),
+        ("ghostty", ["ghostty", "+ssh", "--forward-env", "--terminfo", "--", "pi"], true),
+        // The app itself and its other actions are not ssh.
+        ("ghostty", ["/Applications/Tarn.app/Contents/MacOS/ghostty"], false),
+        ("ghostty", ["ghostty", "+show-config", "+ssh"], false),
+        ("ghostty", ["ghostty", "+ssh-cache", "--clear"], false),
+        ("zsh", ["zsh", "+ssh"], false),
+    ] as [(String, [String]?, Bool)])
+    func sshOrGhosttysSSHWrapperIsSSH(comm: String, argv: [String]?, isSSH: Bool) {
+        #expect(AgentProcess.isSSH(comm: comm) { argv } == isSSH)
+    }
+
+    /// spec: T-250 - an ssh tab keeps the remote shell's title.
+    @Test func anSSHClientIsNamedByItsKernelName() throws {
+        // The real client, as a link keeps its target's kernel name: the proxy command keeps it
+        // waiting with no network and no user config, and the group kill takes the proxy too.
+        let ssh = ["/usr/bin/ssh", "-F", "/dev/null", "-o", "BatchMode=yes", "-o", "ProxyCommand=sleep 30", "tarn-test"]
+        try withGroup(ssh) { pid in
+            #expect(execed(pid, comm: "ssh"), "the kernel name never became ssh")
+            #expect(AgentProcess.isSSH(pid: pid))
+            #expect(AgentProcess.agent(pid: pid) == nil)
+        }
+        try withProcess(file: "sleep", argv: ["sleep", "30"]) { pid in
+            #expect(execed(pid, comm: "sleep"), "the kernel name never became sleep")
+            #expect(!AgentProcess.isSSH(pid: pid))
+        }
+    }
+
+    /// spec: T-250 - under ssh the row keeps the remote title and the card shows no local folder.
+    @Test(arguments: [
+        (false, "/u/Galera", "/u/Galera"),
+        (true, "~/app", nil),
+    ] as [(Bool, String, String?)])
+    func anSSHTabShowsNoLocalFolder(isSSH: Bool, title: String, folder: String?) {
+        let pwd = SidebarModel.shownFolder("/u/Galera", isSSH: isSSH)
+        #expect(SidebarModel.displayTitle("~/app", pwd: pwd) == title)
+        #expect(pwd == folder)
+    }
+
+    /// spec: T-250 - one ssh read per pid in a turn; a reset forgets it, so `exec ssh` is seen.
+    @MainActor @Test func theSSHCheckIsReadOncePerTurn() {
+        let saved = AgentProcessCache.sshReader
+        var reads = 0
+        AgentProcessCache.sshReader = { _ in reads += 1; return true }
+        AgentProcessCache.reset()
+        defer {
+            AgentProcessCache.sshReader = saved
+            AgentProcessCache.reset()
+        }
+        #expect(AgentProcessCache.isSSH(pid: 10))
+        #expect(AgentProcessCache.isSSH(pid: 10))
+        #expect(reads == 1)
+        AgentProcessCache.reset()
+        _ = AgentProcessCache.isSSH(pid: 10)
+        #expect(reads == 2)
+    }
+
+    /// Whether `pid` took the kernel name `comm` within 5 s: posix_spawn returns before exec.
+    private func execed(_ pid: pid_t, comm: String) -> Bool {
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            if AgentProcess.comm(pid: pid) == comm { return true }
+            Thread.sleep(forTimeInterval: 0.01)
+        }
+        return false
     }
 
     @Test func unreadablePidIsNotAnAgent() {

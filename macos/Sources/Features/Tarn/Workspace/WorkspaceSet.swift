@@ -9,27 +9,24 @@ struct Workspace: Equatable, Identifiable, Codable {
     var id = UUID()
     var name: String
     var collapsed = false
+    /// The project folder (D19): absolute and standardized; nil for "No project".
+    var folder: String?
 }
 
 /// The workspaces of one Ghostty window and which tab sits in which one.
 ///
-/// Ghostty alone writes the order of tabs; this value stores only membership. A workspace is
-/// a contiguous run of the native tab order, so workspace order is derived from the order of
-/// tabs and never stored (`docs/modules/workspaces.md`).
+/// Ghostty alone writes the order of tabs; this value stores only membership. Workspaces are
+/// drawn in the order of their first tab, so their order is derived and never stored
+/// (`docs/modules/workspaces.md`).
 struct WorkspaceSet: Equatable {
-    static let defaultName = "Default"
-
-    /// One window's workspaces. Not part of the stored state.
+    /// One block of the sidebar. Not part of the stored state: a workspace with its tabs, or
+    /// the ungrouped tabs between two workspaces (`workspace` is nil, no header).
     struct Run: Equatable {
-        let workspace: Workspace
-        let tabs: [TabKey]
-    }
+        let workspace: Workspace?
+        fileprivate(set) var tabs: [TabKey]
 
-    /// A single native move Ghostty has to make so a new tab ends its workspace's run:
-    /// `delta` is the amount of the `move_tab` action.
-    struct Reorder: Equatable {
-        let tab: TabKey
-        let delta: Int
+        /// The workspace, or the first tab of an ungrouped run (as `SidebarModel.Group.id`).
+        var id: UUID { workspace?.id ?? tabs[0] }
     }
 
     /// What closing a tab did to its workspace.
@@ -58,15 +55,6 @@ struct WorkspaceSet: Equatable {
         self.revision = revision
     }
 
-    /// A set with `Default` holding `tabs`.
-    static func makeDefault(tabs: [TabKey]) -> WorkspaceSet {
-        let workspace = Workspace(name: defaultName)
-        return WorkspaceSet(
-            workspaces: [workspace],
-            members: Dictionary(uniqueKeysWithValues: tabs.map { ($0, workspace.id) })
-        )
-    }
-
     // MARK: Queries
 
     func workspace(_ id: Workspace.ID) -> Workspace? {
@@ -81,42 +69,40 @@ struct WorkspaceSet: Equatable {
         members.filter { $0.value == workspace }.map(\.key)
     }
 
-    /// The workspaces of `order` from top to bottom, each with its tabs in tab order.
-    /// A workspace without a tab in `order` is left out; so is a tab without a workspace.
+    /// The blocks of `order` from top to bottom. A workspace stands where its first tab is and holds
+    /// all its tabs; a tab with no workspace joins the ungrouped block it follows. A workspace
+    /// without a tab in `order` is left out.
     func runs(order: [TabKey]) -> [Run] {
-        var ids: [Workspace.ID] = []
-        var byWorkspace: [Workspace.ID: [TabKey]] = [:]
+        var runs: [Run] = []
+        var place: [Workspace.ID: Int] = [:]
         for tab in order {
-            guard let id = members[tab], workspace(id) != nil else { continue }
-            if byWorkspace[id] == nil { ids.append(id) }
-            byWorkspace[id, default: []].append(tab)
+            if let id = members[tab], let workspace = workspace(id) {
+                if let at = place[id] {
+                    runs[at].tabs.append(tab)
+                } else {
+                    place[id] = runs.count
+                    runs.append(Run(workspace: workspace, tabs: [tab]))
+                }
+            } else if let last = runs.indices.last, runs[last].workspace == nil {
+                runs[last].tabs.append(tab)
+            } else {
+                runs.append(Run(workspace: nil, tabs: [tab]))
+            }
         }
-        return ids.compactMap { id in
-            workspace(id).map { Run(workspace: $0, tabs: byWorkspace[id] ?? []) }
-        }
-    }
-
-    /// Each workspace of `order` forms one unbroken run.
-    func isContiguous(_ order: [TabKey]) -> Bool {
-        var closed = Set<Workspace.ID>()
-        var current: Workspace.ID?
-        for tab in order {
-            guard let id = members[tab] else { continue }
-            if id == current { continue }
-            if closed.contains(id) { return false }
-            if let current { closed.insert(current) }
-            current = id
-        }
-        return true
+        return runs
     }
 
     // MARK: Edits
 
-    /// Adds an empty workspace and returns it, or nil for a blank name. The workspace
-    /// gets its tab right after; until then it is in no run.
-    mutating func create(name: String) -> Workspace.ID? {
+    /// Adds an empty workspace and returns it, or nil for a blank name or a folder that is not
+    /// an absolute path. The workspace gets its tab right after; until then it is in no run.
+    mutating func create(name: String, folder: String? = nil) -> Workspace.ID? {
         guard let name = Self.cleaned(name) else { return nil }
-        let workspace = Workspace(name: name)
+        var workspace = Workspace(name: name)
+        if let folder {
+            guard let path = WorkspaceFolder.standardized(folder) else { return nil }
+            workspace.folder = path
+        }
         workspaces.append(workspace)
         revision += 1
         return workspace.id
@@ -130,6 +116,16 @@ struct WorkspaceSet: Equatable {
         workspaces[index].name = name
         revision += 1
         return true
+    }
+
+    /// The first tab of the workspace that holds `folder` (Q1).
+    func firstTab(inFolder folder: String, order: [TabKey]) -> TabKey? {
+        runs(order: order).first { $0.workspace?.folder == folder }?.tabs.first
+    }
+
+    /// The last tab of workspace `id` in `order`: the parent of its "+" tab (S6).
+    func lastTab(of id: Workspace.ID, order: [TabKey]) -> TabKey? {
+        runs(order: order).last { $0.workspace?.id == id }?.tabs.last
     }
 
     mutating func setCollapsed(_ id: Workspace.ID, _ collapsed: Bool) {
@@ -147,10 +143,11 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Puts `tab` in `workspace`, leaving the one it was in.
+    /// Puts `tab` in `workspace`, leaving the one it was in; a workspace left empty goes.
     mutating func join(_ tab: TabKey, to workspace: Workspace.ID) {
         guard self.workspace(workspace) != nil, members[tab] != workspace else { return }
-        members[tab] = workspace
+        let old = members.updateValue(workspace, forKey: tab)
+        if let old, !members.values.contains(old) { workspaces.removeAll { $0.id == old } }
         revision += 1
     }
 
@@ -165,23 +162,11 @@ struct WorkspaceSet: Equatable {
         return .workspaceClosed(workspaces.remove(at: index))
     }
 
-    /// Deletes a workspace; its tabs go to the one above, or below when it is first.
-    /// The last workspace is never deleted. Returns false when nothing changed.
+    /// Deletes the group; its tabs stay where they stand, ungrouped (G7). False for an unknown id.
     @discardableResult
-    mutating func delete(_ id: Workspace.ID, order: [TabKey]) -> Bool {
-        guard workspaces.count > 1, workspace(id) != nil else { return false }
-        let runs = runs(order: order)
-        if let index = runs.firstIndex(where: { $0.workspace.id == id }) {
-            let neighbour = index > 0 ? runs[index - 1] : runs[safe: index + 1]
-            if let heir = neighbour?.workspace.id {
-                for tab in runs[index].tabs { members[tab] = heir }
-            }
-        }
-        // Members that are not on screen (a window still being restored) follow the same rule.
-        let heir = workspaces.first { $0.id != id }?.id
-        for (tab, owner) in members where owner == id {
-            if let heir { members[tab] = heir }
-        }
+    mutating func ungroup(_ id: Workspace.ID) -> Bool {
+        guard workspace(id) != nil else { return false }
+        members = members.filter { $0.value != id }
         workspaces.removeAll { $0.id == id }
         revision += 1
         return true
@@ -194,94 +179,7 @@ struct WorkspaceSet: Equatable {
         revision += 1
     }
 
-    /// Drops workspaces that hold no tab, except `keep`.
-    mutating func removeEmpty(keeping keep: Workspace.ID? = nil) {
-        let used = Set(members.values)
-        let before = workspaces.count
-        workspaces.removeAll { !used.contains($0.id) && $0.id != keep }
-        if workspaces.count != before { revision += 1 }
-    }
-
-    // MARK: Following Ghostty
-
-    /// Brings membership in line with a native order that changed behind our back
-    /// (`docs/modules/workspaces.md`).
-    ///
-    /// - Parameters:
-    ///   - previous: the relative order of the tabs at the last look.
-    ///   - current: the native order now, new tabs included.
-    ///   - target: where a tab with no workspace goes (section 4).
-    /// - Returns: the native moves that put each new tab at the end of its workspace's run.
-    ///   Membership is already final; the caller makes the moves.
-    mutating func reconcile(previous: [TabKey], current: [TabKey], target: Workspace.ID) -> [Reorder] {
-        let before = self
-        let fresh = current.filter { members[$0].flatMap { workspace($0) } == nil }
-        if !fresh.isEmpty {
-            let heir = ensureWorkspace(target)
-            for tab in fresh { members[tab] = heir }
-        }
-
-        let known = current.filter { !fresh.contains($0) }
-        if !isContiguous(known) {
-            repair(known, previous: previous.filter(known.contains))
-        }
-
-        var reorders: [Reorder] = []
-        var order = current
-        for tab in fresh {
-            guard let index = order.firstIndex(of: tab), let id = members[tab] else { continue }
-            order.remove(at: index)
-            let lastPeer = order.lastIndex { members[$0] == id }
-            let destination = lastPeer.map { $0 + 1 } ?? order.count
-            order.insert(tab, at: destination)
-            if destination != index { reorders.append(Reorder(tab: tab, delta: destination - index)) }
-        }
-
-        if members != before.members || workspaces != before.workspaces { revision = before.revision + 1 }
-        return reorders
-    }
-
-    /// Makes the workspaces of `known` contiguous again. Ghostty moves one tab at a time, so
-    /// first look for the tab whose removal leaves the others in their old order; it joins
-    /// the workspace of its upper neighbour, or its lower one when it is first. If that does
-    /// not heal the order, every tab outside the first run of its workspace joins the
-    /// workspace above it.
-    private mutating func repair(_ known: [TabKey], previous: [TabKey]) {
-        if previous.count == known.count {
-            let mover = known.first { tab in
-                known.filter { $0 != tab } == previous.filter { $0 != tab }
-            }
-            if let mover, let index = known.firstIndex(of: mover) {
-                let neighbour = index > 0 ? known[index - 1] : known[safe: index + 1]
-                if let id = neighbour.flatMap({ members[$0] }) { members[mover] = id }
-                if isContiguous(known) { return }
-            }
-        }
-
-        var closed = Set<Workspace.ID>()
-        var current: Workspace.ID?
-        for (index, tab) in known.enumerated() {
-            guard let id = members[tab] else { continue }
-            if id == current { continue }
-            if closed.contains(id), index > 0, let above = members[known[index - 1]] {
-                members[tab] = above
-                continue
-            }
-            if let current { closed.insert(current) }
-            current = id
-        }
-    }
-
-    /// `target` when it exists, else the first workspace, else a new `Default`.
-    private mutating func ensureWorkspace(_ target: Workspace.ID) -> Workspace.ID {
-        if workspace(target) != nil { return target }
-        if let first = workspaces.first { return first.id }
-        let created = Workspace(name: Self.defaultName)
-        workspaces.append(created)
-        return created.id
-    }
-
-    private static func cleaned(_ name: String) -> String? {
+    static func cleaned(_ name: String) -> String? {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }

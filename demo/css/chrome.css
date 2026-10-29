@@ -1,6 +1,11 @@
 /* Window chrome: title bar, sidebar, top tabs, split layout, grab handle, drop frame, tab card,
    find bar, palette. Colors come from the tokens below. */
 :root {
+  --group-bg: color-mix(in srgb, var(--chrome), var(--fg) 4%);
+  --tab-card: color-mix(in srgb, var(--chrome), var(--fg) 8%);
+  --tab-hover: color-mix(in srgb, var(--chrome), var(--fg) 11%);
+  --tab-border: color-mix(in srgb, var(--fg) 6%, transparent);
+  --tab-selected-border: color-mix(in srgb, var(--accent) 45%, transparent);
   --chrome: #21222c; --line: #3a3c4e; --div: #000; --muted: #9a9cb3; --accent: #8be9fd; --deny: #ff5555;
   --blue: #4f8cff; --green: #50fa7b; --orange: #ffb86c; --menu: #2b2d3a; --key: #6c6f85;
   /* macOS system accent (default blue): Ghostty's drop zone fill and the system list drop line */
@@ -28,6 +33,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* sidebar */
 .sidebar { position: relative; width: 200px; flex: none; overflow: auto; background: var(--chrome); border-right: 1px solid var(--div); padding: 10px 8px; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.wsblock { display: flex; flex-direction: column; gap: 4px; flex: none; margin-top: 8px; }
+.wsblock.group { background: var(--group-bg); border-radius: 10px; padding: 4px; }
+.wsblock .wsh { margin-top: 0; }
 /* 14 px grab zone over the sidebar edge: 11 px inside the sidebar, 3 px into the terminal so the
    first text column stays selectable; the line shows on hover */
 .sbgrip { flex: none; width: 14px; margin: 0 -3px 0 -11px; cursor: col-resize; position: relative; z-index: 4; }
@@ -39,20 +47,22 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sbtop .ib { display: grid; place-items: center; width: 26px; height: 24px; padding: 0; font-size: 16px; }
 .wsh { display: flex; align-items: center; gap: 6px; padding: 5px 6px; margin-top: 6px; border-radius: 5px; font-size: 11.5px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); cursor: pointer; user-select: none; }
 .wsh:hover { background: rgba(127, 127, 127, .12); color: var(--fg); }
-.wsh .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.wsh .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
 .wsh .ib { opacity: 0; font-size: 14px; line-height: 1; padding: 0 5px; }
 .wsh:hover .ib { opacity: 1; }
 .wsh .cnt { font-size: 11px; color: var(--key); text-transform: none; }
 .chev { width: 10px; flex: none; color: var(--muted); font-size: 10px; }
 .tab { display: flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 5px; background: none; border: 0; text-align: left; color: var(--muted); width: 100%; cursor: pointer; }
-.tab:hover { background: rgba(127, 127, 127, .12); }
-.tab[aria-selected="true"] { background: rgba(127, 127, 127, .22); color: var(--fg); }
+.tab[data-tabid], .tab.dragghost { --card-bg: var(--tab-card); background: var(--card-bg); border-radius: 6px; box-shadow: inset 0 0 0 1px var(--tab-border); }
+.tab[data-tabid]:hover { --card-bg: var(--tab-hover); }
+.tab[aria-selected="true"] { background: color-mix(in srgb, var(--card-bg), var(--accent) 18%); box-shadow: inset 0 0 0 1px var(--tab-selected-border); color: var(--fg); }
 .tab .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.sidebar .tab[data-tabid] { margin-left: 12px; width: calc(100% - 12px); }
+.sidebar .tab[data-tabid], .wsblock.dragghost .tab[data-tabid] { margin-left: 12px; width: calc(100% - 12px); }
 .tab .x { opacity: 0; background: none; border: 0; padding: 0 3px; color: var(--muted); font-size: 11px; }
 .tab:hover .x { opacity: 1; }
 .tab:hover .key { display: none; }
 .tab.add { color: var(--key); margin-top: 4px; }
+.tab.add:hover { background: rgba(127, 127, 127, .12); }
 .key { font-size: 11px; color: var(--key); }
 .sbtop .grow { flex: 1; }
 .tab.wide { align-items: flex-start; padding: 5px 8px; }
@@ -68,13 +78,13 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sidebar.rail .tab[data-tabid] { margin: 0; width: 34px; height: 30px; justify-content: center; position: relative; padding: 0; }
 .sidebar.rail .tab .dot { position: absolute; top: 5px; right: 5px; }
 .sidebar.rail .sep { width: 24px; margin: 6px auto; }
-/* sidebar drop line where a workspace lands: the system accent, as in a macOS list */
-.wsline { position: absolute; left: 8px; right: 8px; height: 3px; border-radius: 1px; background: var(--sys-accent); pointer-events: none; }
 /* a dragged tab leaves the list; the rows slide apart to the gap where it lands, as in Warp */
-.sidebar .tab[data-tabid] { user-select: none; }
-.sidebar .tab.lifted { display: none; }
-body.dragging .sidebar > * { transition: margin-top .15s ease-out; }
-.tab.dragghost { position: fixed; z-index: 30; pointer-events: none; color: var(--fg); background: var(--menu); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.sidebar .tab[data-tabid], .sidebar .wsh { user-select: none; }
+.sidebar .tab.lifted, .sidebar .wsblock.lifted { display: none; }
+body.dragging .sidebar > *, body.dragging .wsblock > * { transition: margin-top .1s ease-out; }
+.tab.dragghost { position: fixed; z-index: 30; pointer-events: none; color: var(--fg); box-shadow: inset 0 0 0 1px var(--tab-border), 0 6px 18px rgba(0, 0, 0, .35); }
+.wsblock.dragghost { position: fixed; z-index: 30; pointer-events: none; margin: 0; border-radius: 10px; overflow: hidden; color: var(--fg); box-shadow: 0 6px 18px rgba(0, 0, 0, .35); }
+.tab.dragghost[aria-selected="true"] { box-shadow: inset 0 0 0 1px var(--tab-selected-border), 0 6px 18px rgba(0, 0, 0, .35); }
 .tab.dragghost .x { opacity: 1; }
 .tab.dragghost .key { display: none; }
 .ctx { position: fixed; z-index: 20; min-width: 200px; background: var(--menu); border: 1px solid var(--line); border-radius: 8px; padding: 4px; box-shadow: 0 8px 24px rgba(0, 0, 0, .4); }
@@ -89,6 +99,7 @@ body.dragging .sidebar > * { transition: margin-top .15s ease-out; }
 .ttab:hover { background: rgba(127, 127, 127, .1); }
 .ttab[aria-selected="true"] { background: var(--bg); color: var(--fg); }
 .ttab .tt { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ttab .tw { color: var(--key); }
 .ttab .tk { flex: none; min-width: 22px; text-align: right; font-size: 11px; color: var(--key); }
 .ttab .tx { flex: none; width: 16px; height: 16px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); font-size: 9px; opacity: 0; }
 .ttab:hover .tx { opacity: 1; }
@@ -162,3 +173,17 @@ body.dragging iframe { pointer-events: none; }
 .ask-dialog { position: absolute; left: 50%; top: 20%; transform: translateX(-50%); z-index: 40; padding: 14px 16px; border-radius: 10px; background: var(--menu); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .4); }
 .ask-dialog p { margin: 0 0 12px; max-width: 360px; }
 .ask-dialog button { margin-right: 8px; padding: 3px 12px; font: inherit; }
+.ask-dialog .newgroup { display: grid; gap: 8px; margin: 0 0 14px; }
+.ask-dialog .closetabs { display: flex; align-items: center; gap: 6px; margin: 0 0 14px; }
+.ask-dialog .newgroup label { display: grid; grid-template-columns: auto 84px 1fr; align-items: center; gap: 6px; }
+.ask-dialog input:not([type]) { font: inherit; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--chrome); color: var(--fg); }
+
+/* Ungrouped tabs: the header stays in the DOM for the drag code and takes no room; the rows sit flush. */
+.sidebar .wsh.flat { display: none; }
+.sidebar:not(.rail) .tab.loose[data-tabid] { margin-left: 0; width: 100%; }
+
+/* Notifications: the demo's banner for an agent that needs you */
+.banner { position: fixed; top: 44px; right: 16px; z-index: 40; width: 280px; padding: 9px 12px; border-radius: 10px; background: var(--menu); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .45); font-size: 12.5px; pointer-events: none; }
+.banner b { display: block; font-size: 12.5px; }
+.banner span { color: var(--muted); }
+.ttab .tw { flex: none; padding: 0 5px; border-radius: 4px; background: rgba(127, 127, 127, .2); color: var(--muted); font-size: 10.5px; }

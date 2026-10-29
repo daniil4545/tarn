@@ -1,8 +1,13 @@
-# tarn make targets. Usage: make -f tarn.mk check | release | bench
+# tarn make targets. Usage: make -f tarn.mk check | release | bench | worktree NAME=<branch> | dev | live [STAND_APP=<app>]
 #
-# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests
+# worktree a task worktree .worktrees/NAME on a new branch from origin/dev, linked to this checkout's built core
+# dev      the Debug Tarn.app of this checkout without coverage, the app the stand runs by default
+# live     a second Tarn with its own home and control socket next to the user's (tools/stand/stand.sh), for live checks;
+#          tools/stand/drive.sh types into it, reads its screen and takes screenshots
+# check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests, shellcheck, typos, ruff;
+#          the cheap linters run before the build; CI runs this target on every PR into dev and main
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
-# bench    the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
+# bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
 #
 # Builds run under nice and with 4 jobs: the machine is shared with other work.
 # Deviation from macos/build.nu: it passes no -jobs limit, so xcodebuild is called directly.
@@ -24,18 +29,57 @@ BENCH    := $(CURDIR)/dist/bench
 NOCOV    := ENABLE_CODE_COVERAGE=NO CLANG_COVERAGE_MAPPING=NO
 LSREG    :=/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister
 
-.PHONY: check release bench
+STAND_APP ?= $(SYMROOT)/Debug/Tarn.app
+
+# The GitHub runner has no GUI session: tests that need a real window, focus or mouse drag fail there
+# and pass on the Mac (T-270). CI skips them; the agent runs the full check on the Mac before a merge.
+GUI_TESTS := GhosttyTests/NewPaneTests/theSplitGoesBelowAndKeepsTheFocus() \
+	GhosttyTests/SidebarWidthTests/terminalKeepsItsFrameWhileTheSidebarIsDragged()
+CI_SKIP   := $(if $(CI),$(foreach t,$(GUI_TESTS),-skip-testing '$(t)'))
+# A failed test runs once more in a new test host (T-280): window tests time out when macOS is slow,
+# and the host at times exits mid-run, which Xcode retries only with relaunch. A real break fails both.
+RETRY     := -retry-tests-on-failure -test-iterations 2 -test-repetition-relaunch-enabled YES
+
+.PHONY: check release bench worktree dev live
+
+# The core (GhosttyKit.xcframework, zig-out) is untracked and slow to build: every worktree links this one.
+worktree:
+	@test -n "$(NAME)" || { echo "worktree: NAME=<branch> is required"; exit 1; }
+	@test "$$(git rev-parse --git-dir)" = "$$(git rev-parse --git-common-dir)" || { echo "worktree: run it in the main checkout, not in a worktree"; exit 1; }
+	@test -d macos/GhosttyKit.xcframework -a ! -L macos/GhosttyKit.xcframework || { echo "worktree: build the core in the main checkout first"; exit 1; }
+	git fetch -q origin dev
+	git worktree add -b $(NAME) .worktrees/$(NAME) origin/dev
+	ln -s $(CURDIR)/macos/GhosttyKit.xcframework .worktrees/$(NAME)/macos/GhosttyKit.xcframework
+	ln -s $(CURDIR)/zig-out .worktrees/$(NAME)/zig-out
+
+dev:
+	mkdir -p $(SYMROOT)
+	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
+		GHOSTTY_COMMIT=$$(git rev-parse --short HEAD) $(NOCOV) -jobs 4 build > $(SYMROOT)/dev.log 2>&1 || \
+		{ grep -E "error:" $(SYMROOT)/dev.log | tail -20; exit 1; }
+	@echo "dev: $(SYMROOT)/Debug/Tarn.app at $$(git rev-parse --short HEAD), log $(SYMROOT)/dev.log"
+
+live:
+	sh tools/stand/stand.sh $(STAND_APP)
 
 check:
 	cd macos && swiftlint lint --strict Sources/Features/Tarn Tests/Tarn
+	shellcheck -e SC2015 plugin/hooks/*.sh install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
+	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
+		macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
+	uvx ruff@0.17.2 check plugin/test
+	uvx ruff@0.17.2 format --check plugin/test
 	mkdir -p $(SYMROOT)
 	$(XCB) -project $(PROJECT) -scheme Ghostty -configuration Debug SYMROOT=$(SYMROOT) \
-		-jobs 4 -skip-testing GhosttyUITests test > $(SYMROOT)/test.log 2>&1 || \
-		{ grep -E "error:|failed|\*\* TEST" $(SYMROOT)/test.log | tail -40; exit 1; }
-	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed; log $(SYMROOT)/test.log"
+		-jobs 4 -skip-testing GhosttyUITests $(CI_SKIP) $(RETRY) test > $(SYMROOT)/test.log 2>&1 || \
+		{ grep -E "error:|failed|\*\* TEST|✘|Expectation|recorded an issue" $(SYMROOT)/test.log | tail -40; exit 1; }
+	@echo "app tests: $$(grep -c -E "Test [Cc]ase .* passed" $(SYMROOT)/test.log) passed, $$(grep -c -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log) failed and retried; log $(SYMROOT)/test.log"
+	@grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -v "(0.000 seconds)" | \
+		sed -E "s/^Test [Cc]ase '([^']*)'.*/  retried: \1/" | sort -u || true
+	@n=$$(grep -E "Test [Cc]ase .* failed" $(SYMROOT)/test.log | grep -c "(0.000 seconds)" || true); \
+		[ "$$n" -eq 0 ] || echo "  retried: $$n tests the test host never finished (it exited mid-run)"
 	python3 -I plugin/test/hook_test.py
 	python3 -I cli/test/cli_test.py
-	shellcheck install.sh cli/tarn cli/test/install_test.sh
 	sh cli/test/install_test.sh
 
 release:

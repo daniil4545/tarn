@@ -38,8 +38,8 @@ struct SidebarMenuTests {
 
     @Test func workspaceMenuItemsSendAMessageTheirTargetHandles() {
         let (model, _) = makeModel()
-        let menu = model.contextMenu(for: SidebarModel.Group(workspace: Workspace(name: "Alpha"), tabs: []))
-        #expect(itemsWithActions(menu).map(\.title) == ["New Tab", "Collapse", "Rename Workspace...", "Delete Workspace..."])
+        let menu = model.contextMenu(for: Workspace(name: "Alpha"))
+        #expect(itemsWithActions(menu).map(\.title) == ["New Tab", "Collapse", "Rename Group...", "Delete Group..."])
         expectHandled(itemsWithActions(menu))
     }
 
@@ -52,8 +52,8 @@ struct SidebarMenuTests {
 
     @Test func renameWorkspaceItemOpensTheNameSheet() throws {
         let (model, window) = makeModel()
-        let menu = model.contextMenu(for: SidebarModel.Group(workspace: Workspace(name: "Alpha"), tabs: []))
-        let rename = try #require(menu.items.first { $0.title == "Rename Workspace..." })
+        let menu = model.contextMenu(for: Workspace(name: "Alpha"))
+        let rename = try #require(menu.items.first { $0.title == "Rename Group..." })
 
         _ = NSApp.sendAction(try #require(rename.action), to: rename.target, from: rename)
 

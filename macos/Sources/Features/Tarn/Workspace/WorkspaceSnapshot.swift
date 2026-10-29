@@ -10,6 +10,8 @@ struct WorkspaceSnapshot: Codable, Equatable {
         var id: UUID
         var name: String
         var collapsed: Bool
+        /// Missing in snapshots saved before folders; decodes as nil.
+        var folder: String?
         /// In tab order.
         var tabKeys: [TabKey]
     }
@@ -27,17 +29,19 @@ struct WorkspaceSnapshot: Codable, Equatable {
     var workspaces: [Entry]
 
     /// The set this snapshot describes. A tab listed twice stays in the first workspace;
-    /// a workspace without a tab is dropped.
-    func makeSet() -> WorkspaceSet {
+    /// a workspace without a tab is dropped. The "~" of an older build, with no folder or the
+    /// home folder, is no group now: its tabs load ungrouped, where they stand (G13).
+    func makeSet(home: String = NSHomeDirectory()) -> WorkspaceSet {
+        let homeFolder = WorkspaceFolder.standardized(home) ?? home
         var members: [TabKey: Workspace.ID] = [:]
         var kept: [Workspace] = []
-        for entry in workspaces {
+        for entry in workspaces where !(entry.name == "~" && (entry.folder ?? homeFolder) == homeFolder) {
             var any = false
             for key in entry.tabKeys where members[key] == nil {
                 members[key] = entry.id
                 any = true
             }
-            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed)) }
+            if any { kept.append(Workspace(id: entry.id, name: entry.name, collapsed: entry.collapsed, folder: entry.folder)) }
         }
         return WorkspaceSet(id: setID, workspaces: kept, members: members, revision: revision)
     }
@@ -62,7 +66,8 @@ extension WorkspaceSnapshot {
         self.revision = set.revision
         self.tabKey = tabKey
 
-        let runs = set.runs(order: order)
+        // Ungrouped tabs are in no entry.
+        let runs = set.runs(order: order).compactMap { run in run.workspace.map { (workspace: $0, tabs: run.tabs) } }
         let shown = Set(runs.map(\.workspace.id))
         var entries = runs.map { run -> Entry in
             let extra = set.tabs(in: run.workspace.id).filter { !run.tabs.contains($0) }
@@ -70,13 +75,16 @@ extension WorkspaceSnapshot {
                 id: run.workspace.id,
                 name: run.workspace.name,
                 collapsed: run.workspace.collapsed,
+                folder: run.workspace.folder,
                 tabKeys: run.tabs + extra.sorted { $0.uuidString < $1.uuidString }
             )
         }
         for workspace in set.workspaces where !shown.contains(workspace.id) {
             let keys = set.tabs(in: workspace.id).sorted { $0.uuidString < $1.uuidString }
             if !keys.isEmpty {
-                entries.append(Entry(id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, tabKeys: keys))
+                entries.append(Entry(
+                    id: workspace.id, name: workspace.name, collapsed: workspace.collapsed, folder: workspace.folder, tabKeys: keys
+                ))
             }
         }
         self.workspaces = entries

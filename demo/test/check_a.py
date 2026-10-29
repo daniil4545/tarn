@@ -302,12 +302,13 @@ def tarn_cli(base):
             "tarn open on a missing file",
             has(pg, "p7", r"tarn: no such file: nope\.md"),
         )
-        run(pg, "p7", "tarn new")
+        run(pg, "p7", "tarn new -- npm test", r"\np\d+\s*\n")
+        new_id = (re.findall(r"\n(p\d+)\s*\n", screen(pg, "p7")) or [""])[-1]
+        agent = [c for c in calls(pg, "pane.split") if c.get("focus") is False]
         check(
-            "tarn new asks for a tab and does not take focus",
-            len(calls(pg, "tab.new")) == 1
-            and calls(pg, "tab.new")[0]["select"] is False,
-            str(calls(pg, "tab.new")),
+            "tarn new splits below the caller and does not take focus",
+            agent == [{"id": "p7", "dir": "down", "focus": False}],
+            str(calls(pg, "pane.split")),
         )
         check(
             "agent commands leave focus and input alone",
@@ -315,17 +316,77 @@ def tarn_cli(base):
             and last_prompt_line(pg, "p7").endswith("%"),
         )
 
-        run(pg, "p7", "tarn ls", r"\n\d+\s+tarn\s+main\s+\w+\s+\d+[smh]")
-        check(
-            "tarn ls prints the row format of the spec",
-            has(pg, "p7", r"\n1\s+tarn\s+main\s+waiting\s+\d+[smh]"),
-            screen(pg, "p7")[:300],
+        run(
+            pg,
+            "p7",
+            "tarn ls",
+            r"\nPANE\s+TAB\s+GROUP\s+TITLE\s+CWD\s+PROCESS\s+BRANCH\s+STATE",
         )
-        run(pg, "p7", "tarn ls --json", r'"state": "waiting"')
         check(
-            "tarn ls --json carries Session fields",
-            has(pg, "p7", r'"seen": false') and has(pg, "p7", r'"pane": "p1"'),
+            "tarn ls lists the panes of the caller's group with the group name",
+            has(
+                pg,
+                "p7",
+                r"\np1\s+t1\s+tarn\s+Claude · spec\s+\S+\s+claude\s+main\s+waiting",
+            )
+            and has(pg, "p7", r"\np7\s+")
+            and not has(pg, "p7", r"\np5\s+"),
+            screen(pg, "p7")[:600],
+        )
+        run(pg, "p7", "tarn ls --json", r'"panes"')
+        check(
+            "tarn ls --json carries the pane fields",
+            # the screen keeps the tail of the reply: the last tab of the caller's group
+            has(pg, "p7", r'"pane": "p4"')
+            and has(pg, "p7", r'"workspace": "w1"')
+            and has(pg, "p7", r'"group": "tarn"')
+            and has(pg, "p7", r'"folder": "~/code/tarn"')
+            and not has(pg, "p7", r'"host"'),
             screen(pg, "p7"),
+        )
+        focus(pg, "p6")
+        run(pg, "p6", "tarn ls --json", r'"panes"')
+        check(
+            "tarn ls of an ungrouped caller lists its own tab only, with no group",
+            has(pg, "p6", r'"pane": "p6"')
+            and has(pg, "p6", r'"workspace": ""')
+            and has(pg, "p6", r'"group": ""')
+            and not has(pg, "p6", r'"pane": "p[1-57-9]"'),
+            screen(pg, "p6"),
+        )
+        focus(pg, "p7")
+
+        # read and close (agent-cli 4.7, 4.8): the pane `tarn new` opened above.
+        run(pg, "p7", "echo alpha-line", r"\nalpha-line")
+        read = r"tarn read p7 --lines 2\s*\nalpha-line\s*\n[^\n]*tarn read p7 --lines 2"
+        run(pg, "p7", "tarn read p7 --lines 2", read)
+        check(
+            "tarn read prints the last lines of a pane",
+            has(pg, "p7", read),
+            screen(pg, "p7")[-400:],
+        )
+        for bad in ["0", "-1", "x"]:
+            run(pg, "p7", f"tarn read p7 --lines {bad}", r"tarn: bad lines\s*\n.*%")
+        check(
+            "tarn read refuses a bad --lines",
+            len(re.findall(r"\ntarn: bad lines", screen(pg, "p7"))) >= 3,
+            screen(pg, "p7")[-400:],
+        )
+        run(pg, "p7", "tarn close p5", r"tarn: no pane matched: p5")
+        check(
+            "tarn close refuses a pane of another workspace",
+            has(pg, "p7", r"tarn: no pane matched: p5") and not calls(pg, "pane.close"),
+            str(calls(pg, "pane.close")),
+        )
+        run(pg, "p7", f"tarn close {new_id}")
+        check(
+            "tarn close closes the pane and leaves focus and input alone",
+            bool(new_id)
+            and calls(pg, "pane.close") == [{"id": new_id, "exited": True}]
+            and pg.evaluate(f"!document.querySelector(\"[data-pane='{new_id}']\")")
+            and pg.evaluate("document.activeElement.tagName") == active
+            and last_prompt_line(pg, "p7").endswith("%"),
+            f"{new_id} {calls(pg, 'pane.close')}",
         )
 
         run(pg, "p7", "touch scratch.txt")
@@ -333,6 +394,19 @@ def tarn_cli(base):
         check(
             "git status follows vfs edits",
             has(pg, "p7", r"\?\? scratch\.txt") and has(pg, "p7", r" M docs/spec\.md"),
+        )
+        # spec: agent-cli 4.5, B2 - run types the line at the new pane's prompt, never Enter.
+        printed = r"tarn run -- make install\s*\n(p\d+)\s*\n"
+        run(pg, "p7", "tarn run -- make install")
+        found = re.findall(printed, until(pg, "p7", printed))
+        typed = found[-1] if found else ""
+        check(
+            "tarn run types the command in a split and leaves Enter to the user",
+            typed != ""
+            and has(pg, typed, r"% make install\s*$")
+            and pg.evaluate("document.activeElement.tagName") == active
+            and last_prompt_line(pg, "p7").endswith("%"),
+            screen(pg, typed) if typed else screen(pg, "p7"),
         )
         check(
             "tarn: no page errors",
@@ -701,7 +775,9 @@ def selection_and_urls(base):
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
             pg.mouse.up()
-            time.sleep(0.4)
+            pg.wait_for_function(
+                "__tarn.term('p7').getSelection() === 'you'", timeout=5000
+            )
 
         pg.evaluate("navigator.clipboard.writeText('untouched')")
         select_word()
@@ -713,8 +789,15 @@ def selection_and_urls(base):
             "window.bus.cmd('config.set', {key: 'copy-on-select', value: 'clipboard'})"
         )
         pg.mouse.click(5, 5)
-        time.sleep(0.4)
+        pg.wait_for_function(
+            "__tarn.term('p7').getSelection() === ''", timeout=5000
+        )
         select_word()
+        # Selection settles before the asynchronous clipboard write completes.
+        pg.wait_for_function(
+            "async () => (await navigator.clipboard.readText()) === 'you'",
+            timeout=5000,
+        )
         check(
             "copy-on-select clipboard copies the selection",
             pg.evaluate("navigator.clipboard.readText()") == "you",

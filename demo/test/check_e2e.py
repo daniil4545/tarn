@@ -13,7 +13,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import DEMO, Checks, app_page, server, show_pane
+from lib import DEMO, Checks, app_page, cmd, server, show_pane
 
 check = Checks()
 TERM = '.tabview:not([hidden]) .leaf[data-kind="term"]'
@@ -46,6 +46,76 @@ def ready(pg):
     pg.wait_for_selector("html[data-ready=true]")
 
 
+def folder_story(pg):
+    """docs/specs/workspace-folder.md: no folder mark, the fixed folder, top tab prefix."""
+    check(
+        "F1 an agent outside its workspace folder carries no mark (D21 dropped)",
+        pg.locator(f"{TAB}[data-tabid='t2'] .l2").count() == 1
+        and "!" not in pg.inner_text(f"{TAB}[data-tabid='t2']"),
+    )
+    pg.locator("[data-wsh='w1']").first.click(button="right")
+    check(
+        "F3 the workspace menu has no Set Folder or Remove Folder: the folder is fixed",
+        pg.locator("[data-wsren='w1']").count() == 1
+        and pg.locator("[data-wsfolder], [data-wsunfolder]").count() == 0,
+    )
+    pg.keyboard.press("Escape")
+    def ws(tab):
+        return next(w for w in snap(pg)["workspaces"]["wss"] if tab in w["tabs"])
+
+    cmd(pg, "tab.go", {"id": "t6"})
+    cmd(pg, "tab.new", {"ws": "w1", "header": True})
+    fresh = snap(pg)["workspaces"]["cur"]
+    check(
+        "F6 + of a workspace opens its folder, whatever tab is selected",
+        snap(pg)["workspaces"]["tabs"][fresh]["cwd"] == "~/code/tarn" and ws(fresh)["id"] == "w1",
+    )
+    cmd(pg, "tab.close", {"id": fresh})
+    cmd(pg, "tab.go", {"id": "t2"})
+    cmd(pg, "tab.new", {"ws": "w2", "header": True})
+    other = snap(pg)["workspaces"]["cur"]
+    check(
+        "F6a + of a plain group opens the folder of the selected tab (Ghostty)",
+        snap(pg)["workspaces"]["tabs"][other]["cwd"] == snap(pg)["workspaces"]["tabs"]["t2"]["cwd"] and ws(other)["id"] == "w2",
+    )
+    cmd(pg, "tab.close", {"id": other})
+    cmd(pg, "tab.go", {"id": "t2"})
+    cmd(pg, "tab.new", {})
+    beside = snap(pg)["workspaces"]["cur"]
+    tabs = ws(beside)["tabs"]
+    check(
+        "F6b Cmd+T in a grouped tab joins its group right after it, in its folder",
+        ws(beside)["id"] == "w1"
+        and tabs[tabs.index("t2") + 1] == beside
+        and snap(pg)["workspaces"]["tabs"][beside]["cwd"] == snap(pg)["workspaces"]["tabs"]["t2"]["cwd"],
+    )
+    cmd(pg, "tab.close", {"id": beside})
+
+    def agent_tab(cwd):
+        cmd(pg, "tab.new", {"ws": "w0", "cwd": cwd})
+        tab = snap(pg)["workspaces"]["cur"]
+        return tab, snap(pg)["workspaces"]["tabs"][tab]["layout"]["pane"]
+
+    def ws_of(tab):
+        return next(w["id"] for w in snap(pg)["workspaces"]["wss"] if tab in w["tabs"])
+
+    started, pane = agent_tab("~/code/tarn/docs")
+    cmd(pg, "hook", {"pane": pane, "name": "UserPromptSubmit", "event": {}})
+    check(
+        "F7 an agent started in a project folder leaves its tab where it is (D21 dropped)",
+        ws_of(started) == "w0",
+    )
+    cmd(pg, "tab.close", {"id": started})
+    cmd(pg, "tab.go", {"id": "t1"})
+    cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
+    check(
+        "F5 with tabs at the top a tab reads title, then its group; an ungrouped tab has no mark",
+        pg.inner_text("#topTabs [data-toptab='t1'] .tw").strip() == "tarn"
+        and pg.locator("#topTabs [data-toptab='t6'] .tw").count() == 0,
+    )
+    cmd(pg, "config.reset", {"key": "tab-style"})
+
+
 def story(base):
     with app_page(base) as (pg, errors, requests):
         s = snap(pg)
@@ -53,8 +123,9 @@ def story(base):
             "E1 the demo opens on the seed: six tabs, three workspaces",
             len(s["workspaces"]["tabs"]) == 6 and len(s["workspaces"]["wss"]) == 3,
         )
+        folder_story(pg)
 
-        # type in the shell (Default workspace, tab 6)
+        # type in the shell (workspace ~, tab 6)
         show_pane(pg, "p6")
         pg.locator("[data-pane='p6'] canvas").first.click()
         until(pg, "p6", "%")
@@ -62,8 +133,8 @@ def story(base):
         check("2 typing in the shell runs a command", until(pg, "p6", r"\nhello\s*\n"))
         run(pg, "tarn --help")
         check(
-            "E2a tarn --help marks only new as planned",
-            until(pg, "p6", r"usage: tarn .*new \(planned\)"),
+            "E2a tarn --help lists new with its split options",
+            until(pg, "p6", r"usage: tarn .*new \[--right\]"),
         )
 
         # claude through permission and waiting

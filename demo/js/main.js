@@ -20,6 +20,7 @@ import { TERMINAL_KEYS } from "./keys/terminal.js";
 import { viewerKeys } from "./keys/viewer.js";
 import { helpKeys } from "./keys/help.js";
 import { startDemoReset, RESET_ROW } from "./demo-reset.js";
+import { startAttention } from "./attention.js";
 import { toast } from "./toast.js";
 
 let focused = null;
@@ -35,6 +36,7 @@ const vfs = startVfs();
 startPanes({ vfs });
 startViewer({ fs: vfs, home: HOME, root: REPO });
 startWorkspaces({ createPane, createViewer: createViewerPane });
+startAttention();
 startDemoReset();
 startChrome(document.getElementById("main"), [...ROWS, RESET_ROW]);
 startSettings(ROWS);

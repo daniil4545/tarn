@@ -30,10 +30,12 @@ enum SidebarDragKind: Equatable {
 enum SidebarDropSlot: Equatable {
     /// Before a tab row, in that row's workspace.
     case beforeTab(TabKey)
-    /// After the last tab of a workspace.
-    case endOfWorkspace(Workspace.ID)
-    /// Before a workspace header.
-    case beforeWorkspace(Workspace.ID)
+    /// After the last tab of a workspace, or of a block of ungrouped tabs (named by its id).
+    case endOfWorkspace(UUID)
+    /// Below all rows, ungrouped, when the last block is a workspace.
+    case tail
+    /// Before a block: a workspace header, or the first row of a run of ungrouped tabs (its id).
+    case beforeWorkspace(UUID)
     /// After the last workspace.
     case end
 }
@@ -42,15 +44,13 @@ enum SidebarDropSlot: Equatable {
 enum SidebarDropTarget: Equatable {
     case tab(TabKey)
     case header(Workspace.ID)
+    case margin(UUID)
     /// The empty sidebar below the last row.
     case tail
 }
 
 extension SidebarModel {
-    /// The slot a drop at `target` lands in. `lowerHalf` says which half of the row or header
-    /// the pointer is in. A tab dropped on a header goes to the end of that workspace; a
-    /// workspace dropped on a row goes before or after the whole workspace, by the half of the
-    /// workspace the row is in.
+    /// `lowerHalf` measures the row for tab drags, the whole block for group drags.
     nonisolated static func dropSlot(
         dragging kind: SidebarDragKind,
         over target: SidebarDropTarget,
@@ -58,37 +58,54 @@ extension SidebarModel {
         in groups: [Group]
     ) -> SidebarDropSlot? {
         switch (kind, target) {
+        case (_, .margin(let id)):
+            return groups.contains { $0.id == id } ? .beforeWorkspace(id) : nil
+
         case (.tab, .header(let id)):
-            return groups.contains { $0.workspace.id == id } ? .endOfWorkspace(id) : nil
+            return groups.contains { $0.workspace?.id == id } ? .endOfWorkspace(id) : nil
 
         case (.tab, .tab(let key)):
             guard let group = groups.first(where: { $0.tabs.contains { $0.key == key } }),
                   let index = group.tabs.firstIndex(where: { $0.key == key })
             else { return nil }
             if !lowerHalf { return .beforeTab(key) }
-            return group.tabs[safe: index + 1].map { .beforeTab($0.key) } ?? .endOfWorkspace(group.workspace.id)
+            return group.tabs[safe: index + 1].map { .beforeTab($0.key) } ?? .endOfWorkspace(group.id)
 
         case (.workspace, .header(let id)):
-            guard let index = groups.firstIndex(where: { $0.workspace.id == id }) else { return nil }
+            guard let index = groups.firstIndex(where: { $0.workspace?.id == id }) else { return nil }
             return lowerHalf ? slot(after: index, in: groups) : .beforeWorkspace(id)
 
         case (.workspace, .tab(let key)):
             guard let index = groups.firstIndex(where: { $0.tabs.contains { $0.key == key } }),
                   let row = groups[index].tabs.firstIndex(where: { $0.key == key })
             else { return nil }
-            let before = (row + (lowerHalf ? 1 : 0)) * 2 <= groups[index].tabs.count
-            return before ? .beforeWorkspace(groups[index].workspace.id) : slot(after: index, in: groups)
+            // A group goes between ungrouped tabs as a tab does, never inside another group.
+            if groups[index].workspace == nil {
+                let tabs = groups[index].tabs
+                if !lowerHalf { return row == 0 ? .beforeWorkspace(groups[index].id) : .beforeTab(key) }
+                return tabs[safe: row + 1].map { .beforeTab($0.key) } ?? slot(after: index, in: groups)
+            }
+            return lowerHalf ? slot(after: index, in: groups) : .beforeWorkspace(groups[index].id)
 
         case (.tab, .tail):
-            return groups.last.map { .endOfWorkspace($0.workspace.id) }
+            guard let last = groups.last else { return nil }
+            return last.workspace == nil ? .endOfWorkspace(last.id) : .tail
 
         case (.workspace, .tail):
             return groups.isEmpty ? nil : .end
         }
     }
 
+    /// Before the next block below `index`, or the end.
     private nonisolated static func slot(after index: Int, in groups: [Group]) -> SidebarDropSlot {
-        groups[safe: index + 1].map { .beforeWorkspace($0.workspace.id) } ?? .end
+        groups[safe: index + 1].map { .beforeWorkspace($0.id) } ?? .end
+    }
+
+    /// The slot while `lifted` is dragged. The slot before the lifted row and the slot after it
+    /// both leave the tab where it is: they are one slot, the row's own, which opens no gap.
+    nonisolated static func gapSlot(_ slot: SidebarDropSlot?, lifted: TabKey, in groups: [Group]) -> SidebarDropSlot? {
+        guard slot == .beforeTab(lifted) else { return slot }
+        return dropSlot(dragging: .tab, over: .tab(lifted), lowerHalf: true, in: groups)
     }
 }
 
@@ -103,11 +120,18 @@ struct SidebarInteraction: NSViewRepresentable {
     var dragOver: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
     var dragExit: () -> Void
     var drop: (SidebarDragKind, _ value: String, _ lowerHalf: Bool) -> Bool
+    /// A drag out of this view began; the height is the view's own.
+    var dragBegan: (_ height: CGFloat) -> Void = { _ in }
     /// The drag ended at a screen point; true when somebody took it.
     var dragEnded: (_ screenPoint: NSPoint, _ accepted: Bool) -> Void = { _, _ in }
+    var dragMoved: (NSPoint) -> Void = { _ in }
     /// Strips at the sides that stay clickable for SwiftUI buttons below.
     var excludedLeading: CGFloat = 0
     var excludedTrailing: CGFloat = 0
+    /// The padding around the drawn card, left out of the drag image.
+    var cardInset = NSEdgeInsetsZero
+    var blockView: (() -> NSView?)?
+    var toolTip: String?
 
     func makeNSView(context: Context) -> InteractionView {
         let view = InteractionView()
@@ -126,9 +150,14 @@ struct SidebarInteraction: NSViewRepresentable {
         view.dragOver = dragOver
         view.dragExit = dragExit
         view.drop = drop
+        view.dragBegan = dragBegan
         view.dragEnded = dragEnded
+        view.dragMoved = dragMoved
         view.excludedLeading = excludedLeading
         view.excludedTrailing = excludedTrailing
+        view.cardInset = cardInset
+        view.blockView = blockView
+        view.toolTip = toolTip
     }
 
     final class InteractionView: NSView, NSDraggingSource {
@@ -138,9 +167,13 @@ struct SidebarInteraction: NSViewRepresentable {
         var dragOver: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
         var dragExit: () -> Void = {}
         var drop: (SidebarDragKind, String, Bool) -> Bool = { _, _, _ in false }
+        var dragBegan: (CGFloat) -> Void = { _ in }
         var dragEnded: (NSPoint, Bool) -> Void = { _, _ in }
+        var dragMoved: (NSPoint) -> Void = { _ in }
         var excludedLeading: CGFloat = 0
         var excludedTrailing: CGFloat = 0
+        var cardInset = NSEdgeInsetsZero
+        var blockView: (() -> NSView?)?
 
         private var mouseDownEvent: NSEvent?
         private var didDrag = false
@@ -193,7 +226,13 @@ struct SidebarInteraction: NSViewRepresentable {
             let item = NSPasteboardItem()
             item.setString(payload.value, forType: payload.kind.pasteboardType)
             let dragging = NSDraggingItem(pasteboardWriter: item)
-            dragging.setDraggingFrame(bounds, contents: snapshot())
+            let block = payload.kind == .workspace ? blockView?() : nil
+            let card = block.map { convert($0.bounds, from: $0) } ?? NSRect(
+                x: bounds.minX + cardInset.left, y: bounds.minY + cardInset.bottom,
+                width: bounds.width - cardInset.left - cardInset.right,
+                height: bounds.height - cardInset.top - cardInset.bottom
+            )
+            dragging.setDraggingFrame(card, contents: snapshot(of: card, radius: block == nil ? Sidebar.cardRadius : 10))
             beginDraggingSession(with: [dragging], event: start, source: self)
         }
 
@@ -207,21 +246,33 @@ struct SidebarInteraction: NSViewRepresentable {
             menuProvider?()
         }
 
-        /// The row as drawn, for the drag image.
-        private func snapshot() -> NSImage {
-            let host = superview ?? self
-            let rect = host.convert(bounds, from: self)
+        /// The row as drawn, for the drag image. SwiftUI draws the row in its hosting view: the
+        /// representable's own host draws nothing, and its snapshot is blank.
+        private func snapshot(of card: NSRect, radius: CGFloat) -> NSImage {
+            let host = window?.contentView ?? self
+            let rect = host.convert(card, from: self)
             guard let rep = host.bitmapImageRepForCachingDisplay(in: rect) else {
-                return NSImage(size: bounds.size)
+                return NSImage(size: card.size)
             }
             host.cacheDisplay(in: rect, to: rep)
-            let image = NSImage(size: rect.size)
-            image.addRepresentation(rep)
-            return image
+            // Clipped to the card's corners, so no sidebar shows at its edges.
+            return NSImage(size: rect.size, flipped: false) { frame in
+                NSBezierPath(roundedRect: frame, xRadius: radius, yRadius: radius).addClip()
+                rep.draw(in: frame)
+                return true
+            }
         }
 
         func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
             .move
+        }
+
+        func draggingSession(_ session: NSDraggingSession, willBeginAt screenPoint: NSPoint) {
+            dragBegan(payload?()?.kind == .workspace ? blockView?()?.bounds.height ?? bounds.height : bounds.height)
+        }
+
+        func draggingSession(_ session: NSDraggingSession, movedTo screenPoint: NSPoint) {
+            dragMoved(screenPoint)
         }
 
         func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
@@ -235,7 +286,11 @@ struct SidebarInteraction: NSViewRepresentable {
         }
 
         private func lowerHalf(_ info: NSDraggingInfo) -> Bool {
-            convert(info.draggingLocation, from: nil).y < bounds.midY
+            if kind(of: info) == .workspace, let block = blockView?() {
+                let point = block.convert(info.draggingLocation, from: nil)
+                return block.isFlipped ? point.y > block.bounds.midY : point.y < block.bounds.midY
+            }
+            return convert(info.draggingLocation, from: nil).y < bounds.midY
         }
 
         private func respond(_ info: NSDraggingInfo) -> NSDragOperation {

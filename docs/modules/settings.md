@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The settings window (Cmd+,) holds tarn's own settings (tab style, row size, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
+The settings window (Cmd+,) holds tarn's own settings (the four module switches, row size, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
 
 ## Place in the system
 
@@ -31,11 +31,12 @@ Reading: the store writes the file, asks Ghostty to reload, and reads the new ef
 | Out | the options file, written atomically | `TarnConfigFile.save` |
 | Out | `ghostty.reloadConfig()` after a successful write | store `reload` closure |
 | Out | file lines into every config built by the app | `TarnConfigFile.load(into:from:)` |
-| Out | tab style in `UserDefaults` `TarnTabStyle`, row size in `TarnTabRows` | `TabStyle`, `TabRows`, `TarnSettingsView` |
+| Out | module switches in `UserDefaults` (`TarnTabStyle`, `TarnFileViewer`, `TarnModule.*`), row size in `TarnTabRows` | `TarnModules`, `TabRows`, `TarnSettingsView` |
+| In | `claude --version`, `~/.claude/plugins/installed_plugins.json`, `SessionRegistry.eventsSeen` | `AgentChecks` |
 
 ## How it works
 
-State: the window `TarnSettingsController` (single, 640 by 400, Escape closes) with sections Tabs, File Viewer, Appearance, Terminal, Windows, Help. `GhosttyOptionStore.shared` holds the file as last read, errors per option key and the last app config. The catalog `GhosttyOption.all` lists 22 options, each with key, control (toggle, choice, theme, number, slider, text), default in file syntax, section, how Ghostty reads it, and when a change applies (live, new windows, restart).
+State: the window `TarnSettingsController` (single, 640 by 400, Escape closes) with sections Modules, Appearance, Terminal, Windows, Help. Modules opens first and holds all module settings without duplicate pages. Each module's options sit under its switch and stay visible but disabled when it is off. Row size sits under Sidebar; the File viewer row describes opening files and what happens when it is off. `GhosttyOptionStore.shared` holds the file as last read, errors per option key and the last app config. The catalog `GhosttyOption.all` lists 22 options, each with key, control (toggle, choice, theme, number, slider, text), default in file syntax, section, how Ghostty reads it, and when a change applies (live, new windows, restart).
 
 Load order (`Ghostty.Config.loadConfig`):
 1. `load_file` if a path is given, else `load_default_files`.
@@ -62,12 +63,18 @@ Theme row (T-151): under the row, `ThemePicker` lists the base themes (the entry
 
 Window colors from the theme: `ThemePalette(config:)` reads `background`, `foreground` and `palette` of the live config with `ghostty_config_get`; `ThemeChrome` derives the rest with one rule for every theme (the rule of `demo/js/chrome-theme.js`): sidebar surface = background plus 6% of the text color, divider = background toward black (22% on a light theme, 45% on a dark one), muted text = text 38% toward the background, faint text 55%, accent = the first of blue, bright blue, cyan, magenta with contrast 3:1 against the background, else the text color. Light or dark is the background luminance (WCAG, above 0.4). `window-theme` `auto` and `ghostty` use this; `system`, `light` and `dark` keep the built-in palettes (`ThemeChrome.current` returns nil). The sidebar and the viewer repaint on `ghosttyConfigDidChange`, so a theme change needs no restart.
 
+Modules (T-205, `docs/specs/modules.md`): the first section has one switch per module and an Agents line. `TarnModule` lists Sidebar, File viewer, Permission card, Notifications with title, detail, key and `needs`. `TarnModules.isOn` is the effective state: stored on and every needed module on; only Permission card needs one (Sidebar). Sidebar is the old tab style (`TarnTabStyle`: `sidebar` is on, `top` is off), with Row size directly under its switch on Modules. A missing key is on; a value of the wrong type counts as on and is logged once (`os_log`, category `settings`); the words `YES` and `NO` of a launch argument count. Every path that draws a module or creates its objects reads the state at that moment. `TarnModuleWatcher` observes `UserDefaults.didChangeNotification` (any writer), compares the effective set with the last one and acts on the difference: native tab bar (`TabStyle.applyToOpenWindows`), release of waiting permission hooks, focus out of a viewer pane that is no longer drawn, menu items (Toggle File Viewer, Jump to Waiting Session are hidden by walking `NSApp.mainMenu` for their actions, so no Ghostty file needs a new hook), then `terminalTabsDidChange` for the sidebars and tab marks. A row whose module needs another is greyed out with "needs Sidebar" and keeps its stored value.
+
+Agents line: Claude Code with its version and three checks, run off the main thread when the pane opens, no network. Found: `claude --version` from `~/.local/bin/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, `~/.claude/local/claude` in turn, else `$SHELL -l -i -c 'claude --version'` killed after 5 s; the version is the line `N.N.N (Claude Code)`. Plugin: `tarn@tarn` under `plugins` in `installed_plugins.json` (format of 2.1.311). Events: the registry received a hook event since tarn started. A failed check shows its hint. No module is gated by the version.
+
 Cmd+W closes the settings window: the menu item Close sends `close:` (and Close Window `closeWindow:`) down the responder chain, and `NSWindow` answers neither; `TarnSettingsController` has both actions, as `AboutController` does.
 
 ## Files
 
 | Path | Role |
 |---|---|
+| `macos/Sources/Features/Tarn/TarnModules.swift` | `TarnModule`, `TarnModules` (effective state, menu items), `TarnModuleWatcher` |
+| `macos/Sources/Features/Tarn/ModulesPane.swift`, `AgentChecks.swift` | the Modules pane; the three Claude Code checks |
 | `macos/Sources/Features/Tarn/TarnSettings.swift` | `TabStyle`, `TarnSettingsController` (also the `close:` and `closeWindow:` actions), `TarnSettingsView` sections |
 | `macos/Sources/Features/Tarn/ThemeColors.swift` | `ThemeColor` (mix, luminance, contrast), `ThemePalette` (theme file and config reading, accent), `ThemeChrome` (derived window colors), `ChromeInk` environment |
 | `macos/Sources/Features/Tarn/ThemeCatalog.swift` | theme folders, names, base list, palette from a theme file |
@@ -124,6 +131,8 @@ All in `macos/Tests/Tarn/`.
 | `GhosttyOptionTests` | unique keys, choice defaults, catalog defaults equal a loaded config, repeatable clear, apply labels, whole numbers |
 | `ThemeColorsTests` | hex and mix math, WCAG contrast, theme file parse (comments, bad lines, missing colors), palette from a config, light and dark window colors, accent skips a color below 3:1 and falls back to the text color, the rule over every installed theme, `window-theme` switch, viewer variables |
 | `ThemeCatalogTests` | the base list is the seven themes and each is installed, the rest is the others, folders merge and the user's wins, a path is not a theme, XDG folder |
+| `TarnModulesTests` | effective state and needs, 1.2.0 keys, wrong types, launch-argument words, menu items hidden, viewer visibility with the user hide, version and plugin parsing |
+| `ModulesRegistryTests` | notifications off (no banner, `tarn notify` refused, terminal notifications not suppressed), permission card off (empty reply at once, waiting hook released on switch-off) |
 | `SettingsWindowCloseTests` | the settings controller answers `close:` and `closeWindow:` |
 | `KeyReferenceTests` | unique ids, each Ghostty action resolves, unbound text, keybind change visible, performable defaults, viewer keys from the table |
 

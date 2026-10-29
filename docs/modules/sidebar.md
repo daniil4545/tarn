@@ -29,7 +29,7 @@ Reading: one `SidebarModel` per window controller derives `groups` from the regi
 | In | 2 s timer, only while the window is visible | `SidebarModel.init` |
 | In | `WorkspaceRegistry.runs(for:)` | `SidebarModel.refresh` |
 | In | `SessionRegistry.sessions` | `SidebarModel.agent(in:)` |
-| In | tab style `TarnTabStyle`, row size `TarnTabRows` (wide by default: title, then folder and minutes in state; narrow: one line), sidebar width and collapsed in `UserDefaults` | `SidebarLayout`, `Sidebar` |
+| In | the Sidebar switch (tab style `TarnTabStyle`), row size `TarnTabRows` (wide by default: title, then folder and minutes in state; narrow: one line), sidebar width and collapsed in `UserDefaults` | `SidebarLayout`, `Sidebar` |
 | In | drags of a tab row or a workspace header (private pasteboard types `com.daniil4545.tarn.tab`, `.workspace`) | `TabDragSource.swift`, `SidebarModel.drop` |
 | Out | tab select, close, new tab, context menu | `SidebarModel` |
 | Out | workspace commands: new tab in, new workspace, rename, delete, fold, move tab, move workspace | `WorkspaceRegistry` |
@@ -47,17 +47,17 @@ Refresh:
 3. For each run it builds the tabs. A tab reads `foregroundPID` of its splits and asks `AgentProcess.agent`; the first split with an agent names the tab's agent and gives the `pwd`. The tab's session is the non-idle one among its splits that needs the user most.
 4. A changed list republishes; an open card updates. A header shows the worst session of its tabs (`mostUrgent`: permission, then working, then unseen done).
 
-Drawing: the expanded sidebar shows a header per workspace (name; for a folded workspace the tab count and the worst state dot; a + button opens a tab in it) and rows with close button on hover, tab color dot, agent logo, title, state dot and shortcut. A click on a header folds it; a folded workspace hides its tabs. The collapsed rail shows icons only. Width 120 to 400 (default 200), collapsed 40; the width is stored once a drag ends. The drag does not resize the terminal: `SidebarLayout` holds the layout space at the stored width and draws the sidebar and its divider over it (`Sidebar.widths`: layout width and drawn width), so a wider sidebar lies over the terminal and a narrower one leaves a strip of the sidebar's fill. The terminal resizes once, when the mouse is released (no pty resize or SIGWINCH per frame). The resize drag clamps at both ends and never folds the sidebar: only the button (or its shortcut) folds it, and a stored width outside the range is clamped on read (`Sidebar.clampedWidth`). The grab zone is the divider: a 14 pt transparent frame (`Sidebar.edgeGrabWidth`) on the 1 pt line, 10 pt of it over the sidebar and only 3 pt over the terminal (`Sidebar.edgeGrabOverTerminal`), so the terminal's first column still takes a click or a selection that starts at its edge; the zone lies above the rows and the terminal, with the resize pointer from `backport.pointerStyle` as in Ghostty's `SplitView.Divider`.
+Drawing: the expanded sidebar shows a header per workspace (name; for a folded workspace the tab count and the worst state dot; a + button opens a tab in it) and rows with close button on hover, tab color dot, agent logo, title, state dot and shortcut. A click on a header folds it; a folded workspace hides its tabs. The rows of a workspace are indented 12 pt (`Sidebar.groupIndent`); a tab in no workspace is a row with no header and no indent. Groups are blocks with their own background, tabs are cards (R20). Blocks are separated by `Sidebar.blockMargin` (8 pt). The collapsed rail shows icons only. Width 120 to 400 (default 200), collapsed 40; the width is stored once a drag ends. The drag does not resize the terminal: `SidebarLayout` holds the layout space at the stored width and draws the sidebar and its divider over it (`Sidebar.widths`: layout width and drawn width), so a wider sidebar lies over the terminal and a narrower one leaves a strip of the sidebar's fill. The terminal resizes once, when the mouse is released (no pty resize or SIGWINCH per frame). The resize drag clamps at both ends and never folds the sidebar: only the button (or its shortcut) folds it, and a stored width outside the range is clamped on read (`Sidebar.clampedWidth`). The grab zone is the divider: a 14 pt transparent frame (`Sidebar.edgeGrabWidth`) on the 1 pt line, 10 pt of it over the sidebar and only 3 pt over the terminal (`Sidebar.edgeGrabOverTerminal`), so the terminal's first column still takes a click or a selection that starts at its edge; the zone lies above the rows and the terminal, with the resize pointer from `backport.pointerStyle` as in Ghostty's `SplitView.Divider`.
 
-Commands: new tab and new workspace go through the registry (the workspace prompt asks for a name; delete asks with the tab count and names the workspace that takes the tabs). Close Other Tabs and Close Tabs Below act inside the tab's workspace and close as one undoable step, after the viewer's unsaved-edit question and Ghostty's running-process question. "Move to" moves a tab to another workspace.
+Commands: new tab and new workspace go through the registry (the New Group sheet asks for a group name or a workspace folder; Delete Group asks with an unchecked "Also close its N tabs"). Close Other Tabs and Close Tabs Below act inside the tab's workspace and close as one undoable step, after the viewer's unsaved-edit question and Ghostty's running-process question. "Move to" moves a tab to a workspace, from another workspace or from none.
 
-Drag and drop: a tab dropped on the upper half of a row lands before it, on the lower half before the next row or at the end of the workspace; on a header, at the end of that workspace. A workspace dropped on a header or row lands before that workspace or the next; below the last header, at the end. The slot is pure math (`SidebarModel.dropSlot`). A payload from another window is refused. A tab drag that nobody accepts and that ends outside every window moves the tab to a new window.
+Drag and drop (`docs/spec.md` R20): over a tab the rows part (halves, as iTerm2), over a group header nothing changes, the strip between group blocks ungroups the tab, leaving the sidebar closes the gap. A tab dropped on the upper half of a row lands before it, on the lower half before the next row or at the end of the workspace. A dragged tab or group lifts its row or block and opens a gap at its slot (`TabGap`); no line is drawn. The slot is pure math (`SidebarModel.dropSlot`). The gap takes the drop itself, so a pointer on it keeps the slot, and the drop lands where the gap is shown. A tab dropped on a row of an ungrouped block, at its end, below all rows (`.tail`) leaves its group and takes the place: `moveTab(to: nil)`, one `move_tab`. The context menu of a grouped row has "Remove from group", one `move_tab` after the last tab of the group it leaves. A group never lands inside another group; it drops between groups or ungrouped tabs. A group move reorders the native tab group in one pass with `removeWindow` and `addTabbedWindowSafely` inside a zero-duration animation group, then calls `relabelTabs` (T-308). A payload from another window is refused. A tab drag that nobody accepts and that ends outside every window moves the tab to a new window.
 
 Card: hover on an agent row for 0.5 s, or a force click on any row, opens the one `TabCardPopover`. It shows title, workspace name, folder, state, elapsed time and, for a request, its text and buttons when the hook waits (`answerable`). After an answer it stays closed until the pointer leaves the row.
 
 Motion: `Motion.swift` holds the two durations (0.1 s hover, 0.15 s fold) and their curves. Row and button hover fills fade; a fold fades the rows and turns the header arrow a quarter; only a change of the folded set animates, not a title change or a reorder.
 
-Titles: a shell path title becomes the full working directory with `~`; under an agent a shell title becomes the agent's name and an own title loses its leading spinner mark.
+Titles: a shell path title becomes the full working directory with `~`, except while `ssh` leads the foreground process group (a typed `ssh`, or Ghostty's `ghostty +ssh` wrapper that shell integration runs in its place; not `tarn new -- ssh`, `sudo ssh`, mosh or ssh in tmux): Ghostty drops the remote OSC 7, so the folder is the local one; the remote shell's title stays as set and the card shows no folder; under an agent a shell title becomes the agent's name and an own title loses its leading spinner mark.
 
 Colors (T-151): the sidebar takes its colors from the terminal theme, not only the background. `SidebarLayout` asks `ThemeChrome.current(for: ghostty.config)` (see [settings.md](settings.md)) and gives the result to the rows through the environment value `chromeInk`: fill = surface (background plus 6% of the text color) at the background opacity, text, hover and selection fills = the theme text color at the old opacities, muted and faint text for headers, counts and key hints, divider = the theme divider, which turns to the theme accent while the pointer is on the grab zone or it is dragged. The color scheme follows the background luminance. The four agent state colors (blue, orange, red, green) stay the same in every theme. With `window-theme` system, light or dark, `chromeInk` has no theme and the views use the system colors as before. The hover card (`TabCard`) is a system popover and keeps the system colors. A theme change reloads the config, `ghostty.config` changes, and the sidebar repaints without a restart.
 
@@ -66,7 +66,7 @@ Colors (T-151): the sidebar takes its colors from the terminal theme, not only t
 | Path | Role |
 |---|---|
 | `macos/Sources/Features/Tarn/Sidebar.swift` | `SidebarModel`, `SidebarLayout`, `Sidebar`, rows, `NativeTabMark`, menus, drop handling |
-| `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view, drop line, name and delete prompts |
+| `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view, name and delete prompts |
 | `macos/Sources/Features/Tarn/TabDragSource.swift` | drag kinds, drop slots and targets, AppKit drag source and interaction view |
 | `macos/Sources/Features/Tarn/Motion.swift` | animation durations and curves |
 | `macos/Sources/Features/Tarn/AgentViews.swift` | `AgentBadge`, `AgentQuickActions`, `TabCard` (shows the workspace name) |
@@ -82,7 +82,7 @@ Colors (T-151): the sidebar takes its colors from the terminal theme, not only t
 | Tab accessory view stack | `Features/Terminal/Window Styles/TerminalWindow.swift:173` | `NativeTabMark` install |
 | `TerminalTabColor` | `Features/Terminal/TerminalTabColor.swift:4` | row color dot |
 | Close actions, `confirmClose`, `closeTabImmediately`, undo grouping | `TerminalController` (`closeTab`, `closeTabImmediately`) | context menu, grouped close |
-| `move_tab` (through the registry) | `Features/Terminal/BaseTerminalController.swift:1046` | all reordering |
+| `move_tab` (through the registry) | `Features/Terminal/BaseTerminalController.swift:1046` | single-tab reordering; group moves use the native tab group (T-308) |
 | `SurfaceDragSourceView` pattern | `Ghostty/Surface View/SurfaceDragSource.swift:82` | tab and workspace drag source |
 | Origin | PR #14562 of ghostty-org/ghostty (see `THIRD_PARTY.md`) | vertical tab list |
 
@@ -94,16 +94,16 @@ Rows 1 to 6 and 9 of [architecture.md](../architecture.md): `sidebarModel` prope
 
 | Rule | Enforced by |
 |---|---|
-| The sidebar never writes session state or tab order | views read; order changes go through `WorkspaceRegistry` and `move_tab` |
+| The sidebar never writes session state or tab order | views read; order changes go through `WorkspaceRegistry`, using `move_tab` for a single tab or one native pass for a group (T-308) |
 | Row N is native tab N, folded or not | by construction in the registry ([workspaces.md](workspaces.md)) |
 | A closed window is not asked for its tabs again (it would rejoin a tab group and stay alive) | `observeWindowClose` clears `window` |
 | Hidden windows do not poll | timer checks `occlusionState` |
 | A force click must not also switch tabs | `forceClicked` flag |
-| The last workspace has no delete | menu item disabled with one group |
+| The only group can be deleted | its tabs stay, ungrouped |
 
 Startup (T-149): the sidebar adds little to the first window. A profile of the first layout (Time Profiler, ReleaseLocal) showed three costs of ours: `window.tabGroup` read in `WorkspaceRegistry.bookGroups` (AppKit builds a tab bar for a lone window, the largest), the card popover built in `SidebarModel.init` (now built on first use) and the lazy stacks of the list (now plain stacks; a window lists a handful of tabs). Removing the sidebar and the viewer wrapper altogether moved startup by a few milliseconds, inside the run-to-run noise of the benchmark; see `docs/bench.md`.
 
-Known limits: detection latency up to 2 s on a visible window; hidden windows refresh on notifications only. The top tab style shows no workspaces; membership keeps working.
+Known limits: detection latency up to 2 s on a visible window; hidden windows refresh on notifications only. Sidebar off (tab style `top`): the native tab bar shows each tab with the agent mark `NativeTabMark` in its accessory view, and when the set has two or more workspaces, that mark carries the workspace name too. Ghostty draws the tab title and puts the accessory after it, so the order is title, workspace name, state dot (user decision 2026-10-27; no insertion point). File viewer off: the Toggle File Viewer button is hidden. Permission card off: the hover card keeps title, folder and state and has no Allow, Deny or answers.
 
 ## Tests
 
@@ -112,7 +112,7 @@ Known limits: detection latency up to 2 s on a visible window; hidden windows re
 | `SidebarGroupingTests` (`macos/Tests/Tarn/SidebarGroupingTests.swift`) | header shows the most urgent state, unseen done beats seen done, no state without agents, drop slots for tabs and workspaces on rows and headers, unknown targets, a split tab's text follows the pane of its dot |
 | `AgentProcessTests` | `displayTitle` cases, every agent has name and icon |
 | `WorkspaceTitleTests` | subtitle text |
-| `SidebarMenuTests` | every item of the tab and workspace menus sends a message its target handles (the selector once resolved to `performSelector:`); Rename Workspace opens its sheet |
+| `SidebarMenuTests` | every item of the tab and workspace menus sends a message its target handles (the selector once resolved to `performSelector:`); Rename Group... opens its Rename Group sheet |
 | `TabRowsTests` | the second line of a wide row: folder and minutes in state, "now" under a minute, hours, no folder |
 | `SidebarWidthTests` | width clamp (NaN, infinity, out of range); a click in the grab zone does not reach the rows, and a click 4 pt right of the line reaches the terminal (real hit test); during a drag the terminal keeps its frame and a wider sidebar lies over it |
 | `AgentProcessCacheTests` | the cache counts reads per pid, a non-agent answer is cached, the next turn reads again; five `SidebarModel.refresh` calls of a real controller read its shell once (fails if `makeTab` bypasses the cache) |

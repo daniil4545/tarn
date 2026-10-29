@@ -8,75 +8,125 @@ import Testing
 struct TargetTests {
     private let t = (0..<6).map { _ in TabKey() }
 
-    @Test func firstLaunchHasDefaultWithTheTab() {
-        var book = WorkspaceBook()
-        let outcome = book.pass([[t[0]]])
-        #expect(book.names([t[0]]) == [WorkspaceSet.defaultName])
-        #expect(outcome.reorders.isEmpty)
-        #expect(outcome.changed.count == 1)
-    }
-
-    @Test func aSecondWindowGetsItsOwnDefault() {
+    @Test func aSecondWindowGetsItsOwnSet() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])
         _ = book.pass([[t[0]], [t[1]]])
         #expect(book.set(of: t[0])?.id != book.set(of: t[1])?.id)
-        #expect(book.names([t[1]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[1]]) == ["-"])
     }
 
-    @Test func aNewTabJoinsTheWorkspaceOfTheSelectedTab() {
+    @Test func aNewTabIsUngroupedEvenWhenTheSelectedTabIsInAGroup() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])
-        _ = book.newWorkspace("Work", in: t[0])
-        // Select t0 (Default), then a new tab appears: it goes to Default.
+        book.group("Work", [t[0]])
         _ = book.selected(t[0])
         _ = book.pass([[t[0], t[1]]], selected: [t[1]])
-        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.defaultName)
+        #expect(book.workspace(of: t[1]) == nil)
+        #expect(book.names([t[0], t[1]]) == ["Work", "-"])
     }
 
-    @Test func aPendingTargetWinsOverTheSelection() {
+    /// spec: docs/specs/workspace-folder.md S42
+    @Test func aTabOpenedFromAnotherTakesItsWorkspaceNotTheSelectedOne() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
-        let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
+        let work = book.group("Work", [t[1]])
+        // t0 (ungrouped) is selected, but the new tab is opened from t1 (Work): before any pass saw it,
+        // and again after a pass put it, unplaced, in the set.
         _ = book.selected(t[0])
-        book.setPendingTarget(work, for: t[0])
-        let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
-        #expect(book.workspace(of: t[2])?.id == work)
-        // t2 sits before t1, the last tab of Work: it moves one place down.
-        #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
-    }
-
-    @Test func aPendingTargetIsUsedOnce() {
-        var book = WorkspaceBook()
-        _ = book.pass([[t[0], t[1]]])
-        let work = book.newWorkspace("Work", in: t[0])
-        _ = book.edit(t[1]) { $0.join(t[1], to: work) }
-        _ = book.selected(t[0])
-        book.setPendingTarget(work, for: t[0])
+        _ = book.opened(t[2], from: t[1])
         _ = book.pass([[t[0], t[1], t[2]]], selected: [t[0]])
+        #expect(book.workspace(of: t[2])?.id == work)
+        _ = book.opened(t[3], from: t[0])
         _ = book.pass([[t[0], t[1], t[2], t[3]]], selected: [t[0]])
-        #expect(book.workspace(of: t[3])?.name == WorkspaceSet.defaultName)
+        #expect(book.workspace(of: t[3]) == nil)
+        _ = book.opened(t[3], from: t[1])
+        #expect(book.names([t[0], t[1], t[2], t[3]]) == ["-", "Work"])
+        #expect(book.runs(for: [t[0], t[1], t[2], t[3]])[1].tabs == [t[1], t[2], t[3]])
     }
 
-    @Test func aNewWorkspaceHoldsItsFirstTabAndOpensAtTheEnd() {
+    /// spec: docs/specs/workspace-folder.md S42
+    @Test func aTabOpenedFromAnUngroupedTabIsUngroupedRightAfterIt() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
-        let fresh = book.newWorkspace("Notes", in: t[0])
-        book.setPendingTarget(fresh, for: t[0])
-        // Between the command and the tab, a pass must not drop the empty workspace.
-        _ = book.pass([[t[0], t[1]]])
-        #expect(book.set(of: t[0])?.workspace(fresh) != nil)
+        book.group("Work", [t[1]])
+        let changed = book.opened(t[2], from: t[0])
+        // Placed by `opened`, before any pass saw the tab.
+        #expect(changed == [book.set(of: t[0])!.id])
+        #expect(book.set(of: t[2])?.id == book.set(of: t[0])?.id)
+        _ = book.pass([[t[0], t[2], t[1]]])
+        #expect(book.workspace(of: t[2]) == nil)
+        #expect(book.names([t[0], t[2], t[1]]) == ["-", "Work"])
+        #expect(book.runs(for: [t[0], t[2], t[1]])[0].tabs == [t[0], t[2]])
+    }
 
-        let outcome = book.pass([[t[0], t[2], t[1]]], selected: [t[2]])
-        #expect(book.names([t[0], t[1], t[2]]) == ["Default", "Notes"])
-        #expect(outcome.reorders == [.init(tab: t[2], delta: 1)])
+    @Test func aTabOpenedFromAnotherIsPlacedBeforeThePassSeesIt() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1]]])
+        let work = book.group("Work", [t[1]])
+        let changed = book.opened(t[2], from: t[1])
+        #expect(changed == [book.set(of: t[1])!.id])
+        let outcome = book.pass([[t[0], t[1], t[2]]])
+        #expect(book.workspace(of: t[2])?.id == work)
+        #expect(outcome.changed.isEmpty)
+    }
+
+    @Test func aTabSeenAloneBeforeItWasTabbedMovesToTheSourceSet() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        _ = book.pass([[t[0]], [t[1]]])
+        _ = book.opened(t[1], from: t[0])
+        #expect(book.set(of: t[1])?.id == book.set(of: t[0])?.id)
+        #expect(book.sets.count == 1)
+    }
+
+    @Test func anOpenedTabUnfoldsItsWorkspace() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0]]])
+        let id = book.group("A", [t[0]])
+        _ = book.edit(t[0]) { $0.setCollapsed(id, true) }
+        _ = book.opened(t[1], from: t[0])
+        #expect(book.workspace(of: t[1])?.collapsed == false)
+    }
+
+    @Test func aSourceNobodyHasSeenGivesNoWorkspace() {
+        var book = WorkspaceBook()
+        #expect(book.opened(t[1], from: t[0]).isEmpty)
+        #expect(book.set(of: t[1]) == nil)
+    }
+
+    /// spec: docs/specs/workspace-folder.md S44
+    @Test func theLastTabLeavingAWorkspaceTakesTheWorkspaceWithIt() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1]]])
+        let tarn = book.group("tarn", [t[0]])
+        let notes = book.group("Notes", [t[1]])
+        #expect(book.names([t[0], t[1]]) == ["tarn", "Notes"])
+        _ = book.edit(t[1]) { $0.join(t[1], to: tarn) }
+        #expect(book.set(of: t[0])?.workspace(notes) == nil)
+        #expect(book.names([t[0], t[1]]) == ["tarn"])
+    }
+
+    /// spec: docs/specs/workspace-folder.md S53
+    @Test func aTabDroppedBetweenTwoTabsOfAWorkspaceDoesNotJoinIt() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[2]], [t[3], t[4]]])
+        book.group("tarn", [t[0], t[1]])
+        _ = book.selected(t[0])
+        // t3 leaves a window of two and lands between t0 and t1.
+        _ = book.pass([[t[0], t[3], t[1], t[2]], [t[4]]], selected: [t[0], t[4]])
+        let order = [t[0], t[3], t[1], t[2]]
+        let runs = book.runs(for: order)
+        #expect(book.names(order) == ["tarn", "-"])
+        #expect(runs[0].tabs == [t[0], t[1]])
+        #expect(runs[1].tabs == [t[3], t[2]])
+        #expect(book.workspace(of: t[3]) == nil)
     }
 
     @Test func aTabInAFoldedWorkspaceUnfoldsItOnSelectionButNotOnRepeat() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
-        let id = book.workspace(of: t[0])!.id
+        let id = book.group("A", [t[0], t[1]])
         _ = book.selected(t[1])
         _ = book.edit(t[0]) { $0.setCollapsed(id, true) }
 
@@ -88,35 +138,27 @@ struct TargetTests {
         #expect(book.workspace(of: t[0])?.collapsed == false)
     }
 
-    @Test func aNewTabUnfoldsItsWorkspace() {
-        var book = WorkspaceBook()
-        _ = book.pass([[t[0]]])
-        let id = book.workspace(of: t[0])!.id
-        _ = book.edit(t[0]) { $0.setCollapsed(id, true) }
-        _ = book.pass([[t[0], t[1]]], selected: [t[0]])
-        #expect(book.workspace(of: t[1])?.collapsed == false)
-    }
-
-    @Test func aTabDraggedOutOfItsWindowStartsANewDefault() {
+    @Test func aTabDraggedOutOfItsWindowStartsANewSetUngrouped() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
+        book.group("A", [t[2]])
         // t2 leaves for its own window; t0 and t1 stay.
         _ = book.pass([[t[0], t[1]], [t[2]]])
         #expect(book.set(of: t[2])?.id != book.set(of: t[0])?.id)
-        #expect(book.names([t[2]]) == [WorkspaceSet.defaultName])
-        #expect(book.names([t[0], t[1]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[2]]) == ["-"])
+        #expect(book.names([t[0], t[1]]) == ["-"])
     }
 
-    @Test func aTabDraggedToAnotherWindowJoinsItsCurrentWorkspace() {
+    @Test func aTabDraggedToAnotherWindowIsUngrouped() {
         var book = WorkspaceBook()
-        _ = book.pass([[t[0], t[1]], [t[2], t[3]]])
-        let other = book.newWorkspace("Other", in: t[2])
-        _ = book.edit(t[2]) { $0.join(t[2], to: other) }
+        _ = book.pass([[t[0], t[1], t[4]], [t[2], t[3]]])
+        let other = book.group("Other", [t[2]])
+        book.group("Mine", [t[1]])
         _ = book.selected(t[2])
         // t1 moves to the second window, after t3.
-        _ = book.pass([[t[0]], [t[2], t[3], t[1]]], selected: [t[0], t[2]])
-        #expect(book.workspace(of: t[1])?.id == other)
-        #expect(book.names([t[0]]) == [WorkspaceSet.defaultName])
+        _ = book.pass([[t[0], t[4]], [t[2], t[3], t[1]]], selected: [t[0], t[2]])
+        #expect(book.workspace(of: t[1]) == nil)
+        #expect(book.workspace(of: t[2])?.id == other)
     }
 
     @Test func repeatedPassesChangeNothing() {
@@ -129,33 +171,8 @@ struct TargetTests {
 
 @MainActor
 @Suite
-struct TargetExpiryTests {
+struct KeyHopsTests {
     private let t = (0..<4).map { _ in TabKey() }
-
-    @Test func aTargetNobodyUsedStopsSteeringLaterTabs() {
-        var book = WorkspaceBook()
-        _ = book.pass([[t[0]]])
-        let other = book.newWorkspace("Other", in: t[0])
-        book.setPendingTarget(other, for: t[0])
-        let first = book.clearPendingTarget(for: t[0])
-        let second = book.clearPendingTarget(for: t[0])
-        #expect(first)
-        #expect(!second)
-        _ = book.pass([[t[0], t[1]]], selected: [t[0]])
-        #expect(book.workspace(of: t[1])?.name == WorkspaceSet.defaultName)
-    }
-
-    @Test func anEmptyWorkspaceMadeForATabThatNeverCameIsRemoved() {
-        var book = WorkspaceBook()
-        _ = book.pass([[t[0]]])
-        let created = book.newWorkspace("Ghost", in: t[0])
-        book.setPendingTarget(created, for: t[0])
-        _ = book.pass([[t[0]]])
-        #expect(book.set(of: t[0])?.workspace(created) != nil)
-        _ = book.clearPendingTarget(for: t[0])
-        _ = book.pass([[t[0]]])
-        #expect(book.set(of: t[0])?.workspace(created) == nil)
-    }
 
     @Test func keyNotificationsOfOurOwnMovesAreRecognisedUntilCleared() {
         let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 100, height: 100), styleMask: [.titled], backing: .buffered, defer: true)

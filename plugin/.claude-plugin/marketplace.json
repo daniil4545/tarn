@@ -7,9 +7,9 @@
   "plugins": [
     {
       "name": "tarn",
-      "description": "Reports agent state to the tarn sidebar: working, needs you, done",
+      "description": "Reports agent state to the tarn sidebar and gives the agent the tarn commands skill",
       "source": "./",
-      "version": "0.2.0"
+      "version": "1.3.0"
     }
   ]
 }

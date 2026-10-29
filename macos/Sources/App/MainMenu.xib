@@ -167,7 +167,7 @@
                                     <action selector="newTab:" target="-1" id="KoW-K7-hw5"/>
                                 </connections>
                             </menuItem>
-                            <menuItem title="New Workspace" keyEquivalent="T" id="Tw1-Ws-Nw1">
+                            <menuItem title="New Group..." keyEquivalent="T" id="Tw1-Ws-Nw1">
                                 <connections>
                                     <action selector="newWorkspace:" target="-1" id="Tw2-Ws-Nw2"/>
                                 </connections>

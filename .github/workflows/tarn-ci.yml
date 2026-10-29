@@ -1,5 +1,7 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# dev gets the demo checks only, nothing waits on them; main (release PRs from dev) gets both jobs.
+# `demo` runs on every PR and push to dev and main and is the required check of dev. `app` runs on
+# PRs into main and on pushes to main, and is required there; on dev the agent runs
+# `make -f tarn.mk check` on the Mac before a merge (T-278).
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
@@ -19,8 +21,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: tarn-ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # A newer push to a PR replaces its old run. A push to dev or main gets a group of its own (the
+  # commit), so a queued run is never dropped for a newer one.
+  group: tarn-ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   demo:
@@ -40,19 +44,56 @@ jobs:
       - name: Demo unit tests
         # File arguments: the runner's Node 22 does not take a folder.
         run: node --test demo/test/unit/*.test.mjs
+      - name: Install browser
+        run: uv run -q --with playwright python -m playwright install --with-deps chromium-headless-shell
       - name: Demo checks
         run: |
-          for c in 0 a b c e2e review; do
-            uv run -q --with playwright python -I demo/test/check_$c.py
+          # A pointer drag in a loaded browser misses its target now and then (W7 in check_b, T-270):
+          # a check script that fails gets one more run; a real defect fails both.
+          for c in 0 a b c e2e review modules; do
+            uv run -q --with playwright python -I demo/test/check_$c.py ||
+              uv run -q --with playwright python -I demo/test/check_$c.py
           done
 
+  lint:
+    # What of `make -f tarn.mk check` needs no macOS: runs on every PR in about 2 min. Swiftlint,
+    # the app tests and the installer test (plutil, ditto) stay on macOS.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: ${{ inputs.upstream && '0' || '1' }}
+          persist-credentials: false
+      - name: Merge upstream/main
+        if: inputs.upstream
+        run: |
+          git -c user.name=ci -c user.email=ci@localhost fetch --quiet https://github.com/ghostty-org/ghostty.git main
+          git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+      - name: Shell lint
+        run: shellcheck -e SC2015 plugin/hooks/*.sh install.sh cli/tarn cli/test/install_test.sh tools/stand/stand.sh tools/stand/drive.sh
+      - name: Spelling
+        run: |
+          uvx typos@1.51.1 --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*' cli plugin tools docs demo viewer-web \
+            macos/Sources/Features/Tarn macos/Tests/Tarn install.sh README.md NOTICE.md tarn.mk .github/workflows/tarn-*.yml
+      - name: Python lint
+        run: |
+          uvx ruff@0.17.2 check plugin/test
+          uvx ruff@0.17.2 format --check plugin/test
+      - name: Script tests
+        run: |
+          python3 -I plugin/test/hook_test.py
+          python3 -I cli/test/cli_test.py
+
   app:
+    # The macOS runner is slow and queues PRs one behind another (T-278), so it gates only main.
     if: github.base_ref == 'main' || github.ref == 'refs/heads/main' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
     env:
-      # A hung app costs hook.sh 166-404 ms on these runners; 800 ms still catches a wait on nc's
-      # 1 s timeout. The 100 ms contract is checked on the Mac.
+      # A hung app costs hook.sh up to 404 ms on these runners (T-182 measured the old loop);
+      # 800 ms still catches a wait on nc's 1 s timeout. The 100 ms contract is checked on the Mac.
       TARN_HOOK_LIMIT_MS: "800"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -67,11 +108,13 @@ jobs:
       # The version comes from minimum_zig_version in build.zig.zon.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - name: Linters
-        run: brew install swiftlint shellcheck
+        run: brew install swiftlint shellcheck typos-cli uv
       - name: Build GhosttyKit
         run: zig build -Demit-macos-app=false
       - name: make -f tarn.mk check
         run: make -f tarn.mk check
       - name: Test log
         if: failure()
-        run: tail -200 macos/build/test.log || true
+        run: |
+          grep -n -B2 -A6 -E "✘|Expectation|recorded an issue" macos/build/test.log | head -120 || true
+          tail -200 macos/build/test.log || true

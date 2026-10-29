@@ -66,7 +66,8 @@ flowchart LR
 | Workspaces | workspace set per window, restore, undo tombstone, sidebar headers | [workspaces.md](modules/workspaces.md) | works |
 | Layout | area tree, drop zones, grips, viewer host layout | [layout.md](modules/layout.md) | works |
 | Browser demo | static page that mimics the window; not part of the app | [demo.md](modules/demo.md) | works |
-| Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket commands `ls` and `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
+| Attention, `tarn` CLI | notifications (one per need), jump (Cmd+U), socket command `notify`, the `tarn` shell client | [attention.md](modules/attention.md) | works |
+| Agent commands | socket commands on panes of the caller's workspace: `ls`, `new`, `run`, `wait`, `read`, `close`; `module ls`; `tarn skill` | [agent-commands.md](modules/agent-commands.md) | works |
 
 Tests live in `macos/Tests/Tarn/` and `plugin/test/`; each module document names its suites.
 
@@ -111,9 +112,10 @@ One environment: the local macOS app. One config file of ours: `~/.config/tarn/g
 | `TARN_SURFACE` | tells hooks which surface they run in | the app, for each surface shell |
 | socket path | `~/Library/Application Support/tarn/tarn.sock` | constant in `ControlSocket.path` |
 | sidebar width, collapsed | layout | `UserDefaults` (`TarnSidebarWidth`, `TarnSidebarCollapsed`) |
-| tab style `TarnTabStyle`: `sidebar` (default) or `top` | sidebar or native tab bar | settings window, `UserDefaults` |
-| `TarnFileViewer` | the file viewer on or off, default on | settings window, `UserDefaults` |
-| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.2.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
+| module Sidebar, key `TarnTabStyle`: `sidebar` (default, on) or `top` (off) | sidebar or native tab bar | Settings > Modules, `UserDefaults` |
+| module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules, `UserDefaults` |
+| modules Permission card, Notifications, keys `TarnModule.permissionCard`, `TarnModule.notifications` | default on; Permission card needs Sidebar; a wrong type counts as on and is logged (category `settings`) | Settings > Modules, `UserDefaults`; launch arguments such as `-TarnModule.notifications NO` win without writing (the bench uses them) |
+| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 1.3.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
 
 Logs: `os_log`, subsystem `tarn`, categories `registry`, `socket`, `viewer`, `attention`, `settings`, `workspace`; view in Console.app. Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (3600 s).
 
@@ -148,7 +150,7 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 19 | `macos/Sources/App/MainMenu.xib` | View menu: item "Toggle File Viewer", key equivalent `b`, action `toggleViewer:` to the first responder | Cmd+B from the terminal opens, shows or hides the viewer pane; the action is in `ViewerHost.swift` |
 | 20 | `macos/Sources/App/MainMenu.xib` | Window menu: item "Jump to Waiting Session", key equivalent `u`, action `jumpToWaitingSession:` to the first responder, after "Show/Hide All Terminals" | Cmd+U jump; the action is in `AttentionJump.swift` |
 | 21 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `showDesktopNotification(_ app:target:n:)` surface case: `if MainActor.assumeIsolated({ Attention.suppresses(surfaceView) }) { return }`; `private` removed from `showDesktopNotification(_ surfaceView:title:body:requireFocus:)` | OSC 9/777 of a live agent session is dropped; our notification goes through Ghostty's route |
-| 22 | `macos/Ghostty.xcodeproj/project.pbxproj` | shell phase "Install tarn CLI" in the app target: installs `cli/tarn` into `Contents/MacOS` and signs it | the CLI ships in the bundle; the core puts that folder on `PATH` |
+| 22 | `macos/Ghostty.xcodeproj/project.pbxproj` | shell phase "Install tarn CLI" in the app target: installs `cli/tarn` into `Contents/MacOS` and signs it, and `cli/SKILL.md` with the app version into `Contents/Resources/tarn` | the CLI ships in the bundle; the core puts that folder on `PATH` |
 | 23 | `macos/Ghostty.xcodeproj/project.pbxproj`, `Ghostty.xcscheme` | bundle ids `com.daniil4545.tarn[.debug|-dock-tile|.tests|.uitests]`, `PRODUCT_NAME = Tarn` with `PRODUCT_MODULE_NAME = Ghostty`, display name, usage strings, `MARKETING_VERSION = 1.0.0`, icon name `AppIcon`, `Tarn.app` in `TEST_HOST`; `images/Ghostty.icon` out of Resources | the app installs next to Ghostty |
 | 24 | `macos/Ghostty-Info.plist`, `SurfaceView+Transferable.swift` | UTI `com.daniil4545.tarn.surfaceId`; `GhosttyCommit` from `$(GHOSTTY_COMMIT)` | two apps never export one type id |
 | 25 | `DockTilePlugin.swift`, `Notification+AppIcon.swift` | defaults suite and notification name use `com.daniil4545.tarn` | the dock tile reads tarn's defaults, not Ghostty's |
@@ -156,8 +158,12 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 27 | `UpdateDelegate.swift`, `UpdateController.swift`, `AppDelegate.swift` | `feedURLString` returns nil; `checkForUpdates` stops at `isEnabled = false`; `startUpdater` not called; the menu item hidden | Sparkle never offers a Ghostty build |
 | 28 | `macos/Tests/Update/UpdaterOffTests.swift` | tests: the feed is empty, checking for updates leaves the state idle | the invariant of row 27 stays checked |
 | 29 | `macos/Assets.xcassets/AppIcon.appiconset`, the PNG files of `AppIconImage.imageset` | tarn icon replaces Ghostty's | the app has its own icon |
-| 30 | `macos/Sources/App/MainMenu.xib` | File menu: item "New Workspace", key equivalent `T` (Shift+Cmd+T), action `newWorkspace:` to the first responder, after "New Tab" | Shift+Cmd+T opens a new workspace; `tarn-defaults.conf` unbinds Ghostty's `super+shift+t=undo`, so the key reaches the menu, and undo keeps Cmd+Z; a user `keybind` on the key wins |
-Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows are numbered in the order they were added, and the table is sorted by number. Line numbers are not recorded: they shift with upstream; search by the names above.
+| 30 | `macos/Sources/App/MainMenu.xib` | File menu: item "New Group...", key equivalent `T` (Shift+Cmd+T), action `newWorkspace:` to the first responder, after "New Tab" | Shift+Cmd+T opens the New Group sheet; `tarn-defaults.conf` unbinds Ghostty's `super+shift+t=undo`, so the key reaches the menu, and undo keeps Cmd+Z; a user `keybind` on the key wins |
+| 31 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `commandFinished`, after the surface is resolved and before the `notify-on-command-finish` guard: `PaneWaits.commandFinished(pane:exitCode:durationNs:)` | `tarn wait` ends on a shell command that finished, whatever the notify setting |
+| 32 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `showChildExited`, after the surface is resolved and before the guard: `PaneWaits.childExited(pane:)` | `tarn wait` on a `new` pane ends with its process |
+| 33 | `macos/Sources/Features/Terminal/BaseTerminalController.swift` | at the end of `surfaceTreeDidChange`: `PaneWaits.surfaceTreeChanged()` | `tarn wait` answers `closed` when its pane closes |
+| 34 | `macos/Sources/App/AppDelegate.swift` | in `ghosttyNewTab`: the controller that `TerminalController.newTab` returns goes to `MainActor.assumeIsolated { WorkspaceRegistry.shared.opened(_:from:) }` with the parent window | a new tab takes the workspace of the tab it was opened from (`docs/specs/workspace-folder.md` M1) |
+Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows are numbered consecutively; the two insertion points removed with D20 are omitted. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
 

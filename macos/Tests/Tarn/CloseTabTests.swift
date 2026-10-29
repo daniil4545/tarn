@@ -42,6 +42,38 @@ struct CloseTabTests {
         #expect(posts == 3, "a publish that never settles stops after 3 rounds, got \(posts)")
     }
 
+    // spec: docs/specs/workspace-folder.md S1, S3, Q1
+    /// A folder makes a workspace named after it with one new tab; the same folder again selects
+    /// that workspace and opens nothing.
+    @Test func aFolderOpensItsWorkspaceOnceAndThenSelectsIt() async throws {
+        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
+        let registry = WorkspaceRegistry.shared
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ws-\(UUID().uuidString)")
+        let folder = root.appendingPathComponent("proj")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let first = TerminalController.newWindow(app)
+        let firstWindow = try #require(first.window)
+        try await wait { firstWindow.isVisible }
+        registry.sync()
+
+        #expect(registry.createWorkspace(folder: folder.path, from: firstWindow))
+        try await wait { live(firstWindow).count == 2 }
+        let opened = try #require(firstWindow.tabGroup?.windows.last)
+        let workspace = try #require(registry.workspace(of: opened))
+        #expect(workspace.name == "proj")
+        #expect(workspace.folder == WorkspaceFolder.standardized(folder.path))
+
+        #expect(registry.createWorkspace(folder: folder.path + "/", from: firstWindow))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(live(firstWindow).count == 2, "the same folder opens no second tab")
+
+        for window in live(firstWindow) {
+            (window.windowController as? TerminalController)?.closeWindowImmediately()
+        }
+        try await wait { live(firstWindow).isEmpty }
+    }
+
     /// The first-day report: four tabs, Cmd+W on the 4th and then on the 3rd took the app down; the test goes on to the last tab.
     @Test func cmdWOnTheFourthAndThirdTabClosesOnlyThem() async throws {
         let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
@@ -51,10 +83,10 @@ struct CloseTabTests {
         try await wait { firstWindow.isVisible }
         registry.sync()
 
-        // Tabs in tab order: Default, Default, B, B. Each new tab lands after its own workspace, so
+        // Tabs in tab order: ungrouped, A, B, B. Each new tab lands after its own workspace, so
         // Ghostty's native `move_tab` never runs (it asserts inside AppKit in a hidden test host).
-        let defaultID = try #require(registry.workspace(of: firstWindow)?.id)
-        registry.newTab(in: defaultID, from: firstWindow)
+        #expect(registry.workspace(of: firstWindow) == nil)
+        #expect(registry.createWorkspace(named: "A", from: firstWindow))
         try await wait { live(firstWindow).count == 2 }
         let second = try #require(firstWindow.tabGroup?.windows.last)
         #expect(registry.createWorkspace(named: "B", from: second))

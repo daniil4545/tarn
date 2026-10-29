@@ -1,0 +1,468 @@
+# Milestone 2.0 slicing: one item = one sub-issue = one PR under 400 lines of code.
+# Items of one line run one after another; different lines run in parallel windows and never share
+# files or owned surfaces (checked by ~/.claude/scripts/plan/plan.py check).
+# Not here: #34 (merged, #52), #35 (its own stages, tix T-203), #47 tab drag (PR #32).
+
+repo = "daniil4545/tarn"
+project = "tarn"
+milestone = "2.0"
+base = "origin/dev"
+wave = 1
+max_builds = 2
+
+# --- H: hooks and session fields ---
+
+[[item]]
+key = "H1"
+epic = 44
+line = "H"
+wave = 1
+title = "Permission hook returns the decision to Claude when tarn quits"
+body = "After a timeout, as cmux does (120 s). The rest of #44 after #52."
+files = ["plugin/hooks/permission.sh", "plugin/hooks/hooks.json", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+lines = 60
+
+[[item]]
+key = "H2"
+epic = 33
+line = "H"
+wave = 1
+build = true
+title = "Hook script with a reply: tarn answers the hook and Claude reads it"
+body = "hook.sh prints nothing by contract; #41, #42, #43 need a reply (additionalContext, deny, block)."
+files = ["new:plugin/hooks/reply.sh", "plugin/hooks/hooks.json", "macos/Sources/Features/Tarn/SessionRegistry.swift", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+needs = ["H1"]
+lines = 200
+
+[[item]]
+key = "H3"
+epic = 33
+line = "H"
+wave = 2
+build = true
+title = "Hub data: last message on Stop and task stages kept per session"
+body = "Keep Stop last_assistant_message and TaskCreated/TaskCompleted stages in the session record for the workspace hub."
+files = ["plugin/hooks/hooks.json", "macos/Sources/Features/Tarn/SessionRegistry.swift", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+needs = ["H2"]
+lines = 200
+
+[[item]]
+key = "H4"
+epic = 41
+line = "H"
+wave = 2
+title = "Neighbours: SessionStart gives the agent the tabs of its workspace"
+body = "SessionStart replies with additionalContext built from tarn ls: sessions, terminals, ssh tabs, no screen text."
+files = ["plugin/hooks/hooks.json", "new:plugin/hooks/reply.sh", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+needs = ["H3", "T-203"]
+lines = 250
+
+[[item]]
+key = "H5"
+epic = 42
+line = "H"
+wave = 2
+build = true
+title = "Collision radar: record edited files, warn the second agent"
+body = "PostToolUse on Edit, Write, MultiEdit records file_path; the second editor of a file gets additionalContext."
+files = ["plugin/hooks/hooks.json", "macos/Sources/Features/Tarn/SessionRegistry.swift", "new:macos/Sources/Features/Tarn/Radar/Radar.swift", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+needs = ["H4"]
+lines = 300
+
+[[item]]
+key = "H6"
+epic = 43
+line = "H"
+wave = 3
+title = "Sleep mode probe: does PermissionRequest fire in auto mode"
+body = "Live night probe before any code. Result decides how H7 and H8 work."
+files = []
+needs = ["H5"]
+lines = 0
+
+[[item]]
+key = "H7"
+epic = 43
+line = "H"
+wave = 3
+build = true
+title = "Sleep mode: switch, rule in the prompt, AskUserQuestion denied"
+body = "One switch; UserPromptSubmit adds the rule text; AskUserQuestion is denied with 'decide by the spec'."
+files = ["plugin/hooks/hooks.json", "new:macos/Sources/Features/Tarn/Sleep/SleepMode.swift", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+needs = ["H6"]
+lines = 300
+
+[[item]]
+key = "H8"
+epic = 43
+line = "H"
+wave = 3
+build = true
+title = "Sleep mode: permissions by the forbidden list, Stop sends the agent back"
+body = "PermissionRequest allowed unless on the forbidden list; Stop sends the agent back at most 8 times, stop_hook_active checked."
+files = ["plugin/hooks/permission.sh", "new:macos/Sources/Features/Tarn/Sleep/SleepMode.swift", "plugin/test/hook_test.py"]
+owns = ["hooks"]
+needs = ["H7"]
+lines = 300
+
+# --- S: sidebar row, workspace header and hub layout (one writer: Sidebar.swift, sidebar.js) ---
+
+[[item]]
+key = "S1"
+epic = 36
+line = "S"
+wave = 2
+build = true
+title = "Sidebar row: a slot for marks from separate providers"
+body = "Git and radar provide marks; the row draws them. After #35 stage 3."
+files = ["macos/Sources/Features/Tarn/Sidebar.swift", "macos/Sources/Features/Tarn/TarnSettings.swift", "demo/js/sidebar.js"]
+owns = ["sidebar"]
+needs = ["T-203", "S3"]
+lines = 200
+
+[[item]]
+key = "S2"
+epic = 36
+line = "S"
+wave = 2
+build = true
+title = "Git: branch and changes mark in the sidebar row"
+body = "Refresh on .git changes and hook events, never by a timer."
+files = ["new:macos/Sources/Features/Tarn/Git/GitStatus.swift", "macos/Sources/Features/Tarn/ProjectInfo.swift", "macos/Sources/Features/Tarn/FileWatcher.swift", "macos/Sources/Features/Tarn/Sidebar.swift", "demo/js/sidebar.js"]
+owns = ["sidebar"]
+needs = ["S1"]
+lines = 300
+
+[[item]]
+key = "S3"
+epic = 39
+line = "S"
+wave = 1
+build = true
+title = "SSH: an ssh tab keeps the remote shell's title"
+body = "T-250: the host is Ghostty's title, as in every terminal; no path title swap while ssh runs."
+files = ["macos/Sources/Features/Tarn/Sidebar.swift", "macos/Sources/Features/Tarn/AgentProcess.swift"]
+owns = ["sidebar"]
+lines = 30
+
+[[item]]
+key = "W1"
+epic = 33
+line = "S"
+wave = 2
+title = "Workspace hub: look in the demo, vertical and horizontal"
+body = "Demo first: a click on the workspace header opens the hub; folding moves elsewhere (decided in the demo)."
+files = ["demo/js/sidebar.js", "demo/js/workspace.js", "new:demo/js/hub.js", "new:demo/css/hub.css"]
+owns = ["sidebar"]
+needs = ["S2"]
+lines = 0
+
+[[item]]
+key = "W3"
+epic = 33
+line = "S"
+wave = 2
+build = true
+title = "Workspace hub in place of the tab content"
+body = "The approved demo look in the app: header click opens the hub, items from W2."
+files = ["macos/Sources/Features/Tarn/WorkspaceHeader.swift", "macos/Sources/Features/Tarn/Sidebar.swift", "new:macos/Sources/Features/Tarn/Hub/HubView.swift"]
+owns = ["sidebar"]
+needs = ["W1", "W2"]
+lines = 350
+
+[[item]]
+key = "S4"
+epic = 42
+line = "S"
+wave = 3
+build = true
+title = "Collision radar mark in the sidebar row and the hub"
+body = "Mark both sessions that edit one file."
+files = ["macos/Sources/Features/Tarn/Sidebar.swift", "new:macos/Sources/Features/Tarn/Radar/RadarMark.swift", "demo/js/sidebar.js"]
+owns = ["sidebar"]
+needs = ["W3", "H5"]
+lines = 100
+
+[[item]]
+key = "W5"
+epic = 33
+line = "S"
+wave = 3
+build = true
+title = "Hub header: branch and radar marks"
+body = "The hub header shows what the row providers already know."
+files = ["macos/Sources/Features/Tarn/WorkspaceHeader.swift", "new:macos/Sources/Features/Tarn/Hub/HubView.swift"]
+owns = ["sidebar"]
+needs = ["S4"]
+lines = 150
+
+[[item]]
+key = "P2"
+epic = 38
+line = "S"
+wave = 3
+build = true
+title = "Localhost: port link in the hub header, open in the browser"
+body = "Poll every 2-3 s only while the hub is visible."
+files = ["macos/Sources/Features/Tarn/WorkspaceHeader.swift", "new:macos/Sources/Features/Tarn/Ports/PortScanner.swift"]
+owns = ["sidebar"]
+needs = ["W5", "P1"]
+lines = 150
+
+[[item]]
+key = "S5"
+epic = 47
+line = "S"
+wave = 3
+build = true
+title = "Sidebar smoothness: measure first layout and animations, fix costly views"
+body = "No new functions. Bench first, then the costly views."
+files = ["macos/Sources/Features/Tarn/Sidebar.swift", "macos/Sources/Features/Tarn/Motion.swift", "tools/bench/bench.swift", "docs/bench.md"]
+owns = ["sidebar"]
+needs = ["P2"]
+lines = 200
+
+# --- W: hub store and actions (new files only) ---
+
+[[item]]
+key = "W2"
+epic = 33
+line = "W"
+wave = 2
+build = true
+title = "Workspace hub: item store on disk, up to 200 per workspace"
+body = "Questions, reports and stages from H3 persist until removed."
+files = ["new:macos/Sources/Features/Tarn/Hub/HubStore.swift"]
+needs = ["H3"]
+lines = 250
+
+[[item]]
+key = "W4"
+epic = 33
+line = "W"
+wave = 3
+build = true
+title = "Workspace hub: quick answer and jump to the session"
+body = "Allow, Deny, option number; jump through AttentionJump."
+files = ["new:macos/Sources/Features/Tarn/Hub/HubActions.swift", "macos/Sources/Features/Tarn/AttentionJump.swift"]
+needs = ["W3"]
+lines = 200
+
+# --- P: ports ---
+
+[[item]]
+key = "P1"
+epic = 38
+line = "P"
+wave = 1
+build = true
+title = "Localhost: listening ports of a session through libproc"
+body = "No subprocess; reuse the libproc helpers of AgentProcess (read only)."
+files = ["new:macos/Sources/Features/Tarn/Ports/PortScanner.swift"]
+owns = ["ports"]
+lines = 250
+
+# --- G: git history data ---
+
+[[item]]
+key = "G1"
+epic = 37
+line = "G"
+wave = 1
+build = true
+title = "Commit graph: log pages and swimlanes with merge tests"
+body = "VS Code scmHistory architecture (MIT, own code)."
+files = ["new:macos/Sources/Features/Tarn/Git/GitLog.swift", "new:macos/Sources/Features/Tarn/Git/GitLanes.swift"]
+owns = ["git-data"]
+lines = 300
+
+# --- V: viewer ---
+
+[[item]]
+key = "V1"
+epic = 45
+line = "V"
+wave = 1
+title = "Viewer audit with the user: defects become sub-issues"
+body = "Convenience, design and stability defects, one line each."
+files = []
+owns = ["viewer"]
+lines = 0
+
+[[item]]
+key = "V2"
+epic = 45
+line = "V"
+wave = 1
+build = true
+title = "Viewer: Cmd+G with the find bar hidden, stale marks"
+files = ["macos/Sources/Features/Tarn/ViewerWebView.swift", "macos/Sources/Features/Tarn/ViewerModel.swift", "viewer-web/src/find.js"]
+owns = ["viewer"]
+needs = ["V1"]
+lines = 150
+
+[[item]]
+key = "V3"
+epic = 45
+line = "V"
+wave = 1
+title = "Viewer: soft line break in markdown"
+body = "tix T-192."
+files = ["viewer-web/src/main.js"]
+owns = ["viewer"]
+needs = ["V2"]
+lines = 50
+
+[[item]]
+key = "V4"
+epic = 45
+line = "V"
+wave = 1
+build = true
+title = "Viewer: Cmd+click on a path while an app holds the mouse"
+body = "tix T-174, e.g. Claude Code fullscreen. Ghostty file changes only as an insertion point."
+files = ["macos/Sources/Ghostty/Ghostty.App.swift", "macos/Sources/Features/Tarn/ViewerHost.swift"]
+owns = ["viewer"]
+needs = ["V3"]
+lines = 150
+
+[[item]]
+key = "V5"
+epic = 45
+line = "V"
+wave = 2
+build = true
+title = "Viewer: design pass, demo first"
+files = ["viewer-web/src/viewer.css", "demo/css/viewer.css", "demo/js/viewer.js"]
+owns = ["viewer"]
+needs = ["V4"]
+lines = 300
+
+[[item]]
+key = "G2"
+epic = 37
+line = "V"
+wave = 3
+title = "Commit graph: look in the demo"
+files = ["demo/js/viewer.js", "demo/css/viewer.css"]
+owns = ["viewer"]
+needs = ["V5"]
+lines = 0
+
+[[item]]
+key = "G3"
+epic = 37
+line = "V"
+wave = 3
+build = true
+title = "Commit graph: rendering in the viewer"
+body = "Zero cost while closed."
+files = ["viewer-web/src/main.js", "macos/Sources/Features/Tarn/ViewerDocument.swift", "macos/Sources/Features/Tarn/ViewerModel.swift"]
+owns = ["viewer"]
+needs = ["G2", "G1"]
+lines = 350
+
+# --- L: layout ---
+
+[[item]]
+key = "L1"
+epic = 46
+line = "L"
+wave = 1
+title = "Layout: new look of drop line, grips and dividers in the demo"
+body = "tix T-146. The user approves the look before L2."
+files = ["demo/js/dnd.js", "demo/css/pane.css"]
+owns = ["layout"]
+lines = 0
+
+[[item]]
+key = "L2"
+epic = 46
+line = "L"
+wave = 1
+build = true
+title = "Layout: new look in the app"
+files = ["macos/Sources/Features/Tarn/Viewer/AreaDropOverlay.swift", "macos/Sources/Features/Tarn/Viewer/ViewerGrip.swift", "macos/Sources/Features/Tarn/Viewer/AreaSplit.swift"]
+owns = ["layout"]
+needs = ["L1"]
+lines = 250
+
+# --- C: agent commands (#40, docs/specs/agent-cli.md section 11) ---
+
+[[item]]
+key = "C3"
+epic = 40
+line = "C"
+wave = 1
+build = true
+title = "Agent CLI: wait and the end and close insertion points"
+files = ["macos/Sources/Features/Tarn/AgentCommands/AgentCommands.swift", "cli/tarn", "cli/test/cli_test.py"]
+owns = ["commands"]
+lines = 350
+
+[[item]]
+key = "C4"
+epic = 40
+line = "C"
+wave = 2
+build = true
+title = "Agent CLI: run as a split"
+files = ["macos/Sources/Features/Tarn/AgentCommands/AgentCommands.swift", "cli/tarn", "cli/test/cli_test.py"]
+owns = ["commands"]
+needs = ["C3"]
+lines = 300
+
+[[item]]
+key = "C5"
+epic = 40
+line = "C"
+wave = 2
+build = true
+title = "Agent CLI: read and close"
+files = ["macos/Sources/Features/Tarn/AgentCommands/AgentCommands.swift", "cli/tarn", "cli/test/cli_test.py"]
+owns = ["commands"]
+needs = ["C4"]
+lines = 300
+
+[[item]]
+key = "C8"
+epic = 39
+line = "C"
+wave = 2
+build = true
+title = "tarn ls: drop the HOST column"
+body = "T-250: the title and PROCESS show an ssh tab."
+files = ["macos/Sources/Features/Tarn/AgentCommands/ListPanes.swift", "cli/test/cli_test.py", "demo/js/commands/tarn.js"]
+owns = ["commands"]
+needs = ["C5"]
+lines = 20
+
+[[item]]
+key = "C6"
+epic = 40
+line = "C"
+wave = 3
+build = true
+title = "Agent CLI: skill and module ls"
+files = ["macos/Sources/Features/Tarn/AgentCommands/AgentCommands.swift", "cli/tarn", "new:plugin/skills/tarn/SKILL.md"]
+owns = ["commands"]
+needs = ["C8"]
+lines = 250
+
+[[item]]
+key = "C7"
+epic = 40
+line = "C"
+wave = 3
+build = true
+title = "Agent CLI: --tab for new and run"
+files = ["macos/Sources/Features/Tarn/AgentCommands/NewPane.swift", "new:macos/Sources/Features/Tarn/AgentCommands/NewTab.swift", "cli/tarn"]
+owns = ["commands"]
+needs = ["C6", "T-266"]
+lines = 250

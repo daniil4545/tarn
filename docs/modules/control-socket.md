@@ -4,7 +4,7 @@
 
 The control socket is the one unix socket through which local processes talk to the running app: agent hooks send state events, and a client can ask the viewer to open a file. It reads one JSON line per connection and can keep the connection open to send an answer back.
 
-Clients: the hook scripts and the `tarn` CLI (`open`, `ls`, `notify`, [attention.md](attention.md)). Spec: `docs/spec.md` sections 2.2 to 2.5.
+Clients: the hook scripts and the `tarn` CLI (`open`, `notify`, [attention.md](attention.md); `ls`, `new`, `run`, `wait`, `read`, `close`, `modules`, [agent-commands.md](agent-commands.md)). Spec: `docs/spec.md` sections 2.2 to 2.5.
 
 ## Place in the system
 
@@ -29,7 +29,8 @@ Reading: the socket knows no protocol. It hands each line and its `Reply` to the
 | In | hook event `{"version":1,"surface":<uuid>,"event":{...}}`, with `"reply":true` for the permission hook | `SessionRegistry.receive` |
 | In | command `{"version":1,"cmd":"open","surface":<uuid>,"path":<absolute>,"line":<n>}` | `ViewerRouter.handleCommand` |
 | Out | for a permission hook: the decision line, or an empty close | `Reply.send` |
-| In | commands `ls` and `notify`, see [attention.md](attention.md) | `AttentionCommands.handle` |
+| In | commands `ls`, `new`, `run`, `wait`, `read`, `close` and `modules` (the reply of `wait` is held until the pane ends, `Reply.watchPeer` drops a cancelled one), see [agent-commands.md](agent-commands.md) | `AgentCommands.handle` |
+| In | command `notify`, see [attention.md](attention.md) | `AttentionCommands.handle` |
 | Out | every command: `{"ok":true,...,"version":1}` or `{"error":"<text>","ok":false,"version":1}`, keys sorted, text without the `tarn: ` prefix (the CLI adds it); error texts: `unsupported version`, `unknown surface`, `empty text`, `unknown command: <name>` | `AttentionCommands.reply`, `failure` |
 
 ## How it works
@@ -42,7 +43,7 @@ State: the listening descriptor, a read dispatch source and the serial queue `ta
 4. An empty or oversized read closes the connection; an oversized one is logged.
 5. Otherwise a `Reply` wraps the descriptor and the line goes to the main actor.
 6. The callback in `SessionRegistry.start` parses the line once. A line that is not a JSON object (junk, invalid UTF-8) gets `{"error":"malformed request",...}`, except a permission hook's line (`"reply":true`), which gets silence (`AttentionCommands.refuse`, `isMalformed`).
-7. The parsed message goes to `ViewerRouter.handleCommand` (`open`), then to `AttentionCommands.handle` (`ls`, `notify`, and an error reply for any other `cmd`); a message without `cmd` goes to `SessionRegistry.receive`.
+7. The parsed message goes to `ViewerRouter.handleCommand` (`open`), then to `AgentCommands.handle` (`ls`, `new`, `run`, `wait`, `read`, `close`, `modules`), then to `AttentionCommands.handle` (`notify`, and an error reply for any other `cmd`); a message without `cmd` goes to `SessionRegistry.receive`.
 8. Before binding, `start` connects to an existing socket file. A live listener (another tarn, or a Debug build next to the installed app) keeps its file: the new app logs it and runs without a socket. A stale file is replaced.
 9. `Reply.send` writes the answer on the socket queue and closes; with an empty line it only closes. A dropped `Reply` closes the connection on deinit. Writes ignore SIGPIPE.
 

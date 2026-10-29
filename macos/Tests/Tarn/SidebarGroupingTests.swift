@@ -101,8 +101,8 @@ struct SidebarGroupingTests {
     }
 
     @Test(arguments: [
-        // row index in B (3 rows), lower half, expected: before B (true) or after B (false)
-        (0, false, true), (0, true, true), (1, false, true), (1, true, false), (2, false, false), (2, true, false),
+        // Row index in B, lower half of the whole block, expected before B.
+        (0, false, true), (0, true, false), (1, false, true), (1, true, false), (2, false, true), (2, true, false),
     ] as [(Int, Bool, Bool)])
     func aWorkspaceOnARowLandsByTheHalfOfItsWorkspace(row: Int, lowerHalf: Bool, beforeB: Bool) {
         let (groups, _) = layout()
@@ -112,11 +112,91 @@ struct SidebarGroupingTests {
     }
 
     // spec: docs/specs/windows-workspaces.md S9. The empty sidebar below the last row takes drops after everything.
-    @Test func belowTheLastRowAWorkspaceGoesToTheEndAndATabToTheLastWorkspace() {
+    @Test func belowTheLastRowAWorkspaceGoesToTheEndAndATabBelowAllRows() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: groups) == .end)
-        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .endOfWorkspace(groups[2].id))
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .tail)
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: []) == nil)
+    }
+
+    // The slot before the lifted row and the slot after it are one slot: the row's own.
+    @Test func theSlotBeforeTheLiftedRowIsTheSlotAfterIt() {
+        let (groups, tabs) = layout()
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[2].key), lifted: tabs[2].key, in: groups) == .beforeTab(tabs[3].key))
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[4].key), lifted: tabs[4].key, in: groups) == .endOfWorkspace(groups[1].id))
+        #expect(SidebarModel.gapSlot(.beforeTab(tabs[0].key), lifted: tabs[2].key, in: groups) == .beforeTab(tabs[0].key))
+        #expect(SidebarModel.gapSlot(nil, lifted: tabs[2].key, in: groups) == nil)
+    }
+
+    @Test func marginsTargetThePositionBeforeABlockForEitherDragKind() {
+        let (groups, _) = withUngrouped()
+        for group in groups {
+            for kind in [SidebarDragKind.tab, .workspace] {
+                let slot = SidebarModel.dropSlot(dragging: kind, over: .margin(group.id), lowerHalf: false, in: groups)
+                #expect(slot == .beforeWorkspace(group.id))
+            }
+        }
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .margin(UUID()), lowerHalf: true, in: groups) == nil)
+    }
+
+    /// A: two tabs, ungrouped: one tab, B: two tabs.
+    private func withUngrouped() -> (groups: [SidebarModel.Group], tabs: [SidebarModel.Tab]) {
+        let tabs = (1...5).map { tab($0) }
+        return (
+            [group("A", Array(tabs[0...1])), .init(workspace: nil, tabs: [tabs[2]]), group("B", Array(tabs[3...4]))],
+            tabs
+        )
+    }
+
+    /// spec: docs/specs/workspace-folder.md G5
+    /// A row without a group takes a tab drag like any row (native order only).
+    @Test func aTabDraggedOverAnUngroupedRowLandsByTheHalfOfThatRow() {
+        let (groups, tabs) = withUngrouped()
+        let key = tabs[2].key
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(key), lowerHalf: false, in: groups) == .beforeTab(key))
+        // The lone row of its block: the lower half is the end of the block.
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(key), lowerHalf: true, in: groups) == .endOfWorkspace(groups[1].id))
+
+        let flat = [SidebarModel.Group(workspace: nil, tabs: Array(tabs[0...2]))]
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(tabs[0].key), lowerHalf: true, in: flat) == .beforeTab(tabs[1].key))
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tab(tabs[2].key), lowerHalf: true, in: flat) == .endOfWorkspace(flat[0].id))
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: flat) == .endOfWorkspace(flat[0].id))
+    }
+
+    // spec: docs/specs/workspace-folder.md G5
+    /// A header dragged over an ungrouped block lands before or after the whole block.
+    @Test func aWorkspaceOverAnUngroupedRowLandsBeforeOrAfterItsBlock() {
+        let (groups, tabs) = withUngrouped()
+        let key = tabs[2].key
+        #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tab(key), lowerHalf: false, in: groups) == .beforeWorkspace(key))
+        #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tab(key), lowerHalf: true, in: groups) == .beforeWorkspace(groups[2].id))
+    }
+
+    @Test func anUngroupedBlockHasNoHeader() {
+        let (groups, tabs) = withUngrouped()
+        let key = tabs[2].key
+        // The ungrouped block has no header; its id is its first tab, no workspace's.
+        #expect(groups[1].id == key)
+        #expect(!groups.contains { $0.workspace?.id == key })
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .header(key), lowerHalf: false, in: groups) == nil)
+    }
+
+    // spec: docs/specs/workspace-folder.md G5
+    @Test func aWorkspaceDroppedBelowAnotherLandsBeforeTheNextBlockUngroupedOrNot() {
+        let (groups, _) = withUngrouped()
+        let a = groups[0].id, b = groups[2].id
+        let lower = SidebarModel.dropSlot(dragging: .workspace, over: .header(a), lowerHalf: true, in: groups)
+        #expect(lower == .beforeWorkspace(groups[1].id))
+        let end = SidebarModel.dropSlot(dragging: .workspace, over: .header(b), lowerHalf: true, in: groups)
+        #expect(end == .end)
+    }
+
+    // spec: docs/specs/workspace-folder.md S43
+    @Test func belowAnUngroupedLastBlockATabGoesToTheEndOfThatBlock() {
+        let (groups, _) = withUngrouped()
+        let ungroupedLast = Array(groups[0...1])
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: ungroupedLast) == .endOfWorkspace(groups[1].id))
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .tail)
     }
 
     @Test func unknownTargetsGiveNoSlot() {

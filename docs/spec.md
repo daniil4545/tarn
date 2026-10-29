@@ -28,7 +28,7 @@ tarn is a fork of [Ghostty](https://github.com/ghostty-org/ghostty) for macOS. I
 
 Principles:
 
-1. **Simplicity.** A part stays only if something breaks without it; the rest is cut, not hidden behind a setting. The tarn settings window holds only settings of tarn's own features; terminal settings stay in the Ghostty config file.
+1. **Simplicity.** A part stays only if something breaks without it; the rest is cut, not hidden behind a setting. One exception (user decision 2026-10-27, T-205): the features of section 1 (sidebar, file viewer, permission card, notifications) may be switched off in Settings > Modules; features outside section 1 are still cut. All module settings live on the first settings page, Modules, each module's options under its switch; options stay visible but disabled when the module is off. The tarn settings window holds only settings of tarn's own features; terminal settings stay in the Ghostty config file.
 2. **Speed.** Startup, input latency, idle CPU and memory stay at the level of upstream Ghostty built from the same commit. Numbers come from a benchmark, not from impressions.
 3. **Reliability.** The Ghostty core is not modified. Our code lives in its own files; upstream files change only at insertion points listed in `docs/architecture.md`.
 4. **Lightweight and local.** No account, cloud, telemetry, subscription, built-in AI model or network requests from our code.
@@ -46,19 +46,19 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R6 | File editing in the viewer pane: one tool for view and edit, file tabs | first (user decision 2026-10-25) | - |
 | R3 | Sidebar with all sessions of a window, grouped in user-named workspaces (`docs/specs/windows-workspaces.md`); a tab running claude, codex or opencode shows the agent's icon and state; the collapsed sidebar shows icons only | first | median 5 parallel sessions, peak 16 |
 | R19 | Pins | removed 2026-10-25 (D17): workspaces group tabs | user request 2026-10-23 |
-| R20 | Drag to reorder tabs in the sidebar, as the native tab bar did | first | user request 2026-10-23 |
+| R20 | Drag to reorder tabs in the sidebar, as the native tab bar did: over a tab the rows part (halves, as iTerm2), over a group header nothing changes, the strip between group blocks ungroups the tab, leaving the sidebar closes the gap; groups are blocks with their own background, tabs are cards (T-298) | first | user request 2026-10-23, user decisions 2026-10-29 |
 | R21 | Custom groups | built as workspaces, first wave | user request 2026-10-23 |
-| R24 | Settings window (cmd+,); tab style: sidebar or native tabs at the top, where an agent tab shows its state dot and logo at the right edge | first | user request 2026-10-25 |
+| R24 | Settings window (cmd+,); tab style is the Sidebar switch in Settings > Modules (on: sidebar, off: native tabs at the top, where an agent tab shows the workspace name, its state dot and logo at the right edge) | first | user request 2026-10-25 |
 | R8 | Agent CLI `tarn`: `open`, `ls`, `notify` | first | - |
 | R10 | Several agents per project shown as separate sessions | first | - |
 | R4 | One notification per need; jump to the next session that needs the user by a click | first | 13.5% of replies come after more than 10 min |
 | R12 | Editor-like prompt input | first, Claude Code itself, verify | - |
-| R15 | `tarn new` and `tarn send`: hand-over between sessions | second | 50+ manual hand-overs |
+| R15 | agent commands on panes: `tarn new`, `run`, `wait`, `read`, `close`, no `send` (`docs/specs/agent-cli.md`) | second | 50+ manual hand-overs |
 | R16 | `tarn run`: a command for the user with output back to the agent | second | ~35 pasted outputs |
 | R17 | Subagent panel inside a session | second | 14 requests |
 | R18 | Tracker connector: the `tk` task of each session in the sidebar | second | `tk` links tasks to session ids |
 | R11 | HTML and PDF in the viewer | later | 5 PDF paths, HTML opened in a browser |
-| R13 | SSH sessions in the sidebar | later | 3-4 mentions |
+| R13 | SSH sessions in the sidebar: an ssh tab shows the title the remote shell sets, as every terminal does; no host parser (user decision 2026-10-27, T-250) | 2.0 | 3-4 mentions |
 | R14 | Phone access to waiting sessions, free, outside the home network | later, guide | - |
 | R22 | Preview of a localhost server an agent starts | later | Tellurion trial 2026-10-23 |
 | R23 | State for codex and opencode sessions | later | codex shows no state in the first version |
@@ -232,7 +232,7 @@ Jump order for R4: `waiting` with `failed`, then `permission`, then `waiting` or
 | Ghostty core events | notification, title, pwd, bell, child exited, progress, command finished reach the app | `src/apprt/action.zig:203-333`, `macos/Sources/Ghostty/Ghostty.App.swift:653-780`, checked by review | registry needs its own parsing |
 | Ghostty surfaces | each surface has a stable UUID; per-surface environment variables are supported; close is an event | `AppDelegate.swift:969-977`, `SurfaceView.swift:591`, `Ghostty.App.swift:293`, checked by review | surface key changes |
 | Ghostty notifications | a notification is bound to a surface, shown only when it is not focused, a click focuses it | `Ghostty.App.swift:551-563,1620-1640`, `AppDelegate.swift:948-955`, checked by review | our own route needed |
-| Ghostty AppleScript | `focus`, `input text`, `new tab` with working directory and command | `macos/Ghostty.sdef:86-227` | second wave writes its own |
+| Ghostty AppleScript | `focus`, `input text`, `new tab` with working directory and command | `macos/Ghostty.sdef:89-233` | second wave writes its own |
 | Claude Code hooks | every event carries `session_id`, `cwd`, `transcript_path`, `hook_event_name`; `Notification` adds `notification_type`, `message`, `title`; subagent events carry `agent_id`, `agent_type` | code.claude.com/docs/en/hooks, 2026-10-21 | state table changes |
 | Claude Code OSC 7501 | state escape sequence is not passed through tmux | code.claude.com/docs/en/terminal-config, 2026-10-21 | hooks stay the only source |
 | `tk` | `claim` is `<agent>:<session id>`; `tk list --json` returns `id`, `title`, `project`, `status`, `claim`, `ask` | tracker `docs/spec.md` 2.4; `tk list --json`, 2026-10-21 | second wave changes |
@@ -264,7 +264,7 @@ Code sources. Reference projects were picked from seven MIT agent terminals on l
 - Notification title `<project>`, body `Waiting for you`.
 - Notification title `<project>`, body `Failed, see the session`.
 - Notification title `<project>`, body: the text of `tarn notify`.
-- `tarn ls` row: `3  tarn  main  permission  2m`; `tarn ls --json` returns the `Session` fields.
+- `tarn ls`: a header `PANE  TAB  GROUP  TITLE  CWD  PROCESS  BRANCH  STATE` and one row per terminal pane of the caller's group, or only its own tab when ungrouped; `tarn ls --json` returns `panes` (`docs/specs/agent-cli.md` 4).
 - `tarn open` on a missing file: `tarn: no such file: <path>`, exit code 1.
 
 ## 12. Decisions and open questions
@@ -288,7 +288,7 @@ Code sources. Reference projects were picked from seven MIT agent terminals on l
 Open for the second wave, from the spec review of 2026-10-21 (resolve before designing R15-R18):
 
 1. `tarn send`: a target without bracketed paste executes newlines; the text needs encoding per paste mode (`src/Surface.zig:3431`, `paste.zig:109-113`).
-2. Session address in the CLI: `tarn ls` numbers shift; commands need the surface UUID or the Claude session id.
+2. Closed: a pane is addressed by its surface UUID, the value of `TARN_SURFACE` (`docs/specs/agent-cli.md` 3).
 3. `tarn run`: timeout, sudo, large output, parallel calls, where the command runs, whether the user can edit it.
 4. `tarn new`: whether the entry prompt is submitted; which `claude` command and permission mode; tab or split.
 5. Tracker `ask` versus hook state: `ask` is a field shown in the sidebar, not a state transition; polling `tk` at most once per N seconds; `/clear` changes the session id.

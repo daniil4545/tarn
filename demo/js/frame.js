@@ -6,8 +6,11 @@ import { currentTab } from "./workspace.js";
 
 const LIGHTS = ["#ff5f57", "#febc2e", "#28c840"].map((c) => `<i style="background:${c}"></i>`).join("");
 
+// Demo only: the app opens Settings by Cmd+, and the menu.
+const GEAR = '<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><circle cx="8" cy="8" r="2.2"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4"/></svg>';
+
 const HTML = `
-<div class="titlebar"><span class="lights">${LIGHTS}</span><span class="ttl"></span><span class="sub"></span><span id="titlebar-actions"></span></div>
+<div class="titlebar"><span class="lights">${LIGHTS}</span><span class="ttl"></span><span class="sub"></span><span id="titlebar-actions"><button class="ib" id="tbSettings" title="Settings (Cmd+,)" aria-label="Settings (Cmd+,)">${GEAR}</button></span></div>
 <div class="body">
   <nav class="sidebar" id="sidebar" aria-label="Tabs"></nav>
   <div class="sbgrip" id="sbGrip" aria-hidden="true"></div>
@@ -22,6 +25,7 @@ export function mountFrame(root) {
   root.innerHTML = HTML;
   apply();
   showTitle();
+  root.querySelector("#tbSettings").addEventListener("click", () => bus.cmd("settings.open"));
   bus.on("config:changed", () => { apply(); showTitle(); });
   bus.on("state:changed", ({ part }) => { if (part === "workspaces") showTitle(); });
   bus.handle("window.fullscreen", () => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()));
@@ -40,8 +44,7 @@ function apply() {
 function showTitle() {
   const s = read("workspaces"), tab = currentTab(s);
   const ws = tab && s.wss.find((w) => w.tabs.includes(tab.id));
-  const top = read("config")["tab-style"] === "top";
-  const [title, sub] = tab ? [tab.title, top ? "" : ws.name] : ["tarn", ""];
+  const [title, sub] = tab ? [tab.title, ws.name] : ["tarn", ""];
   document.querySelector(".titlebar .ttl").textContent = title;
   document.querySelector(".titlebar .sub").textContent = sub;
   document.title = sub ? `${title} · ${sub}` : title;

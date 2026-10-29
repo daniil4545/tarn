@@ -8,6 +8,7 @@ import { clock } from "./clock.js";
 import { WORKSPACES } from "./seed.js";
 import { ask } from "./ask-dialog.js";
 import * as tree from "./layout.js";
+import { isOn } from "./modules.js";
 
 const CAP = 8; // panes per tab
 const cfg = (key) => read("config")[key];
@@ -22,7 +23,9 @@ let write;
 
 export const paneOf = (id) => panes.get(id);
 // Ids of every pane of a tab, shown or hidden (a viewer hidden with Toggle Pane stays alive).
-export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node))];
+// `stashed` holds the viewers of a tab while File viewer is off; `hidden` is the user's Cmd+B hide.
+export const leafIdsOf = (tab) => [...tree.leaves(tab.layout).map(tree.leafId), ...(tab.hidden ?? []).map((h) => tree.leafId(h.node)), ...(tab.stashed ?? []).map((h) => tree.leafId(h.node))];
+// The tab order down the list.
 export const flatTabs = (s) => s.wss.flatMap((w) => w.tabs);
 export const currentTab = (s = read("workspaces")) => s.tabs[s.cur] ?? null;
 const wsOf = (s, tabId) => s.wss.find((w) => w.tabs.includes(tabId));
@@ -55,6 +58,13 @@ function usable(state) {
   return ok;
 }
 
+// A store from before groups has a workspace "~" without a folder: its tabs become ungrouped
+// tabs where they stand.
+function migrateHome(state) {
+  if (state.wss.some((w) => w.loose)) return;
+  state.wss = state.wss.map((w) => (w.name === "~" && !w.folder ? { id: w.id, name: "", loose: true, tabs: w.tabs } : w));
+}
+
 function scanIds(state) {
   const bump = (id) => { ids[id[0]] = Math.max(ids[id[0]], Number(id.slice(1)) || 0); };
   state.wss.forEach((w) => bump(w.id));
@@ -70,10 +80,12 @@ export function startWorkspaces({ createPane, createViewer }) {
   const stored = cfg("window-save-state") === "never" ? WORKSPACES : load("workspaces", WORKSPACES, hasShape);
   const initial = structuredClone(usable(stored) ? stored : WORKSPACES);
   scanIds(initial);
+  migrateHome(initial);
   for (const tab of Object.values(initial.tabs)) {
     // A viewer's files are not stored, so after a reload its leaf would be empty: drop it.
     for (const v of tree.viewers(tab.layout)) tab.layout = tree.remove(tab.layout, v.viewer);
     tab.hidden = [];
+    tab.stashed = [];
     if (!tree.pathOf(tab.layout, tab.focus)) tab.focus = null;
     tab.focus ??= tree.terminals(tab.layout)[0].pane;
     tab.zoom ??= null;
@@ -97,12 +109,34 @@ export function startWorkspaces({ createPane, createViewer }) {
     const pane = bus.cmd("pane.place", { viewer: true, zone: "right", target: "block", focus: false });
     if (pane) bus.cmd("viewer.open", { ...request, pane });
   });
+  // File viewer off: the panes leave the layout but stay alive with their tabs and unsaved text;
+  // on again they return to their seats. Cmd+B's own hide (`hidden`) is a separate list.
+  bus.on("config:changed", ({ key }) => {
+    if (key === "file-viewer") update(syncViewers);
+  });
+  if (!isOn("viewer")) update(syncViewers);
   Object.entries(COMMANDS).forEach(([name, fn]) => bus.handle(name, (payload = {}) => (NEEDS_TAB.test(name) && !currentTab() ? undefined : fn(payload))));
+}
+
+function syncViewers(s) {
+  const on = isOn("viewer");
+  for (const tab of Object.values(s.tabs)) {
+    if (!on) {
+      for (const v of tree.viewers(tab.layout)) {
+        (tab.stashed ??= []).push({ node: tree.at(tab.layout, tree.pathOf(tab.layout, v.viewer)), seat: tree.seatOf(tab.layout, v.viewer) });
+        dropLeaf(tab, v.viewer);
+      }
+    } else {
+      for (const { node, seat } of tab.stashed ?? []) tab.layout = tree.reseat(tab.layout, node, seat);
+      tab.stashed = [];
+    }
+  }
 }
 
 function update(fn) {
   const draft = structuredClone(read("workspaces"));
   const result = fn(draft);
+  mergeLoose(draft);
   write(draft);
   if (cfg("window-save-state") !== "never") save("workspaces", draft);
   return result;
@@ -114,6 +148,24 @@ function ensurePane(id, cwd) {
 }
 
 const short = (cwd) => cwd.replace("~/code/", "~/c/");
+// Ungrouped tabs sit in headerless blocks anywhere between the groups (docs/specs/workspace-folder.md
+// G5). The block at list index `at` (the tail by default), or the one just above it, else a new one there.
+const looseAt = (s, at = s.wss.length) => {
+  if (s.wss[at]?.loose) return s.wss[at];
+  if (s.wss[at - 1]?.loose) return s.wss[at - 1];
+  const ws = { id: nextId("w"), name: "", loose: true, tabs: [] };
+  s.wss.splice(at, 0, ws);
+  return ws;
+};
+// Two ungrouped blocks that meet are one; an empty one goes.
+function mergeLoose(s) {
+  s.wss = s.wss.reduce((out, w) => {
+    if (w.loose && !w.tabs.length) return out;
+    if (w.loose && out.at(-1)?.loose) out.at(-1).tabs.push(...w.tabs);
+    else out.push(w);
+    return out;
+  }, []);
+}
 const inheritedCwd = (s) => (cfg("window-inherit-working-directory") && s.tabs[s.cur] ? s.tabs[s.cur].cwd : "~");
 
 function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` } = {}) {
@@ -124,11 +176,10 @@ function addTab(s, ws, { cwd = inheritedCwd(s), title = `zsh · ${short(cwd)}` }
   return id;
 }
 
-// A new window starts with Default and one tab.
+// A new window starts with one ungrouped tab in the home folder.
 function openWindow(s) {
-  const ws = { id: nextId("w"), name: "Default", tabs: [] };
-  s.wss = [ws];
-  s.cur = addTab(s, ws, { cwd: "~" });
+  s.wss = [];
+  s.cur = addTab(s, looseAt(s), { cwd: "~" });
 }
 
 // Undo: a closed pane or tab stays alive until the undo window ends, then it is freed.
@@ -178,14 +229,14 @@ function settleViewers(tabs, go) {
 
 function closeTab(s, id) {
   const tab = s.tabs[id], ws = wsOf(s, id), order = flatTabs(s), at = order.indexOf(id);
-  const kept = keepUndo({ kind: "tab", what: tab.title, tab, wsId: ws.id, wsAt: s.wss.indexOf(ws), wsName: ws.name, wsFolded: !!ws.collapsed, index: ws.tabs.indexOf(id), leafIds: leafIdsOf(tab) });
+  const kept = keepUndo({ kind: "tab", what: tab.title, tab, ws: { ...ws, tabs: [] }, wsAt: s.wss.indexOf(ws), index: ws.tabs.indexOf(id), leafIds: leafIdsOf(tab) });
   ws.tabs = ws.tabs.filter((x) => x !== id);
   delete s.tabs[id];
   if (!ws.tabs.length) s.wss = s.wss.filter((w) => w !== ws);
   if (s.cur === id) select(s, order[at + 1] ?? order[at - 1] ?? null);
   const undo = kept ? " · ⌘Z restores" : "";
   toast(!s.wss.length ? `Last tab closed: the window closes${undo}`
-    : !ws.tabs.length ? `Workspace ${ws.name} closed with its last tab${undo}` : `Tab closed${undo}`);
+    : !ws.tabs.length && !ws.loose ? `Group ${ws.name} closed with its last tab${undo}` : `Tab closed${undo}`);
 }
 
 function closeLeaf(s, id) {
@@ -205,10 +256,11 @@ function dropLeaf(tab, id) {
 
 function restore(s, rec) {
   if (rec.kind === "tab") {
-    let ws = s.wss.find((w) => w.id === rec.wsId);
+    let ws = s.wss.find((w) => w.id === rec.ws.id);
     if (!ws) {
-      ws = { id: rec.wsId, name: rec.wsName, collapsed: rec.wsFolded, tabs: [] };
-      s.wss.splice(Math.min(rec.wsAt, s.wss.length), 0, ws);
+      const at = Math.min(rec.wsAt, s.wss.length);
+      ws = rec.ws.loose ? looseAt(s, at) : structuredClone(rec.ws);
+      if (!rec.ws.loose) s.wss.splice(at, 0, ws);
     }
     ws.tabs.splice(Math.min(rec.index, ws.tabs.length), 0, rec.tab.id);
     ws.collapsed = false;
@@ -227,10 +279,15 @@ const ZONE = { right: "right", down: "bottom" };
 const NEEDS_TAB = /^(pane\.(?!undo)|tab\.(close|step)|viewer\.(hide|show))/;
 
 const COMMANDS = {
-  "tab.new": ({ ws, pane, cwd, title, select = true }) => update((s) => {
-    const target = (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || s.wss[0];
-    if (!target) return openWindow(s);
-    const id = addTab(s, target, { cwd, title });
+  // Cmd+T takes the group of the tab it opens from, right after it, in its folder (Ghostty). A
+  // group's "+" (`header`) adds at the end of the group, in the workspace folder or, for a plain
+  // group, in the current tab's folder.
+  "tab.new": ({ ws, pane, cwd, title, header = false, select = true }) => update((s) => {
+    if (!s.wss.length) return openWindow(s);
+    const target = (pane && wsOf(s, tabOfLeaf(s, pane)?.id)) || s.wss.find((w) => w.id === ws) || wsOf(s, s.cur) || looseAt(s);
+    const id = addTab(s, target, { cwd: cwd ?? ((header && target.folder) || undefined), title });
+    const at = target.tabs.indexOf(s.cur);
+    if (!header && !ws && at >= 0) target.tabs.splice(at + 1, 0, target.tabs.pop()); // Cmd+T: next to the current tab
     if (select) { s.cur = id; target.collapsed = false; }
   }),
 
@@ -249,31 +306,39 @@ const COMMANDS = {
     select(s, order[(order.indexOf(s.cur) + delta + order.length) % order.length]);
   }),
 
-  // Before another tab or at the end of a workspace.
-  "tab.move": ({ id, ws, before = null }) => update((s) => {
-    const to = s.wss.find((w) => w.id === ws), from = wsOf(s, id);
+  // Before another tab or at the end of a group or ungrouped block. `ws: "loose"` ungroups: with
+  // `after` (Remove from group) it stands below that group; `before` a block places it above.
+  "tab.move": ({ id, ws, before = null, after = null }) => update((s) => {
+    const below = after ? s.wss.findIndex((w) => w.id === after) + 1 : 0;
+    const block = s.wss.findIndex((w) => w.id === before);
+    const to = ws === "loose" ? looseAt(s, block >= 0 ? block : below || s.wss.length) : s.wss.find((w) => w.id === ws), from = wsOf(s, id);
     if (!to) return;
     from.tabs = from.tabs.filter((x) => x !== id);
-    const at = before ? to.tabs.indexOf(before) : -1;
+    const at = block >= 0 && s.wss[block] === to ? 0 : before ? to.tabs.indexOf(before) : below ? 0 : -1;
     if (at >= 0) to.tabs.splice(at, 0, id); else to.tabs.push(id);
-    if (from !== to) { to.collapsed = false; toast(`Moved to ${to.name}`); }
+    if (from !== to) {
+      to.collapsed = false;
+      toast(to.loose ? "Moved out of the group" : `Moved to ${to.name}`);
+    }
     if (!from.tabs.length) s.wss = s.wss.filter((w) => w !== from);
   }),
 
   // A terminal splits into a terminal; a viewer into another viewer that opens `path`.
-  "pane.split": ({ id, dir, kind = "terminal", path }) => {
+  // `focus: false` (`tarn new`) leaves the focus where it was. Returns the new id.
+  "pane.split": ({ id, dir, kind = "terminal", path, focus = true }) => {
     const created = update((s) => {
-      const tab = currentTab(s), target = id ?? tab.focus;
+      const tab = (id && tabOfLeaf(s, id)) || currentTab(s), target = id ?? tab.focus;
       if (leafCount(tab) >= CAP) return toast(`At most ${CAP} panes in a tab`);
       const at = tree.pathOf(tab.layout, target), viewer = kind === "viewer";
       const fresh = nextId(viewer ? "v" : "p");
       tab.layout = tree.setAt(tab.layout, at, tree.join(tree.at(tab.layout, at), viewer ? { viewer: fresh } : { pane: fresh }, ZONE[dir]));
-      tab.focus = fresh;
+      if (focus) tab.focus = fresh;
       tab.zoom = null;
-      ensurePane(fresh, inheritedCwd(s));
+      ensurePane(fresh, cfg("window-inherit-working-directory") ? tab.cwd : "~");
       return fresh;
     });
     if (created && path) bus.cmd("viewer.open", { pane: created, path });
+    return created;
   },
 
   "pane.close": ({ id, exited = false }) => {
@@ -345,35 +410,57 @@ const COMMANDS = {
     toast(`Restored: ${rec.what}`);
   },
 
-  "ws.new": ({ name }) => update((s) => {
-    const ws = { id: nextId("w"), name, tabs: [] };
+  // A group with one new tab, at the bottom of the list. With a folder it is a workspace: the tab
+  // starts in the folder; a plain group's tab starts where Cmd+T would.
+  "ws.new": ({ name, folder }) => update((s) => {
+    const ws = { id: nextId("w"), name, tabs: [], ...(folder ? { folder } : {}) };
     s.wss.push(ws);
-    s.cur = addTab(s, ws, { cwd: "~" });
+    s.cur = addTab(s, ws, { cwd: folder ?? inheritedCwd(s) });
   }),
 
-  "ws.rename": ({ id, name }) => update((s) => { s.wss.find((w) => w.id === id).name = name; }),
-  "ws.fold": ({ id }) => update((s) => { const w = s.wss.find((x) => x.id === id); w.collapsed = !w.collapsed; }),
-
-  // Its tabs go to the workspace above, or below if it is the first (D13). The last one cannot go.
-  "ws.delete": ({ id }) => update((s) => {
-    const at = s.wss.findIndex((w) => w.id === id);
-    if (s.wss.length < 2) return;
-    const into = s.wss[at > 0 ? at - 1 : 1];
-    if (at > 0) into.tabs.push(...s.wss[at].tabs); else into.tabs.unshift(...s.wss[at].tabs);
-    into.collapsed = false;
-    s.wss.splice(at, 1);
+  "ws.rename": ({ id, name }) => update((s) => {
+    const w = s.wss.find((x) => x.id === id);
+    if (!w.loose) w.name = name;
+  }),
+  "ws.fold": ({ id }) => update((s) => {
+    const w = s.wss.find((x) => x.id === id);
+    if (!w.loose) w.collapsed = !w.collapsed;
   }),
 
-  // Before another workspace, or at the end.
-  "ws.move": ({ id, before = null }) => update((s) => {
+  // Ungroup, as Warp does: the tabs stay where they are, ungrouped. With `closeTabs` the tabs
+  // close too, each with its own undo.
+  "ws.delete": ({ id, closeTabs = false }) => {
+    const ws = read("workspaces").wss.find((w) => w.id === id);
+    if (!ws || ws.loose) return;
+    if (!closeTabs) {
+      update((s) => {
+        const at = s.wss.findIndex((w) => w.id === id);
+        s.wss[at] = { id, name: "", loose: true, tabs: s.wss[at].tabs };
+      });
+      return;
+    }
+    const tabs = ws.tabs.map((t) => read("workspaces").tabs[t]);
+    if (tabs.every((t) => allowClose(tree.terminals(t.layout).map((x) => x.pane)))) settleViewers(tabs, () => update((s) => tabs.forEach((t) => closeTab(s, t.id))));
+  },
+
+  // Before another group or ungrouped block, or at the bottom.
+  // `beforeTab`, an ungrouped tab, splits its block: the group stands right above that tab.
+  "ws.move": ({ id, before = null, beforeTab = null }) => update((s) => {
     const ws = s.wss.find((w) => w.id === id);
+    if (ws.loose) return;
     s.wss = s.wss.filter((w) => w !== ws);
-    const at = before ? s.wss.findIndex((w) => w.id === before) : -1;
+    const host = beforeTab && s.wss.find((w) => w.loose && w.tabs.includes(beforeTab));
+    if (host && host.tabs.indexOf(beforeTab) > 0) {
+      const tail = { id: nextId("w"), name: "", loose: true, tabs: host.tabs.splice(host.tabs.indexOf(beforeTab)) };
+      s.wss.splice(s.wss.indexOf(host) + 1, 0, ws, tail);
+      return;
+    }
+    const at = host ? s.wss.indexOf(host) : before ? s.wss.findIndex((w) => w.id === before) : -1;
     s.wss.splice(at >= 0 ? at : s.wss.length, 0, ws);
   }),
 
   "window.new": () => {
-    if (read("workspaces").wss.length) return toast("⌘N opens another window with its own Default");
+    if (read("workspaces").wss.length) return toast("⌘N opens another window");
     update(openWindow);
   },
 

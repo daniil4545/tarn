@@ -1,7 +1,7 @@
 // The zsh stand-in. Pure over its arguments: no DOM, no engine, so Node tests drive it.
-// createShell({vfs, emit, write, clock, identity, history, cols, sessions, paneId})
+// createShell({vfs, emit, write, clock, identity, history, cols, panes, paneId})
 //   write(data)       bytes for the terminal
-//   emit(name, data)  cwd, prompt, command, exit, viewer.open, tab.new, hook
+//   emit(name, data)  cwd, prompt, command, exit, viewer.open, pane.new (returns the pane id), hook
 //   input(data)       bytes from the terminal
 import { crlf } from "./ansi.js";
 import { createEditor } from "./line-editor.js";
@@ -14,7 +14,7 @@ const BRACKETED_PASTE_ON = "\x1b[?2004h";
 const BRACKETED_PASTE_OFF = "\x1b[?2004l";
 const CLEAR = "\x1b[H\x1b[2J";
 
-export function createShell({ vfs, emit, write, clock, identity, history, cols, sessions, paneId, viewerOn = () => true }) {
+export function createShell({ vfs, emit, write, clock, identity, history, cols, panes, paneId, viewerOn = () => true }) {
   let cwd = identity.start;
   let previous = cwd;
   let job = null;
@@ -68,13 +68,12 @@ export function createShell({ vfs, emit, write, clock, identity, history, cols, 
 
   const ctx = {
     paneId,
-    planned: new Set(), // tarn subcommands that already printed the planned notice
     vfs,
     identity,
     emit,
     write,
     cols,
-    sessions,
+    panes,
     viewerOn,
     now: clock.now,
     env,

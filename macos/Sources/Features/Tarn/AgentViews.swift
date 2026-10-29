@@ -45,7 +45,7 @@ struct AgentQuickActions: View {
             }
 
             // Without a waiting hook the agent shows its own dialog in the terminal.
-            if agent.answerable {
+            if agent.answerable && TarnModules.isOn(.permissionCard) {
                 buttons
             }
         }

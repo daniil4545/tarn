@@ -6,7 +6,7 @@
 </p>
 
 <p align="center"><b>An agent-first terminal for macOS, built on <a href="https://ghostty.org">Ghostty</a>.</b><br>
-Every tab in a sidebar, grouped in workspaces, with the state of each Claude Code session at a glance.</p>
+Every tab in a sidebar, optionally grouped, with the state of each Claude Code session at a glance.</p>
 
 tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty project; see
 [NOTICE.md](NOTICE.md).
@@ -15,8 +15,8 @@ tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty pro
 
 Ghostty keeps rendering, input, splits and config. tarn adds:
 
-- **Sidebar.** A vertical tab list in place of the tab bar. Tabs sit in workspaces you name, folded
-  or open; a tab running `claude`, `codex` or `opencode` shows the agent's icon.
+- **Sidebar.** A vertical tab list in place of the tab bar. Tabs stay ungrouped or sit in groups you
+  name (a group may be tied to a project folder); a tab running `claude`, `codex` or `opencode` shows the agent's icon.
 - **File viewer.** A click on a path in the terminal opens the file in a pane beside it: markdown
   rendered, mermaid diagrams, highlighted code, an editor with save, live reload when an agent
   rewrites the file.
@@ -34,7 +34,7 @@ Taken from the [browser demo](#try-the-demo) of the tarn window (dark theme).
 
 | Sidebar | File viewer |
 |---|---|
-| ![Switch tabs, fold a workspace, drag a tab into another workspace](docs/assets/gifs/sidebar.gif) | ![A click on a path opens the viewer; edit and save](docs/assets/gifs/viewer-edit.gif) |
+| ![Switch tabs, fold a group, drag a tab into another group](docs/assets/gifs/sidebar.gif) | ![A click on a path opens the viewer; edit and save](docs/assets/gifs/viewer-edit.gif) |
 | **Window layout** | **Agent status and card** |
 | ![A terminal dragged under another: the split turns horizontal](docs/assets/gifs/terminal-split.gif) | ![The dot turns orange; the card answers the permission request](docs/assets/gifs/agent-permission.gif) |
 
@@ -54,18 +54,19 @@ planned parts: [demo/README.md](demo/README.md).
 
 ## Stage
 
-`tarn-v1.0.0`: the first wave. What works:
+`tarn-v1.3.0`. What works:
 
-- a vertical sidebar with workspaces; a tab running `claude`, `codex` or `opencode` shows the
+- a vertical sidebar with optional groups; a tab running `claude`, `codex` or `opencode` shows the
   agent's icon, and Claude Code state shows as a colored dot with a card that answers a permission
   request or a question with one click;
 - a file viewer next to the terminal: markdown with mermaid, source view, editing, a files tree;
-- a settings window with Ghostty options and a Help page of keys;
+- a settings window with Ghostty options, a Help page of keys and switches for each module;
 - one notification per need of an agent, and cmd+U to jump to the session that waits for you;
-- the `tarn` command for agents: `tarn open`, `tarn ls`, `tarn notify`;
+- the `tarn` command for agents: `tarn open`, `ls`, `notify`, `new` and `run` (a split or a tab
+  beside the agent), `wait`, `read`, `close`, `skill`, `module ls`;
 - its own app, `Tarn.app`, next to Ghostty.
 
-Next: the second wave of `docs/spec.md` (hand-over between sessions, `tarn run`, subagents).
+Next: see [docs/roadmap.md](docs/roadmap.md).
 
 ## Install
 
@@ -99,7 +100,7 @@ Tests: `macos/build.nu --action test`; hook contract: `python3 -I plugin/test/ho
 |---|---|
 | how to install, upgrade, add the plugin and set up zsh | [docs/install.md](docs/install.md) |
 | what tarn is for and why it is built this way | [docs/spec.md](docs/spec.md) |
-| how windows, workspaces and layout behave | [docs/specs/windows-workspaces.md](docs/specs/windows-workspaces.md) |
+| how windows, groups and layout behave | [docs/specs/windows-workspaces.md](docs/specs/windows-workspaces.md) |
 | how the viewer pane behaves | [docs/specs/viewer-pane.md](docs/specs/viewer-pane.md) |
 | how it is built and where things live | [docs/architecture.md](docs/architecture.md) |
 | how one part works | [docs/modules/](docs/modules/), one file per module |

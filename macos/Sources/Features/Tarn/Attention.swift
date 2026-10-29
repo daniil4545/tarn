@@ -1,6 +1,4 @@
 import Foundation
-import OSLog
-import UserNotifications
 
 /// What a session needs from the user, in the words of `docs/spec.md` section 11.
 enum AgentNeed: Equatable {
@@ -28,8 +26,6 @@ extension AgentSession {
 /// Notifications of `docs/spec.md` R4: one per need, through Ghostty's own route, never for
 /// a surface the user looks at. The gate is pure; the registry feeds it.
 enum Attention {
-    private static let logger = Logger(subsystem: "tarn", category: "attention")
-
     /// A note longer than this is cut: it is shown in a banner and in `tarn ls`.
     static let maxNote = 500
 
@@ -87,11 +83,6 @@ enum Attention {
     @MainActor
     static func show(surface id: UUID, title: String, body: String) {
         guard let view = SessionRegistry.surfaceView(id) else { return }
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            if settings.authorizationStatus != .authorized {
-                logger.info("notifications are not authorized; the sidebar still marks the session")
-            }
-        }
         Ghostty.App.showDesktopNotification(view, title: title, body: body)
     }
 }

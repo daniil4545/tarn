@@ -1,20 +1,13 @@
-// Drag inside the sidebar. A tab row follows the pointer as in Warp: after a 4 px move the row
-// folds out of the list, a solid copy follows the pointer, and the rows slide apart to a gap where
-// it lands: before a row in its upper half, after it in its lower half, at the end of a workspace
-// over its header, at the end of the last workspace below the rows. Tab rows use pointer events,
-// not HTML5 drag: browsers lose the drop or cancel the drag when the list moves under it. A
-// workspace header goes into the gap nearest the pointer (HTML5 drag, a line). Slots follow
-// SidebarModel.dropSlot in the app.
+// Rows and group blocks share the pointer drag, lifted copy and animated gap.
 import { bus } from "./bus.js";
 
-let drag = null; // {ws: id} during a workspace drag
 let press = null; // {row, x, y, id, moved} from pointerdown until pointerup
 let tab = null; // {id, row, height, ghost, grab, at: {ws, before}, below} once a tab moves
 
 export function startSidebarDrag() {
   const sb = document.getElementById("sidebar");
   sb.addEventListener("pointerdown", (e) => {
-    const row = e.target.closest(".tab[data-tabid]");
+    const row = e.target.closest(".tab[data-tabid], .wsh:not(.flat)");
     if (e.button !== 0 || !row || e.target.closest("button") || sb.classList.contains("rail")) return;
     press = { row, x: e.clientX, y: e.clientY, id: e.pointerId, moved: false };
   });
@@ -25,7 +18,7 @@ export function startSidebarDrag() {
       if (press.moved || Math.hypot(e.clientX - press.x, e.clientY - press.y) < 4) return;
       if (!press.row.isConnected) return void (press = null);
       press.moved = true;
-      tab = lift(press.row, press);
+      tab = lift(press.row.matches(".wsh") ? press.row.closest(".wsblock") : press.row, press);
     }
     tab.ghost.style.left = `${e.clientX - tab.grab.x}px`;
     tab.ghost.style.top = `${e.clientY - tab.grab.y}px`;
@@ -43,34 +36,13 @@ export function startSidebarDrag() {
     const inside = sb.contains(document.elementFromPoint(e.clientX, e.clientY));
     const done = tab;
     endTab();
-    if (inside) bus.cmd("tab.move", { id: done.id, ...done.at });
+    if (inside && done.at) bus.cmd(done.workspace ? "ws.move" : "tab.move", { id: done.id, ...done.at });
   });
   document.addEventListener("pointercancel", () => { press = null; endTab(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") endTab(); });
 
   sb.addEventListener("dragstart", (e) => {
-    const head = e.target.closest(".wsh[data-wsh]");
-    if (!head) return;
-    drag = { ws: head.dataset.wsh };
-    document.body.classList.add("dragging");
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", "tarn-workspace");
-  });
-  sb.addEventListener("dragover", (e) => {
-    if (!drag) return;
-    e.preventDefault();
-    drawLine(e);
-  });
-  sb.addEventListener("drop", (e) => {
-    if (!drag) return;
-    e.preventDefault();
-    dropWorkspace(e);
-  });
-  document.addEventListener("dragend", () => {
-    if (!drag) return;
-    drag = null;
-    document.body.classList.remove("dragging");
-    document.querySelectorAll(".wsline").forEach((x) => x.remove());
+    if (e.target.closest(".wsh")) e.preventDefault();
   });
 }
 
@@ -81,9 +53,9 @@ function swallow(e) {
 // The row folds to nothing and the element below it takes the row's slot as a top margin, so
 // nothing moves until the pointer does.
 function lift(row, at) {
-  let owner = row;
-  while (!owner.dataset.wsh) owner = owner.previousElementSibling;
+  const owner = row.closest("[data-block]");
   const r = row.getBoundingClientRect();
+  const workspace = row.matches(".wsblock");
   const ghost = Object.assign(row.cloneNode(true), { className: `${row.className} dragghost` });
   Object.assign(ghost.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px` });
   ghost.removeAttribute("data-tabid");
@@ -92,8 +64,10 @@ function lift(row, at) {
   bus.emit("drag:start", {});
   // The slot is the row and the space between rows.
   const t = {
-    id: row.dataset.tabid, row, height: r.height + parseFloat(getComputedStyle(row.parentElement).rowGap || 0), ghost,
-    grab: { x: at.x - r.left, y: at.y - r.top }, at: { ws: owner.dataset.wsh, before: nextTab(row) }, below: null,
+    id: workspace ? row.dataset.block : row.dataset.tabid, workspace, row,
+    height: r.height + parseFloat(getComputedStyle(row.parentElement).rowGap || 0) + (workspace ? 8 : 0), ghost,
+    grab: { x: at.x - r.left, y: at.y - r.top },
+    at: workspace ? { before: nextShown(row)?.dataset.block || null } : { ws: owner.dataset.block, before: nextTab(row) }, below: null,
   };
   row.classList.add("lifted");
   openGap(t, nextShown(row), false);
@@ -110,7 +84,7 @@ function endTab() {
   bus.emit("drag:end", {});
 }
 
-// The gap stands above `below`: a tab row, the next workspace header or the New workspace button.
+// The gap stands above `below`: a row, a group's end, a block or the New group button.
 // Its own margin is read with the slide off, so a margin still sliding back does not count.
 function openGap(t, below, slide) {
   if (t.below) t.below.style.marginTop = "";
@@ -141,46 +115,50 @@ function tabSlot(sb, el, y) {
   if (!el || !sb.contains(el)) return null;
   const end = document.getElementById("wsNew");
   if (el.closest("#wsNew") || (el === sb && y >= end.getBoundingClientRect().top)) {
-    const heads = sb.querySelectorAll(".wsh[data-wsh]");
-    return heads.length ? { ws: heads[heads.length - 1].dataset.wsh, before: null, below: end } : null;
+    return { ws: "loose", before: null, below: end };
   }
   const head = el.closest(".wsh[data-wsh]"), row = el.closest(".tab[data-tabid]");
-  if (head) {
-    let below = nextShown(head);
-    while (below.matches(".tab[data-tabid]")) below = nextShown(below);
-    return { ws: head.dataset.wsh, before: null, below };
+  if (head) return null;
+  if (el === sb) {
+    const below = [...sb.querySelectorAll(".wsblock")].find((b) => y < b.getBoundingClientRect().top) || end;
+    return { ws: "loose", before: below.dataset.block || null, below };
   }
   if (!row || row.classList.contains("lifted")) return null;
-  let owner = row;
-  while (!owner.dataset.wsh) owner = owner.previousElementSibling;
+  const owner = row.closest("[data-block]");
   const r = row.getBoundingClientRect();
-  if (y < r.top + r.height / 2) return { ws: owner.dataset.wsh, before: row.dataset.tabid, below: row };
-  return { ws: owner.dataset.wsh, before: nextTab(row), below: nextShown(row) };
+  if (y < r.top + r.height / 2) return { ws: owner.dataset.block, before: row.dataset.tabid, below: row };
+  return { ws: owner.dataset.block, before: nextTab(row), below: nextShown(row) };
 }
 
 function moveGap(sb, el, y) {
-  const at = tabSlot(sb, el, y);
-  if (!at || at.below === tab.below) return;
-  tab.at = { ws: at.ws, before: at.before };
-  openGap(tab, at.below, true);
+  if (!el || !sb.contains(el)) {
+    if (tab.below) tab.below.style.marginTop = "";
+    tab.below = tab.at = null;
+    return;
+  }
+  const at = tab.workspace ? slot(sb, el, y) : tabSlot(sb, el, y);
+  if (!at) return;
+  tab.at = tab.workspace ? { before: at.before, beforeTab: at.beforeTab ?? null } : { ws: at.ws, before: at.before };
+  if (at.below !== tab.below) openGap(tab, at.below, true);
 }
 
-// Slot i is the gap before group i; a group spans from its header to the next header.
-function slot(y) {
-  const sb = document.getElementById("sidebar"), heads = [...sb.querySelectorAll(".wsh[data-wsh]")];
-  const tops = [...heads.map((h) => h.getBoundingClientRect().top), document.getElementById("wsNew").getBoundingClientRect().top];
-  const i = heads.filter((_, n) => (tops[n] + tops[n + 1]) / 2 < y).length;
-  return { before: heads[i]?.dataset.wsh ?? null, y: tops[i] - sb.getBoundingClientRect().top + sb.scrollTop };
-}
-
-function drawLine(e) {
-  document.querySelectorAll(".wsline").forEach((x) => x.remove());
-  const sb = document.getElementById("sidebar"), line = Object.assign(document.createElement("div"), { className: "wsline" });
-  line.style.top = `${slot(e.clientY).y - 4}px`;
-  sb.append(line);
-}
-
-function dropWorkspace(e) {
-  const id = drag.ws, { before } = slot(e.clientY);
-  if (before !== id) bus.cmd("ws.move", { id, before });
+// Slot i is the gap before block i: a group from its header, an ungrouped block (hidden header)
+// from its first row, up to the next block.
+function slot(sb, el, y) {
+  const end = document.getElementById("wsNew"), block = el.closest(".wsblock");
+  let below = end;
+  const row = el.closest(".wsblock:not(.group) .tab[data-tabid]");
+  if (row) {
+    // Ungrouped rows split by their own halves, as for a tab.
+    const r = row.getBoundingClientRect();
+    below = y < r.top + r.height / 2 ? row : nextShown(row);
+    if (below.matches(".tab[data-tabid]")) return { before: null, beforeTab: below.dataset.tabid, below };
+    below = nextShown(block);
+  } else if (block && !block.classList.contains("lifted")) {
+    const r = block.getBoundingClientRect();
+    below = y < r.top + r.height / 2 ? block : nextShown(block);
+  } else if (el === sb) {
+    below = [...sb.querySelectorAll(".wsblock:not(.lifted)")].find((b) => y < b.getBoundingClientRect().top) || end;
+  } else if (!el.closest("#wsNew")) return null;
+  return { before: below.dataset.block || null, below };
 }

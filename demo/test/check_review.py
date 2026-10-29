@@ -345,11 +345,28 @@ def model1_workspace_rules(base):
         )
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "ws.delete", {"id": "w1"})
-        first = ws(pg)["wss"][0]
+        loose = ws(pg)["wss"][0]
         check(
-            "M2 deleting the first workspace puts its tabs first in the one below",
-            first["id"] == "w2" and first["tabs"] == ["t1", "t2", "t3", "t4", "t5"],
-            str(first["tabs"]),
+            "M2 deleting a group keeps its tabs ungrouped where they stood",
+            loose.get("loose")
+            and loose["tabs"] == ["t1", "t2", "t3", "t4"]
+            and ws(pg)["wss"][1]["id"] == "w2",
+            str(ws(pg)["wss"]),
+        )
+    with app_page(base) as (pg, _e, _r):
+        cmd(pg, "tab.move", {"id": "t2", "ws": "loose", "after": "w1"})
+        blocks = [
+            (w["id"] if not w.get("loose") else "", w["tabs"]) for w in ws(pg)["wss"]
+        ]
+        indent = pg.evaluate(
+            "['t1', 't2'].map((id) => getComputedStyle(document.querySelector(`.tab[data-tabid=${id}]`)).marginLeft)"
+        )
+        check(
+            "M2a Remove from group puts the tab right below its group, ungrouped and not indented",
+            blocks
+            == [("w1", ["t1", "t3", "t4"]), ("", ["t2"]), ("w2", ["t5"]), ("", ["t6"])]
+            and indent == ["12px", "0px"],
+            f"{blocks} {indent}",
         )
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "ws.fold", {"id": "w2"})
@@ -366,8 +383,8 @@ def model1_workspace_rules(base):
         cmd(pg, "config.set", {"key": "tab-style", "value": "top"})
         sub = pg.text_content(".titlebar .sub")
         check(
-            "M4 the title bar subtitle is empty in the top style",
-            sub == "" and pg.title() == pg.text_content(".titlebar .ttl"),
+            "M4 the title bar subtitle names the workspace in the top style",
+            sub == "tarn",
             repr(sub),
         )
     with app_page(base) as (pg, _e, _r):
@@ -570,9 +587,17 @@ def keys_table(base):
         )
         press(pg, CMD_B)
         check(
-            "B2 Cmd+B on a shown pane with no file hides it (never closes), keyboard in the terminal",
-            n_panes(pg) == 0 and n_hidden(pg) == 1 and where(pg) == "p1",
+            "B2 Cmd+B on a shown pane with no file closes it, keyboard in the terminal",
+            n_panes(pg) == 0 and n_hidden(pg) == 0 and where(pg) == "p1",
             f"{n_panes(pg)} {n_hidden(pg)} {where(pg)}",
+        )
+        press(pg, CMD_B, False)
+        pg.wait_for_function(LOADED)
+        settle(pg)
+        cmd(
+            pg,
+            "viewer.hide",
+            {"id": pg.locator(VIEWER).first.get_attribute("data-leaf")},
         )
         press(pg, CMD_B, False)
         pg.wait_for_function(LOADED)
@@ -613,16 +638,24 @@ def keys_table(base):
         with_file(pg)
         press(pg, CMD_B)
         check(
-            "B4 Cmd+B on a pane with files hides the whole pane, keyboard in the terminal",
-            n_panes(pg) == 0 and n_hidden(pg) == 1 and where(pg) == "p1",
-            f"{n_panes(pg)} {n_hidden(pg)} {where(pg)}",
+            "B4 Cmd+B with a file and hidden tree shows the tree and keeps the file",
+            n_panes(pg) == 1
+            and n_hidden(pg) == 0
+            and f"{REPO}/docs/spec.md" in file_tabs(pg)
+            and pg.frame_locator(f"{VIEWER} iframe")
+            .first.locator("#vtree .tree")
+            .is_visible(),
+            str(file_tabs(pg)),
         )
-        press(pg, CMD_B, False)
-        pg.wait_for_function(LOADED)
-        settle(pg)
+        press(pg, CMD_B)
         check(
-            "B5 Cmd+B shows it back with its tabs",
-            n_panes(pg) == 1 and f"{REPO}/docs/spec.md" in file_tabs(pg),
+            "B5 Cmd+B with a file and visible tree hides only the tree",
+            n_panes(pg) == 1
+            and n_hidden(pg) == 0
+            and f"{REPO}/docs/spec.md" in file_tabs(pg)
+            and not pg.frame_locator(f"{VIEWER} iframe")
+            .first.locator("#vtree .tree")
+            .is_visible(),
             str(file_tabs(pg)),
         )
     with app_page(base) as (pg, _e, _r):
@@ -661,7 +694,7 @@ def keys_fallback_help_hidden_edits(base):
         press(pg, "Control+Alt+b")
         check(
             "F1 Ctrl+Alt+B does what Cmd+B does",
-            opened and n_panes(pg) == 0 and n_hidden(pg) == 1,
+            opened and n_panes(pg) == 0 and n_hidden(pg) == 0,
             f"{opened} {n_panes(pg)}",
         )
         for gone in ("Alt+Cmd+B", "Shift+Cmd+E"):
@@ -683,7 +716,11 @@ def keys_fallback_help_hidden_edits(base):
         )
     with app_page(base) as (pg, _e, _r):
         dirty_viewer(pg)
-        press(pg, CMD_B)
+        cmd(
+            pg,
+            "viewer.hide",
+            {"id": pg.locator(VIEWER).first.get_attribute("data-leaf")},
+        )
         hid = n_hidden(pg, "t3")
         cmd(pg, "tab.close", {"id": "t3"})
         buttons = pg.locator(".ask-dialog button").all_inner_texts()
@@ -812,12 +849,12 @@ def viewer_follows_app_arrows_and_code(base):
 def viewer_switch(base):
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "settings.open", {})
-        pg.click('#setNav [data-sec="viewer"]')
+        pg.click('#setNav [data-sec="modules"]')
         check(
-            "V0 Settings has a File Viewer section with the switch on",
-            pg.is_checked("#g-file-viewer"),
+            "V0 Settings Modules has the File viewer switch on",
+            pg.is_checked("#m-viewer"),
         )
-        pg.uncheck("#g-file-viewer")
+        pg.uncheck("#m-viewer")
         pg.keyboard.press("Escape")
         shell_pane = new_pane(pg, "~/code/tarn")
         until(pg, shell_pane, "%")
@@ -844,20 +881,22 @@ def viewer_switch(base):
         cmd(pg, "viewer.open", {"path": "README.md"})
         pg.wait_for_selector(VIEWER)
         pg.evaluate("window.bus.cmd('config.set', {key: 'file-viewer', value: false})")
-        cmd(pg, "viewer.open", {"path": "docs/spec.md"})
         settle(pg)
         check(
-            "V4 an open pane keeps working with the switch off",
-            f"{REPO}/docs/spec.md" in file_tabs(pg) and n_panes(pg) == 1,
-            str(file_tabs(pg)),
+            "V4 an open pane is hidden with the switch off and keeps its tab",
+            n_panes(pg) == 0
+            and pg.evaluate("Object.keys(__tarn.viewer().state().panes).length") == 1,
         )
         press(pg, CMD_B)
-        press(pg, CMD_B, False)
+        settle(pg)
+        check("V5 Cmd+B does nothing with the switch off", n_panes(pg) == 0)
+        pg.evaluate("window.bus.cmd('config.set', {key: 'file-viewer', value: true})")
         pg.wait_for_function(LOADED)
         settle(pg)
         check(
-            "V5 Cmd+B hides and shows an existing pane with the switch off",
-            n_panes(pg) == 1,
+            "V6 the pane comes back with its file tab when the switch is on",
+            n_panes(pg) == 1 and f"{REPO}/README.md" in file_tabs(pg),
+            str(file_tabs(pg)),
         )
 
 

@@ -1,10 +1,10 @@
-// The settings window: Tabs, three sections of Ghostty options, Help. Counterpart of
-// TarnSettings.swift. A changed option always writes its line to tarn's own config file
-// (shown under Windows); only Reset removes it.
+// Settings window as TarnSettings.swift. A changed option writes its line to tarn's own
+// config file (shown under Windows); only Reset removes it.
 import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { OPTIONS, DEFAULTS, isWritten } from "./config.js";
-import { SECTIONS, GHOSTTY, APPLIES, TAB_STYLES, TAB_ROWS } from "./settings-data.js";
+import { SECTIONS, GHOSTTY, APPLIES, TAB_ROWS, AGENTS } from "./settings-data.js";
+import { MODULES, stored, isOn } from "./modules.js";
 import { helpGroups, symbols } from "./settings-help.js";
 import { esc } from "./esc.js";
 import { BASE_THEMES, BASE_SINGLES, THEME_NAMES, themeFor } from "./themes.js";
@@ -14,7 +14,7 @@ const ALL = Object.values(GHOSTTY).flat();
 
 let rows = [];
 let root = null;
-let section = "tabs";
+let section = "modules";
 let opener = null;
 let replacing = false;
 const problems = new Map(); // option key -> the line shown under a rejected input
@@ -83,19 +83,46 @@ function optionSection(name, title) {
   return `<section data-pane="${name}" hidden><h3>${title}</h3><div class="setgroup">${GHOSTTY[name].map(optionRow).join("")}</div>${tail}</section>`;
 }
 
-function tabsSection() {
-  const style = read("config")["tab-style"];
-  const radios = TAB_STYLES.map(([value, name, text]) =>
-    `<label><input type="radio" name="tabstyle" value="${value}"${style === value ? " checked" : ""}><span><b>${name}</b><small>${text}</small></span></label>`);
+// One row per module: title, detail, switch. A module whose needed module is off keeps its
+// stored value, is greyed out and says "needs <module>". The Sidebar switch writes `tab-style`.
+function moduleRow(m) {
+  const config = read("config"), needed = MODULES.find((x) => x.id === m.needs);
+  const blocked = needed !== undefined && !isOn(needed.id, config);
+  const attr = m.key ? `data-gkey="${m.key}"` : "data-sidebar";
+  return `<div class="modrow${blocked ? " blocked" : ""}" data-module="${m.id}"><label for="m-${m.id}">${m.title}<small>${m.detail}</small></label><span class="needs">${blocked ? `needs ${needed.title}` : ""}</span><input type="checkbox" role="switch" id="m-${m.id}" ${attr}${stored(m.id, config) ? " checked" : ""}${blocked ? " disabled" : ""}></div>${m.id === "sidebar" ? sidebarOptions() : ""}`;
+}
+
+function agentLine(a) {
+  const checks = a.checks.map(([name, ok]) => `<span class="chk ${ok ? "ok" : "bad"}"><i></i>${name}</span>`).join("");
+  return `<div class="agent-line" data-agent="${a.name}"><span>${a.name} ${a.version}</span><span class="checks">${checks}</span></div>`;
+}
+
+function modulesSection() {
+  return `<section data-pane="modules"><h3>Modules</h3><div class="setgroup">${MODULES.map(moduleRow).join("")}</div><h4>Agents</h4><div class="setgroup">${AGENTS.map(agentLine).join("")}</div><p class="setnote">Each switch applies to every open window at once.</p></section>`;
+}
+
+// After any config change: switches and greyed rows follow the stored values (in place, so a
+// focused switch keeps the keyboard).
+function syncModules() {
+  const config = read("config");
+  root.querySelectorAll(".modrow").forEach((row) => {
+    const m = MODULES.find((x) => x.id === row.dataset.module), needed = MODULES.find((x) => x.id === m.needs);
+    const blocked = needed !== undefined && !isOn(needed.id, config);
+    row.classList.toggle("blocked", blocked);
+    row.querySelector("input").checked = stored(m.id, config);
+    row.querySelector("input").disabled = blocked;
+    row.querySelector(".needs").textContent = blocked ? `needs ${needed.title}` : "";
+  });
+  const options = root.querySelector("#sidebarOptions");
+  options.disabled = !isOn("sidebar", config);
+  options.querySelectorAll("input").forEach((input) => { input.checked = input.value === config["tab-rows"]; });
+}
+
+function sidebarOptions() {
   const rows = read("config")["tab-rows"];
   const sizes = TAB_ROWS.map(([value, name, text]) =>
     `<label><input type="radio" name="tabrows" value="${value}"${rows === value ? " checked" : ""}><span><b>${name}</b><small>${text}</small></span></label>`);
-  return `<section data-pane="tabs"><h3>Tabs</h3><div class="setgroup"><div class="setrow"><span>Tab style</span><div class="radios">${radios.join("")}</div></div><div class="setrow"><span>Row size</span><div class="radios">${sizes.join("")}</div></div></div><p class="setnote">Applies to every open window at once.</p></section>`;
-}
-
-function viewerSection() {
-  const on = read("config")["file-viewer"];
-  return `<section data-pane="viewer" hidden><h3>File Viewer</h3><div class="setgroup"><div class="setrow"><label for="g-file-viewer">File viewer<small>Cmd+B, path clicks and agents open files in a pane beside the terminal. When off, path clicks open files in their default app; an open pane stays until you close it.</small></label><input type="checkbox" id="g-file-viewer" data-gkey="file-viewer"${on ? " checked" : ""}></div></div></section>`;
+  return `<fieldset id="sidebarOptions"${isOn("sidebar") ? "" : " disabled"}><legend>Row size</legend><div class="radios">${sizes.join("")}</div></fieldset>`;
 }
 
 function helpSection() {
@@ -108,7 +135,7 @@ function helpSection() {
 
 function build() {
   const nav = SECTIONS.map(([name, title]) => `<button class="setitem" data-sec="${name}">${title}</button>`).join("");
-  const sections = tabsSection() + viewerSection() + ["appearance", "terminal", "windows"].map((n) => optionSection(n, SECTIONS.find(([k]) => k === n)[1])).join("") + helpSection();
+  const sections = modulesSection() + ["appearance", "terminal", "windows"].map((n) => optionSection(n, SECTIONS.find(([k]) => k === n)[1])).join("") + helpSection();
   root.innerHTML = `<div class="setwin" role="dialog" aria-modal="true" aria-label="Settings"><div class="setside"><div class="lights"><i id="settingsClose" title="Close"></i><i></i><i></i></div><nav id="setNav" aria-label="Settings sections">${nav}</nav><button class="setcfg" id="ghosttyConfig" title="All Ghostty options, keys included. Opens the Ghostty config file.">Ghostty Config…</button></div><div class="setmain" id="setMain">${sections}</div></div>`;
 }
 
@@ -191,7 +218,7 @@ function onChange(e) {
     problems.delete(key);
     return bus.cmd("config.set", { key, value });
   }
-  if (e.target.name === "tabstyle") bus.cmd("config.set", { key: "tab-style", value: e.target.value });
+  if (e.target.dataset?.sidebar !== undefined) bus.cmd("config.set", { key: "tab-style", value: e.target.checked ? "sidebar" : "top" });
   if (e.target.name === "tabrows") bus.cmd("config.set", { key: "tab-rows", value: e.target.value });
 }
 
@@ -239,7 +266,7 @@ export function startSettings(keyRows) {
     e.stopImmediatePropagation();
     close();
   }, true);
-  bus.on("config:changed", ({ key }) => { if (!root.hidden) refreshRow(key); });
+  bus.on("config:changed", ({ key }) => { if (!root.hidden) { refreshRow(key); syncModules(); } });
   bus.handle("settings.open", open);
   bus.handle("config.reload", reload);
 }

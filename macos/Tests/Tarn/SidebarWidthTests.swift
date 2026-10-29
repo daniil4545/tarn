@@ -57,6 +57,7 @@ struct SidebarWidthTests {
         for drag in drags {
             var probe: NSView?
             let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+            window.isReleasedWhenClosed = false
             let host = NSHostingView(rootView: SidebarLayout(model: SidebarModel(), ghostty: ghostty, dragWidth: drag) {
                 Probe { probe = $0 }
             })
@@ -106,6 +107,7 @@ struct SidebarWidthTests {
         defaults.removeObject(forKey: Sidebar.collapsedKey)
         defaults.removeObject(forKey: Sidebar.widthKey)
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 600), styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
         let host = NSHostingView(rootView: SidebarLayout(model: SidebarModel(), ghostty: Ghostty.App()) { Probe() })
         window.contentView = host
         window.orderFront(nil)

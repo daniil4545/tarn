@@ -40,7 +40,7 @@ Event flow:
 1. The app puts `TARN_SURFACE=<uuid>` in each shell environment.
 2. `hook.sh` exits at once without `TARN_SURFACE` or the socket. Otherwise it wraps stdin as `{"version":1,"surface":...,"event":...}`, sends it with `nc -U -w 1` in the background and waits about 40 ms, so events keep order.
 3. `receive` drops lines that are not a JSON object with `version` 1, a UUID surface and an event name, and events for unknown surfaces.
-4. For `PermissionRequest` with `"reply":true`, the request joins `pending`. A question the card cannot answer (several questions, multi-select) gets an empty reply at once, so Claude Code shows its dialog.
+4. For `PermissionRequest` with `"reply":true`, the request joins `pending`. A question the card cannot answer (several questions, multi-select) gets an empty reply at once, so Claude Code shows its dialog. With the Permission card module off (or the Sidebar off, which it needs) every request gets the empty reply at once; switching the module off releases the waiting hooks the same way and clears `answerable`, and the card keeps title, folder and state.
 5. `PendingAnswer.remaining` drops requests: a finished tool call drops its own; the end of a turn (`UserPromptSubmit`, `StopFailure`, `SessionEnd`, `Stop` without background tasks of the main agent) drops all. A dropped hook gets an empty reply.
 6. `AgentSession.handle` applies the transition; `show(waiting:)` forces `permission` with the oldest waiting request and marks it `answerable`.
 7. If the session changed: on a state change `since` resets and `seen` is set from focus; the session is stored and the notification posts.

@@ -43,7 +43,7 @@ function setup({ cols = 100, cwd = REPO, history = [] } = {}) {
     write: (d) => screen.write(d),
     emit: (name, data) => events.push([name, data]),
     identity: { user: "you", host: "mac", home: HOME, start: cwd },
-    sessions: () => [],
+    panes: () => [],
     paneId: "p1",
   });
   shell.start();
@@ -200,18 +200,23 @@ test("tarn open emits viewer.open and reports a missing file", () => {
   assert.equal(events.filter(([n]) => n === "viewer.open").length, 1);
 });
 
-test("only tarn new says it is planned, on its first run", () => {
-  const { screen, run } = setup();
-  run("tarn --help");
-  assert.match(screen.text(), /usage: tarn .*new \(planned\)/);
-  run("clear");
-  run("tarn ls");
-  assert.doesNotMatch(screen.text(), /planned:/);
-  run("tarn new");
-  assert.match(screen.text(), /planned: not in the app yet/);
-  run("clear");
-  run("tarn new");
-  assert.doesNotMatch(screen.text(), /planned:/);
+test("tarn new asks for a split below, or right, and needs a command", () => {
+  const { screen, run, events } = setup();
+  run("tarn new -- npm test");
+  run("tarn new --right --cwd /tmp -- sh -c 'a && b'");
+  assert.deepEqual(events.filter(([n]) => n === "pane.new").map(([, d]) => d), [{ right: false }, { right: true }]);
+  for (const line of ["tarn new", "tarn new npm test", "tarn new --tab -- x"]) {
+    run("clear");
+    run(line);
+    assert.match(screen.text(), /usage: tarn .*new \[--right\]/, line);
+  }
+  assert.equal(events.filter(([n]) => n === "pane.new").length, 2);
+});
+
+test("tarn run asks for a split with the command typed, not submitted", () => {
+  const { run, events } = setup();
+  run("tarn run --right -- make install");
+  assert.deepEqual(events.filter(([n]) => n === "pane.new").map(([, d]) => d), [{ right: true, typed: "make install" }]);
 });
 
 test("sleep runs on the clock and ctrl-C stops it", () => {

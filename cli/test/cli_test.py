@@ -125,12 +125,21 @@ def main() -> int:
             req,
         )
 
-        # ls: text rows are decoded, --json prints the reply line.
-        rows = '1  tarn  main  permission  2m\n2  a"b  -  idle  3s\n'
-        (code, out, _), req = with_server(home, reply(text=rows), ["ls"], surface=None)
+        # ls: names the caller, text rows are decoded, --json prints the reply line.
+        rows = (
+            "PANE  TAB  GROUP  TITLE  CWD  PROCESS  BRANCH  STATE\n"
+            '1     2    tarn   a"b    /w   zsh      main    -\n'
+        )
+        (code, out, _), req = with_server(home, reply(text=rows), ["ls"])
         check("ls text", code == 0 and out == rows, (code, out))
-        check("ls request", req == [{"version": 1, "cmd": "ls", "json": False}], req)
-        line = reply(sessions=[{"project": "tarn", "note": "x\\ny"}])
+        check(
+            "ls request",
+            req == [{"version": 1, "cmd": "ls", "surface": SURFACE, "json": False}],
+            req,
+        )
+        line = reply(
+            panes=[{"pane": SURFACE, "group": "tarn", "folder": None, "title": "x\\ny"}]
+        )
         (code, out, _), req = with_server(home, line, ["ls", "--json"])
         check(
             "ls json",
@@ -139,6 +148,117 @@ def main() -> int:
         )
         (code, out, _), _ = with_server(home, reply(text=""), ["ls"])
         check("ls empty", code == 0 and out == "", out)
+
+        # new: options, the command as argv, the pane id printed.
+        (code, out, err), req = with_server(
+            home, reply(pane=SURFACE), ["new", "--", "sh", "-c", 'a "b" && c']
+        )
+        check("new prints the pane", (code, out, err) == (0, SURFACE + "\n", ""), out)
+        check(
+            "new request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "new",
+                    "surface": SURFACE,
+                    "right": False,
+                    "argv": ["sh", "-c", 'a "b" && c'],
+                }
+            ],
+            req,
+        )
+        (code, _, _), req = with_server(
+            home, reply(pane=SURFACE), ["new", "--right", "--cwd", "w", "--", "ls"]
+        )
+        check(
+            "new right cwd",
+            code == 0 and req[0]["right"] is True and req[0]["cwd"] == f"{home}/w",
+            req,
+        )
+        # spec: agent-cli B2 - a newline or a carriage return is refused before the socket.
+        for arg in ["a\nb", "a\rb"]:
+            code, out, err = run(home, ["new", "--", "echo", arg])
+            check(
+                f"new one line {arg!r}",
+                (code, out, err) == (1, "", "tarn: command must be one line\n"),
+                err,
+            )
+
+        # run: the options and the command line rule of new, cmd "run" (agent-cli 4.5).
+        (code, out, err), req = with_server(
+            home, reply(pane=SURFACE), ["run", "--right", "--cwd", "w", "--", "echo", "hi"]
+        )
+        check("run prints the pane", (code, out, err) == (0, SURFACE + "\n", ""), out)
+        check(
+            "run request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "run",
+                    "surface": SURFACE,
+                    "right": True,
+                    "cwd": f"{home}/w",
+                    "argv": ["echo", "hi"],
+                }
+            ],
+            req,
+        )
+        for arg in ["a\nb", "a\rb"]:
+            code, out, err = run(home, ["run", "--", "echo", arg])
+            check(
+                f"run one line {arg!r}",
+                (code, out, err) == (1, "", "tarn: command must be one line\n"),
+                err,
+            )
+
+        # spec: docs/specs/agent-cli.md U5
+        for cmd in ["new", "run"]:
+            for flags in [["--right", "--tab"], ["--tab", "--right"]]:
+                code, out, err = run(home, [cmd, *flags, "--", "ls"])
+                check(
+                    f"{cmd} right excludes tab {flags}",
+                    (code, out, err)
+                    == (1, "", "tarn: --right and --tab exclude each other\n"),
+                )
+            (code, out, err), req = with_server(
+                home, reply(pane=SURFACE), [cmd, "--tab", "--title", "", "--", "ls"]
+            )
+            check(
+                f"{cmd} empty title reaches app",
+                (code, out, err) == (0, SURFACE + "\n", "")
+                and req[0]["tab"] is True
+                and req[0]["title"] == "",
+                req,
+            )
+            (code, out, err), req = with_server(
+                home,
+                reply(pane=SURFACE),
+                [cmd, "--tab", "--title", 'a "tab"', "--cwd", "w", "--", "echo", "hi"],
+            )
+            check(
+                f"{cmd} tab",
+                (code, out, err) == (0, SURFACE + "\n", "")
+                and req[0]["tab"] is True
+                and req[0]["title"] == 'a "tab"'
+                and req[0]["cwd"] == f"{home}/w"
+                and req[0]["cmd"] == cmd
+                and req[0]["argv"] == ["echo", "hi"],
+                req,
+            )
+            (code, out, err), _ = with_server(
+                home, reply(error="put this tab in a group first"), [cmd, "--tab", "--", "ls"]
+            )
+            check(
+                f"{cmd} ungrouped",
+                (code, out, err) == (1, "", "tarn: put this tab in a group first\n"),
+            )
+            code, out, err = run(home, [cmd, "--title", "t", "--", "ls"])
+            check(
+                f"{cmd} title needs tab",
+                (code, out, err) == (1, "", "tarn: --title needs --tab\n"),
+            )
 
         # error replies: decoded text, stderr only, exit 1.
         err_text = 'no such file: /x "y" \\ z\nline'
@@ -150,16 +270,206 @@ def main() -> int:
         )
         (code, out, err), _ = with_server(home, reply(error="é\x01"), ["notify", "x"])
         check("error unicode", code == 1 and err == "tarn: é\x01\n", err)
+        # spec: agent-cli B5 - the reply's code is the exit code.
+        no_pane = reply(error='no pane matched: "code":5', code=4)
+        (code, out, err), _ = with_server(home, no_pane, ["ls"])
+        check(
+            "error code",
+            (code, out, err) == (4, "", 'tarn: no pane matched: "code":5\n'),
+            (code, out, err),
+        )
+
+        # wait: the text line, --json, the timeout request field, the app's exit codes (6, 9, 4).
+        done = reply(
+            text="error  exit 2  1.5s", state="error", exit_code=2, duration_ms=1500
+        )
+        (code, out, err), req = with_server(
+            home, done, ["wait", SURFACE, "--timeout", "30"]
+        )
+        check("wait text", (code, out, err) == (0, "error  exit 2  1.5s\n", ""), out)
+        check(
+            "wait request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "wait",
+                    "surface": SURFACE,
+                    "pane": SURFACE,
+                    "timeout": 30,
+                }
+            ],
+            req,
+        )
+        (code, out, _), _ = with_server(home, done, ["wait", "--json", SURFACE])
+        check("wait json", code == 0 and json.loads(out)["exit_code"] == 2, out)
+        for text, status in [
+            ("exit code unknown", 6),
+            ("no shell integration", 6),
+            ("timeout", 9),
+        ]:
+            (code, out, err), _ = with_server(
+                home, reply(error=text, code=status), ["wait", SURFACE]
+            )
+            check(
+                f"wait {text}", (code, out, err) == (status, "", f"tarn: {text}\n"), err
+            )
+        # the wait outlives TARN_TIMEOUT: the answer comes later than the 1 s bound.
+        (code, out, _), _ = with_server(
+            home, done, ["wait", SURFACE], delay=2, TARN_TIMEOUT="1"
+        )
+        check("wait ignores TARN_TIMEOUT", code == 0 and out.startswith("error"), out)
+        # --timeout takes ^[0-9]+(\.[0-9]+)?$ only; a bad one sends nothing.
+        for bad in [
+            ".5",
+            "5.",
+            ".",
+            "-1",
+            "1e99",
+            "",
+            "1.2.3",
+            "abc",
+            "007",
+            "00",
+            "01.5",
+        ]:
+            (code, out, err), req = with_server(
+                home, done, ["wait", SURFACE, "--timeout", bad]
+            )
+            check(
+                f"bad timeout {bad!r}",
+                (code, out, err) == (1, "", "tarn: bad timeout\n") and req == [],
+                (code, err, req),
+            )
+        for good in ["0", "0.5", "10", "1.5", "99999999999999999999"]:
+            (code, _, _), req = with_server(
+                home, done, ["wait", SURFACE, "--timeout", good]
+            )
+            check(f"timeout {good}", code == 0 and len(req) == 1, (code, req))
+        code, out, err = run(home, ["wait", SURFACE], surface=None)
+        check("wait without surface", (code, err) == (1, "tarn: not in a tarn tab\n"))
+
+        # read: the text as is, the lines request field, a bad --lines sends nothing.
+        screen = reply(text='b\n\t"c" \\ é\n')
+        (code, out, err), req = with_server(
+            home, screen, ["read", SURFACE, "--lines", "2"]
+        )
+        check("read text", (code, out, err) == (0, 'b\n\t"c" \\ é\n', ""), out)
+        check(
+            "read request",
+            req
+            == [
+                {
+                    "version": 1,
+                    "cmd": "read",
+                    "surface": SURFACE,
+                    "pane": SURFACE,
+                    "lines": 2,
+                }
+            ],
+            req,
+        )
+        (code, _, _), req = with_server(home, screen, ["read", "--lines", "3", SURFACE])
+        check("read lines first", code == 0 and req[0]["lines"] == 3, req)
+        (code, _, _), req = with_server(home, screen, ["read", SURFACE])
+        check("read default", code == 0 and "lines" not in req[0], req)
+        (code, out, _), _ = with_server(home, reply(text=""), ["read", SURFACE])
+        check("read empty", (code, out) == (0, ""), out)
+        for bad in ["0", "-1", "x", "", "1.5", "007", "1e3"]:
+            (code, out, err), req = with_server(
+                home, screen, ["read", SURFACE, "--lines", bad]
+            )
+            check(
+                f"bad lines {bad!r}",
+                (code, out, err) == (1, "", "tarn: bad lines\n") and req == [],
+                (code, err, req),
+            )
+        (code, out, err), _ = with_server(
+            home, reply(error=f"no pane matched: {SURFACE}", code=4), ["read", SURFACE]
+        )
+        check("read no pane", (code, out) == (4, "") and "no pane matched" in err, err)
+
+        # close: the request, nothing on stdout, exit 4 for a foreign pane.
+        (code, out, err), req = with_server(home, OK, ["close", SURFACE])
+        check("close", (code, out, err) == (0, "", ""), (code, out, err))
+        check(
+            "close request",
+            req
+            == [{"version": 1, "cmd": "close", "surface": SURFACE, "pane": SURFACE}],
+            req,
+        )
+        (code, out, err), _ = with_server(
+            home, reply(error=f"no pane matched: {SURFACE}", code=4), ["close", SURFACE]
+        )
+        check("close no pane", (code, out) == (4, "") and "no pane matched" in err, err)
+
+        # module ls: cmd "modules", text or the reply line (agent-cli 4.9).
+        rows = "MODULE   STATE\nsidebar  on\n"
+        (code, out, _), req = with_server(home, reply(text=rows), ["module", "ls"])
+        check("module ls text", (code, out) == (0, rows), (code, out))
+        check(
+            "module ls request",
+            req
+            == [{"version": 1, "cmd": "modules", "surface": SURFACE, "json": False}],
+            req,
+        )
+        line = reply(modules=[{"module": "sidebar", "state": "on"}])
+        (code, out, _), req = with_server(home, line, ["module", "ls", "--json"])
+        check(
+            "module ls json",
+            code == 0 and out.encode() == line and req[0]["json"] is True,
+            out,
+        )
+
+        # skill: the file next to the script, no socket and no surface (agent-cli 4.10).
+        code, out, err = run(home, ["skill"], surface=None)
+        check(
+            "skill",
+            (code, err) == (0, "")
+            and out == (CLI.parent / "SKILL.md").read_text()
+            and out.startswith("# tarn @VERSION@"),
+            (code, err),
+        )
+        bundle = home / "Tarn.app" / "Contents"
+        (bundle / "MacOS").mkdir(parents=True)
+        (bundle / "Resources" / "tarn").mkdir(parents=True)
+        shutil.copy(CLI, bundle / "MacOS" / "tarn")
+        (bundle / "Resources" / "tarn" / "SKILL.md").write_text("# tarn 9.9.9\n")
+        done = subprocess.run(
+            ["/bin/sh", str(bundle / "MacOS" / "tarn"), "skill"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        check("skill in the bundle", done.stdout == "# tarn 9.9.9\n", done)
+        (bundle / "Resources" / "tarn" / "SKILL.md").unlink()
+        done = subprocess.run(
+            ["/bin/sh", str(bundle / "MacOS" / "tarn"), "skill"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        check(
+            "no skill",
+            (done.returncode, done.stderr) == (1, "tarn: no skill in this build\n"),
+            done,
+        )
 
         # client-side errors.
         for name, args, surface in [
             ("open", ["open", "/x"], None),
             ("notify", ["notify", "x"], None),
+            ("ls", ["ls"], None),
+            ("new", ["new", "--", "ls"], None),
+            ("run", ["run", "--", "ls"], None),
+            ("read", ["read", SURFACE], None),
+            ("close", ["close", SURFACE], None),
+            ("module ls", ["module", "ls"], None),
         ]:
             code, out, err = run(home, args, surface=surface)
             check(
                 f"{name} without surface",
-                (code, out) == (1, "") and err.startswith("tarn: TARN_SURFACE"),
+                (code, out, err) == (1, "", "tarn: not in a tarn tab\n"),
                 err,
             )
         code, out, err = run(home, ["ls"])
@@ -200,6 +510,28 @@ def main() -> int:
             ["open"],
             ["open", "a", "b"],
             ["notify"],
+            ["new"],
+            ["new", "ls"],
+            ["new", "--"],
+            ["new", "--title"],
+            ["new", "--cwd"],
+            ["run"],
+            ["run", "--"],
+            ["run", "--title"],
+            ["wait"],
+            ["wait", "a", "b"],
+            ["wait", "a", "--timeout"],
+            ["wait", "a", "--bogus"],
+            ["read"],
+            ["read", "a", "b"],
+            ["read", "a", "--lines"],
+            ["read", "a", "--bogus"],
+            ["close"],
+            ["close", "a", "b"],
+            ["module"],
+            ["module", "list"],
+            ["module", "ls", "--bogus"],
+            ["skill", "x"],
         ]:
             code, out, err = run(home, args)
             check(

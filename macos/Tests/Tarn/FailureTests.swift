@@ -2,12 +2,12 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// What is not covered ends in a tab inside a workspace, never in a crash or a lost tab.
+/// What is not covered ends in an ungrouped tab, never in a crash or a lost tab.
 @Suite
 struct FailureTests {
     private let t = (0..<4).map { _ in TabKey() }
 
-    @Test func aBrokenSnapshotGivesDefaultWithAllTabs() {
+    @Test func aBrokenSnapshotGivesOneUngroupedBlockWithAllTabs() {
         #expect(WorkspaceRestore.snapshot(from: Data("{\"version\":1,".utf8)) == nil)
         #expect(WorkspaceRestore.snapshot(from: Data("[]".utf8)) == nil)
         #expect(WorkspaceRestore.snapshot(from: nil) == nil)
@@ -15,7 +15,8 @@ struct FailureTests {
         // The windows restore without a table: they are new tabs of one group.
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
-        #expect(book.names([t[0], t[1], t[2]]) == [WorkspaceSet.defaultName])
+        #expect(book.names([t[0], t[1], t[2]]) == ["-"])
+        #expect(book.workspace(of: t[0]) == nil)
         #expect(book.runs(for: [t[0], t[1], t[2]])[0].tabs.count == 3)
     }
 
@@ -28,10 +29,11 @@ struct FailureTests {
         #expect(WorkspaceRestore.snapshot(from: try snapshot.encoded()) == nil)
     }
 
-    @Test func aTabWhoseWorkspaceIsMissingIsPlacedAgain() {
-        var set = WorkspaceSet(members: [t[0]: UUID(), t[1]: UUID()])
-        _ = set.reconcile(previous: [], current: [t[0], t[1]], target: UUID())
-        #expect(set.runs(order: [t[0], t[1]]).flatMap(\.tabs) == [t[0], t[1]])
+    @Test func aTabWhoseWorkspaceIsMissingIsUngrouped() {
+        let set = WorkspaceSet(members: [t[0]: UUID(), t[1]: UUID()])
+        let runs = set.runs(order: [t[0], t[1]])
+        #expect(runs.map(\.workspace) == [nil])
+        #expect(runs.flatMap(\.tabs) == [t[0], t[1]])
     }
 
     @Test func aWindowThatVanishedWithoutAClosingNoticeLeavesItsSet() {
@@ -39,10 +41,10 @@ struct FailureTests {
         _ = book.pass([[t[0], t[1]]])
         _ = book.pass([[t[0]]])
         #expect(book.set(of: t[1]) == nil)
-        #expect(book.set(of: t[0])?.members.count == 1)
+        #expect(book.set(of: t[0]) != nil)
     }
 
-    @Test func aTabNeverEndsOutsideAWorkspace() {
+    @Test func aTabTheTableDoesNotListIsUngroupedNotLost() {
         var book = WorkspaceBook()
         // A table that lists tab 1 only; tab 0 and 2 are unknown to it.
         let id = UUID()
@@ -53,5 +55,6 @@ struct FailureTests {
         ))
         _ = book.pass([[t[0], t[1], t[2]]])
         #expect(book.runs(for: [t[0], t[1], t[2]]).flatMap(\.tabs).count == 3)
+        #expect(book.names([t[0], t[1], t[2]]) == ["-", "Only", "-"])
     }
 }
