@@ -7,6 +7,8 @@ struct PaneRow: Equatable {
     let tab: UUID?
     /// Nil for a tab with no workspace and for a window outside the workspaces.
     let workspace: UUID?
+    var group: String?
+    var folder: String?
     var title = ""
     var cwd = ""
     var process = ""
@@ -124,14 +126,16 @@ enum AgentCommands {
         SessionRegistry.orderedWindows().flatMap { window -> [PaneRow] in
             guard let controller = window.windowController as? BaseTerminalController else { return [] }
             let tab = WorkspaceRegistry.shared.tabKey(of: window)
-            let workspace = WorkspaceRegistry.shared.workspace(of: window)?.id
+            let workspace = WorkspaceRegistry.shared.workspace(of: window)
             return controller.surfaceTree.map { view in
                 let pid = view.surfaceModel?.foregroundPID.map { AgentProcess.foreground(group: pid_t($0)) }
                 let cwd = view.workingDirectory ?? ""
                 return PaneRow(
                     pane: view.id,
                     tab: tab,
-                    workspace: workspace,
+                    workspace: workspace?.id,
+                    group: workspace?.name,
+                    folder: workspace?.folder,
                     title: view.title,
                     cwd: cwd,
                     process: pid.flatMap(AgentProcess.comm) ?? "",

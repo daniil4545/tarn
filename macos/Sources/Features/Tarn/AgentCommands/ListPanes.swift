@@ -3,7 +3,7 @@ import Foundation
 /// `tarn ls`: the terminal panes of the caller's workspace (`docs/specs/agent-cli.md` 4.1), in the
 /// form of WezTerm `cli list` (`wezterm/src/cli/list.rs`): a header row, columns padded to the widest cell.
 enum ListPanes {
-    static let columns = ["PANE", "TAB", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"]
+    static let columns = ["PANE", "TAB", "GROUP", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"]
 
     @MainActor
     static func run(_ message: [String: Any], _ scope: AgentScope) -> Result<[String: Any], AgentRefusal> {
@@ -25,7 +25,7 @@ enum ListPanes {
 
     private static func cells(_ row: PaneRow) -> [String] {
         let values: [String] = [
-            row.pane.uuidString, row.tab?.uuidString ?? "", oneLine(row.title), row.cwd,
+            row.pane.uuidString, row.tab?.uuidString ?? "", oneLine(row.group ?? ""), oneLine(row.title), row.cwd,
             row.process, row.branch, row.state,
         ]
         return values.map { $0.isEmpty ? "-" : $0 }
@@ -47,6 +47,8 @@ enum ListPanes {
             "pane": row.pane.uuidString,
             "tab": row.tab?.uuidString ?? "",
             "workspace": row.workspace?.uuidString ?? "",
+            "group": row.group as Any? ?? NSNull(),
+            "folder": row.folder as Any? ?? NSNull(),
             "title": row.title,
             "cwd": row.cwd,
             "process": row.process,
