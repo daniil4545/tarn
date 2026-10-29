@@ -80,7 +80,7 @@ The Sidebar switch selects the tab style. Row size sits directly under it on Set
 +-------------------------------------------------------------+
 ```
 
-- A new section `modules` in `TarnSettingsView.Section` (`TarnSettings.swift:147`), first in the list, grouped `Form` like the other panes. The File Viewer pane keeps its switch on the same key.
+- A new section `modules` in `TarnSettingsView.Section` (`TarnSettings.swift:130`), first in the list, grouped `Form` like the other panes. The Tabs and File Viewer pages were removed.
 - The agent line runs its checks off the main thread when the pane opens; no network:
   1. found: `claude --version` from the first of `~/.local/bin/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, `~/.claude/local/claude`; none of them: `$SHELL -l -i -c 'claude --version'`, killed after 5 s (measured 1.5 to 3.4 s on the user's Mac). The version is the line matching `^\d+\.\d+\.\d+ \(Claude Code\)`. No match: "Claude Code not found".
   2. plugin: `~/.claude/plugins/installed_plugins.json` has the key `tarn@tarn` under `plugins` (format seen on 2.1.311, read only). Missing: "install the tarn plugin" with the command from `docs/install.md`.
@@ -100,7 +100,7 @@ flowchart LR
 
 - `TarnModule: String, CaseIterable`: title, detail, key, `needs`. `TarnModules.isOn(_:)` returns the effective state.
 - Sidebar: `TabStyle` stays the store; `TabStyle.applyToOpenWindows` stays the apply path.
-- File viewer: a pane is drawn when `!hidden && isOn(.viewer)`, so the user's Cmd+B hide (`ViewerHost.hidden`, `ViewerHost.swift:22`) stays its own state.
+- File viewer: a pane is drawn when `!hidden && isOn(.viewer)`, so the user's hide (`ViewerHost.hidden`, set by Hide pane / empty-pane Cmd+B) stays its own state.
 - Permission card: `SessionRegistry.closePending` (`SessionRegistry.swift:452-471`) gives the empty reply.
 - Menu items (Toggle File Viewer, Jump to waiting session) are hidden from our code by walking `NSApp.mainMenu` for their actions at the first `SidebarModel` and on each change; no new insertion point in Ghostty files.
 
@@ -111,11 +111,11 @@ flowchart LR
 
 ## 9. Texts and docs to update
 
-`TarnSettings.swift` `:82-83` and `:259-260` ("an open pane stays"); the Tabs pane without the style picker; `docs/modules/{settings,sidebar,viewer,workspaces,attention,sessions}.md`; `docs/architecture.md` key table (`:113-115`); `demo/README.md:17`; `docs/spec.md` principle 1 (decision 10).
+`TarnSettings.swift` (Settings > Modules); `docs/modules/{settings,sidebar,viewer,workspaces,attention,sessions}.md`; `docs/architecture.md` key table; `demo/README.md:17`; `docs/spec.md` principle 1 (decision 10).
 
 ## 10. Acceptance
 
-1. Each switch applies at once in every open window, with no restart; the File Viewer pane switch does the same.
+1. Each switch applies at once in every open window, with no restart.
 2. Off: the module draws none of the UI of section 5 and reacts to none of its events, including after Cmd+B, undo of a closed tab, restore at start and reopen of a closed viewer. On again: viewer tabs, areas and unsaved edits are as before.
 3. Sidebar off greys out Permission card with "needs Sidebar", its stored value survives; Workspaces stay on and each native tab shows its workspace name. Saved `TarnTabStyle` and `TarnFileViewer` values from 1.2.0 keep working.
 5. Permission card off: Claude Code shows its own permission dialog at once; no request hangs.
