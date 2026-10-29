@@ -49,7 +49,6 @@ struct WorkspaceHeader: View {
         .frame(height: 26)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .overlay(alignment: .bottom) { dropLine(endsHere) }
         .padding(.vertical, 1)
         .padding(.horizontal, Sidebar.listInset)
         .overlay(
@@ -64,9 +63,11 @@ struct WorkspaceHeader: View {
                 drop: { kind, value, lowerHalf in
                     model.drop(kind, value: value, over: .header(workspace.id), lowerHalf: lowerHalf)
                 },
-                dragEnded: { _, _ in model.dropSlot = nil },
+                dragBegan: { model.dragBegan(workspace, height: $0) },
+                dragEnded: { _, _ in model.groupDragEnded() },
                 dragMoved: { model.dragExit(at: $0) },
                 excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0,
+                blockView: { model.blockAnchors[group.id]?.view },
                 toolTip: Self.tip(group, workspace)
             )
         )
@@ -81,19 +82,6 @@ struct WorkspaceHeader: View {
         return workspace.folder.map { "\(WorkspaceFolder.display($0)) \u{B7} \(count)" } ?? count
     }
 
-    /// A workspace dropped after every workspace draws its line under a folded last header.
-    private var endsHere: Bool {
-        workspace.collapsed && model.dropSlot == .end && model.groups.last?.id == group.id
-    }
-}
-
-/// The line that shows where a drop lands.
-func dropLine(_ isShown: Bool) -> some View {
-    Rectangle()
-        .fill(Color.accentColor)
-        .frame(height: 2)
-        .opacity(isShown ? 1 : 0)
-        .allowsHitTesting(false)
 }
 
 /// The sheets of the workspace commands: a folder, a name, and a delete confirmation.

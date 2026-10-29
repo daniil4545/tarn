@@ -6,6 +6,34 @@ import Testing
 @MainActor
 @Suite
 struct SidebarDragTests {
+    @Test(arguments: [false, true])
+    func aGroupLiftsOpensOnlyBlockGapsAndCancels(collapsed: Bool) {
+        let (_, tab, _) = lifted()
+        let (_, loose, _) = lifted()
+        var source = Workspace(name: "Source")
+        source.collapsed = collapsed
+        let target = Workspace(name: "Target")
+        let groups: [SidebarModel.Group] = [
+            .init(workspace: source, tabs: []), .init(workspace: target, tabs: [tab]),
+            .init(workspace: nil, tabs: [loose]),
+        ]
+        let model = SidebarModel(groups: groups)
+        let height: CGFloat = collapsed ? 28 : 80
+        model.dragBegan(source, height: height)
+        #expect(model.liftedWorkspace == source.id && model.liftedHeight == height + 8 && model.gapSlot == nil)
+        // Before Target is the source's own slot, so no gap opens there.
+        for (half, expected) in [(false, SidebarDropSlot?.none), (true, .beforeWorkspace(loose.key))] {
+            #expect(model.dragOver(.workspace, value: source.id.uuidString, over: .tab(tab.key), lowerHalf: half))
+            #expect(model.gapSlot == expected)
+        }
+        #expect(model.dragOver(.workspace, value: source.id.uuidString, over: .tab(loose.key), lowerHalf: true))
+        #expect(model.gapSlot == .end)
+        model.dragExit(at: .zero)
+        #expect(model.gapSlot == nil && model.liftedWorkspace == source.id)
+        model.groupDragEnded()
+        #expect(model.liftedWorkspace == nil && model.dropSlot == nil && model.groups == groups)
+    }
+
     private func lifted() -> (SidebarModel, SidebarModel.Tab, NSWindow) {
         let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 300), styleMask: [.titled], backing: .buffered, defer: false)
         window.orderFront(nil)

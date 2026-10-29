@@ -755,35 +755,53 @@ def run(base):
             "W13 with no ungrouped tab left the groups stay and nothing is drawn for the ungrouped list",
             count(".wsh:not(.flat)") == 2 and count(".wsh.flat") == 0,
         )
-        drag(n(".wsh[data-wsh='w2']"), n(".wsh[data-wsh='w1']"), 0.5, 0.5)
+        mouse_drag(n(".wsh[data-wsh='w2']"), n(".wsblock[data-block='w1']"), 0.1)
         check(
             "W13a drag a workspace header before another reorders workspaces",
             snap()["wss"][0]["id"] == "w2",
         )
         pg.wait_for_function("document.querySelector('.wsh').dataset.wsh === 'w2'")
-        dt = pg.evaluate_handle("new DataTransfer()")
-        head = n(".wsh[data-wsh='w2']").bounding_box()
-        n(".wsh[data-wsh='w1']").dispatch_event("dragstart", {"dataTransfer": dt})
-        n(".wsh[data-wsh='w2']").dispatch_event(
-            "dragover",
-            {"dataTransfer": dt, "clientX": head["x"] + 20, "clientY": head["y"] + 4},
-        )
-        line = n(".wsline").bounding_box()
-        line_color = pg.evaluate(
-            "getComputedStyle(document.querySelector('.wsline')).backgroundColor"
-        )
+        before_group = snap()["wss"]
+        block = n(".wsblock[data-block='w1']")
+        height = block.bounding_box()["height"]
+        press_row(n(".wsh[data-wsh='w1']"))
         check(
-            "D5 the sidebar drop line is the system accent",
-            line_color == "rgb(10, 132, 255)",
-            line_color,
+            "W13b the whole group lifts with a full-height copy and no line",
+            count(".wsblock.lifted") == 1
+            and count(".wsline") == 0
+            and abs(n(".wsblock.dragghost").bounding_box()["height"] - height) < 1,
         )
+        for half in (0.1, 0.9):
+            rows = n(".wsblock[data-block='w2'] .tab[data-tabid]")
+            point(rows.first if half < 0.5 else rows.last, half)
+            pg.wait_for_timeout(150)
+            gap = pg.evaluate(
+                "[...document.querySelectorAll('.sidebar > *')].filter(e => parseFloat(e.style.marginTop) > 8).map(e => [e.dataset.block || 'end', parseFloat(e.style.marginTop)])[0] || null"
+            )
+            check(
+                f"W13d group gap stays outside the target block at {half}",
+                gap is not None
+                and gap[0] == ("w2" if half < 0.5 else "end")
+                and gap[1] > height,
+            )
+        pg.mouse.move(700, 400)
         check(
-            "W13b dragging a workspace draws a line in the gap above the target",
-            line is not None and abs(line["y"] + 2 - head["y"]) <= 6,
-            str(line),
+            "W13e leaving the sidebar closes the group gap",
+            pg.evaluate(
+                "![...document.querySelectorAll('.sidebar > *')].some(e => e.style.marginTop)"
+            ),
         )
-        pg.evaluate("document.dispatchEvent(new Event('dragend'))")
-        check("W13c the line goes away when the drag ends", count(".wsline") == 0)
+        pg.keyboard.press("Escape")
+        pg.mouse.up()
+        check(
+            "W13c Esc restores the block and moves nothing",
+            snap()["wss"] == before_group
+            and count(".dragghost, .lifted, .wsline") == 0,
+        )
+        press_row(n(".wsh[data-wsh='w1']"))
+        pg.mouse.move(700, 400)
+        pg.mouse.up()
+        check("W13f a release outside moves no group", snap()["wss"] == before_group)
         pg.click(".wsh[data-wsh='w2']")
         order_saved = ws_tabs("w1")
         pg.reload()
