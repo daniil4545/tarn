@@ -1,10 +1,7 @@
 import SwiftUI
 
-/// The keys Help lists. Ghostty has no call that lists all bindings, so this is a fixed list of
-/// actions; Ghostty gives the trigger in effect for each one (`docs/modules/settings.md`).
-/// Actions bound with `performable` (undo, redo, clear_screen, start_search, navigate_search) get no
-/// trigger from Ghostty, and the main menu has no key for them either (`MainMenu.xib`), so
-/// those rows carry the Ghostty default keys; a `keybind` change for them is not visible.
+/// The keys Help lists: a fixed list of actions, since Ghostty cannot list all bindings; Ghostty gives
+/// each trigger. `performable` actions get none, so their rows carry the default keys (`docs/modules/settings.md`).
 enum KeyReference {
     struct Row: Identifiable {
         let label: String

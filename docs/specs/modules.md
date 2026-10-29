@@ -116,7 +116,7 @@ flowchart LR
 
 ## 9. Texts and docs to update
 
-`TarnSettings.swift:28-29` (`TabStyle.detail`), `:82-83` and `:259-260` ("an open pane stays"); the Tabs pane without the style picker; `docs/modules/{settings,sidebar,viewer,workspaces,attention,sessions}.md`; `docs/architecture.md` key table (`:113-115`); `demo/README.md:17`; `docs/spec.md` principle 1 (decision 10).
+`TarnSettings.swift` `:82-83` and `:259-260` ("an open pane stays"); the Tabs pane without the style picker; `docs/modules/{settings,sidebar,viewer,workspaces,attention,sessions}.md`; `docs/architecture.md` key table (`:113-115`); `demo/README.md:17`; `docs/spec.md` principle 1 (decision 10).
 
 ## 10. Acceptance
 
