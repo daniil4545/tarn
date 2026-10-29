@@ -5,10 +5,11 @@
 #   tarn open <path>        open a text file in the viewer; never moves focus
 #   tarn ls [--json]        list the terminal panes of this workspace
 #   tarn notify <text>      mark this session and notify the user; never moves focus
-#   tarn new [--right] [--cwd D] -- <cmd...>
+#   tarn new [--right | --tab [--title T]] [--cwd D] -- <cmd...>
 #                           a split below this pane (right with --right) running the command;
+#                           --tab opens an unselected tab in the caller's group; --title names it
 #                           prints its pane id; never moves focus
-#   tarn run [--right] [--cwd D] -- <cmd...>
+#   tarn run [--right | --tab [--title T]] [--cwd D] -- <cmd...>
 #                           as new, but a shell with the command typed, not submitted: the user
 #                           presses Enter; never presses it
 #   tarn wait <pane> [--timeout S] [--json]
@@ -40,7 +41,7 @@ refused() {
 }
 
 usage() {
-  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane> | module ls [--json] | skill"
+  fail "usage: tarn open <path> | ls [--json] | notify <text> | new|run [--right | --tab [--title T]] [--cwd D] -- <cmd...> | wait <pane> [--timeout S] [--json] | read <pane> [--lines N] | close <pane> | module ls [--json] | skill"
 }
 
 # Prints the reply of list command $1: text with no argument, the whole reply with --json.
@@ -158,10 +159,18 @@ case $cmd in
   new | run)
     need_surface
     right=false
+    tab=
+    title=
     cwd=
     while [ $# -gt 0 ] && [ "$1" != "--" ]; do
       case $1 in
         --right) right=true ;;
+        --tab) tab=',"tab":true' ;;
+        --title)
+          [ $# -gt 1 ] || usage
+          shift
+          title=",\"title\":$(json_str "$1")"
+          ;;
         --cwd)
           [ $# -gt 1 ] || usage
           shift
@@ -174,6 +183,8 @@ case $cmd in
       esac
       shift
     done
+    [ "$right" = false ] || [ -z "$tab" ] || fail "--right and --tab exclude each other"
+    [ -z "$title" ] || [ -n "$tab" ] || fail "--title needs --tab"
     [ $# -gt 1 ] || usage
     shift
     # A newline or a carriage return in the command would press Enter (docs/specs/agent-cli.md B2).
@@ -189,7 +200,7 @@ case $cmd in
     done
     dir=
     [ -z "$cwd" ] || dir=",\"cwd\":$(json_str "$cwd")"
-    ask "{\"version\":1,\"cmd\":\"$cmd\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$dir,\"argv\":[$argv]}"
+    ask "{\"version\":1,\"cmd\":\"$cmd\",\"surface\":$(json_str "$TARN_SURFACE"),\"right\":$right$tab$title$dir,\"argv\":[$argv]}"
     json_field pane
     printf '\n'
     ;;

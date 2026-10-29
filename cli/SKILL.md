@@ -1,7 +1,7 @@
 # tarn @VERSION@: the terminal you run in
 
 You run inside a tarn terminal, so the `tarn` command is on `PATH`. It works on the panes of your
-own workspace (the tabs of one project); your pane is `$TARN_SURFACE`. Pane ids come from `tarn ls`
+own group, or only your own tab when it is ungrouped; your pane is `$TARN_SURFACE`. Pane ids come from `tarn ls`
 and from the output of `tarn new` and `tarn run`. An error prints `tarn: <text>` on stderr; exit 1,
 or 4 when a pane id matches no pane.
 
@@ -23,7 +23,7 @@ or 4 when a pane id matches no pane.
 
 `tarn notify <text>` marks your session and notifies the user.
 
-`tarn ls [--json]` lists the terminal panes of your workspace: `PANE TAB GROUP TITLE CWD PROCESS BRANCH
+`tarn ls [--json]` lists the terminal panes of your group (only your own tab when ungrouped): `PANE TAB GROUP TITLE CWD PROCESS BRANCH
 STATE`; `GROUP` is the group name or `-` when ungrouped. JSON adds `group` (name or null) and
 `folder` (workspace folder path or null; a plain group has no folder).
 `STATE` is the agent state of a pane that runs an agent, else `-`.
@@ -32,6 +32,8 @@ STATE`; `GROUP` is the group name or `-` when ungrouped. JSON adds `group` (name
 that runs the command, and prints its pane id. After the command exits the last screen stays.
 Arguments after `--` are the program and its arguments; several commands need `sh -c "a && b"`.
 `--cwd` defaults to your pane's directory.
+`--tab` on `new` or `run` opens an unselected tab right below yours in its group; ungrouped or frozen: `tarn: put this tab in a group first`.
+`--title NAME` on `new` or `run` names the tab and requires `--tab`.
 
 `tarn run [--right] [--cwd D] -- <cmd...>` opens the same split with a shell and the command typed
 but not submitted, and prints its pane id. The user reads it and presses Enter. A command with a
