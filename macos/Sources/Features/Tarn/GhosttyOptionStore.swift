@@ -3,12 +3,9 @@ import Combine
 import Foundation
 import OSLog
 
-/// The model behind the Ghostty option panes: reads and writes tarn's options file and keeps the
-/// last effective config (`docs/modules/settings.md`).
-///
-/// A control change always writes its line, even when the value equals the Ghostty default; only
-/// `reset` removes it. Each write re-reads the file first and changes one key, so a hand edit
-/// between two clicks is kept.
+/// The model behind the Ghostty option panes: reads and writes tarn's options file (`docs/modules/settings.md`).
+/// A change always writes its line, even at the default; only `reset` removes it. Each write re-reads
+/// the file and changes one key, so a hand edit is kept.
 @MainActor
 final class GhosttyOptionStore: ObservableObject {
     /// What a row shows for an option.
@@ -81,10 +78,8 @@ final class GhosttyOptionStore: ObservableObject {
 
     // MARK: - Writing
 
-    /// Writes the line. The default entry of an optional option is the empty value `key = ""`,
-    /// which Ghostty reads as "back to the default" (`src/cli/args.zig:325`): it hides the value
-    /// of the user's own config, which only Reset gives back. A number the type does not take is
-    /// reported in the row and not written.
+    /// Writes the line. The default entry of an optional option is `key = ""`, which Ghostty reads
+    /// as "back to the default" (`src/cli/args.zig:325`). A number the type does not take is not written.
     func set(_ option: GhosttyOption, to value: String) {
         var value = value
         switch option.control {
@@ -103,12 +98,12 @@ final class GhosttyOptionStore: ObservableObject {
     /// The text of a number the option takes, or nil: out of range, or a fraction for a whole number.
     static func numberText(_ number: Double, option: GhosttyOption, range: ClosedRange<Double>) -> String? {
         guard range.contains(number), !option.wholeNumber || number == number.rounded() else { return nil }
-        return String(format: "%g", number)
+        return number.optionText
     }
 
     private static func numberProblem(option: GhosttyOption, range: ClosedRange<Double>) -> String {
         let kind = option.wholeNumber ? "whole number" : "number"
-        return "Enter a \(kind) from \(String(format: "%g", range.lowerBound)) to \(String(format: "%g", range.upperBound))."
+        return "Enter a \(kind) from \(range.lowerBound.optionText) to \(range.upperBound.optionText)."
     }
 
     func reset(_ option: GhosttyOption) {

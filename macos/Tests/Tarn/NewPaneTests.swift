@@ -27,7 +27,7 @@ struct NewPaneTests {
         }
         let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: UUID())
         let scope = AgentScope(caller: caller, panes: [caller])
-        let refusal = NewPane.run(["argv": ["echo", "a\nb"]], scope)
+        let refusal = NewPane.open(["argv": ["echo", "a\nb"]], scope, kind: .new)
         #expect(throws: NewPane.notOneLine) { try refusal.get() }
     }
 
