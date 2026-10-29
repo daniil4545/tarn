@@ -22,7 +22,7 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 ### Changed
 
 - Groups are optional and membership is explicit: a new window starts with one ungrouped tab; starting a process, changing folders or reordering native tabs never regroups tabs.
-- Grouped sidebar rows are indented; ungrouped rows have no header; restored groups keep their names, while the old home "~" workspace becomes ungrouped tabs.
+- Grouped sidebar rows are indented; ungrouped rows have no header; restored groups keep their names; a window saved by 1.2.0 keeps its "Default" group, and Delete group without the box ungroups its tabs.
 - Cmd+T inherits the source tab's group and Ghostty's folder and position; splits keep Ghostty's folder inheritance; a tab opened without a source group is ungrouped.
 - A group's "+" opens from its last tab, using a workspace's fixed folder or a plain group's inherited folder; new groups start at the bottom; the sidebar New Tab button follows Cmd+T.
 - Removing the last tab removes its group; toggling Workspaces off and on preserves membership without moving tabs.

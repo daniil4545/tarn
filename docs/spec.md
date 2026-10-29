@@ -264,7 +264,7 @@ Code sources. Reference projects were picked from seven MIT agent terminals on l
 - Notification title `<project>`, body `Waiting for you`.
 - Notification title `<project>`, body `Failed, see the session`.
 - Notification title `<project>`, body: the text of `tarn notify`.
-- `tarn ls`: a header `PANE  TAB  TITLE  CWD  PROCESS  BRANCH  STATE` and one row per terminal pane of the caller's workspace; `tarn ls --json` returns `panes` (`docs/specs/agent-cli.md` 4).
+- `tarn ls`: a header `PANE  TAB  GROUP  TITLE  CWD  PROCESS  BRANCH  STATE` and one row per terminal pane of the caller's group, or only its own tab when ungrouped; `tarn ls --json` returns `panes` (`docs/specs/agent-cli.md` 4).
 - `tarn open` on a missing file: `tarn: no such file: <path>`, exit code 1.
 
 ## 12. Decisions and open questions
