@@ -2,7 +2,7 @@
 
 ## Purpose
 
-The settings window (Cmd+,) holds tarn's own settings (the five module switches, row size, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
+The settings window (Cmd+,) holds tarn's own settings (the four module switches, row size, file viewer on or off), a short list of Ghostty options and a Help page with the keys in effect. Changed Ghostty options go to a file of ours, `~/.config/tarn/ghostty.conf`, which loads after the user's Ghostty config; the user's own files are never edited.
 
 ## Place in the system
 

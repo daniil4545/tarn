@@ -32,7 +32,7 @@ STATE`; `GROUP` is the group name or `-` when ungrouped. JSON adds `group` (name
 that runs the command, and prints its pane id. After the command exits the last screen stays.
 Arguments after `--` are the program and its arguments; several commands need `sh -c "a && b"`.
 `--cwd` defaults to your pane's directory.
-`--tab` on `new` or `run` opens an unselected tab right below yours in its group; ungrouped or frozen: `tarn: put this tab in a group first`.
+`--tab` on `new` or `run` opens an unselected tab right below yours in its group; ungrouped: `tarn: put this tab in a group first`.
 `--title NAME` on `new` or `run` names the tab and requires `--tab`.
 
 `tarn run [--right] [--cwd D] -- <cmd...>` opens the same split with a shell and the command typed
