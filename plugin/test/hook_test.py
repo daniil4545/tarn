@@ -22,7 +22,7 @@ from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 LIMIT = 0.1
-# TARN_HOOK_LIMIT_MS raises the limit of the hung-app cases for a slow machine; default 100 ms.
+# TARN_HOOK_LIMIT_MS raises the limit of the hung-app and order cases for a slow machine; default 100 ms.
 HUNG_LIMIT = float(os.environ.get("TARN_HOOK_LIMIT_MS", "100")) / 1000
 STOP = b'{"hook_event_name":"Stop"}'
 ASK = b'{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"make"}}'
@@ -149,7 +149,7 @@ def check_order(socket_path: Path, home: Path) -> str | None:
             server.settimeout(3)
             for name in names:
                 payload = json.dumps({"hook_event_name": name}).encode()
-                if failure := silent("hook.sh", home, "x", payload):
+                if failure := silent("hook.sh", home, "x", payload, HUNG_LIMIT):
                     return f"{name}: {failure}"
                 if not select.select([server], [], [], 0)[0]:
                     return f"{name}: hook exited before it connected"
