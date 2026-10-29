@@ -50,7 +50,7 @@ scrollback as plain text.
 
 `tarn close <pane>` closes the pane at once, whatever runs in it.
 
-`tarn module ls [--json]` lists the tarn modules (sidebar, viewer, workspaces, permission card,
+`tarn module ls [--json]` lists the tarn modules (sidebar, viewer, permission card,
 notifications) and their state: `on`, `off`, or `unavailable` when a module it needs is off.
 
 `tarn skill` prints this text.

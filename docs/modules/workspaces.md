@@ -14,13 +14,13 @@ flowchart LR
   reg --> book["WorkspaceBook"]
   book --> set["WorkspaceSet"]
   side["Sidebar commands"] --> reg
-  reg -->|"move_tab"| gh
+  reg -->|"move_tab or native group move"| gh
   reg -->|"runs"| side
   reg --> snap["WorkspaceRestore"]
   reg --> tomb["TombstoneShelf"]
 ```
 
-Reading: Ghostty alone writes tab order; this module writes only membership, names and fold state. `WorkspaceBook` holds the rules without AppKit, `WorkspaceRegistry` maps them onto windows. Source: `Workspace/`.
+Reading: Ghostty writes tab order, except for a group move (T-308). This module writes membership, names and fold state. `WorkspaceBook` holds the rules without AppKit, `WorkspaceRegistry` maps them onto windows. Source: `Workspace/`.
 
 ## Inputs and outputs
 
@@ -31,14 +31,14 @@ Reading: Ghostty alone writes tab order; this module writes only membership, nam
 | In | restorable state of a window (key `tarn.workspaces`) | `WorkspaceRestore.decode` |
 | In | undo of a closed tab or window | `TombstoneShelf`, Ghostty's undo manager |
 | Out | `runs(for:)`: workspaces of a window top to bottom with their tab windows | `SidebarModel.refresh` |
-| Out | native moves through Ghostty's `move_tab` action, only for a sidebar move | `moveNatively` |
+| Out | single-tab moves through Ghostty's `move_tab` action; a group move reorders the native tab group in one pass (T-308) | `moveNatively`, `moveWorkspace` |
 | Out | window subtitle with the workspace name (empty with the top tab bar) | `WorkspaceTitle.apply` |
 | Out | snapshot saved with each window | `WorkspaceRestore.encode` |
 | Out | `terminalTabsDidChange` (object: the registry, which its own observer ignores) and a restorable-state refresh for changed sets | `publish`. A publish made while observers run (a redraw must not call `sync`: the sidebar only reads, and asks for a `sync` once, when it gets its window; the cap is a safety net) asks for one more round instead of nesting; at most 3 rounds, then an error is logged |
 
 ## How it works
 
-State: `WorkspaceSet` per Ghostty window (id, workspaces, membership `TabKey` to workspace id for grouped tabs only, revision). A set lives while it has a live tab, grouped or not (`WorkspaceBook.remove`). A `TabKey` is a UUID made by us for each tab window and saved in the snapshot. Ghostty alone writes tab order; membership never follows it (`docs/specs/workspace-folder.md` M3). Workspaces are drawn in the order of their first tab and ungrouped tabs stand between them (`WorkspaceSet.runs(order:)`: a block with no workspace is a run of ungrouped tabs, two blocks parted only by a later tab of a drawn workspace are one), so row N is native tab N and Cmd+N lands on row N while each workspace is one run; a native reorder or `window-new-tab-position = end` can split a workspace, and nothing heals it. Workspace order is derived and never stored.
+State: `WorkspaceSet` per Ghostty window (id, workspaces, membership `TabKey` to workspace id for grouped tabs only, revision). A set lives while it has a live tab, grouped or not (`WorkspaceBook.remove`). A `TabKey` is a UUID made by us for each tab window and saved in the snapshot. Ghostty writes tab order, except for a group move (T-308); membership never follows it (`docs/specs/workspace-folder.md` M3). Workspaces are drawn in the order of their first tab and ungrouped tabs stand between them (`WorkspaceSet.runs(order:)`: a block with no workspace is a run of ungrouped tabs, two blocks parted only by a later tab of a drawn workspace are one), so row N is native tab N and Cmd+N lands on row N while each workspace is one run; a native reorder or `window-new-tab-position = end` can split a workspace, and nothing heals it. Workspace order is derived and never stored.
 
 Following Ghostty (`sync`, run on every tab notification):
 1. Gone windows leave their set; a workspace with no tab left closes, and a set with no tab left goes.
@@ -50,7 +50,7 @@ Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`,
 
 New tab (`docs/specs/workspace-folder.md` M1): `AppDelegate.ghosttyNewTab` passes the controller that `TerminalController.newTab` returns to `WorkspaceRegistry.opened(_:from:)` with the window the tab was opened from; the tab takes that tab's workspace and unfolds it, when both windows share a native tab group; from an ungrouped tab it is ungrouped, in the same set (otherwise it stays unplaced and `sync` makes it ungrouped). Cmd+T, the New Tab menu item, the native "+" and the sidebar button all take this path; the header "+" and a new workspace call `opened` themselves.
 
-Sidebar commands: a new workspace is created with its first tab, in one step, after the tab exists; a refused tab creates nothing. Rename refuses a blank name. Delete (`ungroup`) removes the group and leaves its tabs ungrouped where they stand; any group may go, the only one too. The sheet may also close the tabs (the sidebar closes them as one undoable step and the group goes with its last tab). Move tab changes membership (a workspace left empty goes), then makes one `move_tab`; move workspace makes one `move_tab` per tab. `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace.
+Sidebar commands: a new workspace is created with its first tab, in one step, after the tab exists; a refused tab creates nothing. Rename refuses a blank name. Delete (`ungroup`) removes the group and leaves its tabs ungrouped where they stand; any group may go, the only one too. The sheet may also close the tabs (the sidebar closes them as one undoable step and the group goes with its last tab). Move tab changes membership (a workspace left empty goes), then makes one `move_tab`. Move workspace reorders the native tab group in one pass with `removeWindow` and `addTabbedWindowSafely` inside a zero-duration animation group, then calls `relabelTabs` (T-308). `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace.
 
 
 No tab moves by itself: an agent tab stays in the workspace it was opened in, and the sidebar draws no folder mark (D21, D22, D26, D27 dropped, T-249, user decision 2026-10-27).
@@ -76,7 +76,7 @@ Undo (tombstone): the tombstone joins Ghostty's undo group instead of a second a
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceTitle.swift` | window subtitle |
 | `macos/Sources/Features/Tarn/Workspace/KeyHops.swift` | marks key changes caused by our own moves |
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceFolder.swift` | pure path rules: standardize, contains, name, display |
-| `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view and tooltip, drop line, New Group sheet and folder panel, name and delete prompts |
+| `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view and tooltip, New Group sheet and folder panel, name and delete prompts |
 | `macos/Sources/Features/Tarn/TabDragSource.swift` | drag payloads and drop-slot math, see [sidebar.md](sidebar.md) |
 
 ## Ghostty mechanisms used
@@ -84,7 +84,7 @@ Undo (tombstone): the tombstone joins Ghostty's undo group instead of a second a
 | Mechanism | Where | Use |
 |---|---|---|
 | Tab = `NSWindow` in an `NSWindowTabGroup`; `newTab` | `macos/Sources/Features/Terminal/TerminalController.swift` (`onMoveTab` `:1585`, `onGotoTab` `:1651`) | order is Ghostty's |
-| `move_tab` through `performAction` | `Features/Terminal/BaseTerminalController.swift:1046` | all reordering |
+| `move_tab` through `performAction` | `Features/Terminal/BaseTerminalController.swift:1046` | single-tab reordering; group moves use the native tab group (T-308) |
 | `ExpiringUndoManager`, `undoExpiration` | `Helpers/ExpiringUndoManager.swift:14`, `BaseTerminalController.swift:113` | tombstone lifetime and undo group |
 | `UndoState` reusing `SurfaceView`s | `TerminalController.swift:1039` | match by surface ids |
 | Restorable state | `TerminalController.swift:1334` (`willEncodeRestorableState`), `TerminalRestorable.swift:120` (`restoreWindow`) | second coder key |
@@ -99,7 +99,7 @@ Rows 15 and 16 of [architecture.md](../architecture.md): `WorkspaceRestore.encod
 
 | Rule | Enforced by |
 |---|---|
-| Ghostty is the single writer of tab order; we never call `removeWindow` or `addTabbedWindowSafely` to order tabs | review; reordering only through `move_tab` |
+| Ghostty writes tab order, except a group move, which reorders the native tab group in one pass (T-308) | review; single-tab moves use `move_tab`; `moveWorkspace` uses `removeWindow` and `addTabbedWindowSafely` |
 | A tab is in one workspace or in none; a tab the table does not name is ungrouped, never lost | `WorkspaceSet.runs(order:)`, `WorkspaceBook.reconcile`, tests `FailureTests` |
 | A group deleted leaves its tabs ungrouped, the only one too; a workspace closes with its last tab | `WorkspaceSetTests` |
 | Any uncovered case logs one line `workspace: <reason> window=<key> set=<id>` (category `workspace`), leaves the tab ungrouped and never crashes or drops a tab | `WorkspaceBook.note`; a broken snapshot, and the `reconcile` fallback, give one block of ungrouped tabs |
