@@ -173,6 +173,20 @@ struct WorkspaceSetTests {
 
 /// The New Group dialog's result (G2).
 struct NewGroupChoiceTests {
+    // spec: docs/specs/workspace-folder.md G2
+    @Test func folderPanelStartsAtTheTypedDirectoryOrHome() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-panel-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let file = dir.appendingPathComponent("file")
+        try Data().write(to: file)
+        #expect(NewGroupChoice.startDirectory(folder: " \(dir.path)/ ").path == dir.standardized.path)
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        for folder in ["~", "  ~  ", "", " ", dir.appendingPathComponent("missing").path, file.path] {
+            #expect(NewGroupChoice.startDirectory(folder: folder) == home, "\(folder)")
+        }
+    }
+
     // spec: docs/specs/workspace-folder.md S41
     @Test func aGroupTakesItsNameAndABlankNameBecomesGroup() {
         #expect(NewGroupChoice.make(confirmed: true, isWorkspace: false, name: " notes ", folder: "/x") == .group(name: "notes"))
