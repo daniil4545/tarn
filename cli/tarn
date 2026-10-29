@@ -3,7 +3,7 @@
 # socket, one back. Errors: stderr "tarn: <text>", nothing on stdout, exit 1 or the "code" of the
 # reply (4: no pane matched, docs/specs/agent-cli.md 4).
 #   tarn open <path>        open a text file in the viewer; never moves focus
-#   tarn ls [--json]        list the terminal panes of this workspace
+#   tarn ls [--json]        list the terminal panes of your group
 #   tarn notify <text>      mark this session and notify the user; never moves focus
 #   tarn new [--right | --tab [--title T]] [--cwd D] -- <cmd...>
 #                           a split below this pane (right with --right) running the command;
