@@ -50,20 +50,18 @@ function render() {
   sb.style.width = ui.rail ? "" : `${ui.width}px`;
   const label = ui.rail ? "Show Sidebar" : "Hide Sidebar";
   const button = (id, title, glyph) => `<button class="ib" id="${id}" title="${title}" aria-label="${title}">${glyph}</button>`;
-  // Modules: the viewer button follows File viewer, New Workspace follows Workspaces.
-  const grouped = isOn("workspaces");
-  sb.classList.toggle("flatlist", !grouped);
+  // The viewer button follows File viewer.
   const viewer = isOn("viewer") ? button("sbViewer", "Toggle File Viewer (Cmd+B)", VIEWER) : "";
-  const newWs = grouped ? button("wsNewTop", "New group (Cmd+Shift+T)", NEWWS) : "";
+  const newWs = button("wsNewTop", "New group (Cmd+Shift+T)", NEWWS);
   const top = ui.rail
     ? `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${viewer}${button("sbNew", "New tab", "+")}</div>`
     : `<div class="sbtop">${button("sbToggle", label, TOGGLE)}${newWs}<span class="grow"></span>${viewer}${button("sbNew", "New tab", "+")}</div>`;
   const icon = (t) => (isAgentTab(t, reg) ? AGENT : TERM);
   if (ui.rail) {
-    sb.innerHTML = top + (grouped ? s.wss.filter((w) => w.tabs.length) : [{ tabs: order }]).map((w) => w.tabs.map((id) => {
+    sb.innerHTML = top + s.wss.filter((w) => w.tabs.length).map((w) => w.tabs.map((id) => {
       const t = s.tabs[id];
       return `<div class="tab" role="tab" tabindex="0" aria-selected="${id === s.cur}" data-tabid="${id}" title="${esc(t.title)}">${icon(t)}${dot(tabStatus(t, reg))}</div>`;
-    }).join("")).join(grouped ? '<div class="sep"></div>' : "");
+    }).join("")).join('<div class="sep"></div>');
     return;
   }
   const key = (id) => { const i = order.indexOf(id); return i < 8 ? `⌘${i + 1}` : i === order.length - 1 ? "⌘9" : ""; };
@@ -77,15 +75,14 @@ function render() {
     const l2 = `<div class="l2">${esc(detail(t, reg))}</div>`;
     return `<div class="${cls} wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
-  // Flat list: every tab in list order, whatever its frozen group. An ungrouped block, between the
-  // groups or at the bottom, has a hidden header so the drag code finds the owner of a row.
-  const lists = grouped ? s.wss.filter((w) => w.tabs.length) : [{ id: "loose", loose: true, tabs: order }];
+  // An ungrouped block has a hidden header so the drag code finds the owner of a row.
+  const lists = s.wss.filter((w) => w.tabs.length);
   sb.innerHTML = top + lists.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
     const head = w.loose ? `<div class="wsh flat" data-wsh="${w.id}" aria-hidden="true"></div>` : `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? `${esc(w.folder)} · ` : ""}${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span>${w.folder ? FOLDER : ""}<span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
     return head + (w.collapsed ? "" : w.tabs.map(row(w)).join(""));
-  }).join("") + (grouped ? '<button class="tab add" id="wsNew">+ New group</button>' : '<div class="flatend" id="wsNew" aria-hidden="true"></div>');
+  }).join("") + '<button class="tab add" id="wsNew">+ New group</button>';
 }
 
 // The second line of a wide row: the folder and how long the agent is in its state. The icon
@@ -122,7 +119,6 @@ function onClick(e) {
 // shows the macOS folder panel; the browser has none, so the demo takes a typed path. A folder
 // another workspace already has selects that workspace (docs/specs/workspace-folder.md Q1).
 async function newWorkspace() {
-  if (!isOn("workspaces")) return;
   const form = document.createElement("div");
   form.className = "newgroup";
   form.innerHTML = `<label><input type="radio" name="kind" value="group" checked> Group <input id="ngName" placeholder="Name" aria-label="Group name"></label>
@@ -163,7 +159,7 @@ function onContextMenu(e) {
   const { wss } = read("workspaces");
   if (row) {
     const id = row.dataset.tabid, here = wss.find((w) => w.tabs.includes(id));
-    const moves = !isOn("workspaces") ? [] : [
+    const moves = [
       ...wss.filter((w) => w !== here && !w.loose && w.tabs.length).map((w) => ({ label: `Move to ${w.name}`, attrs: `data-mmove="${id}" data-to="${w.id}"`, run: () => bus.cmd("tab.move", { id, ws: w.id }) })),
       ...(here.loose ? [] : [{ label: "Remove from group", attrs: `data-mmove="${id}" data-to="loose"`, run: () => bus.cmd("tab.move", { id, ws: "loose", after: here.id }) }]),
     ];

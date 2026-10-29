@@ -36,7 +36,6 @@ struct NewPaneTests {
         try #require(native.selectedWindow === selected)
 
         let registry = WorkspaceRegistry.shared
-        try #require(!registry.isFrozen)
         let callerKey = TabKey(), otherKey = TabKey()
         let group = Workspace(name: "project")
         let set = WorkspaceSet(workspaces: [group], members: [callerKey: group.id, otherKey: group.id])

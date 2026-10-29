@@ -3,7 +3,6 @@ import SwiftUI
 /// Settings > Modules: one switch per module and the Claude Code line.
 struct ModulesSettingsPane: View {
     @AppStorage(TabStyle.key) private var style: TabStyle = .sidebar
-    @AppStorage(TarnModule.workspaces.key) private var workspaces = true
     @AppStorage(TarnModule.permissionCard.key) private var permissionCard = true
     @AppStorage(TarnModule.notifications.key) private var notifications = true
     @AppStorage(FileViewerSetting.key) private var viewer = true
@@ -19,7 +18,6 @@ struct ModulesSettingsPane: View {
                     set: { style = $0 ? .sidebar : .top }
                 ))
                 row(.viewer, isOn: $viewer)
-                row(.workspaces, isOn: $workspaces)
                 row(.permissionCard, isOn: $permissionCard)
                 row(.notifications, isOn: $notifications)
             }

@@ -45,7 +45,6 @@ final class WorkspaceRegistry {
     private var surfaceCache: [ObjectIdentifier: Set<UUID>] = [:]
 
     private init() {
-        book.frozen = !TarnModules.isOn(.workspaces)
         let center = NotificationCenter.default
         center.addObserver(forName: .terminalTabsDidChange, object: nil, queue: .main) { [weak self] note in
             // Delivered synchronously on the main thread. Our own `publish` posts with `self` as the
@@ -85,19 +84,6 @@ final class WorkspaceRegistry {
     /// The workspace of a tab window.
     func workspace(of window: NSWindow) -> Workspace? {
         entries[ObjectIdentifier(window)].flatMap { book.workspace(of: $0.key) }
-    }
-
-    // MARK: Module switch
-
-    /// Workspaces off freezes the workspaces as they are; on again draws them by membership. The
-    /// pass runs now and tells the sidebars.
-    var isFrozen: Bool { book.frozen }
-
-    func setFrozen(_ frozen: Bool) {
-        guard book.frozen != frozen else { return }
-        book.frozen = frozen
-        sync()
-        NotificationCenter.default.post(name: .terminalTabsDidChange, object: self)
     }
 
     // MARK: Following Ghostty
@@ -277,17 +263,13 @@ final class WorkspaceRegistry {
     /// M1, the insertion point of `AppDelegate.ghosttyNewTab`: the tab Ghostty just opened from
     /// `window` takes its workspace, when the two share a native tab group.
     func opened(_ controller: TerminalController?, from window: NSWindow) {
-        guard !book.frozen, let tab = controller?.window, group(of: window).contains(tab) else { return }
+        guard let tab = controller?.window, group(of: window).contains(tab) else { return }
         publish(book.opened(key(for: tab), from: key(for: window)))
     }
 
     /// A new tab in `workspace`, right after its last tab: Ghostty's `newTab(from:)` with that tab as
     /// the parent, inheriting from it as Cmd+T inherits from the focused tab.
     func newTab(in workspace: Workspace.ID, from window: NSWindow) {
-        guard !book.frozen else {
-            (window.windowController as? TerminalController)?.newTab(nil)
-            return
-        }
         let set = book.set(of: key(for: window))
         let order = group(of: window).map(key(for:))
         let last = set?.lastTab(of: workspace, order: order).flatMap { self.window(for: $0) } ?? window
@@ -330,7 +312,6 @@ final class WorkspaceRegistry {
     /// path that is not absolute.
     @discardableResult
     func createWorkspace(folder: String, from window: NSWindow) -> Bool {
-        guard !book.frozen else { return false }
         guard let path = WorkspaceFolder.standardized(folder) else {
             Self.logger.error("workspace: folder not absolute value=\(folder, privacy: .public)")
             return false
@@ -352,7 +333,7 @@ final class WorkspaceRegistry {
     }
 
     private func openWorkspace(name: String, folder: String?, from window: NSWindow) -> Bool {
-        guard !book.frozen, WorkspaceSet.cleaned(name) != nil else { return false }
+        guard WorkspaceSet.cleaned(name) != nil else { return false }
         // The group stands at the bottom: its tab opens from the last tab of the window (G8).
         guard let tabWindow = openTab(after: group(of: window).last ?? window, inheritingFrom: window, folder: folder)?.window,
               group(of: window).contains(tabWindow)
@@ -395,10 +376,10 @@ final class WorkspaceRegistry {
         let members = Dictionary(uniqueKeysWithValues: order.compactMap { key in book.workspace(of: key).map { (key, $0.id) } })
         let place = Self.place(
             of: tab, in: order, members: members, to: workspace,
-            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) } ?? (book.frozen ? Set(order) : nil)
+            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) }
         )
         isBusy = true
-        let changed = book.frozen ? nil : book.edit(tab) { set in
+        let changed = book.edit(tab) { set in
             if let workspace { set.join(tab, to: workspace) } else { set.remove(tab) }
         }
         moveNatively(window, by: place - index)
@@ -409,7 +390,7 @@ final class WorkspaceRegistry {
 
     /// The place a sidebar move gives `tab`: before `neighbour`, else after the last of `behind`, else
     /// after the last other tab of the group it ends in (the one it leaves, for `workspace` nil).
-    /// `members` is the membership before the move; a frozen set passes every tab as `behind`.
+    /// `members` is the membership before the move.
     nonisolated static func place(
         of tab: TabKey,
         in order: [TabKey],

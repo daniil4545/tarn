@@ -168,17 +168,13 @@ body.dragging iframe { pointer-events: none; }
 .ask-dialog .newgroup label { display: grid; grid-template-columns: auto 84px 1fr; align-items: center; gap: 6px; }
 .ask-dialog input:not([type]) { font: inherit; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--line); background: var(--chrome); color: var(--fg); }
 
-/* Ungrouped tabs, and every tab with Workspaces off: the header stays in the DOM for the drag code
-   and takes no room; the rows sit flush. The end spacer stands where "+ New group" was, so a tab
-   can still be dropped at the end. */
+/* Ungrouped tabs: the header stays in the DOM for the drag code and takes no room; the rows sit flush. */
 .sidebar .wsh.flat { display: none; }
 .sidebar:not(.rail) .tab.loose[data-tabid] { margin-left: 0; width: 100%; }
-.sidebar:not(.flatlist) .wsh.flat + .tab[data-tabid] { margin-top: 10px; }
-.sidebar .flatend { flex: none; height: 28px; }
+.sidebar .wsh.flat + .tab[data-tabid] { margin-top: 10px; }
 
 /* Notifications: the demo's banner for an agent that needs you */
 .banner { position: fixed; top: 44px; right: 16px; z-index: 40; width: 280px; padding: 9px 12px; border-radius: 10px; background: var(--menu); color: var(--fg); border: 1px solid var(--line); box-shadow: 0 8px 28px rgba(0, 0, 0, .45); font-size: 12.5px; pointer-events: none; }
 .banner b { display: block; font-size: 12.5px; }
 .banner span { color: var(--muted); }
-.sidebar.flatlist:not(.rail) .tab[data-tabid] { margin-left: 0; width: 100%; }
 .ttab .tw { flex: none; padding: 0 5px; border-radius: 4px; background: rgba(127, 127, 127, .2); color: var(--muted); font-size: 10.5px; }

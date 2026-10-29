@@ -3,7 +3,6 @@
 import { bus } from "./bus.js";
 import { read } from "./state.js";
 import { currentTab } from "./workspace.js";
-import { isOn } from "./modules.js";
 
 const LIGHTS = ["#ff5f57", "#febc2e", "#28c840"].map((c) => `<i style="background:${c}"></i>`).join("");
 
@@ -45,7 +44,7 @@ function apply() {
 function showTitle() {
   const s = read("workspaces"), tab = currentTab(s);
   const ws = tab && s.wss.find((w) => w.tabs.includes(tab.id));
-  const [title, sub] = tab ? [tab.title, isOn("workspaces") ? ws.name : ""] : ["tarn", ""];
+  const [title, sub] = tab ? [tab.title, ws.name] : ["tarn", ""];
   document.querySelector(".titlebar .ttl").textContent = title;
   document.querySelector(".titlebar .sub").textContent = sub;
   document.title = sub ? `${title} · ${sub}` : title;

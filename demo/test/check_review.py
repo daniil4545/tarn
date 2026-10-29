@@ -348,18 +348,23 @@ def model1_workspace_rules(base):
         loose = ws(pg)["wss"][0]
         check(
             "M2 deleting a group keeps its tabs ungrouped where they stood",
-            loose.get("loose") and loose["tabs"] == ["t1", "t2", "t3", "t4"] and ws(pg)["wss"][1]["id"] == "w2",
+            loose.get("loose")
+            and loose["tabs"] == ["t1", "t2", "t3", "t4"]
+            and ws(pg)["wss"][1]["id"] == "w2",
             str(ws(pg)["wss"]),
         )
     with app_page(base) as (pg, _e, _r):
         cmd(pg, "tab.move", {"id": "t2", "ws": "loose", "after": "w1"})
-        blocks = [(w["id"] if not w.get("loose") else "", w["tabs"]) for w in ws(pg)["wss"]]
+        blocks = [
+            (w["id"] if not w.get("loose") else "", w["tabs"]) for w in ws(pg)["wss"]
+        ]
         indent = pg.evaluate(
             "['t1', 't2'].map((id) => getComputedStyle(document.querySelector(`.tab[data-tabid=${id}]`)).marginLeft)"
         )
         check(
             "M2a Remove from group puts the tab right below its group, ungrouped and not indented",
-            blocks == [("w1", ["t1", "t3", "t4"]), ("", ["t2"]), ("w2", ["t5"]), ("", ["t6"])]
+            blocks
+            == [("w1", ["t1", "t3", "t4"]), ("", ["t2"]), ("w2", ["t5"]), ("", ["t6"])]
             and indent == ["12px", "0px"],
             f"{blocks} {indent}",
         )
@@ -380,13 +385,6 @@ def model1_workspace_rules(base):
         check(
             "M4 the title bar subtitle names the workspace in the top style",
             sub == "tarn",
-            repr(sub),
-        )
-        cmd(pg, "config.set", {"key": "module-workspaces", "value": False})
-        sub = pg.text_content(".titlebar .sub")
-        check(
-            "M4a Workspaces off: the subtitle is empty",
-            sub == "" and pg.title() == pg.text_content(".titlebar .ttl"),
             repr(sub),
         )
     with app_page(base) as (pg, _e, _r):
