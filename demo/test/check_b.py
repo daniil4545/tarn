@@ -802,6 +802,41 @@ def run(base):
         pg.mouse.move(700, 400)
         pg.mouse.up()
         check("W13f a release outside moves no group", snap()["wss"] == before_group)
+        saved_storage = pg.evaluate("Object.entries(localStorage)")
+        # Two tabs of w1 leave it, so an ungrouped run of two stands below the groups.
+        for tab_id in ws_tabs("w1")[:2]:
+            n(f"{TAB}[data-tabid='{tab_id}']").click(button="right")
+            pg.click("#ctx [data-mmove][data-to='loose']")
+        loose = next(w for w in snap()["wss"] if w.get("loose"))["tabs"]
+        press_row(n(".wsh[data-wsh='w2']"))
+        point(n(f"{TAB}[data-tabid='{loose[1]}']"), 0.25)
+        point(
+            n(f"{TAB}[data-tabid='{loose[1]}']"), 0.25
+        )  # again once the source gap has closed
+        pg.mouse.up()
+        wss = snap()["wss"]
+        ids = [w["id"] for w in wss]
+        at = ids.index("w2")
+        check(
+            "W13g a group dropped between two ungrouped tabs splits their run around it",
+            0 < at < len(ids) - 1
+            and wss[at - 1].get("loose")
+            and wss[at - 1]["tabs"][-1] == loose[0]
+            and wss[at + 1].get("loose")
+            and wss[at + 1]["tabs"][0] == loose[1],
+            str([(w["id"], w["tabs"]) for w in wss]),
+        )
+        # Keep this destructive drag scenario out of the reload and sidebar checks below.
+        pg.evaluate(
+            "entries => { localStorage.clear(); for (const [k, v] of entries) localStorage.setItem(k, v); }",
+            saved_storage,
+        )
+        pg.reload()
+        pg.wait_for_selector("html[data-ready=true]")
+        check(
+            "W13h the isolated drag leaves the original groups and order intact",
+            snap()["wss"] == before_group,
+        )
         pg.click(".wsh[data-wsh='w2']")
         order_saved = ws_tabs("w1")
         pg.reload()

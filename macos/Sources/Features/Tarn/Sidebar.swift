@@ -201,7 +201,22 @@ final class SidebarModel: ObservableObject {
         return window.tabbedWindows ?? [window]
     }
 
+    /// Set while a group moves tab by tab, so the rows do not renumber at every step.
+    private var isMovingGroup = false
+
+    /// Runs a group move and redraws once its last native move has settled.
+    private func moveGroup(_ move: () -> Void) {
+        isMovingGroup = true
+        move()
+        // Ghostty returns the key window one turn after a move on macOS 26.
+        DispatchQueue.main.async { DispatchQueue.main.async { [weak self] in
+            self?.isMovingGroup = false
+            self?.refresh()
+        } }
+    }
+
     func refresh() {
+        guard !isMovingGroup else { return }
         // Read only: the registry follows Ghostty by its own observers. A redraw that asked it to
         // look again made `sync` -> `publish` -> redraw -> `sync` a loop.
         let registry = WorkspaceRegistry.shared
@@ -613,12 +628,17 @@ final class SidebarModel: ObservableObject {
 
         case (.workspace, .beforeWorkspace(let other)):
             guard groups.contains(where: { $0.id == id }) else { return false }
-            if other != id { registry.moveWorkspace(id, before: other, in: window) }
+            if other != id { moveGroup { registry.moveWorkspace(id, before: other, in: window) } }
             return true
 
         case (.workspace, .end):
             guard groups.contains(where: { $0.id == id }) else { return false }
-            registry.moveWorkspace(id, before: nil, in: window)
+            moveGroup { registry.moveWorkspace(id, before: nil, in: window) }
+            return true
+
+        case (.workspace, .beforeTab(let key)):
+            guard groups.contains(where: { $0.id == id }) else { return false }
+            moveGroup { registry.moveWorkspace(id, beforeTab: key, in: window) }
             return true
 
         default:
@@ -1180,7 +1200,11 @@ private struct SidebarRow: View {
             cardInset: isCompact
                 ? NSEdgeInsets(top: 1, left: 0, bottom: 1, right: 0)
                 : NSEdgeInsets(top: Sidebar.rowGap / 2, left: Sidebar.listInset + indent, bottom: Sidebar.rowGap / 2, right: Sidebar.listInset),
-            blockView: { model.groups.first { $0.tabs.contains { $0.key == tab.key } }.flatMap { model.blockAnchors[$0.id]?.view } }
+            // An ungrouped row measures its own halves for a group drag, so a group can stand between two such rows.
+            blockView: {
+                model.groups.first { $0.tabs.contains { $0.key == tab.key } }
+                    .flatMap { $0.workspace == nil ? nil : model.blockAnchors[$0.id]?.view }
+            }
         )
     }
 
