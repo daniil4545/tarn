@@ -99,8 +99,10 @@ final class ViewerModel {
             adopt(tab.path, from: other)
             tabs.open(tab.path, pin: true)
         }
-        if let active { tabs.open(active, pin: true) }
-        if let active { tree.reveal(active) }
+        if let active {
+            tabs.open(active, pin: true)
+            tree.reveal(active)
+        }
         pushAll()
     }
 
@@ -178,16 +180,11 @@ final class ViewerModel {
 
     func closeActiveTab() {
         // A pane with no file has no tab to close: Cmd+W closes the pane itself.
-        if closePaneIfEmpty() { return }
+        if tabs.tabs.isEmpty {
+            onClosePane?([], -1)
+            return
+        }
         closeTab(at: tabs.active)
-    }
-
-    /// Cmd+W in a pane with no file closes the pane (there is no tab to close). Returns whether it did.
-    @discardableResult
-    private func closePaneIfEmpty() -> Bool {
-        guard tabs.tabs.isEmpty else { return false }
-        onClosePane?([], -1)
-        return true
     }
 
     /// Esc and the Files button in a pane with no file: the pane hides with its tree state kept.

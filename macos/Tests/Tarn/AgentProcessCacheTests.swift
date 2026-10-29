@@ -96,20 +96,32 @@ struct AgentProcessCacheTests {
             window.close()
         }
 
-        // The shell takes a moment to become the pty's foreground process. A hidden window sends
-        // no events, so the registry is asked to look as Ghostty's observers would.
+        // Only a read by `model` counts: the window's own sidebar model reads the same shell. `model` has
+        // no tab until the registry has put the window in a workspace run, and the shell takes a moment
+        // to become the pty's foreground process, so each try starts from an empty cache.
+        func ownShellWasRead() -> Bool {
+            let own = Set(Array(controller.surfaceTree).compactMap { $0.surfaceModel?.foregroundPID }.compactMap { pid_t(exactly: $0) })
+            return !own.isEmpty && own.isSubset(of: reads)
+        }
+
+        // A hidden window sends no events, so the registry is asked to look as Ghostty's observers
+        // would. No await between the last try and the count below: a parallel test could change
+        // the registry there.
         let deadline = ContinuousClock.now + .seconds(5)
-        while reads.isEmpty, ContinuousClock.now < deadline {
+        while ContinuousClock.now < deadline {
             WorkspaceRegistry.shared.sync()
+            reads.removeAll()
+            AgentProcessCache.reset()
             model.refresh()
+            if ownShellWasRead() { break }
             try await Task.sleep(for: .milliseconds(50))
         }
-        try #require(!reads.isEmpty, "makeTab never asked for the foreground process")
+        try #require(ownShellWasRead(), "makeTab never asked for the foreground process")
 
         reads.removeAll()
         AgentProcessCache.reset()
         for _ in 0..<5 { model.refresh() }
-        #expect(!reads.isEmpty)
+        #expect(ownShellWasRead())
         #expect(reads.count == Set(reads).count, "a pid was read twice in one turn: \(reads)")
     }
 }

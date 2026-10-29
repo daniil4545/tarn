@@ -176,12 +176,12 @@ private struct CommittedSlider: View {
                 in: range, step: step
             ) { editing in
                 if !editing, let drag {
-                    store.set(option, to: String(format: "%g", drag))
+                    store.set(option, to: drag.optionText)
                     self.drag = nil
                 }
             }
             .frame(width: 140)
-            Text(String(format: "%g", drag ?? value))
+            Text((drag ?? value).optionText)
                 .font(.system(.body, design: .monospaced))
                 .frame(width: 40, alignment: .trailing)
         }

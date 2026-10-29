@@ -10,7 +10,7 @@ enum ListModules {
         let rows = TarnModule.allCases.map { [name($0), state($0)] }
         return message["json"] as? Bool == true
             ? .success(["modules": rows.map { ["module": $0[0], "state": $0[1]] }])
-            : .success(["text": text(rows)])
+            : .success(["text": ListPanes.table([columns] + rows)])
     }
 
     /// The module id in kebab case: `permissionCard` prints as `permission-card`.
@@ -22,11 +22,5 @@ enum ListModules {
     static func state(_ module: TarnModule, in defaults: UserDefaults = .standard) -> String {
         guard TarnModules.stored(module, in: defaults) else { return "off" }
         return TarnModules.isOn(module, in: defaults) ? "on" : "unavailable"
-    }
-
-    /// Names are ASCII, so padding by UTF-16 units is exact.
-    static func text(_ rows: [[String]]) -> String {
-        let width = ([columns] + rows).map { $0[0].count }.max() ?? 0
-        return ([columns] + rows).map { $0[0].padding(toLength: width, withPad: " ", startingAt: 0) + "  " + $0[1] + "\n" }.joined()
     }
 }

@@ -19,10 +19,10 @@ enum GhosttyOptionReader {
             return ghostty_config_get(cfg, &v, key, length) ? String(v) : nil
         case .float32:
             var v: Float = 0
-            return ghostty_config_get(cfg, &v, key, length) ? format(Double(v)) : nil
+            return ghostty_config_get(cfg, &v, key, length) ? Double(v).optionText : nil
         case .float64:
             var v: Double = 0
-            return ghostty_config_get(cfg, &v, key, length) ? format(v) : nil
+            return ghostty_config_get(cfg, &v, key, length) ? v.optionText : nil
         case .tag:
             var v: UnsafePointer<Int8>?
             guard ghostty_config_get(cfg, &v, key, length), let v else { return nil }
@@ -35,10 +35,5 @@ enum GhosttyOptionReader {
             guard ghostty_config_get(cfg, &v, key, length) else { return nil }
             return v % 1000 == 0 ? "\(v / 1000)s" : "\(v)ms"
         }
-    }
-
-    /// The shortest text of a float: 13, 0.7, 0.35.
-    private static func format(_ v: Double) -> String {
-        String(format: "%g", v)
     }
 }

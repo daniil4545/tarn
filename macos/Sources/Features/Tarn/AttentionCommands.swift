@@ -4,13 +4,7 @@ import OSLog
 extension AgentSession {
     /// The state `tarn ls` shows: `failed` for a waiting session whose last turn failed, else the state name.
     var listState: String {
-        if state == .waiting, failed { return "failed" }
-        switch state {
-        case .idle: return "idle"
-        case .waiting: return "waiting"
-        case .working: return "working"
-        case .permission: return "permission"
-        }
+        state == .waiting && failed ? "failed" : String(describing: state)
     }
 }
 
