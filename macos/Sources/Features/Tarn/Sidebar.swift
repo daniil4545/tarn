@@ -471,6 +471,12 @@ final class SidebarModel: ObservableObject {
         moveTo.isEnabled = canMove
         if modules.contains(.workspaces) {
             menu.addItem(moveTo)
+            if workspaces.contains(where: { $0.tabs.contains { $0.id == tab.id } }) {
+                menu.addItem(menuItem("Remove from group") { [weak self] in
+                    guard let window = self?.tabWindow(for: tab) else { return }
+                    self?.registry.moveTab(window, to: nil)
+                })
+            }
             menu.addItem(.separator())
         }
         menu.addItem(menuItem("Rename Tab...") { [weak self] in
@@ -565,20 +571,21 @@ final class SidebarModel: ObservableObject {
                   let neighbour = group.tabs.first(where: { $0.key == key }).flatMap(tabWindow(for:))
             else { return false }
             guard moving !== neighbour else { return true }
-            if let workspace = group.workspace {
-                registry.moveTab(moving, to: workspace.id, before: neighbour)
-            } else {
-                registry.reorderTab(moving, before: neighbour)
-            }
+            registry.moveTab(moving, to: group.workspace?.id, before: neighbour)
             return true
 
         case (.tab, .endOfWorkspace(let block)):
             guard let moving = tab(withKey: id).flatMap(tabWindow(for:)) else { return false }
             if let group = groups.first(where: { $0.id == block && $0.workspace == nil }) {
-                registry.reorderTab(moving, behind: group.tabs.compactMap(tabWindow(for:)))
+                registry.moveTab(moving, to: nil, behind: group.tabs.compactMap(tabWindow(for:)))
             } else {
                 registry.moveTab(moving, to: block)
             }
+            return true
+
+        case (.tab, .tail):
+            guard let moving = tab(withKey: id).flatMap(tabWindow(for:)) else { return false }
+            registry.moveTab(moving, to: nil, behind: tabWindows)
             return true
 
         case (.workspace, .beforeWorkspace(let other)):
@@ -875,6 +882,7 @@ struct Sidebar: View {
                             }
                             TabGap(model: model, slot: .endOfWorkspace(group.id))
                         }
+                        TabGap(model: model, slot: .tail)
                     }
                 }
             } else {
@@ -899,6 +907,7 @@ struct Sidebar: View {
                                     } else if model.modules.contains(.workspaces) {
                                         // Where a header would stand: the demo's gap above ungrouped rows.
                                         Color.clear.frame(height: Sidebar.ungroupedGap)
+                                            .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.id)) }
                                     }
                                     ForEach(visibleTabs(of: group)) { tab in
                                         TabGap(model: model, slot: .beforeTab(tab.key))
@@ -907,6 +916,7 @@ struct Sidebar: View {
                                     }
                                     TabGap(model: model, slot: .endOfWorkspace(group.id))
                                 }
+                                TabGap(model: model, slot: .tail)
                             }
                             // Only a fold or unfold animates: a title change or a reorder keeps
                             // its jump, as the rows of a moved tab are not new rows.

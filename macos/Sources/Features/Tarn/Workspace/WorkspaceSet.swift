@@ -24,6 +24,9 @@ struct WorkspaceSet: Equatable {
     struct Run: Equatable {
         let workspace: Workspace?
         fileprivate(set) var tabs: [TabKey]
+
+        /// The workspace, or the first tab of an ungrouped run (as `SidebarModel.Group.id`).
+        var id: UUID { workspace?.id ?? tabs[0] }
     }
 
     /// What closing a tab did to its workspace.

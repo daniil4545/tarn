@@ -32,8 +32,10 @@ enum SidebarDropSlot: Equatable {
     case beforeTab(TabKey)
     /// After the last tab of a workspace, or of a block of ungrouped tabs (named by its id).
     case endOfWorkspace(UUID)
-    /// Before a workspace header.
-    case beforeWorkspace(Workspace.ID)
+    /// Below all rows, ungrouped, when the last block is a workspace.
+    case tail
+    /// Before a block: a workspace header, or the first row of a run of ungrouped tabs (its id).
+    case beforeWorkspace(UUID)
     /// After the last workspace.
     case end
 }
@@ -74,23 +76,23 @@ extension SidebarModel {
 
         case (.workspace, .tab(let key)):
             guard let index = groups.firstIndex(where: { $0.tabs.contains { $0.key == key } }),
-                  let workspace = groups[index].workspace,
                   let row = groups[index].tabs.firstIndex(where: { $0.key == key })
             else { return nil }
             let before = (row + (lowerHalf ? 1 : 0)) * 2 <= groups[index].tabs.count
-            return before ? .beforeWorkspace(workspace.id) : slot(after: index, in: groups)
+            return before ? .beforeWorkspace(groups[index].id) : slot(after: index, in: groups)
 
         case (.tab, .tail):
-            return groups.last.map { .endOfWorkspace($0.id) }
+            guard let last = groups.last else { return nil }
+            return last.workspace == nil ? .endOfWorkspace(last.id) : .tail
 
         case (.workspace, .tail):
             return groups.isEmpty ? nil : .end
         }
     }
 
-    /// Before the next workspace below `index`, or the end. Ungrouped blocks are not slots yet.
+    /// Before the next block below `index`, or the end.
     private nonisolated static func slot(after index: Int, in groups: [Group]) -> SidebarDropSlot {
-        groups.dropFirst(index + 1).lazy.compactMap(\.workspace).first.map { .beforeWorkspace($0.id) } ?? .end
+        groups[safe: index + 1].map { .beforeWorkspace($0.id) } ?? .end
     }
 
     /// The slot while `lifted` is dragged. The slot before the lifted row and the slot after it

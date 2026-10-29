@@ -378,37 +378,43 @@ final class WorkspaceRegistry {
         return deleted
     }
 
-    /// Puts `window` in `workspace`, before `neighbour` or at the end of the workspace:
-    /// membership first, then one native move.
-    func moveTab(_ window: NSWindow, to workspace: Workspace.ID, before neighbour: NSWindow? = nil) {
+    /// Puts `window` in `workspace`, or in none (Remove from group, G5), and moves it natively once:
+    /// before `neighbour`, else after the last of `block`, else after the last other tab of the
+    /// group it ends in (the group it leaves, for none). Membership first, then the move.
+    func moveTab(_ window: NSWindow, to workspace: Workspace.ID?, before neighbour: NSWindow? = nil, behind block: [NSWindow]? = nil) {
         let tab = key(for: window)
         let order = group(of: window).map(key(for:))
         guard let index = order.firstIndex(of: tab) else { return }
-        isBusy = true
-        let changed = book.frozen ? nil : book.edit(tab) { $0.join(tab, to: workspace) }
-        let destination = Self.destination(
-            of: tab,
-            in: order,
-            before: neighbour.map(key(for:)),
-            isMember: { [frozen = book.frozen] in frozen || book.workspace(of: $0)?.id == workspace }
+        let members = Dictionary(uniqueKeysWithValues: order.compactMap { key in book.workspace(of: key).map { (key, $0.id) } })
+        let place = Self.place(
+            of: tab, in: order, members: members, to: workspace,
+            before: neighbour.map(key(for:)), behind: block.map { Set($0.map(key(for:))) } ?? (book.frozen ? Set(order) : nil)
         )
-        moveNatively(window, by: destination - index)
+        isBusy = true
+        let changed = book.frozen ? nil : book.edit(tab) { set in
+            if let workspace { set.join(tab, to: workspace) } else { set.remove(tab) }
+        }
+        moveNatively(window, by: place - index)
         isBusy = false
         sync()
         publish(changed.map { [$0] } ?? [])
     }
 
-    /// Moves a tab among ungrouped tabs, or in the flat list of Workspaces off: one native move, no
-    /// membership change (M3). Before `neighbour`, or after the last of `block`.
-    func reorderTab(_ window: NSWindow, before neighbour: NSWindow? = nil, behind block: [NSWindow] = []) {
-        let tab = key(for: window)
-        let order = group(of: window).map(key(for:))
-        guard let index = order.firstIndex(of: tab) else { return }
-        let members = Set(block.map(key(for:)))
-        isBusy = true
-        moveNatively(window, by: Self.destination(of: tab, in: order, before: neighbour.map(key(for:)), isMember: members.contains) - index)
-        isBusy = false
-        sync()
+    /// The place a sidebar move gives `tab`: before `neighbour`, else after the last of `behind`, else
+    /// after the last other tab of the group it ends in (the one it leaves, for `workspace` nil).
+    /// `members` is the membership before the move; a frozen set passes every tab as `behind`.
+    nonisolated static func place(
+        of tab: TabKey,
+        in order: [TabKey],
+        members: [TabKey: Workspace.ID],
+        to workspace: Workspace.ID?,
+        before neighbour: TabKey?,
+        behind: Set<TabKey>?
+    ) -> Int {
+        let anchor = workspace ?? members[tab]
+        return destination(of: tab, in: order, before: neighbour) {
+            behind?.contains($0) ?? (members[$0] == anchor)
+        }
     }
 
     /// The place of `tab` among the other tabs of `order` after a move: before `neighbour`, or
@@ -426,13 +432,14 @@ final class WorkspaceRegistry {
         return order.firstIndex(of: tab) ?? others.count
     }
 
-    /// Moves a whole workspace before `other`, or to the end: one native move per tab.
-    func moveWorkspace(_ workspace: Workspace.ID, before other: Workspace.ID?, in window: NSWindow) {
+    /// Moves a whole workspace before the block `other` (a workspace or a run of ungrouped tabs),
+    /// or to the end: one native move per tab. Ungrouped tabs keep their place.
+    func moveWorkspace(_ workspace: Workspace.ID, before other: UUID?, in window: NSWindow) {
         var order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)
         guard let from = runs.firstIndex(where: { $0.workspace?.id == workspace }) else { return }
         let moving = runs.remove(at: from)
-        runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.workspace?.id == id } } ?? runs.count)
+        runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.id == id } } ?? runs.count)
 
         isBusy = true
         for (place, tab) in runs.flatMap(\.tabs).enumerated() {
