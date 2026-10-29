@@ -410,10 +410,12 @@ final class SidebarModel: ObservableObject {
         let controllers = tabs.compactMap { controller(for: $0) }
         guard let anchor = controller(for: tab), !controllers.isEmpty else { return }
         let closeAll = {
-            anchor.undoManager?.beginUndoGrouping()
+            // Taken once: the anchor may close too, and a closed tab answers with another manager.
+            let undo = anchor.undoManager
+            undo?.beginUndoGrouping()
             for controller in controllers { controller.closeTabImmediately(registerRedo: false) }
-            anchor.undoManager?.setActionName(title)
-            anchor.undoManager?.endUndoGrouping()
+            undo?.setActionName(title)
+            undo?.endUndoGrouping()
         }
         // Unsaved viewer edits of any closing tab are settled first (never lost).
         let settled = { [window] in
