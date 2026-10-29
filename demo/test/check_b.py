@@ -678,11 +678,23 @@ def run(base):
         cmd(pg, "tab.move", {"id": moving, "ws": "w2"})
         for theme in ("light", "dark"):
             set_config("window-theme", theme)
+            pg.mouse.move(1000, 800)
             check(
                 f"W10q {theme} group blocks have a distinct background and inner padding",
                 n(".group").first.evaluate(
                     "e => { const s = getComputedStyle(e); return s.backgroundColor !== getComputedStyle(e.parentElement).backgroundColor && parseFloat(s.paddingTop) > 0 && parseFloat(s.borderRadius) > 0; }"
                 ),
+            )
+            check(
+                f"W10s {theme} tab cards stand out from their containers and selection",
+                pg.evaluate("""() => {
+                    const bg = e => getComputedStyle(e).backgroundColor;
+                    const card = document.querySelector('.group .tab[aria-selected="false"]');
+                    const selected = document.querySelector('.sidebar .tab[aria-selected="true"]');
+                    return card && selected && bg(card) !== bg(card.closest('.group'))
+                        && bg(card) !== bg(document.querySelector('.sidebar'))
+                        && bg(selected) !== bg(card);
+                }"""),
             )
         cmd(pg, "config.reset", {"key": "window-theme"})
 

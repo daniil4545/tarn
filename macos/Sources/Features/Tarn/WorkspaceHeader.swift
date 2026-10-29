@@ -50,7 +50,7 @@ struct WorkspaceHeader: View {
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
         .overlay(alignment: .bottom) { dropLine(endsHere) }
-        .padding(.vertical, Sidebar.rowGap / 2)
+        .padding(.vertical, 1)
         .padding(.horizontal, Sidebar.listInset)
         .overlay(
             SidebarInteraction(
