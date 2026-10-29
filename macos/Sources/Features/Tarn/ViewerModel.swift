@@ -138,8 +138,7 @@ final class ViewerModel {
     func release(_ path: String) {
         guard let index = tabs.tabs.firstIndex(where: { $0.path == path }) else { return }
         tabs.close(at: index)
-        docs[path] = nil
-        watchers[path] = nil
+        forget(path)
         pushChrome()
     }
 
@@ -168,9 +167,13 @@ final class ViewerModel {
     private func prune() {
         let open = Set(tabs.tabs.map(\.path))
         for path in docs.keys where !open.contains(path) {
-            docs[path] = nil
-            watchers[path] = nil
+            forget(path)
         }
+    }
+
+    private func forget(_ path: String) {
+        docs[path] = nil
+        watchers[path] = nil
     }
 
     func toggleTree() {
@@ -223,8 +226,7 @@ final class ViewerModel {
         guard let index = tabs.tabs.firstIndex(where: { $0.path == path }) else { return }
         let before = (tabs.tabs, tabs.active)
         tabs.close(at: index)
-        docs[path] = nil
-        watchers[path] = nil
+        forget(path)
         if tabs.tabs.isEmpty {
             onClosePane?(before.0, before.1)
         } else {
@@ -460,14 +462,9 @@ final class ViewerModel {
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Don't Save")
         alert.addButton(withTitle: "Cancel")
-        switch alert.runModal() {
-        case .alertFirstButtonReturn:
+        return ViewerClose.proceeds(ViewerClose.choice(for: alert.runModal())) {
             save(path)
             return docs[path]?.isDirty != true
-        case .alertSecondButtonReturn:
-            return true
-        default:
-            return false
         }
     }
 
