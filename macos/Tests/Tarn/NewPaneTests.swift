@@ -9,7 +9,7 @@ struct NewPaneTests {
     @Test @MainActor func anUngroupedCallerCannotOpenATab() {
         let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
         let scope = AgentScope(caller: caller, panes: [caller])
-        let result = NewPane.run(["tab": true, "argv": ["echo", "hi"]], scope)
+        let result = NewPane.open(["tab": true, "argv": ["echo", "hi"]], scope, kind: .new)
         #expect(throws: AgentRefusal(text: "put this tab in a group first")) { try result.get() }
     }
 
