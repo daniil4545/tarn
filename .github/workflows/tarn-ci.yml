@@ -44,6 +44,8 @@ jobs:
       - name: Demo unit tests
         # File arguments: the runner's Node 22 does not take a folder.
         run: node --test demo/test/unit/*.test.mjs
+      - name: Install browser
+        run: uv run -q --with playwright python -m playwright install --with-deps chromium-headless-shell
       - name: Demo checks
         run: |
           # A pointer drag in a loaded browser misses its target now and then (W7 in check_b, T-270):

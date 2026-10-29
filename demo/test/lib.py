@@ -1,8 +1,4 @@
-"""Shared helpers of the demo checks: static server, Chrome page, check recorder.
-
-Run a check: uv run --with playwright python -I demo/test/check_0.py
-Under load use: nice -n 10 (the server and Chrome are children of the script).
-"""
+"""Shared helpers of the demo checks: static server, headless shell page, check recorder."""
 
 import functools
 import http.server
@@ -40,7 +36,7 @@ def server():
 def browser_page(base, path="index.html", dpr=1, width=1400, height=860, init=None):
     """Yield (page, errors, requests): console errors, page errors and every request URL."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome")
+        browser = p.chromium.launch()
         ctx = browser.new_context(
             viewport={"width": width, "height": height}, device_scale_factor=dpr
         )

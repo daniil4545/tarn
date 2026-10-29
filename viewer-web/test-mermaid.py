@@ -1,7 +1,4 @@
-"""Renders the five common mermaid diagram kinds with the built bundle, without the app.
-
-Run: uv run --with playwright python -I viewer-web/test-mermaid.py (uses the installed Chrome).
-"""
+"""Renders the five common mermaid diagram kinds with the built bundle in a headless shell."""
 
 import pathlib
 import sys
@@ -25,7 +22,7 @@ DIAGRAMS = {
 def main() -> int:
     failures = []
     with sync_playwright() as p:
-        browser = p.chromium.launch(channel="chrome")
+        browser = p.chromium.launch()
         page = browser.new_page()
         page.set_content("<html><body></body></html>")
         page.add_script_tag(path=str(BUNDLE))

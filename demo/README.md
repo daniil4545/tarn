@@ -44,6 +44,12 @@ in full screen the page gets Cmd+T, Cmd+W and Cmd+N through Keyboard Lock. Elsew
 
 ## Test
 
+Install the browser once on a new machine:
+
+```sh
+uv run --with playwright python -m playwright install chromium-headless-shell
+```
+
 ```sh
 uv run --with playwright python -I demo/test/check_0.py     # engine, contracts, boot
 uv run --with playwright python -I demo/test/check_a.py     # terminal, shell, claude script
@@ -55,7 +61,7 @@ uv run --with playwright python -I demo/test/check_modules.py  # Settings > Modu
 node --test demo/test/unit                                  # the shell without a browser
 ```
 
-Every check runs on the real `index.html` with Chrome (`channel="chrome"`). On a shared machine put
+Every check runs on the real `index.html` with Playwright's `chromium-headless-shell`. On a shared machine put
 `nice -n 10` in front. `demo/test/keys.html` is a manual page for the reserved browser keys.
 `window.__tarn` is the only way tests read state (`js/CONTRACT.md`).
 
