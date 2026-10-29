@@ -20,6 +20,9 @@ enum NewPane {
         // Typed input reaches the line editor as keys: Ctrl+O submits in zsh and bash, Tab completes (B2).
         if kind == .run, Ghostty.Shell.containsControlCharacters(command) { return .failure(RunPane.controlCharacter) }
         let tab = message["tab"] as? Bool == true
+        if tab, message["right"] as? Bool == true {
+            return .failure(AgentRefusal(text: "--right and --tab exclude each other"))
+        }
         if !tab, message["title"] != nil { return .failure(AgentRefusal(text: "--title needs --tab")) }
         if tab, let refusal = NewTab.refusal(group: scope.caller.workspace, frozen: WorkspaceRegistry.shared.isFrozen) {
             return .failure(refusal)

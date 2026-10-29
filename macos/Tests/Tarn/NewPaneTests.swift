@@ -14,15 +14,65 @@ struct NewPaneTests {
     }
 
     // spec: docs/specs/agent-cli.md U5
-    @Test func aNewTabJoinsTheCallersGroup() throws {
-        let caller = TabKey(), child = TabKey()
-        var book = WorkspaceBook()
-        _ = book.reconcile([.init(tabs: [caller], selected: caller)])
-        let group = book.group("project", [caller])
-        _ = book.opened(child, from: caller)
-        _ = book.reconcile([.init(tabs: [caller, child], selected: caller)])
-        #expect(try #require(book.workspace(of: child)).id == group)
-        #expect(book.workspace(of: child) == book.workspace(of: caller))
+    @Test @MainActor func aNewTabJoinsTheUnselectedCallersGroup() throws {
+        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
+        // Construct controllers without showing windows, as in the split focus test.
+        let caller = TerminalController(app)
+        let other = TerminalController(app)
+        let parent = try #require(caller.window)
+        let selected = try #require(other.window)
+        parent.isReleasedWhenClosed = false
+        selected.isReleasedWhenClosed = false
+        defer {
+            caller.surfaceTree = .init()
+            other.surfaceTree = .init()
+        }
+        parent.tabbingMode = .preferred
+        selected.tabbingMode = .preferred
+        try #require(parent.addTabbedWindowSafely(selected, ordered: .above))
+        let native = try #require(parent.tabGroup)
+        native.selectedWindow = selected
+        try #require(native.windows == [parent, selected])
+        try #require(native.selectedWindow === selected)
+
+        let registry = WorkspaceRegistry.shared
+        try #require(!registry.isFrozen)
+        let callerKey = TabKey(), otherKey = TabKey()
+        let group = Workspace(name: "project")
+        let set = WorkspaceSet(workspaces: [group], members: [callerKey: group.id, otherKey: group.id])
+        for (window, key) in [(parent, callerKey), (selected, otherKey)] {
+            registry.restore(WorkspaceSnapshot(set: set, tabKey: key, order: [callerKey, otherKey]), for: window)
+        }
+        try #require(registry.workspace(of: parent)?.id == group.id)
+        let keyWindow = NSApp.keyWindow
+        let active = NSApp.isActive
+        var config = Ghostty.SurfaceConfiguration()
+        config.command = "/bin/cat"
+
+        let pane = try NewTab.open(caller, config: config, title: "").get()
+        let childWindow = try #require(native.windows.first { $0 !== parent && $0 !== selected })
+        let child = try #require(childWindow.windowController as? TerminalController)
+        childWindow.isReleasedWhenClosed = false
+        defer { child.surfaceTree = .init() }
+
+        #expect(child.surfaceTree.first === pane)
+        #expect(native.windows == [parent, childWindow, selected])
+        #expect(childWindow.tabGroup === native)
+        #expect(native.selectedWindow === selected)
+        #expect(NSApp.keyWindow === keyWindow)
+        #expect(NSApp.isActive == active)
+        #expect(registry.workspace(of: childWindow)?.id == group.id)
+        #expect(child.titleOverride == nil)
+    }
+
+    // spec: docs/specs/agent-cli.md U5
+    @Test @MainActor func rightAndTabExcludeEachOther() {
+        let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: UUID())
+        let scope = AgentScope(caller: caller, panes: [caller])
+        for kind in [RunMark.Kind.new, .run] {
+            let result = NewPane.open(["tab": true, "right": true, "argv": ["ls"]], scope, kind: kind)
+            #expect(throws: AgentRefusal(text: "--right and --tab exclude each other")) { try result.get() }
+        }
     }
 
     /// Expected values are the output of Python `shlex.join` on the same arguments.

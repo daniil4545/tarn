@@ -215,6 +215,23 @@ def main() -> int:
 
         # spec: docs/specs/agent-cli.md U5
         for cmd in ["new", "run"]:
+            for flags in [["--right", "--tab"], ["--tab", "--right"]]:
+                code, out, err = run(home, [cmd, *flags, "--", "ls"])
+                check(
+                    f"{cmd} right excludes tab {flags}",
+                    (code, out, err)
+                    == (1, "", "tarn: --right and --tab exclude each other\n"),
+                )
+            (code, out, err), req = with_server(
+                home, reply(pane=SURFACE), [cmd, "--tab", "--title", "", "--", "ls"]
+            )
+            check(
+                f"{cmd} empty title reaches app",
+                (code, out, err) == (0, SURFACE + "\n", "")
+                and req[0]["tab"] is True
+                and req[0]["title"] == "",
+                req,
+            )
             (code, out, err), req = with_server(
                 home,
                 reply(pane=SURFACE),

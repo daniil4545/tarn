@@ -7,6 +7,7 @@
 #   tarn notify <text>      mark this session and notify the user; never moves focus
 #   tarn new [--right | --tab [--title T]] [--cwd D] -- <cmd...>
 #                           a split below this pane (right with --right) running the command;
+#                           --tab opens an unselected tab in the caller's group; --title names it
 #                           prints its pane id; never moves focus
 #   tarn run [--right | --tab [--title T]] [--cwd D] -- <cmd...>
 #                           as new, but a shell with the command typed, not submitted: the user
@@ -175,6 +176,7 @@ case $cmd in
       esac
       shift
     done
+    [ "$right" = false ] || [ -z "$tab" ] || fail "--right and --tab exclude each other"
     [ -z "$title" ] || [ -n "$tab" ] || fail "--title needs --tab"
     [ $# -gt 1 ] || usage
     shift

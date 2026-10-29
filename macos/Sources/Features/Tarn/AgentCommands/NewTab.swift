@@ -24,7 +24,7 @@ enum NewTab {
 
         let child = TerminalController(caller.ghostty, withBaseConfig: config)
         child.isBackgroundOpaque = caller.isBackgroundOpaque
-        child.titleOverride = title
+        child.titleOverride = title.flatMap { $0.isEmpty ? nil : $0 }
         var attached = false
         defer {
             if !attached {

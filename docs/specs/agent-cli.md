@@ -97,8 +97,8 @@ Common rules, for every command except `skill`:
 | `tarn open <path> [:line]` | opens a file in the viewer (exists) | nothing | current `cli/tarn` |
 | `tarn notify <text>` | marks the caller and notifies (exists) | nothing | current `cli/tarn` |
 | `tarn ls [--json]` | terminal panes of the caller's workspace, or of its own tab when the tab has no workspace | table | WezTerm `cli list` |
-| `tarn new [--tab] [--right] [--cwd D] [--title T] -- <cmd...>` | new pane with the command started | pane id | kitty `launch --keep-focus`, WezTerm `split-pane` |
-| `tarn run [--tab] [--right] [--cwd D] -- <cmd...>` | new pane with a shell, the command typed, not submitted | pane id | herdr `send-text` (non-submitting) |
+| `tarn new [--right \| --tab [--title T]] [--cwd D] -- <cmd...>` | new pane with the command started | pane id | kitty `launch --keep-focus`, WezTerm `split-pane` |
+| `tarn run [--right \| --tab [--title T]] [--cwd D] -- <cmd...>` | new pane with a shell, the command typed, not submitted | pane id | herdr `send-text` (non-submitting) |
 | `tarn wait <pane> [--timeout S]` | waits for the end of the command | state line | Otty `pane wait`, `pane run --format json` |
 | `tarn read <pane> [--lines N]` | screen text of a pane | text | herdr `pane read` |
 | `tarn close <pane>` | closes a pane | nothing | WezTerm `kill-pane`, herdr `pane close` |
@@ -133,7 +133,7 @@ Skill rules (Otty skill and herdr skill as models):
 | Need | Ghostty has | Where | Our part |
 | --- | --- | --- | --- |
 | split without focus | `SplitTree.inserting`; `surfaceTree` published property; `newSplit` moves focus and `replaceSurfaceTree` always registers undo | `BaseTerminalController.swift:49-52`, `282-316`, `540-582` | insert, assign the tree, give the first responder back with `Ghostty.moveFocus` (a tree change drops it, `SurfaceView.swift:1067-1070`) |
-| tab in a workspace | `WorkspaceRegistry.newTab(in:from:)`, Ghostty `newTab` | `WorkspaceRegistry.swift:269-274`, `TerminalController.swift:424` | O1, T-206 |
+| tab in a group without selection | `TerminalController`, `addTabbedWindowSafely`, `WorkspaceRegistry.opened` | `TerminalController.swift`, `NSWindow+Extension.swift`, `WorkspaceRegistry.swift` | `NewTab.open` attaches after the caller and restores the selection (U5) |
 | command, cwd, env | `SurfaceConfiguration.command`, `workingDirectory`, `environmentVariables`; `wait-after-command` for commands | `SurfaceView.swift:581-591`, `src/apprt/embedded.zig:568-573` | fill the configuration |
 | typed, not submitted input | `SurfaceConfiguration.initialInput` | `SurfaceView.swift:594` | the line without a newline |
 | end of a shell command | `command_finished` with exit code | `src/Surface.zig:1194-1222`, `Ghostty.App.swift:773-774` | insertion point at `773`, before the `notify-on-command-finish` guard (default `never`, `src/config/Config.zig:1214`) |
@@ -208,6 +208,6 @@ Each PR into `dev`, under 400 lines of code, in this order:
 | 4 | `run` as a split, O2 test | 3 |
 | 5 | `read` and `close` | 1 |
 | 6 | `skill`, the plugin stub skill, `module ls` | 1, #34 for real rows |
-| 7 | `--tab` for `new` and `run`, O1 spike | 2, T-206 |
+| 7 | `--tab` and `--title` for `new` and `run`, unselected native attachment (U5) | 2, T-266 stage 3 |
 
 Change with the PR that changes the behavior: `docs/spec.md` R15 (no `send`), 2 component table, 11 `ls` row, 12 questions 2-4 closed; `docs/modules/control-socket.md`, `docs/modules/attention.md` 29, 33; `docs/architecture.md` insertion points; `cli/tarn` usage lines 5, 17 and error text at 93; `cli/test/cli_test.py`; `macos/Tests/Tarn/AttentionCommandsTests.swift`; `demo/js/commands/tarn.js`, `demo/js/session-rows.js`, `demo/test/check_a.py`; the #41 spec, which reads `ls`.
