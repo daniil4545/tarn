@@ -75,13 +75,13 @@ function render() {
     const l2 = `<div class="l2">${esc(detail(t, reg))}</div>`;
     return `<div class="${cls} wide" ${attrs}>${icon(t)}<div class="lines"><div class="l1">${line}</div>${l2}</div></div>`;
   };
-  // An ungrouped block has a hidden header so the drag code finds the owner of a row.
+  // Ungrouped blocks keep their workspace identity in a hidden header.
   const lists = s.wss.filter((w) => w.tabs.length);
   sb.innerHTML = top + lists.map((w) => {
     const n = w.tabs.length;
     const folded = w.collapsed ? `<span class="cnt">${n}</span>${dot(workspaceStatus(w, s.tabs, reg))}` : "";
     const head = w.loose ? `<div class="wsh flat" data-wsh="${w.id}" aria-hidden="true"></div>` : `<div class="wsh" data-wsh="${w.id}" draggable="true" role="button" tabindex="0" aria-expanded="${!w.collapsed}" title="${w.folder ? `${esc(w.folder)} · ` : ""}${n} tab${n === 1 ? "" : "s"}"><span class="chev">${w.collapsed ? "▸" : "▾"}</span>${w.folder ? FOLDER : ""}<span class="t">${esc(w.name)}</span>${folded}<button class="ib" data-wsnewtab="${w.id}" title="New tab in ${esc(w.name)}">+</button></div>`;
-    return head + (w.collapsed ? "" : w.tabs.map(row(w)).join(""));
+    return `<div class="wsblock${w.loose ? "" : " group"}" data-block="${w.id}">${head}${w.collapsed ? "" : w.tabs.map(row(w)).join("")}<div class="groupend"></div></div>`;
   }).join("") + '<button class="tab add" id="wsNew">+ New group</button>';
 }
 
