@@ -222,6 +222,7 @@ struct ThemeChrome: Equatable {
 /// What the sidebar draws with: the theme colors, or the system ones when there is no theme.
 struct ChromeInk {
     var theme: ThemeChrome?
+    var sidebarSurface: Color = .clear
 
     /// Text at an opacity; the fills of hover and selection use the same color.
     func text(_ opacity: Double = 1) -> Color {
@@ -232,6 +233,9 @@ struct ChromeInk {
     var faint: Color { theme?.key.color ?? Color(nsColor: .tertiaryLabelColor) }
     var accent: Color { theme?.accent.color ?? Color.accentColor }
     var groupBackground: Color { theme.map { $0.surface.mixed(with: $0.foreground, by: 0.04).color } ?? text(0.04) }
+    var tabCard: Color { theme.map { $0.surface.mixed(with: $0.foreground, by: 0.08).color } ?? text(0.08) }
+    var tabCardHover: Color { theme.map { $0.surface.mixed(with: $0.foreground, by: 0.11).color } ?? text(0.11) }
+    var tabBorder: Color { text(0.06) }
     var divider: Color { theme?.divider.color ?? Color.primary.opacity(0.12) }
 }
 

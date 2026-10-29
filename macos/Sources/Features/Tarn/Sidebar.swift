@@ -753,7 +753,7 @@ struct SidebarLayout<Content: View>: View {
     /// The colors of the terminal theme (`window-theme` auto or ghostty), or nil for the built-in
     /// palettes. Config changes arrive through `ghostty.config`, so a theme change repaints at once.
     private var ink: ChromeInk {
-        ChromeInk(theme: ThemeChrome.current(for: ghostty.config))
+        ChromeInk(theme: ThemeChrome.current(for: ghostty.config), sidebarSurface: ghostty.config.backgroundColor)
     }
 
     private var isLightTheme: Bool {
@@ -832,7 +832,7 @@ struct Sidebar: View {
     /// with it instead of the list, so their drop targets touch and a drag over a gap keeps
     /// its line.
     static let listInset: CGFloat = 6
-    static let rowGap: CGFloat = 2
+    static let rowGap: CGFloat = 4
     /// The indent of the rows under a workspace header (`demo/css/chrome.css`).
     static let groupIndent: CGFloat = 12
     static let blockMargin: CGFloat = 8
@@ -953,7 +953,7 @@ struct Sidebar: View {
             TabGap(model: model, slot: .endOfWorkspace(group.id))
         }
         .padding(group.workspace == nil ? 0 : 4)
-        .background(RoundedRectangle(cornerRadius: 8).fill(group.workspace == nil ? Color.clear : ink.groupBackground))
+        .background(RoundedRectangle(cornerRadius: 10).fill(group.workspace == nil ? Color.clear : ink.groupBackground))
         .padding(.horizontal, Sidebar.listInset)
     }
 
@@ -1082,7 +1082,21 @@ private struct SidebarRow: View {
             .font(.system(size: 13))
             .foregroundStyle(ink.text(tab.isSelected ? 1 : 0.7))
             // Scoped to the fill: the close button and the card logic still switch at once.
-            .background(RoundedRectangle(cornerRadius: 5).fill(fill).animation(Motion.hover, value: fill))
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(fill)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(ink.sidebarSurface))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(ink.accent.opacity(tab.isSelected ? 0.18 : 0))
+                    }
+                    .animation(Motion.hover, value: fill)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .strokeBorder(tab.isSelected ? ink.accent.opacity(0.45) : ink.tabBorder, lineWidth: 1)
+                    .allowsHitTesting(false)
+            }
             .background(RowAnchor { model.rowAnchors[tab.id] = WeakView(view: $0) })
             .contentShape(Rectangle())
             .onHover { hovering in
@@ -1096,7 +1110,7 @@ private struct SidebarRow: View {
             }
             .help(isCompact ? tab.title : "")
             .overlay(alignment: .bottom) { dropLine(endsHere) }
-            .padding(.vertical, Sidebar.rowGap / 2)
+            .padding(.vertical, isCompact ? 1 : Sidebar.rowGap / 2)
             .padding(.leading, isCompact ? 0 : Sidebar.listInset + indent)
             .padding(.trailing, isCompact ? 0 : Sidebar.listInset)
             .overlay(interaction)
@@ -1164,8 +1178,7 @@ private struct SidebarRow: View {
     }
 
     private var fill: Color {
-        if tab.isSelected { return ink.text(0.14) }
-        return ink.text(isHovering ? 0.07 : 0)
+        isHovering ? ink.tabCardHover : ink.tabCard
     }
 
     @ViewBuilder
