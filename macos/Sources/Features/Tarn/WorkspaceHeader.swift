@@ -180,9 +180,17 @@ enum NewGroupChoice: Equatable {
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return nil }
         return .workspace(folder: URL(fileURLWithPath: path).standardized.path)
     }
+
+    /// Opens the folder panel at the typed directory, or home when the path is unusable.
+    static func startDirectory(folder: String) -> URL {
+        if case let .workspace(path) = make(confirmed: true, isWorkspace: true, name: "", folder: folder) {
+            return URL(fileURLWithPath: path, isDirectory: true)
+        }
+        return FileManager.default.homeDirectoryForCurrentUser
+    }
 }
 
-/// The accessory of the New Group dialog: the kind, a name and a typed folder path, as in the demo.
+/// The accessory of the New Group dialog: the kind, a name and a typed or chosen folder path.
 @MainActor
 final class NewGroupForm: NSView {
     let nameField = NSTextField(string: "")
@@ -193,7 +201,7 @@ final class NewGroupForm: NSView {
     let workspaceRadio = NSButton(radioButtonWithTitle: "Workspace", target: nil, action: nil)
 
     init() {
-        super.init(frame: NSRect(x: 0, y: 0, width: 330, height: 56))
+        super.init(frame: NSRect(x: 0, y: 0, width: 420, height: 56))
         nameField.placeholderString = "Name"
         folderField.placeholderString = "~/code/project"
         for radio in [groupRadio, workspaceRadio] {
@@ -204,9 +212,10 @@ final class NewGroupForm: NSView {
         groupRadio.state = .on
         folderField.delegate = self
         nameField.delegate = self
+        let choose = NSButton(title: "Choose…", target: self, action: #selector(chooseFolder))
         let rows = NSStackView(views: [
             NSStackView(views: [groupRadio, nameField]),
-            NSStackView(views: [workspaceRadio, folderField]),
+            NSStackView(views: [workspaceRadio, folderField, choose]),
         ])
         rows.orientation = .vertical
         rows.alignment = .leading
@@ -223,6 +232,24 @@ final class NewGroupForm: NSView {
 
     func choice(confirmed: Bool) -> NewGroupChoice? {
         .make(confirmed: confirmed, isWorkspace: workspaceRadio.state == .on, name: nameField.stringValue, folder: folderField.stringValue)
+    }
+
+    @objc private func chooseFolder() {
+        guard let window else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose"
+        panel.directoryURL = NewGroupChoice.startDirectory(folder: folderField.stringValue)
+        panel.beginSheetModal(for: window) { [weak self] response in
+            guard response == .OK, let self, let url = panel.url else { return }
+            self.folderField.stringValue = WorkspaceFolder.display(url.path)
+            self.workspaceRadio.state = .on
+            self.groupRadio.state = .off
+            self.onChange()
+        }
     }
 
     @objc private func kindChanged(_ sender: NSButton) {
