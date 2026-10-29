@@ -134,6 +134,25 @@ struct TombstoneTests {
         #expect(book.workspace(of: t[3])?.id == work)
     }
 
+    // spec: docs/specs/workspace-folder.md S63
+    @Test func aTabUndoKeepsItsGroupWhileAppKitJoinsTheReopenedWindow() {
+        var book = WorkspaceBook()
+        _ = book.pass([[t[0], t[1], t[2]]])
+        let solo = book.group("solo", [t[2]])
+        let closed = book.closing(t[2])!
+        #expect(book.set(of: t[0])?.workspace(solo) == nil)
+
+        book.reinsert(t[2], from: closed)
+        #expect(book.workspace(of: t[2])?.id == solo)
+        _ = book.pass([[t[2]], [t[0], t[1]]])
+        #expect(book.workspace(of: t[2])?.id == solo)
+        #expect(book.set(of: t[2])?.id == closed.set.id)
+
+        _ = book.pass([[t[0], t[1], t[2]]])
+        #expect(book.workspace(of: t[2])?.id == solo)
+        #expect(book.names([t[0], t[1], t[2]]) == ["-", "solo"])
+    }
+
     // spec: docs/specs/workspace-folder.md S46
     /// "Delete group" with the box checked closes the tabs one by one (`Sidebar.close`, one undo
     /// group); the group goes with the last, and the undo of both brings back the group with both.
