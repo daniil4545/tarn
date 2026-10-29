@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Settings > Modules: one switch per module and the Claude Code line.
+/// Settings > Modules: each module's switch and options, then integration checks.
 struct ModulesSettingsPane: View {
     @AppStorage(TabStyle.key) private var style: TabStyle = .sidebar
+    @AppStorage(TabRows.key) private var rows: TabRows = .wide
     @AppStorage(TarnModule.permissionCard.key) private var permissionCard = true
     @AppStorage(TarnModule.notifications.key) private var notifications = true
     @AppStorage(FileViewerSetting.key) private var viewer = true
@@ -17,6 +18,19 @@ struct ModulesSettingsPane: View {
                     get: { style == .sidebar },
                     set: { style = $0 ? .sidebar : .top }
                 ))
+                Picker("Row size", selection: $rows) {
+                    ForEach(TabRows.allCases) { rows in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(rows.title)
+                            Text(rows.detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .tag(rows)
+                    }
+                }
+                .pickerStyle(.radioGroup)
+                .disabled(style != .sidebar)
                 row(.viewer, isOn: $viewer)
                 row(.permissionCard, isOn: $permissionCard)
                 row(.notifications, isOn: $notifications)

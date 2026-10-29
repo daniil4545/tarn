@@ -19,7 +19,8 @@ enum TarnModule: String, CaseIterable, Identifiable {
     var detail: String {
         switch self {
         case .sidebar: "Tabs in workspaces with agent state, on the left. Off: the native tab bar at the top."
-        case .viewer: "Files, markdown and code next to the terminal."
+        case .viewer: "Cmd+B, path clicks and agents open files in a pane beside the terminal. "
+            + "When off, path clicks open files in their default app; open panes are hidden and come back when you switch it on."
         case .permissionCard: "Allow or deny from the sidebar card."
         case .notifications: "A banner when an agent needs you; Cmd+U jumps to it."
         }
