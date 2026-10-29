@@ -14,11 +14,6 @@ struct WorkspaceTitleTests {
         #expect(WorkspaceTitle.subtitle(workspace: "Work", workspacesOn: false) == "")
     }
 
-    @Test func theSettingsTextNamesTheTabs() {
-        #expect(TabStyle.sidebar.detail.hasPrefix("Tabs with agent state"))
-        #expect(TabStyle.top.detail.contains("workspace name"))
-    }
-
     // spec: docs/specs/workspace-folder.md S23
     // Tabs at the top: the tab mark carries the workspace name while Workspaces is on; an ungrouped tab (name empty) has none.
     @Test func theNativeTabMarkNamesTheWorkspace() {

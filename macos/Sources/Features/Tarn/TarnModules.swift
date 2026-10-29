@@ -27,7 +27,7 @@ enum TarnModule: String, CaseIterable, Identifiable {
         }
     }
 
-    /// The UserDefaults key. Sidebar and File viewer keep the keys of 1.2.0.
+    /// The UserDefaults key. Sidebar and File viewer keep their original keys.
     var key: String {
         switch self {
         case .sidebar: TabStyle.key
@@ -120,11 +120,6 @@ enum TarnModules {
     }
 }
 
-extension Notification.Name {
-    /// Posted when the effective set of modules changed; `userInfo["changed"]` is the set.
-    static let tarnModulesDidChange = Notification.Name("com.daniil4545.tarn.modulesDidChange")
-}
-
 /// What each owner does when its module flips. Tests replace the closures with spies.
 struct ModuleOwners {
     var tabStyle: @MainActor () -> Void = { TabStyle.applyToOpenWindows() }
@@ -178,7 +173,6 @@ final class TarnModuleWatcher {
         if changed.contains(.permissionCard) { owners.releasePermissions() }
         if changed.contains(.viewer) { owners.viewerChanged() }
         owners.menus()
-        NotificationCenter.default.post(name: .tarnModulesDidChange, object: nil, userInfo: ["changed": changed])
         NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
     }
 }
