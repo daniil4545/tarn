@@ -14,9 +14,13 @@ enum ListPanes {
 
     /// The table; an empty cell shows as `-`, a title keeps to one line.
     static func text(_ rows: [PaneRow]) -> String {
-        let table: [[String]] = [columns] + rows.map(cells)
-        let widths: [Int] = columns.indices.map { column in table.map { $0[column].count }.max() ?? 0 }
-        return table.map { line(of: $0, widths: widths) }.joined()
+        table([columns] + rows.map(cells))
+    }
+
+    /// Rows (the header first) padded to the widest cell of each column, two spaces apart; the last column is not padded.
+    static func table(_ rows: [[String]]) -> String {
+        let widths: [Int] = rows[0].indices.map { column in rows.map { $0[column].count }.max() ?? 0 }
+        return rows.map { line(of: $0, widths: widths) }.joined()
     }
 
     private static func cells(_ row: PaneRow) -> [String] {
