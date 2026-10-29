@@ -366,7 +366,7 @@ final class SidebarModel: ObservableObject {
 
     func newWorkspace() {
         guard let window else { return }
-        WorkspacePrompt.newWorkspace(in: window)
+        WorkspacePrompt.newGroup(in: window)
     }
 
     func rename(_ workspace: Workspace) {
@@ -381,11 +381,14 @@ final class SidebarModel: ObservableObject {
     private var workspaces: [Group] { groups.filter { $0.workspace != nil } }
 
     func delete(_ workspace: Workspace) {
-        guard let window, let index = workspaces.firstIndex(where: { $0.id == workspace.id }), workspaces.count > 1 else { return }
-        let heir = workspaces[index > 0 ? index - 1 : index + 1].workspace?.name ?? ""
-        WorkspacePrompt.confirmDelete(workspace.name, tabCount: workspaces[index].tabs.count, heir: heir, in: window) { [weak self] in
+        guard let window, let group = workspaces.first(where: { $0.id == workspace.id }) else { return }
+        WorkspacePrompt.confirmDelete(workspace.name, tabCount: group.tabs.count, in: window) { [weak self] closeTabs in
             guard let self, let window = self.window else { return }
-            self.registry.delete(workspace.id, in: window)
+            if closeTabs, let first = group.tabs.first {
+                self.close(group.tabs, title: "Close Group Tabs", from: first)
+            } else {
+                self.registry.ungroup(workspace.id, in: window)
+            }
         }
     }
 
@@ -407,10 +410,12 @@ final class SidebarModel: ObservableObject {
         let controllers = tabs.compactMap { controller(for: $0) }
         guard let anchor = controller(for: tab), !controllers.isEmpty else { return }
         let closeAll = {
-            anchor.undoManager?.beginUndoGrouping()
+            // Taken once: the anchor may close too, and a closed tab answers with another manager.
+            let undo = anchor.undoManager
+            undo?.beginUndoGrouping()
             for controller in controllers { controller.closeTabImmediately(registerRedo: false) }
-            anchor.undoManager?.setActionName(title)
-            anchor.undoManager?.endUndoGrouping()
+            undo?.setActionName(title)
+            undo?.endUndoGrouping()
         }
         // Unsaved viewer edits of any closing tab are settled first (never lost).
         let settled = { [window] in
@@ -501,7 +506,7 @@ final class SidebarModel: ObservableObject {
         menu.addItem(menuItem("Rename Workspace...") { [weak self] in
             self?.rename(workspace)
         })
-        menu.addItem(menuItem("Delete Workspace...", isEnabled: workspaces.count > 1) { [weak self] in
+        menu.addItem(menuItem("Delete Group...") { [weak self] in
             self?.delete(workspace)
         })
         return menu
@@ -966,7 +971,7 @@ struct Sidebar: View {
     }
 
     private var newWorkspaceButton: some View {
-        SidebarButton(systemName: "folder.badge.plus", label: "New Workspace") {
+        SidebarButton(systemName: "folder.badge.plus", label: "New Group") {
             model.newWorkspace()
         }
     }

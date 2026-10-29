@@ -27,7 +27,7 @@ Reading: Ghostty alone writes tab order; this module writes only membership, nam
 | Direction | What | Where |
 |---|---|---|
 | In | `terminalTabsDidChange`, window became key, window will close | `WorkspaceRegistry.init` observers |
-| In | sidebar commands: new tab in a workspace, new workspace by folder, set or remove folder, rename, delete, fold, move tab, move workspace | `WorkspaceRegistry` methods |
+| In | sidebar commands: new tab in a workspace, new group by name or workspace by folder, set or remove folder, rename, delete, fold, move tab, move workspace | `WorkspaceRegistry` methods |
 | In | restorable state of a window (key `tarn.workspaces`) | `WorkspaceRestore.decode` |
 | In | undo of a closed tab or window | `TombstoneShelf`, Ghostty's undo manager |
 | Out | `runs(for:)`: workspaces of a window top to bottom with their tab windows | `SidebarModel.refresh` |
@@ -50,7 +50,7 @@ Folder (`docs/specs/workspace-folder.md`): a workspace has an optional `folder`,
 
 New tab (`docs/specs/workspace-folder.md` M1): `AppDelegate.ghosttyNewTab` passes the controller that `TerminalController.newTab` returns to `WorkspaceRegistry.opened(_:from:)` with the window the tab was opened from; the tab takes that tab's workspace and unfolds it, when both windows share a native tab group; from an ungrouped tab it is ungrouped, in the same set (otherwise it stays unplaced and `sync` makes it ungrouped). Cmd+T, the New Tab menu item, the native "+" and the sidebar button all take this path; the header "+" and a new workspace call `opened` themselves. Workspaces off: `opened` does nothing.
 
-Sidebar commands: a new workspace is created with its first tab, in one step, after the tab exists; a refused tab creates nothing. Rename refuses a blank name. Delete moves tabs to the workspace above (below for the first; ungrouped blocks are skipped); the last workspace is never deleted. Move tab changes membership (a workspace left empty goes), then makes one `move_tab`; move workspace makes one `move_tab` per tab. `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace.
+Sidebar commands: a new workspace is created with its first tab, in one step, after the tab exists; a refused tab creates nothing. Rename refuses a blank name. Delete (`ungroup`) removes the group and leaves its tabs ungrouped where they stand; any group may go, the only one too. The sheet may also close the tabs (the sidebar closes them as one undoable step and the group goes with its last tab). Move tab changes membership (a workspace left empty goes), then makes one `move_tab`; move workspace makes one `move_tab` per tab. `move_tab` acts on the selected tab, so the registry selects the tab, moves, restores the selection and marks these key hops (`KeyHops`) so they do not unfold a folded workspace.
 
 Workspaces off (T-205, Settings > Modules): `WorkspaceBook.frozen`. The workspaces stay exactly as they are. A new tab stays ungrouped; no native move ever runs from `sync`, so a new tab lands where Ghostty puts it and a drag changes only the order. New Workspace (button, menu item, Shift+Cmd+T) is hidden or does nothing; the sidebar is one flat list in native order, and no workspace name shows in the window subtitle or the native tabs. A tab that closes leaves its frozen workspace as usual. On again: membership does not change and no tab moves; the sidebar draws by membership, the tabs opened while off are ungrouped.
 
@@ -68,7 +68,7 @@ Undo (tombstone): the tombstone joins Ghostty's undo group instead of a second a
 
 | Path | Role |
 |---|---|
-| `macos/Sources/Features/Tarn/Workspace/WorkspaceSet.swift` | `Workspace`, `WorkspaceSet`: create, set folder, rename, fold, delete, join, remove, absorb, reconcile, runs |
+| `macos/Sources/Features/Tarn/Workspace/WorkspaceSet.swift` | `Workspace`, `WorkspaceSet`: create, set folder, rename, fold, ungroup, join, remove, absorb, reconcile, runs |
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceBook.swift` | rules without AppKit: set choice, merge, `opened`, closing and reinsert |
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceRegistry.swift` | singleton, windows to keys, observers, native moves, sidebar commands, tombstone registration |
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceSnapshot.swift` | Codable snapshot, version 1 |
@@ -77,7 +77,7 @@ Undo (tombstone): the tombstone joins Ghostty's undo group instead of a second a
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceTitle.swift` | window subtitle |
 | `macos/Sources/Features/Tarn/Workspace/KeyHops.swift` | marks key changes caused by our own moves |
 | `macos/Sources/Features/Tarn/Workspace/WorkspaceFolder.swift` | pure path rules: standardize, contains, name, display |
-| `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view and tooltip, drop line, folder panel, name and delete prompts |
+| `macos/Sources/Features/Tarn/WorkspaceHeader.swift` | header view and tooltip, drop line, New Group sheet and folder panel, name and delete prompts |
 | `macos/Sources/Features/Tarn/TabDragSource.swift` | drag payloads and drop-slot math, see [sidebar.md](sidebar.md) |
 
 ## Ghostty mechanisms used
@@ -102,7 +102,7 @@ Rows 15 and 16 of [architecture.md](../architecture.md): `WorkspaceRestore.encod
 |---|---|
 | Ghostty is the single writer of tab order; we never call `removeWindow` or `addTabbedWindowSafely` to order tabs | review; reordering only through `move_tab` |
 | A tab is in one workspace or in none; a tab the table does not name is ungrouped, never lost | `WorkspaceSet.runs(order:)`, `WorkspaceBook.reconcile`, tests `FailureTests` |
-| The last workspace is not deleted; a workspace closes with its last tab | `WorkspaceSetTests` |
+| A group deleted leaves its tabs ungrouped, the only one too; a workspace closes with its last tab | `WorkspaceSetTests` |
 | Any uncovered case logs one line `workspace: <reason> window=<key> set=<id>` (category `workspace`), leaves the tab ungrouped and never crashes or drops a tab | `WorkspaceBook.note`; a broken snapshot, and the `reconcile` fallback, give one block of ungrouped tabs |
 | A second `reconcile` over the same groups changes nothing | `ReconcileTests`, `TargetTests` |
 | No timer of ours for undo | tombstone closure expires with Ghostty's undo |
@@ -117,7 +117,7 @@ All in `macos/Tests/Tarn/`; `BookSupport.swift` holds helpers.
 | Suite | Pins |
 |---|---|
 | `WorkspaceFolderTests` | folder path rules (symlink, trailing slash, `F-old`), set and remove folder, folder choice by workspace, snapshot with and without the field |
-| `WorkspaceSetTests` | delete up or down, last workspace kept, last tab closes workspace, blank names, fold, runs follow tab order, snapshot round trip, rejects and the dropped `manual` key |
+| `WorkspaceSetTests` | ungroup, the only group deleted, last tab closes workspace, blank names, fold, runs follow tab order, snapshot round trip, rejects and the dropped `manual` key |
 | `ReconcileTests` | a native reorder changes no membership, a new window and an unannounced tab are ungrouped, idempotence |
 | `UngroupedTests` | an older "~" loads as ungrouped tabs (S50), "No project" and "Default" stay groups, a lone old window keeps its group on merge |
 | `TargetTests` | a tab opened from another takes its workspace, from an ungrouped tab it is ungrouped (S42, S53), a last tab leaving drops its workspace (S44), unfold on select, drag out and across windows |

@@ -168,7 +168,8 @@ struct WorkspaceBook {
     }
 
     /// Puts a reopened tab back where `closed` says: its set (recreated when gone) and its
-    /// workspace (recreated when deleted), or ungrouped (M2).
+    /// workspace (recreated when deleted), or ungrouped (M2). Like a restored tab, it stays
+    /// unsettled until AppKit joins it to its native tab group.
     mutating func reinsert(_ tab: TabKey, from closed: ClosedTab) {
         let id = closed.set.id
         var set = sets[id] ?? WorkspaceSet(id: id, revision: closed.set.revision)
@@ -178,7 +179,6 @@ struct WorkspaceBook {
         }
         sets[id] = set
         setOf[tab] = id
-        settled.insert(tab)
     }
 
     private mutating func closeQuietly(_ tab: TabKey, into outcome: inout Outcome) {

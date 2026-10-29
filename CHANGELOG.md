@@ -6,6 +6,7 @@ Changes of tarn on top of Ghostty. Releases are tagged `tarn-vX.Y.Z`; the `vX.Y.
 
 ### Added
 
+- New Group (Shift+Cmd+T) asks for a group name or a project folder; Delete Group keeps the tabs ungrouped, or closes them with a checkbox; the only group can be deleted too.
 - `tarn wait <pane>` waits until the command in a pane ends: `succeed`, `error` or `closed`, exit 0, 4, 6 or 9 (#59).
 - `tarn read <pane> [--lines N]` prints the last lines of a pane's screen as plain text; `tarn close <pane>` closes a pane without confirmation, focus unchanged (#71).
 - `tarn skill` prints how an agent uses the `tarn` commands, matched to the build; the Claude Code plugin carries a skill that runs it. `tarn module ls` lists the modules: on, off or unavailable (#83).

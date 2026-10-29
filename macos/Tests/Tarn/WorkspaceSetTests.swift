@@ -1,8 +1,9 @@
+import AppKit
 import Foundation
 import Testing
 @testable import Ghostty
 
-/// The workspace model: delete, last tab, snapshot.
+/// The workspace model: ungroup, last tab, snapshot.
 @Suite
 struct WorkspaceSetTests {
     private let a = Workspace(name: "A")
@@ -19,48 +20,28 @@ struct WorkspaceSetTests {
         return WorkspaceSet(workspaces: [a, b, c], members: members)
     }
 
-    @Test func deleteMovesTabsToTheWorkspaceAbove() {
+    // spec: docs/specs/workspace-folder.md S45
+    @Test func ungroupLeavesEveryTabWhereItStands() {
         var set = threeWorkspaces()
-        let result = set.delete(b.id, order: tabs)
-        #expect(result)
-        #expect(set.runs(order: tabs).map { $0.workspace?.name } == ["A", "C"])
-        #expect(set.runs(order: tabs)[0].tabs == Array(tabs[0...3]))
-    }
-
-    /// A neighbour that is an ungrouped block cannot be the heir.
-    @Test func deleteSkipsUngroupedBlocksWhenItLooksForTheHeir() {
-        var set = WorkspaceSet(workspaces: [c, a, b], members: [tabs[0]: a.id, tabs[2]: b.id, tabs[3]: c.id])
-        let order = Array(tabs[0...3])
-        let deleted = set.delete(b.id, order: order)
-        #expect(deleted)
-        #expect(set.workspace(of: tabs[2])?.id == a.id)
-        #expect(set.workspace(of: tabs[1]) == nil)
-    }
-
-    @Test func deleteOfTheFirstWorkspaceMovesTabsBelow() {
-        var set = threeWorkspaces()
-        let result = set.delete(a.id, order: tabs)
-        #expect(result)
+        let ungrouped = set.ungroup(b.id)
+        let again = set.ungroup(b.id)
+        #expect(ungrouped)
         let runs = set.runs(order: tabs)
-        #expect(runs.map { $0.workspace?.name } == ["B", "C"])
-        #expect(runs[0].tabs == Array(tabs[0...3]))
+        #expect(runs.map { $0.workspace?.name } == ["A", nil, "C"])
+        #expect(runs[1].tabs == [tabs[2], tabs[3]])
+        #expect(set.workspace(b.id) == nil)
+        #expect(!again, "an unknown group changes nothing")
     }
 
-    @Test func theLastWorkspaceIsNotDeleted() {
+    // spec: docs/specs/workspace-folder.md S56
+    @Test func theOnlyGroupCanBeDeleted() {
         var set = WorkspaceSet()
         let id = set.create(name: "Only")!
         set.join(tabs[0], to: id)
-        let result = set.delete(id, order: [tabs[0]])
-        #expect(!result)
-        #expect(set.workspaces.count == 1)
-    }
-
-    @Test func deleteOfAnEmptyWorkspaceOnlyRemovesIt() throws {
-        var set = threeWorkspaces()
-        let empty = set.create(name: "New")
-        let result = set.delete(try #require(empty), order: tabs)
-        #expect(result)
-        #expect(set.runs(order: tabs).map(\.tabs.count) == [2, 2, 2])
+        let ungrouped = set.ungroup(id)
+        #expect(ungrouped)
+        #expect(set.workspaces.isEmpty)
+        #expect(set.runs(order: [tabs[0]]).map { $0.workspace?.name } == [nil])
     }
 
     @Test func closingTheLastTabClosesTheWorkspace() {
@@ -187,5 +168,66 @@ struct WorkspaceSetTests {
         #expect(set.workspaces.map(\.name) == ["A", "C"])
         #expect(set.members[tabs[0]] == a.id)
         #expect(set.members[tabs[1]] == c.id)
+    }
+}
+
+/// The New Group dialog's result (G2).
+struct NewGroupChoiceTests {
+    // spec: docs/specs/workspace-folder.md S41
+    @Test func aGroupTakesItsNameAndABlankNameBecomesGroup() {
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: false, name: " notes ", folder: "/x") == .group(name: "notes"))
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: false, name: "  ", folder: "") == .group(name: "Group"))
+    }
+
+    // spec: docs/specs/workspace-folder.md S1
+    @Test func aWorkspaceTakesAnExistingFolderAndExpandsTheTilde() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: " \(dir.path) ") == .workspace(folder: dir.path))
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: "~") == .workspace(folder: NSHomeDirectory()))
+    }
+
+    // spec: docs/specs/workspace-folder.md S1
+    @Test func aWorkspaceRefusesAMissingPathAFileAndABlankFolder() throws {
+        let file = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
+        try Data().write(to: file)
+        defer { try? FileManager.default.removeItem(at: file) }
+        for folder in ["/no/such/tarn-folder", file.path, "~/no-such-tarn-folder", " "] {
+            #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: folder) == nil, "\(folder)")
+        }
+    }
+
+    // spec: docs/specs/workspace-folder.md S1
+    @Test func aTrailingSlashNamesTheSameFolder() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let plain = NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: dir.path)
+        #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: dir.path + "/") == plain)
+        #expect(plain != nil)
+    }
+
+    // spec: docs/specs/workspace-folder.md S2
+    @Test func cancelChoosesNothing() {
+        #expect(NewGroupChoice.make(confirmed: false, isWorkspace: false, name: "notes", folder: "") == nil)
+        #expect(NewGroupChoice.make(confirmed: false, isWorkspace: true, name: "", folder: "/p") == nil)
+    }
+}
+
+/// The kind radios of the New Group sheet stand in two stacks and must still exclude each other.
+@MainActor
+struct NewGroupFormTests {
+    // spec: docs/specs/workspace-folder.md S41
+    @Test func pickingOneKindClearsTheOtherAndTheChoiceFollows() {
+        let form = NewGroupForm()
+        form.nameField.stringValue = "notes"
+        form.folderField.stringValue = NSTemporaryDirectory()
+        form.workspaceRadio.performClick(nil)
+        #expect(form.groupRadio.state == .off)
+        #expect(form.choice(confirmed: true) == NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "", folder: NSTemporaryDirectory()))
+        form.groupRadio.performClick(nil)
+        #expect(form.workspaceRadio.state == .off)
+        #expect(form.choice(confirmed: true) == .group(name: "notes"))
     }
 }

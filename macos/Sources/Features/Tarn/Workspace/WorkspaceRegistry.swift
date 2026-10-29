@@ -310,8 +310,16 @@ final class WorkspaceRegistry {
         return TerminalController.newTab(controller.ghostty, from: parent, withBaseConfig: config)
     }
 
-    /// A new workspace named `name` with one new tab. False for a blank name. No UI asks for
-    /// a name any more (Q2); the model keeps the entry point.
+    /// Creates what the New Group dialog chose (G2).
+    @discardableResult
+    func create(_ choice: NewGroupChoice, from window: NSWindow) -> Bool {
+        switch choice {
+        case .group(let name): createWorkspace(named: name, from: window)
+        case .workspace(let folder): createWorkspace(folder: folder, from: window)
+        }
+    }
+
+    /// A new plain group named `name` with one new tab (G2). False for a blank name.
     @discardableResult
     func createWorkspace(named name: String, from window: NSWindow) -> Bool {
         openWorkspace(name: name, folder: nil, from: window)
@@ -369,12 +377,11 @@ final class WorkspaceRegistry {
         edit(window) { $0.setCollapsed(workspace, collapsed) }
     }
 
-    /// Deletes the workspace; its tabs move up, or down for the first one.
+    /// Deletes the group; its tabs stay where they stand, ungrouped (G7).
     @discardableResult
-    func delete(_ workspace: Workspace.ID, in window: NSWindow) -> Bool {
-        let order = group(of: window).map(key(for:))
+    func ungroup(_ workspace: Workspace.ID, in window: NSWindow) -> Bool {
         var deleted = false
-        edit(window) { deleted = $0.delete(workspace, order: order) }
+        edit(window) { deleted = $0.ungroup(workspace) }
         return deleted
     }
 
