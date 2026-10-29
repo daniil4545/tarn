@@ -45,7 +45,7 @@ Inside a Tarn terminal the `tarn` command works with no setup: Ghostty appends `
 
 ```sh
 tarn open docs/spec.md       # open a text file in the viewer
-tarn ls                      # the panes of this workspace: PANE TAB TITLE CWD PROCESS ...
+tarn ls                      # the panes of your group (your own tab when ungrouped): PANE TAB GROUP TITLE ...
 tarn ls --json               # the same panes as JSON
 tarn notify "build done"     # mark this session and notify you
 tarn new -- npm test         # a split below this pane running the command; prints its pane id
@@ -90,7 +90,7 @@ Run through this list once. It is the acceptance list for the release.
 5. Trigger a notification from a Tarn tab (`printf '\e]9;test\a'`): macOS asks permission for "Tarn", and the notification carries the Tarn name.
 6. Ghostty's own settings and windows are as before; the Ghostty config file is unchanged (`ls -l ~/.config/ghostty/config`).
 7. A font or theme line in the Ghostty config applies in Tarn too.
-8. In a Tarn tab: `tarn ls` prints the panes of the workspace (or `tarn: ...` and exit code 1 if the app is not reachable).
+8. In a Tarn tab: `tarn ls` prints the panes of your group (or `tarn: ...` and exit code 1 if the app is not reachable).
 9. Tarn menu, "Make Tarn the Default Terminal" works if you want it (optional).
 
 ## Upgrade

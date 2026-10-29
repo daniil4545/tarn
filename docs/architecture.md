@@ -115,7 +115,7 @@ One environment: the local macOS app. One config file of ours: `~/.config/tarn/g
 | module Sidebar, key `TarnTabStyle`: `sidebar` (default, on) or `top` (off) | sidebar or native tab bar | Settings > Modules, `UserDefaults` |
 | module File viewer, key `TarnFileViewer` | the file viewer on or off, default on | Settings > Modules, `UserDefaults` |
 | modules Permission card, Notifications, keys `TarnModule.permissionCard`, `TarnModule.notifications` | default on; Permission card needs Sidebar; a wrong type counts as on and is logged (category `settings`) | Settings > Modules, `UserDefaults`; launch arguments such as `-TarnModule.notifications NO` win without writing (the bench uses them) |
-| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 0.3.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
+| plugin install | `plugin/.claude-plugin/marketplace.json`, `plugin.json` (name `tarn`, version 1.3.0) | `claude plugin marketplace add <repo>/plugin`, then `claude plugin install tarn@tarn` (`docs/install.md`) |
 
 Logs: `os_log`, subsystem `tarn`, categories `registry`, `socket`, `viewer`, `attention`, `settings`, `workspace`; view in Console.app. Hooks registered in `plugin/hooks/hooks.json`, each with timeout 2 s except `PermissionRequest` (3600 s).
 
