@@ -56,6 +56,8 @@ final class SidebarModel: ObservableObject {
     /// Where a drop in progress would land: a workspace drag draws a line there, a tab drag
     /// opens a gap.
     @Published var dropSlot: SidebarDropSlot?
+    @Published private(set) var outlinedGroup: Workspace.ID?
+    var sidebarAnchor: WeakView?
 
     /// The tab of this window being dragged: its row stays in place, translucent.
     @Published private(set) var liftedTab: TabKey?
@@ -67,7 +69,7 @@ final class SidebarModel: ObservableObject {
     private var liftedSlot: SidebarDropSlot?
 
     /// The slot the gap stands in, only while a tab of this window is dragged away from its row.
-    var gapSlot: SidebarDropSlot? { liftedTab == nil || dropSlot == liftedSlot ? nil : dropSlot }
+    var gapSlot: SidebarDropSlot? { liftedTab == nil || outlinedGroup != nil || dropSlot == liftedSlot ? nil : dropSlot }
 
     /// The tab whose card is open, if any.
     var cardTab: ObjectIdentifier? {
@@ -117,7 +119,8 @@ final class SidebarModel: ObservableObject {
     private var closeObserver: NSObjectProtocol?
     private var processTimer: Timer?
 
-    init() {
+    init(groups: [Group] = []) {
+        self.groups = groups
         SessionRegistry.shared.start()
         TarnModuleWatcher.shared.start()
 
@@ -203,6 +206,7 @@ final class SidebarModel: ObservableObject {
         // look again made `sync` -> `publish` -> redraw -> `sync` a loop.
         let registry = WorkspaceRegistry.shared
         guard let window else {
+            endLift()
             if !groups.isEmpty { groups = [] }
             return
         }
@@ -224,11 +228,10 @@ final class SidebarModel: ObservableObject {
                 return makeTab(tabWindow, key: key, index: index, workspace: run.workspace?.name ?? "", shortcut: shortcut.map { "\($0)" })
             })
         }
+        if let liftedTab, !newGroups.contains(where: { $0.tabs.contains { $0.key == liftedTab } }) { endLift() }
         guard newGroups != groups else { return }
         groups = newGroups
         if cardTab != nil { updateCard() }
-        // A tab closed while dragged may never end its drag session.
-        if let liftedTab, tab(withKey: liftedTab) == nil { endLift() }
     }
 
     private func makeTab(_ tabWindow: NSWindow, key: TabKey, index: Int, workspace: String, shortcut: String?) -> Tab {
@@ -514,13 +517,12 @@ final class SidebarModel: ObservableObject {
         var slot = isOwn(kind, value: value)
             ? Self.dropSlot(dragging: kind, over: target, lowerHalf: lowerHalf, in: groups)
             : nil
+        let outline: Workspace.ID?
+        if kind == .tab, slot != nil, case .header(let id) = target { outline = id } else { outline = nil }
+        if outlinedGroup != outline { outlinedGroup = outline }
         if let liftedTab {
-            if case .header(let id) = target, Self.gapPullsUp(id, gap: gapSlot, in: groups) {
-                return true
-            }
             slot = Self.gapSlot(slot, lifted: liftedTab, in: groups)
-            // The rows slide apart; a pointer that leaves the rows keeps the gap where it is.
-            if let slot, slot != dropSlot { withAnimation(Motion.fold) { dropSlot = slot } }
+            if slot != dropSlot { withAnimation(Motion.fold) { dropSlot = slot } }
         } else if dropSlot != slot {
             dropSlot = slot
         }
@@ -530,6 +532,7 @@ final class SidebarModel: ObservableObject {
     /// A drag of a tab row of this window began: the row dims and no gap opens until the pointer
     /// leaves the row's own slot.
     func dragBegan(_ tab: Tab, height: CGFloat) {
+        outlinedGroup = nil
         liftedHeight = height
         liftedTab = tab.key
         liftedSlot = Self.gapSlot(.beforeTab(tab.key), lifted: tab.key, in: groups)
@@ -545,9 +548,12 @@ final class SidebarModel: ObservableObject {
         }
     }
 
-    /// The pointer left a row or header. The gap of a tab drag stays until the drag ends.
-    func dragExit() {
-        if liftedTab == nil && dropSlot != nil { dropSlot = nil }
+    /// Row transitions keep the target; leaving the sidebar clears it without ending the lift.
+    func dragExit(at screenPoint: NSPoint = NSEvent.mouseLocation) {
+        if let view = sidebarAnchor?.view, let window = view.window,
+           view.bounds.contains(view.convert(window.convertPoint(fromScreen: screenPoint), from: nil)) { return }
+        dropSlot = nil
+        outlinedGroup = nil
     }
 
     /// Carries out a drop; `value` is the payload of the drag. A payload from another window
@@ -587,6 +593,14 @@ final class SidebarModel: ObservableObject {
             registry.moveTab(moving, to: nil, behind: tabWindows)
             return true
 
+        case (.tab, .beforeWorkspace(let block)):
+            guard let moving = tab(withKey: id).flatMap(tabWindow(for:)),
+                  let index = groups.firstIndex(where: { $0.id == block }) else { return false }
+            let before = groups[index...].flatMap(\.tabs).compactMap(tabWindow(for:)).first { $0 !== moving }
+            let behind = groups[..<index].flatMap(\.tabs).compactMap(tabWindow(for:))
+            registry.moveTab(moving, to: nil, before: before, behind: behind)
+            return true
+
         case (.workspace, .beforeWorkspace(let other)):
             guard groups.contains(where: { $0.id == id }) else { return false }
             if other != id { registry.moveWorkspace(id, before: other, in: window) }
@@ -613,6 +627,7 @@ final class SidebarModel: ObservableObject {
     }
 
     private func endLift() {
+        outlinedGroup = nil
         if liftedTab != nil { liftedTab = nil }
         liftedSlot = nil
         if dropSlot != nil { dropSlot = nil }
@@ -825,8 +840,7 @@ struct Sidebar: View {
     static let rowGap: CGFloat = 2
     /// The indent of the rows under a workspace header (`demo/css/chrome.css`).
     static let groupIndent: CGFloat = 12
-    /// The space above a block of ungrouped rows.
-    static let ungroupedGap: CGFloat = 10
+    static let blockMargin: CGFloat = 8
 
     /// `width` held in `widthRange`. A stored value outside the range, or not a number, would
     /// draw a sidebar that is hidden, too wide or of no width, so it falls back instead.
@@ -860,6 +874,7 @@ struct Sidebar: View {
 
     @ObservedObject var model: SidebarModel
     @Binding var isCollapsed: Bool
+    @Environment(\.chromeInk) private var ink
 
     var body: some View {
         VStack(spacing: 0) {
@@ -901,19 +916,8 @@ struct Sidebar: View {
                         VStack(spacing: 0) {
                             VStack(alignment: .leading, spacing: 0) {
                                 ForEach(model.groups) { group in
-                                    if let workspace = group.workspace {
-                                        WorkspaceHeader(model: model, group: group, workspace: workspace)
-                                    } else {
-                                        // Where a header would stand: the demo's gap above ungrouped rows.
-                                        Color.clear.frame(height: Sidebar.ungroupedGap)
-                                            .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(group.id)) }
-                                    }
-                                    ForEach(visibleTabs(of: group)) { tab in
-                                        TabGap(model: model, slot: .beforeTab(tab.key))
-                                        SidebarRow(model: model, tab: tab, isCompact: false, isIndented: group.workspace != nil)
-                                            .transition(.opacity)
-                                    }
-                                    TabGap(model: model, slot: .endOfWorkspace(group.id))
+                                    blockMargin(before: group)
+                                    groupBlock(group)
                                 }
                                 TabGap(model: model, slot: .tail)
                             }
@@ -929,6 +933,47 @@ struct Sidebar: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(RowAnchor { model.sidebarAnchor = WeakView(view: $0) })
+    }
+
+    private func blockMargin(before group: SidebarModel.Group) -> some View {
+        VStack(spacing: 0) {
+            TabGap(model: model, slot: .beforeWorkspace(group.id))
+            Color.clear.frame(height: Sidebar.blockMargin)
+                .overlay { interaction(over: .margin(group.id)) }
+        }
+        .overlay(alignment: .bottom) { dropLine(model.liftedTab == nil && model.dropSlot == .beforeWorkspace(group.id)) }
+    }
+
+    private func groupBlock(_ group: SidebarModel.Group) -> some View {
+        VStack(spacing: 0) {
+            if let workspace = group.workspace {
+                WorkspaceHeader(model: model, group: group, workspace: workspace)
+            }
+            ForEach(visibleTabs(of: group)) { tab in
+                TabGap(model: model, slot: .beforeTab(tab.key))
+                SidebarRow(model: model, tab: tab, isCompact: false, isIndented: group.workspace != nil)
+                    .transition(.opacity)
+            }
+            TabGap(model: model, slot: .endOfWorkspace(group.id))
+        }
+        .padding(group.workspace == nil ? 0 : 4)
+        .background(RoundedRectangle(cornerRadius: 8).fill(group.workspace == nil ? Color.clear : ink.groupBackground))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .strokeBorder(ink.accent, lineWidth: model.outlinedGroup == group.id ? 2 : 0)
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, Sidebar.listInset)
+    }
+
+    private func interaction(over target: SidebarDropTarget) -> SidebarInteraction {
+        SidebarInteraction(
+            onClick: {},
+            dragOver: { kind, value, half in model.dragOver(kind, value: value, over: target, lowerHalf: half) },
+            dragExit: { model.dragExit() },
+            drop: { kind, value, half in model.drop(kind, value: value, over: target, lowerHalf: half) }
+        )
     }
 
     /// The workspaces that are folded, which the fold animation follows.
@@ -991,7 +1036,7 @@ private struct TabGap: View {
                     SidebarInteraction(
                         onClick: {},
                         dragOver: { kind, _, _ in kind == .tab },
-                        dragExit: {},
+                        dragExit: { model.dragExit() },
                         drop: { kind, value, _ in model.drop(kind, value: value, at: slot) }
                     )
                 )
@@ -1101,6 +1146,7 @@ private struct SidebarRow: View {
             },
             dragBegan: { height in model.dragBegan(tab, height: height) },
             dragEnded: { point, accepted in model.dragEnded(tab, at: point, accepted: accepted) },
+            dragMoved: { model.dragExit(at: $0) },
             // The close button of an expanded row sits in its first 22 points after the inset.
             excludedLeading: isCompact ? 0 : Sidebar.listInset + indent + 22
         )

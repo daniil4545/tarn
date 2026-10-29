@@ -128,24 +128,15 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.gapSlot(nil, lifted: tabs[2].key, in: groups) == nil)
     }
 
-    // A gap above a header with rows below it stays put: moved to the end of that workspace it
-    // would pull the header up and put a row under the pointer.
-    @Test func aHeaderBelowTheGapKeepsTheGapOnlyWhileRowsStandUnderIt() {
-        let (groups, tabs) = layout()
-        let a = groups[0].id, b = groups[1].id
-        #expect(SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[1].key), in: groups))
-        #expect(SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(a), in: groups))
-        // From below, or with no gap open, the header stays under the pointer.
-        #expect(!SidebarModel.gapPullsUp(b, gap: .beforeTab(tabs[3].key), in: groups))
-        #expect(!SidebarModel.gapPullsUp(b, gap: nil, in: groups))
-        // A folded or empty workspace shows nothing below its header: the new gap comes under the pointer.
-        var workspace = groups[1].workspace!
-        workspace.collapsed = true
-        var folded = groups
-        folded[1] = SidebarModel.Group(workspace: workspace, tabs: groups[1].tabs)
-        #expect(!SidebarModel.gapPullsUp(b, gap: .endOfWorkspace(a), in: folded))
-        let empty = group("D", [])
-        #expect(!SidebarModel.gapPullsUp(empty.id, gap: .endOfWorkspace(a), in: groups + [empty]))
+    @Test func marginsTargetThePositionBeforeABlockForEitherDragKind() {
+        let (groups, _) = withUngrouped()
+        for group in groups {
+            for kind in [SidebarDragKind.tab, .workspace] {
+                let slot = SidebarModel.dropSlot(dragging: kind, over: .margin(group.id), lowerHalf: false, in: groups)
+                #expect(slot == .beforeWorkspace(group.id))
+            }
+        }
+        #expect(SidebarModel.dropSlot(dragging: .tab, over: .margin(UUID()), lowerHalf: true, in: groups) == nil)
     }
 
     /// A: two tabs, ungrouped: one tab, B: two tabs.
@@ -202,13 +193,10 @@ struct SidebarGroupingTests {
 
     // spec: docs/specs/workspace-folder.md S43
     @Test func belowAnUngroupedLastBlockATabGoesToTheEndOfThatBlock() {
-        let (groups, tabs) = withUngrouped()
+        let (groups, _) = withUngrouped()
         let ungroupedLast = Array(groups[0...1])
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: ungroupedLast) == .endOfWorkspace(groups[1].id))
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: groups) == .tail)
-        // A gap in the ungrouped block pulls no header up: it belongs to no workspace.
-        #expect(!SidebarModel.gapPullsUp(groups[2].id, gap: .beforeTab(tabs[2].key), in: groups))
-        #expect(SidebarModel.gapPullsUp(groups[2].id, gap: .endOfWorkspace(groups[0].id), in: groups))
     }
 
     @Test func unknownTargetsGiveNoSlot() {

@@ -45,12 +45,10 @@ struct WorkspaceHeader: View {
         .font(.system(size: 11, weight: .semibold))
         .foregroundStyle(ink.muted)
         .padding(.horizontal, 6)
-        .padding(.top, 8)
-        .padding(.bottom, 2)
+        .padding(.vertical, 5)
         .frame(height: 26)
         .contentShape(Rectangle())
         .onHover { isHovering = $0 }
-        .overlay(alignment: .top) { dropLine(model.dropSlot == .beforeWorkspace(workspace.id)) }
         .overlay(alignment: .bottom) { dropLine(endsHere) }
         .padding(.vertical, Sidebar.rowGap / 2)
         .padding(.horizontal, Sidebar.listInset)
@@ -66,7 +64,8 @@ struct WorkspaceHeader: View {
                 drop: { kind, value, lowerHalf in
                     model.drop(kind, value: value, over: .header(workspace.id), lowerHalf: lowerHalf)
                 },
-                dragEnded: { _, _ in model.dragExit() },
+                dragEnded: { _, _ in model.dropSlot = nil },
+                dragMoved: { model.dragExit(at: $0) },
                 excludedTrailing: isHovering ? Sidebar.listInset + 24 : 0,
                 toolTip: Self.tip(group, workspace)
             )

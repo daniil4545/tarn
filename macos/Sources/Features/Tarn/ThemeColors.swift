@@ -231,6 +231,7 @@ struct ChromeInk {
     var muted: Color { theme?.muted.color ?? Color.secondary }
     var faint: Color { theme?.key.color ?? Color(nsColor: .tertiaryLabelColor) }
     var accent: Color { theme?.accent.color ?? Color.accentColor }
+    var groupBackground: Color { theme.map { $0.surface.mixed(with: $0.foreground, by: 0.04).color } ?? text(0.04) }
     var divider: Color { theme?.divider.color ?? Color.primary.opacity(0.12) }
 }
 
