@@ -422,7 +422,7 @@ final class WorkspaceRegistry {
 
     /// Moves a group's tabs before the block `other` (nil: to the end), or before the ungrouped tab `beforeTab`.
     func moveWorkspace(_ workspace: Workspace.ID, before other: UUID? = nil, beforeTab: TabKey? = nil, in window: NSWindow) {
-        var order = group(of: window).map(key(for:))
+        let order = group(of: window).map(key(for:))
         var runs = book.runs(for: order)
         guard let from = runs.firstIndex(where: { $0.workspace?.id == workspace }) else { return }
         let moving = runs.remove(at: from)
@@ -436,21 +436,43 @@ final class WorkspaceRegistry {
             target = runs.flatMap(\.tabs)
         }
 
+        guard target != order, let first = moving.tabs.first,
+              let start = target.firstIndex(of: first), let native = window.tabGroup
+        else { return }
+        let windows = moving.tabs.compactMap(self.window(for:))
+        guard windows.count == moving.tabs.count else { return }
+        // Anchor outside the moving block. Only its own windows leave and rejoin the group.
+        let before = start == 0
+        guard var anchor = self.window(for: target[before ? moving.tabs.count : start - 1]) else { return }
+        let selected = native.selectedWindow
+        let wasKey = selected?.isKeyWindow == true
         isBusy = true
-        // Only the group's own tabs move, the last first when it goes down, so the rest falls into place.
-        let first = moving.tabs.first
-        let down = (first.flatMap(target.firstIndex) ?? 0) > (first.flatMap(order.firstIndex) ?? 0)
-        for tab in down ? moving.tabs.reversed() : moving.tabs { move(tab, to: target, in: &order) }
-        for tab in target { move(tab, to: target, in: &order) }
+        NSAnimationContext.beginGrouping()
+        NSAnimationContext.current.duration = 0
+        for tabWindow in windows {
+            let current = native.windows
+            guard let index = current.firstIndex(of: tabWindow), current.count > 1 else { break }
+            let neighbour = current[index == 0 ? 1 : index - 1]
+            native.removeWindow(tabWindow)
+            guard anchor.addTabbedWindowSafely(tabWindow, ordered: before ? .below : .above) else {
+                // A caught AppKit exception must not leave the tab detached from its workspace.
+                if !neighbour.addTabbedWindowSafely(tabWindow, ordered: index == 0 ? .below : .above) {
+                    Self.logger.error("workspace: could not reattach tab after group move failed")
+                }
+                break
+            }
+            if !before { anchor = tabWindow }
+        }
+        if let selected {
+            selected.tabGroup?.selectedWindow = selected
+            if wasKey { selected.makeKey() }
+        }
+        NSAnimationContext.endGrouping()
+        // Use the same relabeling as a native drag, even when the tab bar is hidden.
+        (window.windowController as? TerminalController)?.relabelTabs()
+        for tabWindow in native.windows { tabWindow.invalidateRestorableState() }
         isBusy = false
         sync()
-    }
-
-    private func move(_ tab: TabKey, to target: [TabKey], in order: inout [TabKey]) {
-        guard let place = target.firstIndex(of: tab), let current = order.firstIndex(of: tab), current != place else { return }
-        order.remove(at: current)
-        order.insert(tab, at: place)
-        if let tabWindow = window(for: tab) { moveNatively(tabWindow, by: place - current) }
     }
 
     private func edit(_ window: NSWindow, _ change: (inout WorkspaceSet) -> Void) {
