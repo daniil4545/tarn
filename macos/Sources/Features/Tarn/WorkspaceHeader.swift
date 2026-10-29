@@ -235,7 +235,7 @@ final class NewGroupForm: NSView {
 }
 
 extension TerminalController {
-    /// The File menu item "New Workspace" (Shift+Cmd+T), found through the responder chain.
+    /// The File menu item "New Group..." (Shift+Cmd+T), found through the responder chain.
     @IBAction func newWorkspace(_ sender: Any?) {
         guard let window else { return }
         WorkspacePrompt.newGroup(in: window)
