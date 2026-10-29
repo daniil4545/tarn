@@ -33,7 +33,7 @@ addEventListener('DOMContentLoaded', () => {
 
 
 def open_page(p, base, dpr=2, video_dir=None):
-    browser = p.chromium.launch(channel="chrome")
+    browser = p.chromium.launch()
     opts = {
         "viewport": {"width": 1440, "height": 900},
         "device_scale_factor": dpr,

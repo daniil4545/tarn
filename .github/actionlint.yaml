@@ -1,0 +1,4 @@
+self-hosted-runner:
+  # The macOS runner that runs the app job (tarn-ci.yml).
+  labels:
+    - xcode-27
