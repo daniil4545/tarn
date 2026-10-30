@@ -66,7 +66,7 @@ While a file tab, a viewer or a terminal is dragged, a frame shows the space it 
 | elsewhere in a pane | the half of that pane on the nearest edge |
 | over the dragged pane itself | red frame, refused |
 
-Panes only split in two, so a quarter needs an area already split on that axis. Rectangle uses a 5 px edge because the screen edge stops the pointer; inside a window it does not, hence 24 px. The top edge gives the top half, not a full window (zoom is Ghostty's cmd+shift+enter); no thirds. Terminals: inside the block they use the pane zones; a lone terminal moves the whole block in area zones; split terminals get a red frame in area zones when viewers are open, except where a strip or a corner lies over the block: there it is a terminal's edge and Ghostty's pane zones work (T-178).
+Panes only split in two, so a quarter needs an area already split on that axis. Rectangle uses a 5 px edge because the screen edge stops the pointer; inside a window it does not, hence 24 px. The top edge gives the top half, not a full window (zoom is Ghostty's cmd+shift+enter); no thirds. Terminals: inside the block they use the pane zones; a lone terminal moves the whole block in area zones; split terminals have no area zones: while one is dragged the drop overlay is out of the layout, Ghostty's pane zones work across the whole block and a drop over a viewer does nothing (T-178, T-328).
 
 ## 4. User scenarios
 
@@ -86,7 +86,7 @@ Panes only split in two, so a quarter needs an area already split on that axis. 
 | S13 | click a path in agent output | the file opens in a viewer of the same tab; tree hidden; cmd+B shows it |
 | S14 | cmd+D, cmd+shift+D | Ghostty split in the terminal block; in a viewer: the file in a new viewer |
 | S14a | drag a viewer by its three dots (same handle as a terminal) | to the middle of another viewer: that viewer takes all its files; to an edge of a viewer or of the terminal block: the viewer moves there with its files and tree; onto itself: refused; outside every window: a new window |
-| S14b | drag a terminal by its three dots to a viewer edge | a lone terminal: the terminal block moves to that edge (for example below the viewer); split terminals: refused with a hint to drag the viewer to the block edge, since they are one Ghostty split tree |
+| S14b | drag a terminal by its three dots to a viewer edge | a lone terminal: the terminal block moves to that edge (for example below the viewer); split terminals: no area zones, they are one Ghostty split tree and move only among themselves |
 | S15 | cmd+W on a pane | the pane closes; cmd+Z within 5 s brings it back |
 | S16 | cmd+W on the last pane of a tab | the tab closes with its viewers; cmd+Z within 5 s brings it back |
 | S17 | close the last tab of a workspace | the workspace closes; cmd+Z within 5 s brings both back (D12) |

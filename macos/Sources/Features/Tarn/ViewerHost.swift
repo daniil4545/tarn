@@ -67,6 +67,18 @@ final class ViewerHost: ObservableObject {
     /// panes themselves stay in `panes` either way.
     nonisolated static func isShown(hidden: Bool, moduleOn: Bool) -> Bool { !hidden && moduleOn }
 
+    /// Whether the drop overlay is in the layout. A terminal of a split block drags among Ghostty's
+    /// own zones, and AppKit gives a drag to the registered view under the pointer whatever its
+    /// `hitTest` says, so the overlay stays out of the way of that drag.
+    nonisolated static func overlayActive(drag: AreaPayload?, loneTerminal: Bool) -> Bool {
+        if case .terminal = drag { return loneTerminal }
+        return true
+    }
+
+    var overlayActive: Bool {
+        Self.overlayActive(drag: drag, loneTerminal: (controller?.surfaceTree.count ?? 1) <= 1)
+    }
+
     /// The File viewer switch flipped: the keyboard leaves a pane that is no longer drawn.
     func moduleChanged() {
         if !isViewerOn(), focusedPane != nil { returnFocusToTerminal() }
