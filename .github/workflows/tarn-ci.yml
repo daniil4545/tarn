@@ -1,5 +1,6 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# `demo` runs on every PR and push to dev and main and is the required check of dev. `app` runs on
+# `demo` runs on every PR and push to dev and main and is a required check of dev; on a PR into dev
+# it runs the browser only when demo/ or viewer-web/ change (T-321). `app` runs on
 # PRs into main and on pushes to main, and is required there; on dev the agent runs
 # `make -f tarn.mk check` on the Mac before a merge (T-278).
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
@@ -40,13 +41,27 @@ jobs:
         run: |
           git -c user.name=ci -c user.email=ci@localhost fetch --quiet https://github.com/ghostty-org/ghostty.git main
           git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD
+      - name: Scope
+        # A PR into dev that leaves the demo alone passes at once; main and pushes run everything.
+        id: scope
+        if: github.base_ref == 'dev'
+        run: |
+          git fetch --quiet --depth=1 origin dev
+          if git diff --quiet FETCH_HEAD HEAD -- demo viewer-web .github/workflows/tarn-ci.yml; then
+            echo "skip=1" >> "$GITHUB_OUTPUT"
+            echo "no demo change: checks skipped"
+          fi
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        if: steps.scope.outputs.skip != '1'
       - name: Demo unit tests
+        if: steps.scope.outputs.skip != '1'
         # File arguments: the runner's Node 22 does not take a folder.
         run: node --test demo/test/unit/*.test.mjs
       - name: Install browser
+        if: steps.scope.outputs.skip != '1'
         run: uv run -q --with playwright python -m playwright install --with-deps chromium-headless-shell
       - name: Demo checks
+        if: steps.scope.outputs.skip != '1'
         run: |
           # A pointer drag in a loaded browser misses its target now and then (W7 in check_b, T-270):
           # a check script that fails gets one more run; a real defect fails both.
