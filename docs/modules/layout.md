@@ -114,7 +114,7 @@ Rejected: an own tree type and viewers inside the terminal tree (its leaves must
 | Suite | Pins |
 |---|---|
 | `AreaTreeTests` (`macos/Tests/Tarn/AreaTreeTests.swift`) | one block leaf, open beside with shares, remove, snapshot round trip, neighbour by direction, slot of a closed viewer |
-| `AreaDropTests` (`AreaDropTests.swift`) | one case per zone row, corner and strip sizes, refusals, lone terminal and split terminals, file drops, `placing` results, brighter dots |
+| `AreaDropTests` (`AreaDropTests.swift`) | one case per zone row, corner and strip sizes, refusals, lone terminal, file drops, `placing` results, brighter dots |
 | `AreaSplitTests` | line position as `SplitView` draws it, drag ratio limits, strip geometry, events the strip takes; hit tests in an `NSHostingView`: the strip takes the left click above the pane views, leaves the pane's scroll bar and the wheel alone (horizontal and stacked splits) |
 | `ViewerHostTests` (`ViewerModelTests.swift`) | a page file drag ends with a click or the drag end |
 | `ViewerCloseTests` | close questions across several viewers |

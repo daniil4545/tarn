@@ -350,8 +350,7 @@ final class ViewerHost: ObservableObject {
     }
 
     func dropTarget(at point: CGPoint, in size: CGSize, payload: AreaPayload) -> AreaDropTarget? {
-        let lone = (controller?.surfaceTree.count ?? 1) <= 1
-        return AreaDrop.target(at: point, in: size, tree: tree, payload: payload, loneTerminal: lone)
+        AreaDrop.target(at: point, in: size, tree: tree, payload: payload)
     }
 
     func drop(_ payload: AreaPayload, _ plan: AreaPlan) {
