@@ -54,7 +54,7 @@ planned parts: [demo/README.md](demo/README.md).
 
 ## Stage
 
-`tarn-v1.3.0`. What works:
+`tarn-v1.3.1`. What works:
 
 - a vertical sidebar with optional groups; a tab running `claude`, `codex` or `opencode` shows the
   agent's icon, and Claude Code state shows as a colored dot with a card that answers a permission
