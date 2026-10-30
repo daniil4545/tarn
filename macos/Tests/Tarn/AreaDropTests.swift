@@ -23,9 +23,9 @@ struct AreaDropTests {
     }
 
     private func target(
-        _ x: CGFloat, _ y: CGFloat, tree: AreaTree, _ payload: AreaPayload, lone: Bool = true
+        _ x: CGFloat, _ y: CGFloat, tree: AreaTree, _ payload: AreaPayload
     ) -> AreaDropTarget? {
-        AreaDrop.target(at: CGPoint(x: x, y: y), in: size, tree: tree, payload: payload, loneTerminal: lone)
+        AreaDrop.target(at: CGPoint(x: x, y: y), in: size, tree: tree, payload: payload)
     }
 
     private func frame(of leaf: AreaLeaf, in tree: AreaTree) -> CGRect {
@@ -95,23 +95,6 @@ struct AreaDropTests {
         let result = target(rect.maxX - 40, rect.midY, tree: oneViewer, .terminal(UUID()))
         #expect(result?.plan == .beside(first.id, .right))
         #expect(result?.refusal == nil)
-    }
-
-    @Test func splitTerminalsAreRefusedWithAHint() {
-        let rect = frame(of: first, in: oneViewer)
-        let result = target(rect.maxX - 40, rect.midY, tree: oneViewer, .terminal(UUID()), lone: false)
-        #expect(result?.plan == nil)
-        #expect(result?.refusal == AreaDrop.splitRefusal)
-        let strip = target(990, 300, tree: oneViewer, .terminal(UUID()), lone: false)
-        #expect(strip?.refusal == AreaDrop.splitRefusal)
-    }
-
-    /// A strip or a corner of the area that lies over the block is the edge of a terminal: moving one
-    /// split terminal under another there is Ghostty's drop, not a refused area zone.
-    @Test(arguments: [(10.0, 300.0), (300.0, 590.0), (300.0, 10.0), (10.0, 590.0)])
-    func splitTerminalsUseGhosttysZonesAtTheBlockEdge(x: Double, y: Double) {
-        #expect(frame(of: block, in: oneViewer).contains(CGPoint(x: x, y: y)))
-        #expect(target(x, y, tree: oneViewer, .terminal(UUID()), lone: false) == nil)
     }
 
     @Test func aTerminalInsideTheBlockAndWithoutViewersIsGhosttys() {
