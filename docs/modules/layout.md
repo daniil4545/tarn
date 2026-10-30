@@ -50,7 +50,7 @@ Drops (`AreaDrop.target`, checked first to last): corner (48 pt), strip (24 pt),
 2. Tab bar or middle of a viewer: the dragged viewer or file goes into that viewer.
 3. Elsewhere in a pane: the pane takes the half on the nearest edge, by Ghostty's `TerminalSplitDropZone.calculate`.
 4. Over the dragged pane itself: refused, red frame, text "Drop on another pane".
-5. A lone terminal dropped at a viewer edge moves the block; split terminals are refused with the hint "Split terminals stay together: drag the viewer to the block edge". Inside the block, its strips and corners included, the overlay answers nothing, so split terminals move among themselves with Ghostty's zones.
+5. A lone terminal dropped at a viewer edge moves the block; for split terminals the overlay is not in the layout while one is dragged (AppKit gives a drag to the registered view under the pointer whatever its `hitTest` says, T-328), so they move among themselves with Ghostty's zones across the whole block, strips and corners included, and a drop over a viewer does nothing.
 6. A pointer in the block with no matching zone gives nil: Ghostty's own drop zones work.
 
 A drop shows a line, not a filled frame: 3 pt (`AreaDrop.lineWidth`) in the system accent (`NSColor.controlAccentColor`), centered on the border the new pane will have (`AreaDrop.line`: the inner edge of the space it takes; a drop into a viewer: under its tab bar). A refusal shows a gray plate with the reason and no line. The line and the plate move in one `NSAnimationContext` of `Motion.base`. Terminal onto terminal inside the block stays Ghostty's own zone (`TerminalSplitDropZone`, accent fill 30%): its overlay is drawn inside Ghostty's split view and a layer on top cannot replace it. A file tab moves with its edits (refused if both viewers hold different edited copies); a tree row only opens the file. An emptied source viewer closes. A viewer dropped outside every window opens in a new window (S14a).
@@ -114,7 +114,7 @@ Rejected: an own tree type and viewers inside the terminal tree (its leaves must
 | Suite | Pins |
 |---|---|
 | `AreaTreeTests` (`macos/Tests/Tarn/AreaTreeTests.swift`) | one block leaf, open beside with shares, remove, snapshot round trip, neighbour by direction, slot of a closed viewer |
-| `AreaDropTests` (`AreaDropTests.swift`) | one case per zone row, corner and strip sizes, refusals, lone terminal and split terminals, file drops, `placing` results, brighter dots |
+| `AreaDropTests` (`AreaDropTests.swift`) | one case per zone row, corner and strip sizes, refusals, lone terminal, file drops, `placing` results, brighter dots |
 | `AreaSplitTests` | line position as `SplitView` draws it, drag ratio limits, strip geometry, events the strip takes; hit tests in an `NSHostingView`: the strip takes the left click above the pane views, leaves the pane's scroll bar and the wheel alone (horizontal and stacked splits) |
 | `ViewerHostTests` (`ViewerModelTests.swift`) | a page file drag ends with a click or the drag end |
 | `ViewerCloseTests` | close questions across several viewers |

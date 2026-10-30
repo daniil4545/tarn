@@ -114,6 +114,13 @@ struct TarnModulesTests {
         #expect(!ViewerHost.isShown(hidden: true, moduleOn: false))
     }
 
+    @Test func theOverlayStepsAsideForATerminalOfASplitBlock() {
+        #expect(!ViewerHost.overlayActive(drag: .terminal(UUID()), loneTerminal: false))
+        #expect(ViewerHost.overlayActive(drag: .terminal(UUID()), loneTerminal: true))
+        #expect(ViewerHost.overlayActive(drag: .viewer(UUID()), loneTerminal: false))
+        #expect(ViewerHost.overlayActive(drag: nil, loneTerminal: false))
+    }
+
     // MARK: Agent checks
 
     @Test func theVersionIsTheLineOfClaudeCode() {

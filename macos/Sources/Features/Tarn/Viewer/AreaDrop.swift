@@ -86,15 +86,13 @@ enum AreaDrop {
     /// Thickness of the line that shows where the new pane's border will be.
     static let lineWidth: CGFloat = 3
     static let selfRefusal = "Drop on another pane"
-    static let splitRefusal = "Split terminals stay together: drag the viewer to the block edge"
 
     /// Nil means "not ours": the pointer is in the terminal block, where Ghostty's own drop zones work.
     static func target(
-        at point: CGPoint, in size: CGSize, tree: AreaTree, payload: AreaPayload, loneTerminal: Bool
+        at point: CGPoint, in size: CGSize, tree: AreaTree, payload: AreaPayload
     ) -> AreaDropTarget? {
         guard let root = tree.root, let block = tree.block else { return nil }
         let moving: AreaLeaf?
-        var refusal: String?
         switch payload {
         case let .viewer(id):
             guard let leaf = tree.leaf(id: id) else { return nil }
@@ -103,21 +101,13 @@ enum AreaDrop {
             // Without viewers the block is the whole area: Ghostty's zones are the only ones.
             guard !tree.viewers.isEmpty else { return nil }
             moving = block
-            if !loneTerminal {
-                // Inside the block, its edge strips and corners too, the terminals split among
-                // themselves with Ghostty's zones; only a viewer's side refuses them.
-                let inBlock = frames(of: root, in: CGRect(origin: .zero, size: size))
-                    .contains { $0.0 === block && $0.1.contains(point) }
-                if inBlock { return nil }
-                refusal = splitRefusal
-            }
         case .file:
             // A file opens a new viewer or joins one; nothing leaves the layout yet.
             moving = nil
         }
         let rest = (moving.map { tree.removing($0) } ?? tree).root
         if let found = areaZone(at: point, in: size, rest: rest) {
-            return AreaDropTarget(plan: refusal == nil ? found.plan : nil, frame: found.frame, refusal: refusal)
+            return AreaDropTarget(plan: found.plan, frame: found.frame, refusal: nil)
         }
         guard let (leaf, rect) = frames(of: root, in: CGRect(origin: .zero, size: size))
             .first(where: { $0.1.contains(point) })
@@ -141,8 +131,7 @@ enum AreaDrop {
                 return AreaDropTarget(plan: .into(leaf.id), frame: rect, refusal: nil)
             }
         }
-        return AreaDropTarget(
-            plan: refusal == nil ? .beside(leaf.id, edge) : nil, frame: half(edge, of: rect), refusal: refusal)
+        return AreaDropTarget(plan: .beside(leaf.id, edge), frame: half(edge, of: rect), refusal: nil)
     }
 
     /// The line a drop shows, centered on the border of the new pane: the inner edge of the space it
