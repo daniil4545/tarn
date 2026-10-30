@@ -4,6 +4,16 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 
 ## [Unreleased]
 
+## [tarn-v1.3.1] - 2026-10-30
+
+### Fixed
+
+- With a viewer open, a terminal of a split block dragged by its handle shows Ghostty's drop zones across the whole block and moves under the target terminal again (T-328).
+
+### Changed
+
+- Dropping a terminal of a split block over a viewer does nothing; the hint "Split terminals stay together" is gone.
+
 ## [tarn-v1.3.0] - 2026-10-29
 
 ### Added
@@ -108,25 +118,3 @@ First release, ad-hoc signed and not notarized; see `docs/install.md`.
 ### Known limits
 
 - Startup is about 17 ms (7%) slower than upstream, above the 5% target; idle CPU and memory meet it. See `docs/bench.md` for results and variation.
-
-## [tarn-v0.0.1] - 2026-10-23
-
-First source-built preview: sidebar and session state; viewer, CLI, notifications, app identity and benchmarks not yet included.
-
-### Added
-
-- Resizable vertical tab sidebar with shortcuts, close on hover, context menu, rename and collapsed icon strip.
-- Detected sessions grouped by project git root with icons; same-named projects show their parent folder; tabs return below the divider when sessions exit.
-- Plugin session state dots for working, permission, questions, done, unseen completion and errors.
-- Permission and single-choice question cards reply through the waiting hook.
-
-### Setup
-
-Build with `macos/build.nu --configuration Debug --action build`, open `macos/build/Debug/Ghostty.app` and install the plugin from `<repo>/plugin`.
-
-### Known limits
-
-- Uses `Ghostty.app` and Ghostty's debug bundle id, sharing notifications and defaults.
-- Only the primary integration reports state; other detected sessions have groups and icons only.
-- Sessions inside tmux or SSH, or behind wrappers, are not detected.
-- Permission state persists until an approved command ends.
