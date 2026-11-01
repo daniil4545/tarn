@@ -4,6 +4,16 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 
 ## [Unreleased]
 
+## [tarn-v1.3.2] - 2026-11-01
+
+### Fixed
+
+- Copy, paste, cut, select all, undo and redo work in the viewer, in source and rendered views and in the find field (#166, T-365). Paste in rendered view opens the source and appends at the end; paste with focus on the files tree changes nothing.
+
+### Added
+
+- Show in Finder in the viewer's context menu for the open file, and in the terminal's context menu when the selection is an existing local path (T-390).
+
 ## [tarn-v1.3.1] - 2026-10-30
 
 ### Fixed
