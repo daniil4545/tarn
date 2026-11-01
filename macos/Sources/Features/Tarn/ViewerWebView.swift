@@ -63,6 +63,7 @@ final class ViewerWebView: WKWebView {
 
     var onCommand: ((String) -> Void)?
     var onLayout: ((ViewerLayoutCommand) -> Void)?
+    var pasteFile: () -> String? = { nil }
 
     /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
@@ -92,10 +93,39 @@ final class ViewerWebView: WKWebView {
         characters == "=" && flags.intersection([.shift, .control, .option, .command]) == .command
     }
 
+    /// Ghostty's performable Copy/Paste bindings have no menu shortcut. Keep native editing
+    /// in the web responder, including the find field, instead of sending it to a terminal.
+    static func editAction(characters: String?, flags: NSEvent.ModifierFlags) -> Selector? {
+        let modifiers = flags.intersection([.shift, .control, .option, .command])
+        if modifiers == [.command, .shift], characters?.lowercased() == "z" { return Selector(("redo:")) }
+        guard modifiers == .command else { return nil }
+        switch characters?.lowercased() {
+        case "c": return Selector(("copy:"))
+        case "v": return Selector(("paste:"))
+        case "x": return Selector(("cut:"))
+        case "a": return Selector(("selectAll:"))
+        case "z": return Selector(("undo:"))
+        default: return nil
+        }
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         guard event.type == .keyDown,
               let responder = window?.firstResponder as? NSView, responder.isDescendant(of: self)
         else { return super.performKeyEquivalent(with: event) }
+        if let action = Self.editAction(
+            characters: event.characters(byApplyingModifiers: .command) ?? event.charactersIgnoringModifiers,
+            flags: event.modifierFlags) {
+            if action == Selector(("paste:")) {
+                pasteFromClipboard()
+                return true
+            }
+            if action == Selector(("undo:")) || action == Selector(("redo:")) {
+                evaluateJavaScript("window.tarn.history(\(action == Selector(("redo:"))))")
+                return true
+            }
+            if responder.tryToPerform(action, with: self) { return true }
+        }
         if Self.isZoomIn(characters: event.charactersIgnoringModifiers, flags: event.modifierFlags) {
             ViewerZoom.change(by: 1)
             return true
@@ -106,6 +136,24 @@ final class ViewerWebView: WKWebView {
         }
         if forwardToTerminal(event) { return true }
         return super.performKeyEquivalent(with: event)
+    }
+
+    /// Read once, then choose the destination and insert in one page operation. A tab switch
+    /// before the script runs cancels the paste instead of editing the newly selected file.
+    private func pasteFromClipboard() {
+        let board = NSPasteboard.general
+        let text = board.string(forType: .string)
+            ?? board.data(forType: .rtf).flatMap {
+                try? NSAttributedString(data: $0, options: [.documentType: NSAttributedString.DocumentType.rtf], documentAttributes: nil).string
+            }
+            ?? (board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?
+                .map(\.path).joined(separator: "\n")
+        guard let text else { return }
+        callAsyncJavaScript("window.tarn.paste(text, path)", arguments: ["text": text, "path": pasteFile() as Any? ?? NSNull()], in: nil, in: .page) { result in
+            if case let .failure(error) = result {
+                Logger(subsystem: "tarn", category: "viewer").error("paste failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
     }
 
     /// Runs a tab or window keybind (Cmd+1 by default) on the focused terminal of this window,
@@ -228,6 +276,7 @@ final class ViewerWebController: NSObject {
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
+        view.pasteFile = { [weak model] in model?.tabs.activePath }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
         view.pageZoom = ViewerZoom.current()
         #if DEBUG
