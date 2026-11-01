@@ -1650,6 +1650,7 @@ extension Ghostty {
             item.setImageIfDesired(systemSymbolName: "pencil.line")
             item = menu.addItem(withTitle: "Change Terminal Title...", action: #selector(changeTitle(_:)), keyEquivalent: "")
 
+            FinderReveal.add(to: menu, surface: self)
             return menu
         }
 

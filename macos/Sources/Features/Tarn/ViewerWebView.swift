@@ -63,6 +63,12 @@ final class ViewerWebView: WKWebView {
 
     var onCommand: ((String) -> Void)?
     var onLayout: ((ViewerLayoutCommand) -> Void)?
+    var currentFile: () -> String? = { nil }
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        FinderReveal.add(to: menu, file: currentFile().flatMap { FinderReveal.file($0, cwd: nil) })
+    }
 
     /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
@@ -228,6 +234,7 @@ final class ViewerWebController: NSObject {
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
+        view.currentFile = { [weak model] in model?.tabs.activePath }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
         view.pageZoom = ViewerZoom.current()
         #if DEBUG
