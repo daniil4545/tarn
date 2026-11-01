@@ -44,6 +44,13 @@ enum ViewerColors {
 /// split and focus items of the menu reach it first in the responder chain, before the terminal
 /// controller, so Ghostty's split keys work while a viewer holds the keyboard.
 final class ViewerWebView: WKWebView {
+    var currentFile: () -> String? = { nil }
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        FinderReveal.add(to: menu, file: currentFile().flatMap { FinderReveal.file($0, cwd: nil) })
+    }
+
     /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
     /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
     static let keyTable: [Key] = [
@@ -279,6 +286,7 @@ final class ViewerWebController: NSObject {
         view.pasteFile = { [weak model] in model?.tabs.activePath }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
         view.pageZoom = ViewerZoom.current()
+        view.currentFile = { [weak model] in model?.tabs.activePath }
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif

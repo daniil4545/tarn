@@ -163,6 +163,7 @@ Diff against the merge base with `upstream/main`. Every Swift change outside `ma
 | 32 | `macos/Sources/Ghostty/Ghostty.App.swift` | in `showChildExited`, after the surface is resolved and before the guard: `PaneWaits.childExited(pane:)` | `tarn wait` on a `new` pane ends with its process |
 | 33 | `macos/Sources/Features/Terminal/BaseTerminalController.swift` | at the end of `surfaceTreeDidChange`: `PaneWaits.surfaceTreeChanged()` | `tarn wait` answers `closed` when its pane closes |
 | 34 | `macos/Sources/App/AppDelegate.swift` | in `ghosttyNewTab`: the controller that `TerminalController.newTab` returns goes to `MainActor.assumeIsolated { WorkspaceRegistry.shared.opened(_:from:) }` with the parent window | a new tab takes the workspace of the tab it was opened from (`docs/specs/workspace-folder.md` M1) |
+| 35 | `macos/Sources/Ghostty/Surface View/SurfaceView_AppKit.swift` | at the end of `menu(for:)`: `FinderReveal.add(to:surface:)` | an existing selected path can be shown in Finder without opening the viewer |
 Rows 1 to 4, 10, 12 and 15 are in `TerminalController.swift`. Rows are numbered consecutively; the two insertion points removed with D20 are omitted. Line numbers are not recorded: they shift with upstream; search by the names above.
 
 Upstream merge rule: a merge touching a row above gets its own commit (`.claude/CLAUDE.md`).
