@@ -46,6 +46,8 @@ jobs:
         run: node --test demo/test/unit/*.test.mjs
       - name: Install browser
         run: uv run -q --with playwright python -m playwright install --with-deps chromium-headless-shell
+      - name: Viewer clipboard
+        run: uv run -q --with playwright python -I viewer-web/test-clipboard.py
       - name: Demo checks
         run: |
           # A pointer drag in a loaded browser misses its target now and then (W7 in check_b, T-270):
@@ -54,8 +56,6 @@ jobs:
             uv run -q --with playwright python -I demo/test/check_$c.py ||
               uv run -q --with playwright python -I demo/test/check_$c.py
           done
-      - name: Viewer clipboard
-        run: uv run -q --with playwright python -I viewer-web/test-clipboard.py
 
   lint:
     # What of `make -f tarn.mk check` needs no macOS: runs on every PR in about 2 min. Swiftlint,

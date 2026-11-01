@@ -11,10 +11,16 @@ def main() -> None:
     with sync_playwright() as playwright:
         browser = playwright.chromium.launch()
         page = browser.new_page()
+
+        def source() -> str:
+            # Empty CodeMirror lines contain a BR; innerText adds layout-dependent breaks.
+            return "\n".join(page.locator(".cm-content > .cm-line").all_text_contents())
+
         html = (BUNDLE / "tarn-viewer.html").read_text()
         page.set_content(
             html.replace('http-equiv="Content-Security-Policy"', 'data-csp="off"')
         )
+        page.add_style_tag(path=str(BUNDLE / "tarn-viewer.css"))
         page.evaluate(
             "window.messages=[];window.webkit={messageHandlers:{tarn:{postMessage:m=>messages.push(m)}}}"
         )
@@ -27,24 +33,23 @@ def main() -> None:
         }""")
         page.locator('article input[type="checkbox"]').focus()
         page.evaluate("tarn.paste('\\nnew text', '/a.md')")
-        assert (
-            page.locator(".cm-content").inner_text()
-            == "# Heading\n\n- [ ] Task\nnew text"
-        )
+        actual = source()
+        assert actual == "# Heading\n\n- [ ] Task\nnew text", repr(actual)
         page.evaluate("tarn.flush()")
         assert (
             page.evaluate("messages.filter(m=>m.t==='edit').at(-1).text")
             == "# Heading\n\n- [ ] Task\nnew text"
         )
         page.keyboard.press("ControlOrMeta+z")
-        assert page.locator(".cm-content").inner_text() == "# Heading\n\n- [ ] Task"
+        actual = source()
+        assert actual == "# Heading\n\n- [ ] Task", repr(actual)
         print("rendered paste, checkbox focus, unsaved edit and undo: PASS")
 
         page.evaluate("tarn.paste(' end', '/a.md')")
-        assert page.locator(".cm-content").inner_text().endswith("Task end")
-        before = page.locator(".cm-content").inner_text()
+        assert source().endswith("Task end")
+        before = source()
         page.evaluate("tarn.paste('wrong file', '/other.md')")
-        assert page.locator(".cm-content").inner_text() == before
+        assert source() == before
         print("source caret and stale file refusal: PASS")
 
         for source in (False, True):
