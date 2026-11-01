@@ -44,6 +44,13 @@ enum ViewerColors {
 /// split and focus items of the menu reach it first in the responder chain, before the terminal
 /// controller, so Ghostty's split keys work while a viewer holds the keyboard.
 final class ViewerWebView: WKWebView {
+    var currentFile: () -> String? = { nil }
+
+    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
+        super.willOpenMenu(menu, with: event)
+        FinderReveal.add(to: menu, file: currentFile().flatMap { FinderReveal.file($0, cwd: nil) })
+    }
+
     /// The Cmd keys the web view handles itself: key, command sent to the host or page, text for Help.
     /// Help and `command` read this one list; Cmd+B also has the View menu item for a focus in the terminal.
     static let keyTable: [Key] = [
@@ -63,12 +70,6 @@ final class ViewerWebView: WKWebView {
 
     var onCommand: ((String) -> Void)?
     var onLayout: ((ViewerLayoutCommand) -> Void)?
-    var currentFile: () -> String? = { nil }
-
-    override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
-        super.willOpenMenu(menu, with: event)
-        FinderReveal.add(to: menu, file: currentFile().flatMap { FinderReveal.file($0, cwd: nil) })
-    }
 
     /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
@@ -234,9 +235,9 @@ final class ViewerWebController: NSObject {
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
-        view.currentFile = { [weak model] in model?.tabs.activePath }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
         view.pageZoom = ViewerZoom.current()
+        view.currentFile = { [weak model] in model?.tabs.activePath }
         #if DEBUG
         if #available(macOS 13.3, *) { view.isInspectable = true }
         #endif
