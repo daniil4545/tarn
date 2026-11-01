@@ -17,11 +17,13 @@ struct ViewerClipboardTests {
         window.contentView = view
         defer { window.contentView = nil }
         view.loadHTMLString(html + "<script>window.tarn={paste(text){document.execCommand('insertText',false,text)}}</script>", baseURL: nil)
-        let deadline = ContinuousClock.now + .seconds(10)
+        // A cold WebKit process on CI takes over 10 s to load; the paste itself gets its own wait.
+        let loaded = ContinuousClock.now + .seconds(60)
         while view.isLoading || view.url == nil {
-            guard ContinuousClock.now < deadline else { throw CancellationError() }
+            guard ContinuousClock.now < loaded else { throw CancellationError() }
             await Task.yield()
         }
+        let deadline = ContinuousClock.now + .seconds(10)
         window.makeFirstResponder(view)
         _ = try await view.evaluateJavaScript("document.getElementById('field').focus()")
         let board = NSPasteboard.general

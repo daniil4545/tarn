@@ -40,10 +40,25 @@ def main() -> None:
             page.evaluate("messages.filter(m=>m.t==='edit').at(-1).text")
             == "# Heading\n\n- [ ] Task\nnew text"
         )
+        page.evaluate("tarn.history(false)")
+        actual = source()
+        assert actual == "# Heading\n\n- [ ] Task", repr(actual)
+        page.evaluate("tarn.history(true)")
+        assert source().endswith("new text")
         page.keyboard.press("ControlOrMeta+z")
         actual = source()
         assert actual == "# Heading\n\n- [ ] Task", repr(actual)
-        print("rendered paste, checkbox focus, unsaved edit and undo: PASS")
+        print("rendered paste, checkbox focus, unsaved edit, undo and redo: PASS")
+
+        page.evaluate(
+            "const b=document.createElement('button');b.id='outside';"
+            "document.getElementById('app').append(b);b.focus()"
+        )
+        before = source()
+        page.evaluate("tarn.paste('tree focus', '/a.md')")
+        assert source() == before
+        page.evaluate("document.getElementById('outside').remove();tarn.focusContent()")
+        print("paste with focus outside the content: PASS")
 
         page.evaluate("tarn.paste(' end', '/a.md')")
         assert source().endswith("Task end")
@@ -52,8 +67,8 @@ def main() -> None:
         assert source() == before
         print("source caret and stale file refusal: PASS")
 
-        for source in (False, True):
-            if not source:
+        for editing in (False, True):
+            if not editing:
                 page.evaluate("tarn.cmd('mode')")
             else:
                 page.evaluate("tarn.find('hide');tarn.cmd('mode')")
@@ -63,7 +78,7 @@ def main() -> None:
             field.press("ControlOrMeta+a")
             page.evaluate("tarn.paste('new', '/a.md')")
             assert field.input_value() == "new"
-            assert bool(page.locator(".cm-content").count()) == source
+            assert bool(page.locator(".cm-content").count()) == editing
         print("find paste in rendered and source modes: PASS")
         browser.close()
 

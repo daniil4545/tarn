@@ -5,7 +5,7 @@ import MarkdownIt from "markdown-it";
 import hljs from "highlight.js/lib/common";
 import { EditorView, lineNumbers, highlightActiveLine, drawSelection, keymap } from "@codemirror/view";
 import { EditorState } from "@codemirror/state";
-import { history, historyKeymap, defaultKeymap } from "@codemirror/commands";
+import { history, historyKeymap, defaultKeymap, undo, redo } from "@codemirror/commands";
 import { markdown } from "@codemirror/lang-markdown";
 import { syntaxHighlighting, HighlightStyle, StreamLanguage } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
@@ -450,6 +450,8 @@ window.tarn = {
       document.execCommand("insertText", false, text);
       return;
     }
+    // Focus on the tree or a banner button is not a paste target: never edit the file then.
+    if (field && field !== document.body && !$("vcontent").contains(field)) return;
     if (!path || !docs[path] || docs[path].kind === "notice") return;
     if (!cm) {
       setMode();
@@ -457,6 +459,15 @@ window.tarn = {
     }
     cm.view.focus();
     cm.view.dispatch({ ...cm.view.state.replaceSelection(text), scrollIntoView: true, userEvent: "input.paste" });
+  },
+  history(redoing) {
+    // WebKit's native undo misses CodeMirror's own transactions, such as a rendered paste.
+    const field = document.activeElement;
+    if (field?.matches('input[type="text"], input[type="search"], input:not([type]), textarea')) {
+      document.execCommand(redoing ? "redo" : "undo");
+      return;
+    }
+    if (cm) (redoing ? redo : undo)(cm.view);
   },
   focusTree() { const tree = $("vtree").querySelector(".tree"); if (tree) tree.focus(); },
   focusContent() {

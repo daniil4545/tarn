@@ -120,6 +120,10 @@ final class ViewerWebView: WKWebView {
                 pasteFromClipboard()
                 return true
             }
+            if action == Selector(("undo:")) || action == Selector(("redo:")) {
+                evaluateJavaScript("window.tarn.history(\(action == Selector(("redo:"))))")
+                return true
+            }
             if responder.tryToPerform(action, with: self) { return true }
         }
         if Self.isZoomIn(characters: event.charactersIgnoringModifiers, flags: event.modifierFlags) {
