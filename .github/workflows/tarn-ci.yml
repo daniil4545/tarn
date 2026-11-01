@@ -54,6 +54,8 @@ jobs:
             uv run -q --with playwright python -I demo/test/check_$c.py ||
               uv run -q --with playwright python -I demo/test/check_$c.py
           done
+      - name: Viewer clipboard
+        run: uv run -q --with playwright python -I viewer-web/test-clipboard.py
 
   lint:
     # What of `make -f tarn.mk check` needs no macOS: runs on every PR in about 2 min. Swiftlint,

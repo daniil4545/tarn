@@ -440,6 +440,24 @@ window.tarn = {
   },
   toast,
   flush() { flushEdit(); },
+  paste(text, expectedPath) {
+    // Native paste belongs to the find field or the existing editor selection. Rendered
+    // content has no caret: open the source and append, without replacing selected prose.
+    const path = activePath();
+    if (path !== expectedPath) return;
+    const field = document.activeElement;
+    if (field?.matches('input[type="text"], input[type="search"], input:not([type]), textarea')) {
+      document.execCommand("insertText", false, text);
+      return;
+    }
+    if (!path || !docs[path] || docs[path].kind === "notice") return;
+    if (!cm) {
+      setMode();
+      cm.view.dispatch({ selection: { anchor: cm.view.state.doc.length }, scrollIntoView: true });
+    }
+    cm.view.focus();
+    cm.view.dispatch({ ...cm.view.state.replaceSelection(text), scrollIntoView: true, userEvent: "input.paste" });
+  },
   focusTree() { const tree = $("vtree").querySelector(".tree"); if (tree) tree.focus(); },
   focusContent() {
     if (cm) return cm.view.focus();
