@@ -775,9 +775,23 @@ def selection_and_urls(base):
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
             pg.mouse.up()
-            pg.wait_for_function(
-                "__tarn.term('p7').getSelection() === 'you'", timeout=5000
-            )
+            try:
+                pg.wait_for_function(
+                    "__tarn.term('p7').getSelection() === 'you'", timeout=5000
+                )
+            except Exception:
+                # Geometry for a failure report: where the drag went and what it selected.
+                print(
+                    "select_word",
+                    a,
+                    b,
+                    pg.evaluate(
+                        """() => { const t = __tarn.term('p7'); const r = document.activeElement;
+                          return [t.getSelection(), t.cols, t.rows, t.topRow, t.lineCount,
+                            r && r.tagName, scrollX, scrollY, t.cellCentre(0, 1)]; }"""
+                    ),
+                )
+                raise
 
         pg.evaluate("navigator.clipboard.writeText('untouched')")
         select_word()
@@ -789,9 +803,7 @@ def selection_and_urls(base):
             "window.bus.cmd('config.set', {key: 'copy-on-select', value: 'clipboard'})"
         )
         pg.mouse.click(5, 5)
-        pg.wait_for_function(
-            "__tarn.term('p7').getSelection() === ''", timeout=5000
-        )
+        pg.wait_for_function("__tarn.term('p7').getSelection() === ''", timeout=5000)
         select_word()
         # Selection settles before the asynchronous clipboard write completes.
         pg.wait_for_function(
