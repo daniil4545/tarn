@@ -6,7 +6,7 @@
 repo = "daniil4545/tarn"
 project = "tarn"
 milestone = "2.0"
-base = "origin/dev"
+base = "origin/main"
 wave = 1
 max_builds = 2
 

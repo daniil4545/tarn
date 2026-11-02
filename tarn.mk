@@ -1,11 +1,11 @@
 # tarn make targets. Usage: make -f tarn.mk check | release | bench | worktree NAME=<branch> | dev | live [STAND_APP=<app>]
 #
-# worktree a task worktree .worktrees/NAME on a new branch from origin/dev, linked to this checkout's built core
+# worktree a task worktree .worktrees/NAME on a new branch from origin/main, linked to this checkout's built core
 # dev      the Debug Tarn.app of this checkout without coverage, the app the stand runs by default
 # live     a second Tarn with its own home and control socket next to the user's (tools/stand/stand.sh), for live checks;
 #          tools/stand/drive.sh types into it, reads its screen and takes screenshots
 # check    swiftlint on our folders, the app test suites, the hook, CLI and installer tests, shellcheck, typos, ruff;
-#          the cheap linters run before the build; CI runs this target on every PR into dev and main
+#          the cheap linters run before the build; CI runs this target on every push to main
 # release  Tarn.app (ReleaseLocal, ad-hoc signed by Xcode, with the `tarn` CLI inside) and dist/tarn-<version>-macos.zip with its .sha256
 # bench    (TARN_BENCH_MODULES=off starts tarn with every module off) the release Tarn.app against upstream Ghostty built from the merge base with upstream/main; writes docs/bench.md
 #
@@ -47,8 +47,8 @@ worktree:
 	@test -n "$(NAME)" || { echo "worktree: NAME=<branch> is required"; exit 1; }
 	@test "$$(git rev-parse --git-dir)" = "$$(git rev-parse --git-common-dir)" || { echo "worktree: run it in the main checkout, not in a worktree"; exit 1; }
 	@test -d macos/GhosttyKit.xcframework -a ! -L macos/GhosttyKit.xcframework || { echo "worktree: build the core in the main checkout first"; exit 1; }
-	git fetch -q origin dev
-	git worktree add -b $(NAME) .worktrees/$(NAME) origin/dev
+	git fetch -q origin main
+	git worktree add -b $(NAME) .worktrees/$(NAME) origin/main
 	ln -s $(CURDIR)/macos/GhosttyKit.xcframework .worktrees/$(NAME)/macos/GhosttyKit.xcframework
 	ln -s $(CURDIR)/zig-out .worktrees/$(NAME)/zig-out
 

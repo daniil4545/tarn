@@ -1,6 +1,6 @@
 ---
 name: stand
-description: The agent tests tarn live by itself - builds the dev app, starts the stand (a second Tarn next to the user's), types commands, presses keys, runs Ghostty actions and the tarn CLI, reads the screen as text and as a screenshot, writes the Stand line. Use before a merge (the Stand line of a PR), after merges into dev (the dev build check), when asked to run, try, click through or screenshot tarn, or to check that a change works in the real app.
+description: The agent tests tarn live by itself - builds the dev app, starts the stand (a second Tarn next to the user's), types commands, presses keys, runs Ghostty actions and the tarn CLI, reads the screen as text and as a screenshot, writes the Stand line. Use before a merge (the Stand line of a PR), after merges into main (the dev build check), when asked to run, try, click through or screenshot tarn, or to check that a change works in the real app.
 ---
 
 # Stand: live checks of tarn by the agent
@@ -52,7 +52,7 @@ flowchart LR
 
 ## Dev build check
 
-After merges into `dev` (several PRs or on request): pull `dev`, `make -f tarn.mk check`, then
+After merges into `main` (several PRs or on request): pull `main`, `make -f tarn.mk check`, then
 `make -f tarn.mk dev` and the stand. Walk the user paths the merged PRs changed, plus the smoke path:
 
 1. The window opens with the sidebar and workspace `~`.
