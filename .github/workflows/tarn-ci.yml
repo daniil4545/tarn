@@ -58,7 +58,7 @@ jobs:
           done
 
   lint:
-    # What of `make -f tarn.mk check` needs no macOS: runs on every PR in about 2 min. Swiftlint,
+    # What of `make -f tarn.mk check` needs no macOS: runs on every PR in about 20 s. Swiftlint,
     # the app tests and the installer test (plutil, ditto) stay on macOS.
     runs-on: ubuntu-latest
     timeout-minutes: 15
