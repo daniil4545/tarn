@@ -1,7 +1,7 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# GitHub flow (T-428): `demo` and `lint` run on every PR and push to main and are the required checks.
-# `app` runs on pushes to main only (the macOS runner takes 13-18 min, T-278); before a merge the
-# agent runs `make -f tarn.mk check` on the Mac, and a release tag goes only on a commit with green `app`.
+# GitHub flow (T-428): `demo`, `lint` and `app` run on every PR and push to main and are the required
+# checks (T-442: agents merge unattended, so Swift is built and tested before a merge, not after).
+# A release tag goes only on a commit with green `app`.
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
 
@@ -89,8 +89,6 @@ jobs:
           python3 -I cli/test/cli_test.py
 
   app:
-    # The macOS runner is slow (T-278): it runs after a merge, not on PRs.
-    if: github.event_name == 'push' || inputs.upstream
     runs-on: xcode-27
     timeout-minutes: 60
     env:
