@@ -33,7 +33,7 @@ The window is the center: a terminal pane, with or without an agent in it. Every
 - Agents may open, show and close companions; focus never moves and typing never stops.
 - The permission card and the hub answer requests by the same rules, under one setting.
 - Few rules now: the base first, rules are added from use.
-- The hub is a pane on the right of the windows, beside the viewer, opened by a button or a shortcut; its state is global across tabs (epic T-363).
+- The hub is a pane on the right of the windows, like the viewer; with both open, the last opened stands rightmost. It opens by a button or a shortcut; its state is global across tabs (epic T-363).
 
 2026-11-02 (epic T-370, release 1.3.3):
 
@@ -87,7 +87,7 @@ Each companion's document `docs/modules/<name>.md` states:
 
 Planned for 1.4 (epic T-363), not done in 1.3.3:
 
-- `docs/specs/modules.md`: Settings > Modules lists Sidebar, File viewer, Hub; "tarn answers requests" (R5) is read by the card and the hub; Notifications is a tarn setting. Stored keys stay, so saved values survive. In 1.3.3 only the naming and grouping change (T-373).
+- `docs/specs/modules.md`: Settings > Modules lists Sidebar, File viewer, Hub; "tarn answers requests" (R5) is shown under Sidebar and Hub and read by the card and the hub; Notifications is a tarn setting. Stored keys stay, so saved values survive. In 1.3.3 only the naming and grouping change (T-373).
 - Viewer spec: `tarn open` shows the viewer with the file instead of leaving it hidden; focus and typing stay (R4).
 - Layout: "Split zoom does nothing from a viewer" is replaced by the expand capability.
 
@@ -106,3 +106,4 @@ Findings of the 2026-10-31 review of this concept that 1.3.3 does not settle; th
 | Agent shows a closed or off companion | What "show" means for a closed pane, a background tab, an expanded companion |
 | Narrow window | Minimum widths; which companion hides first |
 | Show and focus | The CLI "show" never focuses; only the user's toggle does |
+| Template size | Section 7 against the existing `docs/modules/viewer.md` and `sidebar.md`: rewrite them to the template or keep their format and add only the missing points |
