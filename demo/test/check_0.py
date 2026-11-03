@@ -11,7 +11,7 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import Checks, browser_page, server
+from lib import Checks, browser_page, drag_trace, server
 
 check = Checks()
 
@@ -84,12 +84,8 @@ def spike_basics(base):
         # Where the canvas and the cells are before and after the drag, for a failure report.
         geo = """() => { const c = document.querySelector('#spike-host canvas'); const r = c.getBoundingClientRect();
           return {rect: [r.left, r.top, r.width, r.height], cols: t.cols, rows: t.rows,
-            ev: window.ev || []}; }"""
-        pg.evaluate(
-            """() => { window.ev = []; const c = document.querySelector('#spike-host canvas');
-              for (const k of ['mousedown', 'mouseup']) document.addEventListener(k, e =>
-                ev.push([k, e.target.tagName, e.target === c, e.clientX, e.clientY, e.offsetX, e.offsetY]), true); }"""
-        )
+            ev: window.dragTrace || []}; }"""
+        drag_trace(pg)
         before = pg.evaluate(geo)
         pg.mouse.move(a["x"] - 3, a["y"])
         pg.mouse.down()

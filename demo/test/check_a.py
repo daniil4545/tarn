@@ -12,7 +12,16 @@ import time
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
-from lib import Checks, app_page, cmd, new_pane, server, show_pane
+from lib import (
+    Checks,
+    app_page,
+    cmd,
+    drag_report,
+    drag_trace,
+    new_pane,
+    server,
+    show_pane,
+)
 
 check = Checks()
 REPO = "/Users/you/code/tarn"
@@ -771,6 +780,7 @@ def selection_and_urls(base):
         def select_word():
             a = pg.evaluate("__tarn.term('p7').cellCentre(0, 1)")
             b = pg.evaluate("__tarn.term('p7').cellCentre(2, 1)")
+            drag_trace(pg)
             pg.mouse.move(a["x"] - 3, a["y"])
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
@@ -790,6 +800,7 @@ def selection_and_urls(base):
                           return [t.getSelection(), t.cols, t.rows, t.topRow, t.lineCount,
                             r && r.tagName, scrollX, scrollY, t.cellCentre(0, 1)]; }"""
                     ),
+                    drag_report(pg),
                 )
                 raise
 

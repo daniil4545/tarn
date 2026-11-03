@@ -123,3 +123,20 @@ class Checks:
 
     def exit(self):
         sys.exit(self.report())
+
+
+# A selection drag records every mouse event the page sees, with the target and its box at that
+# moment, for a failure report: in CI the drag sometimes ends in cell 0,0.
+DRAG_TRACE = """() => { window.dragTrace = [];
+  for (const k of ['mousedown', 'mousemove', 'mouseup']) document.addEventListener(k, e => {
+    const r = e.target.getBoundingClientRect ? e.target.getBoundingClientRect() : null;
+    dragTrace.push([k, e.target.tagName, e.clientX, e.clientY, e.offsetX, e.offsetY,
+      r && [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)]]); }, true); }"""
+
+
+def drag_trace(page):
+    page.evaluate(DRAG_TRACE)
+
+
+def drag_report(page):
+    return page.evaluate("window.dragTrace || []")
