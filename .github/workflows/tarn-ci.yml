@@ -1,6 +1,7 @@
 # tarn CI: `make -f tarn.mk check` on macOS and the browser demo checks on Linux.
-# GitHub flow (T-428): `demo`, `lint` and `app` run on every PR and push to main and are the required
-# checks (T-442: agents merge unattended, so Swift is built and tested before a merge, not after).
+# GitHub flow (T-428): `demo`, `lint`, `app` and `secrets` run on every PR and push to main; `gate` is
+# red unless all of them succeeded and is the one required check (T-450: agents merge unattended, so
+# Swift is built and tested before a merge, not after).
 # A release tag goes only on a commit with green `app`.
 # Upstream workflows stay in this folder for clean upstream merges and are disabled in the settings.
 name: tarn-ci
@@ -118,3 +119,32 @@ jobs:
         run: |
           grep -n -B2 -A6 -E "✘|Expectation|recorded an issue" macos/build/test.log | head -120 || true
           tail -200 macos/build/test.log || true
+
+  # Secrets in what the PR would merge: gitleaks over the tree, upstream false positives in .gitleaks.toml.
+  secrets:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: "1.27.x"
+          cache: false
+      - name: gitleaks
+        run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 dir --no-banner --redact --config .gitleaks.toml .
+
+  gate:
+    if: always()
+    needs: [demo, lint, app, secrets]
+    runs-on: ubuntu-latest
+    steps:
+      - name: every job passed
+        env:
+          RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "results: $RESULTS"
+          for r in $RESULTS; do
+            case "$r" in success) ;; *) exit 1 ;; esac
+          done
