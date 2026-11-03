@@ -63,9 +63,6 @@ final class ViewerHost: ObservableObject {
         lastViewer.flatMap { panes[$0] } ?? tree.viewers.first.flatMap { panes[$0.id] }
     }
 
-    /// Whether the layout draws the viewers: not hidden by the user and the module is on. The
-    /// panes themselves stay in `panes` either way.
-
     /// Whether the drop overlay is in the layout. A terminal of a split block drags among Ghostty's
     /// own zones, and AppKit gives a drag to the registered view under the pointer whatever its
     /// `hitTest` says, so the overlay stays out of the way of that drag.
