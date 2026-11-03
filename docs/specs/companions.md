@@ -1,6 +1,6 @@
 # Modules and companions
 
-Status: approved by the user 2026-10-31 (T-364); hub placement and the 1.3.3 scope added 2026-11-02 (T-371). A base to grow rules on once companions are in use: it fixes terms and a few rules, everything else is a default. Extends `docs/specs/modules.md`.
+Status: approved by the user 2026-10-31 (T-364); hub placement and the 1.3.3 scope added 2026-11-02 (T-371); the hub deferred past 1.4.0 by the user 2026-11-03. A base to grow rules on once companions are in use: it fixes terms and a few rules, everything else is a default. Extends `docs/specs/modules.md`.
 
 ## 1. Idea
 
@@ -85,7 +85,7 @@ Each companion's document `docs/modules/<name>.md` states:
 
 ## 8. Planned changes to existing documents
 
-Planned for 1.4 (epic T-363), not done in 1.3.3:
+Deferred by the user 2026-11-03: the hub (epic T-363) and the state model per tab group (T-427) come after 1.4.0, the last release of this line; 1.4.0 brings the current modules to the companion form without adding one. Planned with the hub:
 
 - `docs/specs/modules.md`: Settings > Modules lists Sidebar, File viewer, Hub; "tarn answers requests" (R5) is shown under Sidebar and Hub and read by the card and the hub; Notifications is a tarn setting. Stored keys stay, so saved values survive. In 1.3.3 only the naming and grouping change (T-373).
 - Viewer spec: `tarn open` shows the viewer with the file instead of leaving it hidden; focus and typing stay (R4).
