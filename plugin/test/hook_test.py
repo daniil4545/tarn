@@ -22,7 +22,7 @@ from pathlib import Path
 
 HOOKS = Path(__file__).resolve().parent.parent / "hooks"
 LIMIT = 0.1
-# TARN_HOOK_LIMIT_MS raises the limit of the hung-app and order cases for a slow machine; default 100 ms.
+# TARN_HOOK_LIMIT_MS raises the limit of the hung-app, stale-socket and order cases for a slow machine; default 100 ms.
 HUNG_LIMIT = float(os.environ.get("TARN_HOOK_LIMIT_MS", "100")) / 1000
 STOP = b'{"hook_event_name":"Stop"}'
 ASK = b'{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"make"}}'
@@ -181,7 +181,8 @@ def main() -> int:
         # A socket file left by a crashed app: nobody listens.
         with socket.socket(socket.AF_UNIX) as stale:
             stale.bind(str(socket_path))
-        if failure := silent("permission.sh", home, "x", ASK):
+        # Connecting to a socket nobody listens on takes the slow runner about 100 ms.
+        if failure := silent("permission.sh", home, "x", ASK, HUNG_LIMIT):
             failures.append(f"permission.sh, stale socket: {failure}")
         socket_path.unlink()
 
