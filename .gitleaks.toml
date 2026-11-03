@@ -1,0 +1,13 @@
+# Default rules plus an allowlist for upstream Ghostty files that name keys and variables
+# without values (generic-api-key false positives).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "upstream Ghostty: key names, no values"
+paths = [
+  '''^\.github/workflows/release-(tip|tag)\.yml$''',
+  '''^src/input/Binding\.zig$''',
+  '''^src/terminal/snapshot/terminal\.zig$''',
+  '''^vendor/''',
+]
