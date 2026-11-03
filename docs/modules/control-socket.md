@@ -35,11 +35,11 @@ Reading: the socket knows no protocol. It hands each line and its `Reply` to the
 
 ## How it works
 
-State: the listening descriptor, a read dispatch source and the serial queue `tarn.socket`. No per-connection state outside `Reply`.
+State: the listening descriptor, a read dispatch source on the serial queue `tarn.socket` (accepts, replies), and the concurrent queue `tarn.socket.read` (one read per client). No per-connection state outside `Reply`.
 
 1. `SessionRegistry.start` creates the socket with a callback and calls `start`.
 2. `start` creates the folder, removes a stale file, binds `~/Library/Application Support/tarn/tarn.sock`, sets mode 0600 and listens with backlog 16. Any failure is logged and the app runs without the socket.
-3. On a connection, `accept` sets a 1 s receive timeout and reads until a newline, end of data or more than 4 MB.
+3. On a connection, `accept` hands the descriptor to `tarn.socket.read`, where `readLine` sets a 1 s receive timeout and reads until a newline, end of data or more than 4 MB.
 4. An empty or oversized read closes the connection; an oversized one is logged.
 5. Otherwise a `Reply` wraps the descriptor and the line goes to the main actor.
 6. The callback in `SessionRegistry.start` parses the line once. A line that is not a JSON object (junk, invalid UTF-8) gets `{"error":"malformed request",...}`, except a permission hook's line (`"reply":true`), which gets silence (`AttentionCommands.refuse`, `isMalformed`).
@@ -69,7 +69,7 @@ None for the socket itself. The surface id reaches clients through `TARN_SURFACE
 | Rule | Enforced by |
 |---|---|
 | Only the same user can connect | mode 0600 on the socket file |
-| A slow or silent client cannot hold the reader | 1 s receive timeout; reads happen on `tarn.socket`, not the main thread |
+| A slow or silent client cannot hold the reader | 1 s receive timeout; each client is read on its own thread of `tarn.socket.read`, so it delays neither the next accept nor a reply |
 | Memory per line is bounded | 4 MB cap, line dropped and logged |
 | Bind failure does not stop the app | `fail` logs and closes; process detection still works |
 | Protocol version is checked by the receiver | `version == 1` in `receive` and `openFromSocket` |
