@@ -769,12 +769,14 @@ def selection_and_urls(base):
         run(pg, "p7", "echo https://example.com/demo")
 
         def select_word():
-            # The last prompt row, away from the canvas edge: a drag within 30 px of it starts
-            # ghostty-web's selection autoscroll, which drags the selection end to cell 0,0 on a slow machine.
-            row = pg.evaluate(
+            # The prompt row after the echo, once drawn (lineText takes absolute rows): a drag within
+            # 30 px of the canvas edge starts ghostty-web's autoscroll, which pulls the selection end to cell 0,0.
+            row = pg.wait_for_function(
                 """() => { const t = __tarn.term('p7'); let last = -1;
-                  for (let y = 0; y < t.rows; y++) if (t.lineText(y).startsWith('you@')) last = y; return last; }"""
-            )
+                  for (let y = 0; y < t.rows; y++) if (t.lineText(t.topRow + y).startsWith('you@')) last = y;
+                  return last > 1 ? last : null; }""",
+                timeout=5000,
+            ).json_value()
             a = pg.evaluate("(r) => __tarn.term('p7').cellCentre(0, r)", row)
             b = pg.evaluate("(r) => __tarn.term('p7').cellCentre(2, r)", row)
             pg.mouse.move(a["x"] - 3, a["y"])
