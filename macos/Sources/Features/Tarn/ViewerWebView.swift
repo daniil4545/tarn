@@ -70,7 +70,6 @@ final class ViewerWebView: WKWebView {
 
     var onCommand: ((String) -> Void)?
     var onLayout: ((ViewerLayoutCommand) -> Void)?
-    var pasteFile: () -> String? = { nil }
 
     /// The pane command of a key press. The typed letter decides, as for the menu, so Dvorak and
     /// Colemak keep their own Cmd+X and Cmd+F. Only when the layout types no ASCII letter (Russian:
@@ -156,9 +155,9 @@ final class ViewerWebView: WKWebView {
             ?? (board.readObjects(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true]) as? [URL])?
                 .map(\.path).joined(separator: "\n")
         guard let text else { return }
-        callAsyncJavaScript("window.tarn.paste(text, path)", arguments: ["text": text, "path": pasteFile() as Any? ?? NSNull()], in: nil, in: .page) { result in
+        callAsyncJavaScript("window.tarn.paste(text, path)", arguments: ["text": text, "path": currentFile() as Any? ?? NSNull()], in: nil, in: .page) { result in
             if case let .failure(error) = result {
-                Logger(subsystem: "tarn", category: "viewer").error("paste failed: \(error.localizedDescription, privacy: .public)")
+                ViewerModel.logger.error("paste failed: \(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -212,7 +211,6 @@ final class ViewerWebView: WKWebView {
 /// Owns the web view of one viewer pane: loads the page, serves its assets, forwards messages.
 @MainActor
 final class ViewerWebController: NSObject {
-    private static let logger = Logger(subsystem: "tarn", category: "viewer")
     private static let pageURL = URL(string: "\(ViewerRules.scheme)://app/tarn-viewer.html")!
 
     let container = ViewerPaneView()
@@ -241,7 +239,7 @@ final class ViewerWebController: NSObject {
                 }
             }
         model.script = { [weak self] call in self?.webView?.evaluateJavaScript(call) { _, error in
-            if let error { Self.logger.error("script failed: \(error.localizedDescription, privacy: .public)") }
+            if let error { ViewerModel.logger.error("script failed: \(error.localizedDescription, privacy: .public)") }
         } }
         model.onFocus = { [weak self] in self?.focus() }
         model.hasFocus = { [weak self] in
@@ -260,7 +258,7 @@ final class ViewerWebController: NSObject {
         ) { [weak self] list, error in
             DispatchQueue.main.async {
                 guard let list else {
-                    Self.logger.error("rule list failed: \(String(describing: error), privacy: .public)")
+                    ViewerModel.logger.error("rule list failed: \(String(describing: error), privacy: .public)")
                     return
                 }
                 self?.makeWebView(rules: list)
@@ -283,7 +281,6 @@ final class ViewerWebController: NSObject {
         view.navigationDelegate = self
         view.onCommand = { [weak model] in model?.command($0) }
         view.onLayout = { [weak model] in model?.onLayout?($0) }
-        view.pasteFile = { [weak model] in model?.tabs.activePath }
         view.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model.dark)
         view.pageZoom = ViewerZoom.current()
         view.currentFile = { [weak model] in model?.tabs.activePath }
@@ -318,7 +315,7 @@ final class ViewerWebController: NSObject {
         guard let webView else { return }
         ViewerColors.install(chrome, in: webView.configuration.userContentController)
         webView.evaluateJavaScript(ViewerColors.script(for: chrome)) { _, error in
-            if let error { Self.logger.error("colors failed: \(error.localizedDescription, privacy: .public)") }
+            if let error { ViewerModel.logger.error("colors failed: \(error.localizedDescription, privacy: .public)") }
         }
         webView.underPageBackgroundColor = ViewerColors.underPageColor(for: chrome, dark: model?.dark ?? true)
     }
@@ -365,7 +362,7 @@ final class ViewerWebController: NSObject {
 extension ViewerWebController: WKNavigationDelegate {
     /// The web content process died (memory pressure): load the page again; the model refills it.
     func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
-        Self.logger.error("web content process terminated")
+        ViewerModel.logger.error("web content process terminated")
         model?.pageLost()
         webView.load(URLRequest(url: Self.pageURL))
     }
@@ -391,7 +388,7 @@ extension ViewerWebController {
               let asset = ViewerRules.asset(for: url, bundle: bundle, roots: model?.assetRoots ?? []),
               let data = try? Data(contentsOf: asset.file)
         else {
-            Self.logger.info("refused \(url?.absoluteString ?? "-", privacy: .public)")
+            ViewerModel.logger.info("refused \(url?.absoluteString ?? "-", privacy: .public)")
             urlSchemeTask.didFailWithError(URLError(.fileDoesNotExist))
             return
         }

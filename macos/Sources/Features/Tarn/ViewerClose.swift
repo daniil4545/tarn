@@ -126,16 +126,22 @@ enum ViewerClose {
         return false
     }
 
+    /// The Save / Don't Save / Cancel alert; `choice(for:)` reads its answer.
     @MainActor
-    private static func ask(_ paths: [String], window: NSWindow?, completion: @escaping (Choice) -> Void) {
-        let text = message(for: paths)
+    static func alert(title: String, detail: String) -> NSAlert {
         let alert = NSAlert()
-        alert.messageText = text.title
-        alert.informativeText = text.detail
-        alert.alertStyle = .warning
+        alert.messageText = title
+        alert.informativeText = detail
         alert.addButton(withTitle: "Save")
         alert.addButton(withTitle: "Don't Save")
         alert.addButton(withTitle: "Cancel")
+        return alert
+    }
+
+    @MainActor
+    private static func ask(_ paths: [String], window: NSWindow?, completion: @escaping (Choice) -> Void) {
+        let text = message(for: paths)
+        let alert = alert(title: text.title, detail: text.detail)
         guard let window else { return completion(choice(for: alert.runModal())) }
         alert.beginSheetModal(for: window) { response in
             // Same as Ghostty's confirmation: keep focus with Stage Manager.

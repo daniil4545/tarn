@@ -63,10 +63,6 @@ final class ViewerHost: ObservableObject {
         lastViewer.flatMap { panes[$0] } ?? tree.viewers.first.flatMap { panes[$0.id] }
     }
 
-    /// Whether the layout draws the viewers: not hidden by the user and the module is on. The
-    /// panes themselves stay in `panes` either way.
-    nonisolated static func isShown(hidden: Bool, moduleOn: Bool) -> Bool { !hidden && moduleOn }
-
     /// Whether the drop overlay is in the layout. A terminal of a split block drags among Ghostty's
     /// own zones, and AppKit gives a drag to the registered view under the pointer whatever its
     /// `hitTest` says, so the overlay stays out of the way of that drag.
@@ -111,7 +107,7 @@ final class ViewerHost: ObservableObject {
         let pane = existing ?? makeViewer(root: root ?? NSHomeDirectory(), beside: blockLeaf, edge: .right, share: 0.6)
         guard pane.model.open(target, background: typingInPane) else {
             // A viewer this call created for a file that cannot open does not stay; a tree-only one does.
-            if existing == nil, pane.model.snapshot.isEmpty { discard(pane.leaf.id) }
+            if existing == nil, pane.model.tabs.tabs.isEmpty { discard(pane.leaf.id) }
             return false
         }
         lastViewer = pane.leaf.id
@@ -140,7 +136,7 @@ final class ViewerHost: ObservableObject {
         guard isViewerOn() else { return }
         guard let model = activeModel else { return openTreeOnly(root: root) }
         if hidden { return show() }
-        if model.snapshot.isEmpty { return model.closeActiveTab() }
+        if model.tabs.tabs.isEmpty { return model.closeActiveTab() }
         model.toggleTree()
     }
 
@@ -183,15 +179,13 @@ final class ViewerHost: ObservableObject {
     /// The model and page of a viewer leaf. The caller puts the leaf into the layout.
     private func makePane(_ leaf: AreaLeaf, root: String) -> Pane {
         let id = leaf.id
-        let model = ViewerModel(root: root)
+        let model = ViewerModel(root: root, id: id)
         let web = ViewerWebController(model: model)
         model.onClosePane = { [weak self] saved, active in self?.close(id, saved: saved, active: active) }
         model.onHidePane = { [weak self] in self?.hidePane() }
         model.onPaneKey = { [weak self] in self?.toggleFromKey(root: nil) }
         model.onLayout = { [weak self] command in self?.layout(command, from: id) }
-        model.onFileDrag = { [weak self] file in
-            self?.drag = file.map { .file(FileDrag(path: $0.path, viewer: id, moves: $0.moves, sole: $0.sole)) }
-        }
+        model.onFileDrag = { [weak self] file in self?.drag = file.map { .file($0) } }
         let grip = web.container.grip
         grip.viewerID = id
         grip.title = { [weak model] in (model?.tabs.activePath).map { ($0 as NSString).lastPathComponent } ?? "Viewer" }
@@ -209,7 +203,7 @@ final class ViewerHost: ObservableObject {
     /// The viewers for a tombstone, or nil when the tab has none.
     func snapshot() -> ViewerSnapshot? {
         let viewers = tree.viewers.compactMap { leaf in
-            panes[leaf.id].map { ViewerSnapshot.Viewer(id: leaf.id, root: $0.model.tree.root, tabs: $0.model.snapshot, active: $0.model.tabs.active) }
+            panes[leaf.id].map { ViewerSnapshot.Viewer(id: leaf.id, root: $0.model.tree.root, tabs: $0.model.tabs.tabs, active: $0.model.tabs.active) }
         }
         guard !viewers.isEmpty, let layout = try? JSONEncoder().encode(tree) else { return nil }
         return ViewerSnapshot(layout: layout, viewers: viewers)
@@ -338,12 +332,12 @@ final class ViewerHost: ObservableObject {
 
     // MARK: Drops
 
-    /// Called by the terminal pane drag, which Ghostty's grab handle publishes (`DraggingSurfaceKey`).
     /// A drag that came from a page ends with the AppKit session; a click proves it is over.
     func cancelFileDrag() {
         if case .file = drag { drag = nil }
     }
 
+    /// Called by the terminal pane drag, which Ghostty's grab handle publishes (`DraggingSurfaceKey`).
     func terminalDragged(_ id: UUID?) {
         if case .viewer = drag { return }
         drag = id.map { .terminal($0) }
@@ -439,8 +433,6 @@ final class ViewerHost: ObservableObject {
 
 /// Where a path click or `tarn open` goes.
 enum ViewerRouter {
-    private static let logger = Logger(subsystem: "tarn", category: "viewer")
-
     /// What a clicked path becomes. The reason of a refusal is logged: a click that does nothing
     /// must be explainable from `log stream --predicate 'subsystem == "tarn"'`.
     enum Decision: Equatable {
@@ -471,20 +463,20 @@ enum ViewerRouter {
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
         guard FileViewerSetting.isOn else {
-            logger.debug("click on \(raw, privacy: .public) refused: the file viewer is off")
+            ViewerModel.logger.debug("click on \(raw, privacy: .public) refused: the file viewer is off")
             return false
         }
         guard let surface else {
-            logger.debug("click on \(raw, privacy: .public) refused: no surface")
+            ViewerModel.logger.debug("click on \(raw, privacy: .public) refused: no surface")
             return false
         }
         guard let controller = surface.window?.windowController as? TerminalController else {
-            logger.debug("click on \(raw, privacy: .public) refused: the surface has no terminal window")
+            ViewerModel.logger.debug("click on \(raw, privacy: .public) refused: the surface has no terminal window")
             return false
         }
         let cwd = surface.workingDirectory
         let decision = decide(raw, cwd: cwd)
-        logger.debug("click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
+        ViewerModel.logger.debug("click on \(raw, privacy: .public) cwd=\(cwd ?? "-", privacy: .public) -> \(String(describing: decision), privacy: .public)")
         switch decision {
         case let .open(target):
             _ = controller.viewerHost.open(target, root: cwd, focus: true)
@@ -516,7 +508,7 @@ enum ViewerRouter {
         guard message["cmd"] as? String == "open" else { return false }
         let error = openFromSocket(message)
         if let error {
-            logger.info("open refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
+            ViewerModel.logger.info("open refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
         }
         reply.send(error.map(AttentionCommands.failure) ?? AttentionCommands.reply())
         return true

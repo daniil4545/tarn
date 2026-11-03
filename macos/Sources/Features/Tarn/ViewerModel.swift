@@ -14,19 +14,14 @@ enum ViewerLayoutCommand {
     case equalize
 }
 
-/// A file the page starts to drag: a tab (it moves) or a tree row (it only opens).
-struct PageFileDrag: Equatable {
-    let path: String
-    let moves: Bool
-    let sole: Bool
-}
-
 /// What a viewer pane shows: tabs, documents, the files tree and the watchers. The web page draws
 /// it and reports user actions; this model owns the state. See `docs/modules/viewer.md`.
 @MainActor
 final class ViewerModel {
-    private static let logger = Logger(subsystem: "tarn", category: "viewer")
+    static let logger = Logger(subsystem: "tarn", category: "viewer")
 
+    /// The leaf of the layout this viewer sits in.
+    let id: UUID
     private(set) var tabs = ViewerTabs()
     private(set) var tree: FileTree
     private(set) var treeVisible = false
@@ -46,7 +41,7 @@ final class ViewerModel {
     /// A key or menu command that changes the layout of the tab: a split or a focus move.
     var onLayout: ((ViewerLayoutCommand) -> Void)?
     /// The page started dragging a file, or ended the drag (nil).
-    var onFileDrag: ((PageFileDrag?) -> Void)?
+    var onFileDrag: ((FileDrag?) -> Void)?
     /// Asks to give the page keyboard focus.
     var onFocus: (() -> Void)?
     /// True while the page holds keyboard focus.
@@ -56,7 +51,8 @@ final class ViewerModel {
     /// Asks to hide the pane (Esc or the Files button in a pane with no file).
     var onHidePane: (() -> Void)?
 
-    init(root: String) {
+    init(root: String, id: UUID = UUID()) {
+        self.id = id
         tree = FileTree(root: root)
     }
 
@@ -64,8 +60,6 @@ final class ViewerModel {
     var assetRoots: [String] {
         [tree.root] + docs.keys.map { ($0 as NSString).deletingLastPathComponent }
     }
-
-    var snapshot: [ViewerTab] { tabs.tabs }
 
     /// Set when the user chose Don't Save in a close sheet; the repeated close consumes it. The edits
     /// stay in place until the window really closes, so a Cancel in a later dialog loses nothing.
@@ -191,15 +185,10 @@ final class ViewerModel {
     }
 
     /// Esc and the Files button in a pane with no file: the pane hides with its tree state kept.
-    @discardableResult
     private func hidePaneIfEmpty() -> Bool {
         guard tabs.tabs.isEmpty else { return false }
         onHidePane?()
         return true
-    }
-
-    func flushPendingEdit() {
-        runScript("tarn.flush()")
     }
 
     func focusTreeInPage() {
@@ -287,7 +276,7 @@ final class ViewerModel {
         case "closeTab": closeTab(at: index)
         case "closePane": closePane()
         case "dragFile":
-            if let path { onFileDrag?(PageFileDrag(path: path, moves: body["tab"] as? Bool == true, sole: tabs.tabs.count == 1)) }
+            if let path { onFileDrag?(FileDrag(path: path, viewer: id, moves: body["tab"] as? Bool == true, sole: tabs.tabs.count == 1)) }
         case "dragEnd": onFileDrag?(nil)
         case "toggleTree":
             // The Files button: the tree of a pane with files; a pane with no file has nothing else.
@@ -456,12 +445,9 @@ final class ViewerModel {
 
     private func confirmDiscard(_ path: String) -> Bool {
         guard let doc = docs[path], doc.isDirty else { return true }
-        let alert = NSAlert()
-        alert.messageText = "Save changes to \((path as NSString).lastPathComponent)?"
-        alert.informativeText = "Your changes are lost if you do not save them."
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Don't Save")
-        alert.addButton(withTitle: "Cancel")
+        let alert = ViewerClose.alert(
+            title: "Save changes to \((path as NSString).lastPathComponent)?",
+            detail: "Your changes are lost if you do not save them.")
         return ViewerClose.proceeds(ViewerClose.choice(for: alert.runModal())) {
             save(path)
             return docs[path]?.isDirty != true
