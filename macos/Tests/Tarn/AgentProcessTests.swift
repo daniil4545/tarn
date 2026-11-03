@@ -240,8 +240,8 @@ struct AgentProcessTests {
 
     @Test func everyAgentHasANameAndAnIcon() {
         for agent in AgentProcess.names {
-            #expect(AgentProcess.displayNames[agent] != nil)
-            #expect(AgentProcess.icons[agent].flatMap { NSImage(named: $0) } != nil, "\(agent)")
+            #expect(AgentProcess.agents[agent]?.display != nil)
+            #expect(AgentProcess.agents[agent].flatMap { NSImage(named: $0.icon) } != nil, "\(agent)")
         }
     }
 }

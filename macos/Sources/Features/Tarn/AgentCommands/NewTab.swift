@@ -2,10 +2,6 @@ import AppKit
 
 /// U5: Ghostty's controller and native attachment, without its foreground new-tab factory or creation undo.
 enum NewTab {
-    static func refusal(group: UUID?) -> AgentRefusal? {
-        group == nil ? AgentRefusal(text: "put this tab in a group first") : nil
-    }
-
     @MainActor
     static func open(
         _ caller: BaseTerminalController,

@@ -47,7 +47,7 @@ private struct GhosttyOptionRow: View {
             HStack {
                 Text(option.key).font(.system(.body, design: .monospaced))
                 Spacer()
-                if store.isSet(option) {
+                if store.file.contains(option.key) {
                     Text("set in tarn")
                         .font(.caption)
                         .foregroundStyle(.secondary)

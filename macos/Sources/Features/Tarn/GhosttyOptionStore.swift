@@ -53,10 +53,6 @@ final class GhosttyOptionStore: ObservableObject {
 
     // MARK: - Reading
 
-    func isSet(_ option: GhosttyOption) -> Bool {
-        file.contains(option.key)
-    }
-
     func display(_ option: GhosttyOption) -> Display {
         if let value = file.value(for: option.key) {
             return canShow(value, for: option) ? .value(value) : .raw(value)

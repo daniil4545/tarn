@@ -31,7 +31,7 @@ struct GhosttyOptionStoreTests {
         let (store, url) = try makeStore { reloads += 1 }
         store.set(option("font-size"), to: "16")
         #expect(try lines(url) == ["font-size = 16"])
-        #expect(store.isSet(option("font-size")))
+        #expect(store.file.contains("font-size"))
         #expect(reloads == 1)
     }
 
@@ -46,7 +46,7 @@ struct GhosttyOptionStoreTests {
         store.reset(option("drag-handle"))
         #expect(try lines(url) == ["font-size = 16"])
         #expect(try String(contentsOf: url, encoding: .utf8).contains("# mine"))
-        #expect(!store.isSet(option("drag-handle")))
+        #expect(!store.file.contains("drag-handle"))
     }
 
     /// The user's own config says `false`; picking "default (auto)" must not bring it back.
@@ -55,7 +55,7 @@ struct GhosttyOptionStoreTests {
         let (store, url) = try makeStore(config: user)
         store.set(option("cursor-style-blink"), to: "")
         #expect(try lines(url) == ["cursor-style-blink = \"\""])
-        #expect(store.isSet(option("cursor-style-blink")))
+        #expect(store.file.contains("cursor-style-blink"))
         #expect(store.display(option("cursor-style-blink")) == .value(""))
         // Ghostty reads the empty value as the default, over the user's line.
         let effective = try TemporaryConfig("cursor-style-blink = false\n\(String(contentsOf: url, encoding: .utf8))")
@@ -125,7 +125,7 @@ struct GhosttyOptionStoreTests {
         let store = GhosttyOptionStore(url: blocker.appendingPathComponent("ghostty.conf"), config: nil) { reloads += 1 }
         store.set(option("font-size"), to: "16")
         #expect(store.errors["font-size"] != nil)
-        #expect(!store.isSet(option("font-size")))
+        #expect(!store.file.contains("font-size"))
         #expect(reloads == 0)
         #expect(try String(contentsOf: blocker, encoding: .utf8) == "x")
     }

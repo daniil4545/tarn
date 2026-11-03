@@ -25,10 +25,8 @@ struct ThemeCatalog {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         resources: URL? = Bundle.main.resourceURL
     ) -> [URL] {
-        let config = environment["XDG_CONFIG_HOME"].flatMap { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : nil }
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".config")
         return [
-            config.appendingPathComponent("ghostty/themes"),
+            TarnConfigFile.configHome(environment: environment).appendingPathComponent("ghostty/themes"),
             resources?.appendingPathComponent("ghostty/themes"),
         ].compactMap { $0 }
     }

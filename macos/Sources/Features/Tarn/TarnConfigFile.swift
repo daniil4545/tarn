@@ -119,14 +119,13 @@ struct TarnConfigFile: Equatable {
     /// `$XDG_CONFIG_HOME/tarn/ghostty.conf`, else `~/.config/tarn/ghostty.conf`, as Ghostty
     /// finds its own config directory.
     static func defaultURL(environment: [String: String] = ProcessInfo.processInfo.environment) -> URL {
-        let base: URL
-        if let xdg = environment["XDG_CONFIG_HOME"], xdg.hasPrefix("/") {
-            base = URL(fileURLWithPath: xdg)
-        } else {
-            let home = environment["HOME"] ?? NSHomeDirectory()
-            base = URL(fileURLWithPath: home).appendingPathComponent(".config")
-        }
-        return base.appendingPathComponent("tarn").appendingPathComponent("ghostty.conf")
+        configHome(environment: environment, home: URL(fileURLWithPath: environment["HOME"] ?? NSHomeDirectory()))
+            .appendingPathComponent("tarn/ghostty.conf")
+    }
+
+    static func configHome(environment: [String: String], home: URL = FileManager.default.homeDirectoryForCurrentUser) -> URL {
+        environment["XDG_CONFIG_HOME"].flatMap { $0.hasPrefix("/") ? URL(fileURLWithPath: $0) : nil }
+            ?? home.appendingPathComponent(".config")
     }
 
     /// The file for the app's own configs, or nil when the launch carries `-e`: our lines would

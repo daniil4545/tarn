@@ -52,25 +52,19 @@ enum AttentionCommands {
     /// The reply line for `command`; logs a refusal.
     @MainActor
     static func answer(command: String, message: [String: Any]) -> Data {
-        if let error = perform(command: command, message: message) {
+        let error: String?
+        if command != "notify" {
+            error = "unknown command: \(command)"
+        } else if let id = (message["surface"] as? String).flatMap(UUID.init(uuidString:)) {
+            error = SessionRegistry.shared.notify(id, text: message["text"] as? String ?? "")
+        } else {
+            error = "unknown surface"
+        }
+        if let error {
             logger.info("\(command, privacy: .public) refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
             return failure(error)
         }
         return reply()
     }
 
-    /// Checks the request and carries out `notify`; the error text, or nil on success.
-    @MainActor
-    private static func perform(command: String, message: [String: Any]) -> String? {
-        guard message["version"] as? Int == 1 else { return "unsupported version" }
-        switch command {
-        case "notify":
-            guard let id = (message["surface"] as? String).flatMap(UUID.init(uuidString:)) else {
-                return "unknown surface"
-            }
-            return SessionRegistry.shared.notify(id, text: message["text"] as? String ?? "")
-        default:
-            return "unknown command: \(command)"
-        }
-    }
 }

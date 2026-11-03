@@ -185,7 +185,7 @@ struct ThemeChrome: Equatable {
         accent = palette.accent
     }
 
-    static let viewerVariableNames = ["--p-bg", "--p-bar", "--p-fg", "--p-muted", "--p-line", "--p-code", "--p-accent"]
+    static let viewerVariableNames = Array(ThemeChrome(ThemePalette(background: .black, foreground: .black)).viewerVariables.keys)
 
     /// The `--p-*` custom properties of the viewer page (`viewer-web/src/viewer.css`).
     var viewerVariables: [String: String] {
