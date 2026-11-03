@@ -1,6 +1,6 @@
 # Modules and companions
 
-Status: approved by the user 2026-10-31 (T-364); hub placement and the 1.3.3 scope added 2026-11-02 (T-371); the hub deferred past 1.4.0 by the user 2026-11-03. A base to grow rules on once companions are in use: it fixes terms and a few rules, everything else is a default. Extends `docs/specs/modules.md`.
+Status: approved by the user 2026-10-31 (T-364); hub placement and the release scope added 2026-11-02 (T-371); the hub deferred past 1.4.0 by the user 2026-11-03. A base to grow rules on once companions are in use: it fixes terms and a few rules, everything else is a default. Extends `docs/specs/modules.md`.
 
 ## 1. Idea
 
@@ -35,7 +35,7 @@ The window is the center: a terminal pane, with or without an agent in it. Every
 - Few rules now: the base first, rules are added from use.
 - The hub is a pane on the right of the windows, like the viewer; with both open, the last opened stands rightmost. It opens by a button or a shortcut; its state is global across tabs (epic T-363).
 
-2026-11-02 (epic T-370, release 1.3.3):
+2026-11-02 (epic T-370, release 1.4.0, renamed from 1.3.3 on 2026-11-03):
 
 - Current modules are brought to one companion form in code before the hub: a companion table over the existing switches, menu actions and toggles (T-374). `TerminalController` keeps its nesting of sidebar, viewer and terminal.
 - The state model per tab group for global companions comes with the hub (T-427): the sidebar's width and collapse are already global through `@AppStorage` (`Sidebar.swift:710-711`).
@@ -85,15 +85,15 @@ Each companion's document `docs/modules/<name>.md` states:
 
 ## 8. Planned changes to existing documents
 
-Deferred by the user 2026-11-03: the hub (epic T-363) and the state model per tab group (T-427) come after 1.4.0, the last release of this line; 1.4.0 brings the current modules to the companion form without adding one. Planned with the hub:
+Deferred by the user 2026-11-03: the hub (epic T-363) and the state model per tab group (T-427) come after 1.4.0, the last release of this line; 1.4.0 brings the current modules to the companion form without adding one. The changes below stay planned; the ones that need the hub move with it:
 
-- `docs/specs/modules.md`: Settings > Modules lists Sidebar, File viewer, Hub; "tarn answers requests" (R5) is shown under Sidebar and Hub and read by the card and the hub; Notifications is a tarn setting. Stored keys stay, so saved values survive. In 1.3.3 only the naming and grouping change (T-373).
+- `docs/specs/modules.md`: Settings > Modules lists Sidebar, File viewer, Hub; "tarn answers requests" (R5) is shown under Sidebar and Hub and read by the card and the hub; Notifications is a tarn setting. Stored keys stay, so saved values survive. In 1.4.0 only the naming and grouping change (T-373).
 - Viewer spec: `tarn open` shows the viewer with the file instead of leaving it hidden; focus and typing stay (R4).
 - Layout: "Split zoom does nothing from a viewer" is replaced by the expand capability.
 
 ## 9. Open for the hub spec
 
-Findings of the 2026-10-31 review of this concept that 1.3.3 does not settle; the hub spec answers each.
+Findings of the 2026-10-31 review of this concept that 1.4.0 does not settle; the hub spec answers each.
 
 | Item | Question |
 |---|---|
