@@ -136,7 +136,8 @@ final class SidebarModel: ObservableObject {
                       self.groups.contains(where: { $0.tabs.contains { $0.id == hovered } })
                 else { return }
                 self.cardTab = hovered
-                self.forceClicked = true
+                // With the module off no card opened, so the click stays a plain click.
+                self.forceClicked = self.cardTab != nil
             }
             return event
         }
