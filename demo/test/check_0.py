@@ -65,8 +65,10 @@ def spike_basics(base):
             cols > 40 and pg.locator("#spike-host canvas").count() == 1,
         )
 
+        # The path line sits on row 3: a drag within 30 px of the canvas edge starts ghostty-web's
+        # selection autoscroll, whose 50 ms tick drags the selection end to cell 0,0 on a slow machine.
         pg.evaluate(
-            "t.write('hello \\x1b[31mred\\x1b[0m привет\\r\\nsee src/main.go:42 now\\r\\n')"
+            "t.write('hello \\x1b[31mred\\x1b[0m привет\\r\\n\\r\\n\\r\\nsee src/main.go:42 now\\r\\n')"
         )
         text = pg.evaluate("t.screenText()").split("\n")
         check(
@@ -80,7 +82,7 @@ def spike_basics(base):
         pg.evaluate("window.sel = []; void t.onSelection(s => sel.push(s))")
         # The cyrillic face loads on first use and can move the cells after the write.
         pg.evaluate("document.fonts.ready.then(() => true)")
-        a, b = pg.evaluate("[t.cellCentre(0, 1), t.cellCentre(7, 1)]")
+        a, b = pg.evaluate("[t.cellCentre(0, 3), t.cellCentre(7, 3)]")
         pg.mouse.move(a["x"] - 3, a["y"])
         pg.mouse.down()
         pg.mouse.move(b["x"], b["y"], steps=6)
@@ -98,7 +100,7 @@ def spike_basics(base):
               t.addLinkProvider(l => [...l.matchAll(/[\\w./-]+:\\d+/g)].map(m => ({start: m.index, end: m.index + m[0].length, text: m[0]})),
                 (text) => acts.push(text)); }"""
         )
-        pos = pg.evaluate("t.cellCentre(8, 1)")
+        pos = pg.evaluate("t.cellCentre(8, 3)")
         pg.mouse.move(pos["x"], pos["y"])
         time.sleep(0.2)
         pg.mouse.click(pos["x"], pos["y"])

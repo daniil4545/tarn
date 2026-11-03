@@ -769,8 +769,16 @@ def selection_and_urls(base):
         run(pg, "p7", "echo https://example.com/demo")
 
         def select_word():
-            a = pg.evaluate("__tarn.term('p7').cellCentre(0, 1)")
-            b = pg.evaluate("__tarn.term('p7').cellCentre(2, 1)")
+            # The prompt row after the echo, once drawn (lineText takes absolute rows): a drag within
+            # 30 px of the canvas edge starts ghostty-web's autoscroll, which pulls the selection end to cell 0,0.
+            row = pg.wait_for_function(
+                """() => { const t = __tarn.term('p7'); let last = -1;
+                  for (let y = 0; y < t.rows; y++) if (t.lineText(t.topRow + y).startsWith('you@')) last = y;
+                  return last > 1 ? last : null; }""",
+                timeout=5000,
+            ).json_value()
+            a = pg.evaluate("(r) => __tarn.term('p7').cellCentre(0, r)", row)
+            b = pg.evaluate("(r) => __tarn.term('p7').cellCentre(2, r)", row)
             pg.mouse.move(a["x"] - 3, a["y"])
             pg.mouse.down()
             pg.mouse.move(b["x"], b["y"], steps=5)
@@ -789,9 +797,7 @@ def selection_and_urls(base):
             "window.bus.cmd('config.set', {key: 'copy-on-select', value: 'clipboard'})"
         )
         pg.mouse.click(5, 5)
-        pg.wait_for_function(
-            "__tarn.term('p7').getSelection() === ''", timeout=5000
-        )
+        pg.wait_for_function("__tarn.term('p7').getSelection() === ''", timeout=5000)
         select_word()
         # Selection settles before the asynchronous clipboard write completes.
         pg.wait_for_function(
