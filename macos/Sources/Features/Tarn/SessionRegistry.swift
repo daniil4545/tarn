@@ -335,7 +335,9 @@ final class SessionRegistry {
     /// screen show it instead (`docs/spec.md` section 8). A record whose surface is gone is
     /// dropped here in any state, so a closed pane frees its session and focus observer.
     func checkLiveness() {
-        for id in sessions.keys where Self.surfaceView(id) == nil { remove(id) }
+        let gone = sessions.keys.filter { Self.surfaceView($0) == nil }
+        for id in gone { forget(id) }
+        if !gone.isEmpty { NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil) }
         for (id, session) in sessions where session.state == .working || session.state == .permission {
             guard let view = Self.surfaceView(id) else { continue }
 
@@ -494,11 +496,16 @@ final class SessionRegistry {
     }
 
     private func remove(_ id: UUID) {
+        forget(id)
+        NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
+    }
+
+    /// Drops the record without a redraw: callers that drop several post once.
+    private func forget(_ id: UUID) {
         closePending(id)
         sessions[id] = nil
         focusObservers[id] = nil
         idleSince[id] = nil
-        NotificationCenter.default.post(name: .terminalTabsDidChange, object: nil)
     }
 
     /// Focusing a surface marks its session seen.
