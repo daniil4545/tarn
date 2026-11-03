@@ -71,10 +71,16 @@ final class SidebarModel: ObservableObject {
     /// The gap opens away from the lifted row or block's own slot.
     var gapSlot: SidebarDropSlot? { (liftedTab == nil && liftedWorkspace == nil) || dropSlot == liftedSlot ? nil : dropSlot }
 
-    /// The tab whose card is open, if any.
+    /// The tab whose card is open, if any. With the Permission card module off no card opens.
     var cardTab: ObjectIdentifier? {
-        didSet { if cardTab != oldValue { updateCard() } }
+        didSet {
+            if cardTab != nil, !cardIsOn() { cardTab = nil }
+            if cardTab != oldValue { updateCard() }
+        }
     }
+
+    /// Whether the Permission card module is on; tests inject it.
+    var cardIsOn: () -> Bool = { TarnModules.isOn(.permissionCard) }
 
     /// The AppKit view behind each row, which the card popover points at.
     var rowAnchors: [ObjectIdentifier: WeakView] = [:]
@@ -130,7 +136,8 @@ final class SidebarModel: ObservableObject {
                       self.groups.contains(where: { $0.tabs.contains { $0.id == hovered } })
                 else { return }
                 self.cardTab = hovered
-                self.forceClicked = true
+                // With the module off no card opened, so the click stays a plain click.
+                self.forceClicked = self.cardTab != nil
             }
             return event
         }
@@ -217,6 +224,8 @@ final class SidebarModel: ObservableObject {
 
     func refresh() {
         guard !isMovingGroup else { return }
+        // The module was switched off while a card was open.
+        if cardTab != nil, !cardIsOn() { cardTab = nil }
         // Read only: the registry follows Ghostty by its own observers. A redraw that asked it to
         // look again made `sync` -> `publish` -> redraw -> `sync` a loop.
         let registry = WorkspaceRegistry.shared
