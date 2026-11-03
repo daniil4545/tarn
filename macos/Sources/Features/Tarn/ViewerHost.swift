@@ -524,7 +524,6 @@ enum ViewerRouter {
 
     @MainActor
     static func openFromSocket(_ message: [String: Any], viewerOn: Bool = FileViewerSetting.isOn) -> String? {
-        guard message["version"] as? Int == 1 else { return "unsupported version" }
         guard viewerOn else { return "the file viewer is off in Settings" }
         guard let path = message["path"] as? String, path.hasPrefix("/") else {
             return "the path must be absolute"

@@ -6,14 +6,14 @@ import Darwin
 
 let args = CommandLine.arguments
 guard args.count == 4 else {
-    FileHandle.standardError.write("usage: bench <tarn.app> <upstream.app> <work dir>\n".data(using: .utf8)!)
+    FileHandle.standardError.write(Data("usage: bench <tarn.app> <upstream.app> <work dir>\n".utf8))
     exit(2)
 }
 let apps = [("tarn", URL(fileURLWithPath: args[1])), ("upstream", URL(fileURLWithPath: args[2]))]
 // TARN_BENCH_MODULES=off starts tarn with every module off. Launch arguments land in the
 // UserDefaults argument domain, so the user's own settings are not written.
 let tarnArguments = ProcessInfo.processInfo.environment["TARN_BENCH_MODULES"] == "off"
-    ? ["-TarnTabStyle", "top", "-TarnFileViewer", "NO", "-TarnModule.workspaces", "NO",
+    ? ["-TarnTabStyle", "top", "-TarnFileViewer", "NO",
        "-TarnModule.permissionCard", "NO", "-TarnModule.notifications", "NO"]
     : []
 let work = URL(fileURLWithPath: args[3])
@@ -93,11 +93,17 @@ func startup(_ app: URL, xdg: URL) -> Double {
     return ms
 }
 
+/// Launches and waits for the first on-screen window.
+func launchWithWindow(_ app: URL, xdg: URL) -> NSRunningApplication {
+    let running = launch(app, xdg: xdg)
+    while !hasWindow(running.processIdentifier) { usleep(10000) }
+    return running
+}
+
 /// Mean CPU percent over `idleSeconds` after a settle.
 func idle(_ app: URL, xdg: URL) -> Double {
-    let running = launch(app, xdg: xdg)
+    let running = launchWithWindow(app, xdg: xdg)
     let pid = running.processIdentifier
-    while !hasWindow(pid) { usleep(10000) }
     sleep(UInt32(settleSeconds))
     let first = usage(pid), t0 = Date()
     sleep(UInt32(idleSeconds))
@@ -114,8 +120,7 @@ func idle(_ app: URL, xdg: URL) -> Double {
 
 /// Resident memory and footprint after a settle, MB.
 func memory(_ app: URL, xdg: URL) -> (rss: Double, footprint: Double) {
-    let running = launch(app, xdg: xdg)
-    while !hasWindow(running.processIdentifier) { usleep(10000) }
+    let running = launchWithWindow(app, xdg: xdg)
     sleep(UInt32(settleSeconds))
     let info = usage(running.processIdentifier)
     quit(running)
@@ -161,7 +166,7 @@ if !FileManager.default.fileExists(atPath: data.path) {
 struct Numbers { var startup = 0.0, cpu = 0.0, rss = 0.0, footprint = 0.0, cat = 0.0 }
 var idleConfig: [String: URL] = [:]
 for (name, app) in apps {
-    FileHandle.standardError.write("bench: \(name) \(app.path)\n".data(using: .utf8)!)
+    FileHandle.standardError.write(Data("bench: \(name) \(app.path)\n".utf8))
     idleConfig[name] = try configHome("\(name)-idle", command: "direct:/bin/cat")
 }
 let startups = alternate(startupRuns) { _, name, app in startup(app, xdg: idleConfig[name]!) }
@@ -176,6 +181,7 @@ for (name, app) in apps {
 
 let tarn = results["tarn"]!, upstream = results["upstream"]!
 func percent(_ a: Double, _ b: Double) -> Double { (a - b) / b * 100 }
+// swiftlint:disable:next large_tuple
 let rows: [(String, Double, Double, String, Bool)] = [
     ("Startup, ms (median of \(startupRuns))", tarn.startup, upstream.startup,
      String(format: "%+.1f%%", percent(tarn.startup, upstream.startup)), percent(tarn.startup, upstream.startup) <= 5),

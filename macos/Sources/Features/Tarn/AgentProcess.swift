@@ -9,13 +9,14 @@ import Foundation
 enum AgentProcess {
     /// Agent command names. A process matches one exactly, or as a prefix followed by a
     /// separator: brew's codex binary has the kernel name `codex-aarch64-a`.
-    static let names = ["claude", "codex", "opencode"]
+    static var names: Dictionary<String, (display: String, icon: String)>.Keys { agents.keys }
 
-    /// Names to show for an agent that sets no title of its own.
-    static let displayNames = ["claude": "Claude Code", "codex": "Codex", "opencode": "OpenCode"]
-
-    /// Monochrome template images in `Assets.xcassets`, tinted like SF Symbols.
-    static let icons = ["claude": "TarnAgentClaude", "codex": "TarnAgentCodex", "opencode": "TarnAgentOpenCode"]
+    /// Display names and monochrome template images in `Assets.xcassets`.
+    static let agents: [String: (display: String, icon: String)] = [
+        "claude": ("Claude Code", "TarnAgentClaude"),
+        "codex": ("Codex", "TarnAgentCodex"),
+        "opencode": ("OpenCode", "TarnAgentOpenCode"),
+    ]
 
     /// The agent running as `pid`, or nil for a shell, any other program or an unreadable pid.
     static func agent(pid: pid_t) -> String? {

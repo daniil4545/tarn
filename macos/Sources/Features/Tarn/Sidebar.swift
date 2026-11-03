@@ -347,7 +347,7 @@ final class SidebarModel: ObservableObject {
     /// The tab title to show: a shell's path title becomes the full working directory with "~";
     /// under an agent, a shell title becomes the agent's name and an own title loses its mark.
     nonisolated static func displayTitle(_ title: String, pwd: String?, agent: String? = nil) -> String {
-        if let agent, let name = AgentProcess.displayNames[agent] {
+        if let agent, let name = AgentProcess.agents[agent]?.display {
             // Agents lead their titles with a spinner or a mark (`✳`, `⠏`); the icon and
             // the state dot already show both.
             let text = String(title.drop { !$0.isLetter && !$0.isNumber && !"/~…".contains($0) })
@@ -548,7 +548,7 @@ final class SidebarModel: ObservableObject {
         }
         if let liftedWorkspace, slot == .beforeWorkspace(liftedWorkspace) { slot = liftedSlot }
         if liftedTab != nil || liftedWorkspace != nil {
-            if slot != dropSlot { withAnimation(Motion.gap) { dropSlot = slot } }
+            if slot != dropSlot { withAnimation(Motion.hover) { dropSlot = slot } }
         } else if dropSlot != slot {
             dropSlot = slot
         }
@@ -1350,7 +1350,7 @@ struct TabIcon: View {
 
     var body: some View {
         Group {
-            if let name = agentProcess.flatMap({ AgentProcess.icons[$0] }) {
+            if let name = agentProcess.flatMap({ AgentProcess.agents[$0]?.icon }) {
                 Image(name).resizable()
             } else {
                 Image(systemName: "terminal").resizable()

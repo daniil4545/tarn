@@ -6,7 +6,6 @@ struct AgentChecks: Equatable {
     /// The version of `claude --version`; nil when Claude Code was not found.
     var version: String?
     var pluginInstalled: Bool
-    var eventsSeen: Bool
 
     static let pluginKey = "tarn@tarn"
     static let pluginHint = "install the tarn plugin: claude plugin install tarn@tarn (docs/install.md)"
@@ -38,10 +37,10 @@ struct AgentChecks: Equatable {
     }
 
     /// Runs the checks; blocks for up to a few seconds, so call it off the main thread.
-    static func run(eventsSeen: Bool, home: String = NSHomeDirectory()) -> AgentChecks {
+    static func run(home: String = NSHomeDirectory()) -> AgentChecks {
         let plugin = (try? Data(contentsOf: URL(fileURLWithPath: "\(home)/.claude/plugins/installed_plugins.json")))
             .map(hasPlugin) ?? false
-        return AgentChecks(version: findVersion(home: home), pluginInstalled: plugin, eventsSeen: eventsSeen)
+        return AgentChecks(version: findVersion(home: home), pluginInstalled: plugin)
     }
 
     /// Candidates and the login shell share one budget, so the pane never waits longer than `budget`.

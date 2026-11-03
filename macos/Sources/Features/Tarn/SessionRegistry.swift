@@ -242,10 +242,7 @@ final class SessionRegistry {
                 AttentionCommands.refuse(line, reply: reply)
                 return
             }
-            if ViewerRouter.handleCommand(message, reply: reply) { return }
-            if AgentCommands.handle(message, reply: reply) { return }
-            if AttentionCommands.handle(message, reply: reply) { return }
-            self?.receive(message, reply: reply)
+            self?.handle(message, reply: reply)
         }
         socket.start()
         self.socket = socket
@@ -258,9 +255,24 @@ final class SessionRegistry {
 
     // MARK: Events
 
+    func handle(_ message: [String: Any], reply: ControlSocket.Reply) {
+        guard message["version"] as? Int == 1 else {
+            if let command = message["cmd"] as? String {
+                let error = "unsupported version"
+                reply.send(AgentCommands.handlers[command] != nil || command == "wait"
+                    ? AgentCommands.encode(command, .failure(AgentRefusal(text: error)), surface: message["surface"] as? String)
+                    : AttentionCommands.failure(error))
+            }
+            return
+        }
+        if ViewerRouter.handleCommand(message, reply: reply) { return }
+        if AgentCommands.handle(message, reply: reply) { return }
+        if AttentionCommands.handle(message, reply: reply) { return }
+        receive(message, reply: reply)
+    }
+
     private func receive(_ message: [String: Any], reply: ControlSocket.Reply) {
-        guard message["version"] as? Int == 1,
-              let surfaceText = message["surface"] as? String,
+        guard let surfaceText = message["surface"] as? String,
               let surfaceID = UUID(uuidString: surfaceText),
               let event = message["event"] as? [String: Any],
               let name = event["hook_event_name"] as? String

@@ -97,7 +97,6 @@ struct ModulesSettingsPane: View {
 
     /// The checks run off the main thread when the pane opens.
     private func runChecks() async {
-        let seen = SessionRegistry.shared.eventsSeen
-        checks = await Task.detached { AgentChecks.run(eventsSeen: seen) }.value
+        checks = await Task.detached { AgentChecks.run() }.value
     }
 }

@@ -31,6 +31,49 @@ struct AttentionRegistryTests {
 
     // MARK: Hook events reach the gate
 
+    private func response(to message: [String: Any]) throws -> Data {
+        var fds: [Int32] = [-1, -1]
+        try #require(socketpair(AF_UNIX, SOCK_STREAM, 0, &fds) == 0)
+        defer { close(fds[1]) }
+        let queue = DispatchQueue(label: "test.version")
+        let reply = ControlSocket.Reply(fd: fds[0], queue: queue)
+        registry.handle(message, reply: reply)
+        queue.sync {}
+        var bytes = [UInt8](repeating: 0, count: 1024)
+        let count = recv(fds[1], &bytes, bytes.count, MSG_DONTWAIT)
+        return count > 0 ? Data(bytes.prefix(count)) : Data()
+    }
+
+    @Test func unsupportedVersionsAreRefusedBeforeDispatch() throws {
+        for command in ["ls", "new", "run", "read", "close", "modules", "wait", "open", "notify", "bogus"] {
+            for version: Any? in [nil, 2, "1"] {
+                var message: [String: Any] = ["cmd": command]
+                message["version"] = version
+                let data = try response(to: message)
+                let fields = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+                #expect(fields["error"] as? String == "unsupported version")
+                #expect(fields["ok"] as? Bool == false)
+                #expect(fields["version"] as? Int == 1)
+                let agentCommand = !["open", "notify", "bogus"].contains(command)
+                #expect(fields["code"] as? Int == (agentCommand ? 1 : nil))
+            }
+        }
+        let valid = try response(to: ["version": 1, "cmd": "bogus"])
+        #expect(String(data: valid, encoding: .utf8)?.contains("unknown command: bogus") == true)
+    }
+
+    @Test func unsupportedHookVersionsStaySilent() throws {
+        for version: Any? in [nil, 2, "1"] {
+            var message: [String: Any] = ["reply": true, "surface": id.uuidString,
+                                          "event": ["hook_event_name": "PermissionRequest"]]
+            message["version"] = version
+            #expect(try response(to: message).isEmpty)
+            #expect(!registry.eventsSeen)
+            #expect(registry.sessions.isEmpty)
+            #expect(banners.list.isEmpty)
+        }
+    }
+
     @Test func aStateChangeRaisesOnceWithTheProjectAsTitle() {
         hook("Stop")
         hook("Stop")

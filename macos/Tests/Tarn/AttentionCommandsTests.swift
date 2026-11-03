@@ -15,7 +15,6 @@ struct AttentionCommandsTests {
 
     @Test @MainActor func refusalsAreErrorRepliesWithoutAPrefix() {
         let cases: [([String: Any], String)] = [
-            (["version": 2, "cmd": "notify"], "unsupported version"),
             (["version": 1, "cmd": "bogus"], "unknown command: bogus"),
             (["version": 1, "cmd": "notify", "text": "x"], "unknown surface"),
             (["version": 1, "cmd": "notify", "surface": UUID().uuidString, "text": "x"], "unknown surface"),

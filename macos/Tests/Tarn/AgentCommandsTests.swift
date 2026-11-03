@@ -88,12 +88,6 @@ struct AgentCommandsTests {
         #expect(AgentRefusal.noPane("x").code == 4)
     }
 
-    @Test @MainActor func wrongVersionIsRefused() throws {
-        let mine = pane(in: left)
-        let reply = try object(AgentCommands.answer("ls", ListPanes.run, message: ["version": 2, "surface": mine.pane.uuidString], panes: [mine]))
-        #expect(reply["error"] as? String == "unsupported version")
-    }
-
     @Test @MainActor func jsonCarriesThePaneFields() throws {
         let mine = pane(in: left, state: "waiting")
         let entry = try #require((try ls(mine.pane.uuidString, in: [mine])["panes"] as? [[String: Any]])?.first)
