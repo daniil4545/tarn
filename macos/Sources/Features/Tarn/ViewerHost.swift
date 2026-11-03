@@ -108,6 +108,7 @@ final class ViewerHost: ObservableObject {
         guard pane.model.open(target, background: typingInPane) else {
             // A viewer this call created for a file that cannot open does not stay; a tree-only one does.
             if existing == nil, pane.model.tabs.tabs.isEmpty { discard(pane.leaf.id) }
+            keepFocus(responder)
             return false
         }
         lastViewer = pane.leaf.id
