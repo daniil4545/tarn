@@ -1020,6 +1020,22 @@ struct ViewerPaneKeyTests {
         #expect(window.firstResponder === terminal)
     }
 
+    @Test func aFailedAgentOpenGivesTheTerminalItsFirstResponderBack() async throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let host = ViewerHost()
+        let window = NSWindow(contentRect: .init(x: 0, y: 0, width: 300, height: 200), styleMask: [.titled], backing: .buffered, defer: true)
+        let terminal = Responder()
+        window.contentView = NSView()
+        window.contentView?.addSubview(terminal)
+        host.window = window
+        window.makeFirstResponder(terminal)
+        #expect(!host.open(OpenTarget(path: dir + "/nope.md"), root: dir, focus: false))
+        window.makeFirstResponder(nil)
+        try await spin(0.4)
+        #expect(window.firstResponder === terminal)
+    }
+
     @Test func focusWaitsForTheWebViewToJoinAWindow() async throws {
         let model = ViewerModel(root: NSTemporaryDirectory())
         let web = ViewerWebController(model: model)
