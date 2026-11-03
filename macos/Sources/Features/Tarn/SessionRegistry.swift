@@ -332,13 +332,12 @@ final class SessionRegistry {
     // MARK: Liveness
 
     /// Claude Code sends no event on Esc; its title, progress report and "Interrupted" on
-    /// screen show it instead (`docs/spec.md` section 8).
-    private func checkLiveness() {
+    /// screen show it instead (`docs/spec.md` section 8). A record whose surface is gone is
+    /// dropped here in any state, so a closed pane frees its session and focus observer.
+    func checkLiveness() {
+        for id in sessions.keys where Self.surfaceView(id) == nil { remove(id) }
         for (id, session) in sessions where session.state == .working || session.state == .permission {
-            guard let view = Self.surfaceView(id) else {
-                remove(id)
-                continue
-            }
+            guard let view = Self.surfaceView(id) else { continue }
 
             let looksIdle: Bool
             switch session.state {
@@ -416,15 +415,11 @@ final class SessionRegistry {
 
     // MARK: Attention
 
-    /// Records whose surface still exists, in screen order (window, tab, split). A record of
-    /// a closed surface is dropped here, so no list ever shows a dead session.
+    /// Records whose surface still exists, in screen order (window, tab, split).
     func liveSessions() -> [(session: AgentSession, view: Ghostty.SurfaceView)] {
         var live: [(AgentSession, Ghostty.SurfaceView)] = []
         for view in Self.orderedSurfaces() {
             if let session = sessions[view.id] { live.append((session, view)) }
-        }
-        for id in sessions.keys where !live.contains(where: { $0.0.surfaceID == id }) && Self.surfaceView(id) == nil {
-            remove(id)
         }
         return live
     }
