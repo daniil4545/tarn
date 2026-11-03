@@ -32,7 +32,7 @@ Reading: the store writes the file, asks Ghostty to reload, and reads the new ef
 | Out | `ghostty.reloadConfig()` after a successful write | store `reload` closure |
 | Out | file lines into every config built by the app | `TarnConfigFile.load(into:from:)` |
 | Out | module switches in `UserDefaults` (`TarnTabStyle`, `TarnFileViewer`, `TarnModule.*`), row size in `TarnTabRows` | `TarnModules`, `TabRows`, `TarnSettingsView` |
-| In | `claude --version`, `~/.claude/plugins/installed_plugins.json`, `SessionRegistry.eventsSeen` | `AgentChecks` |
+| In | `claude --version`, `~/.claude/plugins/installed_plugins.json` | `AgentChecks` |
 
 ## How it works
 

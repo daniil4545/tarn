@@ -259,6 +259,7 @@ final class SessionRegistry {
         guard message["version"] as? Int == 1 else {
             if let command = message["cmd"] as? String {
                 let error = "unsupported version"
+                Self.logger.info("\(command, privacy: .public) refused: \(error, privacy: .public) surface=\(message["surface"] as? String ?? "-", privacy: .public)")
                 reply.send(AgentCommands.handlers[command] != nil || command == "wait"
                     ? AgentCommands.encode(command, .failure(AgentRefusal(text: error)), surface: message["surface"] as? String)
                     : AttentionCommands.failure(error))
