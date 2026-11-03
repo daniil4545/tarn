@@ -78,15 +78,14 @@ def spike_basics(base):
         )
 
         pg.evaluate("window.sel = []; void t.onSelection(s => sel.push(s))")
+        drag_trace(pg)
         # The cyrillic face loads on first use and can move the cells after the write.
         pg.evaluate("document.fonts.ready.then(() => true)")
         a, b = pg.evaluate("[t.cellCentre(0, 1), t.cellCentre(7, 1)]")
-        # Where the canvas and the cells are before and after the drag, for a failure report.
+        # The timing of the drag stays as it was: the canvas geometry is read only for a failure report.
         geo = """() => { const c = document.querySelector('#spike-host canvas'); const r = c.getBoundingClientRect();
           return {rect: [r.left, r.top, r.width, r.height], cols: t.cols, rows: t.rows,
             ev: window.dragTrace || []}; }"""
-        drag_trace(pg)
-        before = pg.evaluate(geo)
         pg.mouse.move(a["x"] - 3, a["y"])
         pg.mouse.down()
         pg.mouse.move(b["x"], b["y"], steps=6)
@@ -102,7 +101,6 @@ def spike_basics(base):
                     pg.evaluate("[sel.length, t.topRow, t.lineCount]"),
                     a,
                     b,
-                    before,
                     pg.evaluate(geo),
                 )
             ),
