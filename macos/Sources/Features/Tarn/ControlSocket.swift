@@ -14,11 +14,17 @@ final class ControlSocket {
     private static let maxLine = 4 * 1024 * 1024
 
     private let onLine: @MainActor (Data, Reply) -> Void
+    private let readTimeout: TimeInterval
     private var fd: Int32 = -1
     private var source: DispatchSourceRead?
     private let queue = DispatchQueue(label: "tarn.socket")
+    /// Reads run here, one thread per client: a client that connects and sends nothing holds
+    /// only itself, not the next accept or a permission answer on `queue`.
+    private let readQueue = DispatchQueue(label: "tarn.socket.read", attributes: .concurrent)
 
-    init(onLine: @escaping @MainActor (Data, Reply) -> Void) {
+    /// `readTimeout` bounds the read of one client's line; tests raise it to make a stall visible.
+    init(readTimeout: TimeInterval = 1, onLine: @escaping @MainActor (Data, Reply) -> Void) {
+        self.readTimeout = readTimeout
         self.onLine = onLine
     }
 
@@ -84,15 +90,20 @@ final class ControlSocket {
     private func accept() {
         let client = Darwin.accept(fd, nil, nil)
         guard client >= 0 else { return }
+        readQueue.async { [weak self] in
+            guard let self else { close(client); return }
+            self.readLine(from: client)
+        }
+    }
 
-        // A hook writes its line first; reading on our queue never blocks the agent for
-        // longer than its own write.
+    /// Reads the one line of a hook and hands it to the main actor with its connection.
+    private func readLine(from client: Int32) {
         var data = Data()
         var buffer = [UInt8](repeating: 0, count: 65536)
-        var timeout = timeval(tv_sec: 1, tv_usec: 0)
+        var timeout = timeval(tv_sec: Int(readTimeout), tv_usec: Int32(readTimeout.truncatingRemainder(dividingBy: 1) * 1_000_000))
         setsockopt(client, SOL_SOCKET, SO_RCVTIMEO, &timeout, socklen_t(MemoryLayout<timeval>.size))
         while true {
-            let n = read(client, &buffer, buffer.count)
+            let n = Darwin.read(client, &buffer, buffer.count)
             if n <= 0 { break }
             data.append(buffer, count: n)
             if data.count > Self.maxLine { break }
