@@ -74,6 +74,14 @@ struct AttentionRegistryTests {
         }
     }
 
+    /// Without a window every surface counts as closed: the record goes on the next liveness tick.
+    @Test func aClosedSurfaceIsDroppedByTheLivenessCheck() {
+        hook("Stop")
+        #expect(registry.sessions[id] != nil)
+        registry.checkLiveness()
+        #expect(registry.sessions[id] == nil)
+    }
+
     @Test func aStateChangeRaisesOnceWithTheProjectAsTitle() {
         hook("Stop")
         hook("Stop")
