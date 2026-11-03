@@ -8,8 +8,6 @@ struct ViewerLayout<Content: View>: View {
     @ObservedObject var ghostty: Ghostty.App
     let content: Content
 
-    @AppStorage(FileViewerSetting.key) private var viewerOn = true
-
     init(host: ViewerHost, ghostty: Ghostty.App, @ViewBuilder content: () -> Content) {
         self.host = host
         self.ghostty = ghostty
@@ -17,7 +15,7 @@ struct ViewerLayout<Content: View>: View {
     }
 
     var body: some View {
-        if let root = host.tree.root, host.tree.isSplit, ViewerHost.isShown(hidden: host.hidden, moduleOn: viewerOn && FileViewerSetting.isOn) {
+        if let root = host.tree.root, host.tree.isSplit, !host.hidden, FileViewerSetting.isOn {
             AreaSubtree(host: host, ghostty: ghostty, node: root, block: content)
                 .overlay { if host.overlayActive { AreaDropOverlay(host: host) } }
                 // Ghostty's grab handle publishes which terminal is dragged.
@@ -49,8 +47,8 @@ private struct AreaSubtree<Block: View>: View {
                 dividerColor: ghostty.config.splitDividerColor,
                 onResize: { host.resize(node, to: Double($0)) },
                 onEqualize: { host.equalize() },
-                left: { AreaSubtree(host: host, ghostty: ghostty, node: split.left, block: block) },
-                right: { AreaSubtree(host: host, ghostty: ghostty, node: split.right, block: block) })
+                left: AreaSubtree(host: host, ghostty: ghostty, node: split.left, block: block),
+                right: AreaSubtree(host: host, ghostty: ghostty, node: split.right, block: block))
         }
     }
 

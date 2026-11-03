@@ -32,12 +32,6 @@ final class AreaLeaf: NSView, Codable, Identifiable {
         kind = try container.decode(Kind.self, forKey: .kind)
         super.init(frame: .zero)
     }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(kind, forKey: .kind)
-    }
 }
 
 /// The layout of a tab: viewers around the terminal block.

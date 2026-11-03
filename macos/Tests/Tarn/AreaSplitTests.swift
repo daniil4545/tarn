@@ -117,7 +117,7 @@ struct AreaSplitTests {
         window.isReleasedWhenClosed = false
         let host = NSHostingView(rootView: AreaSplit(
             direction: direction, ratio: 0.5, dividerColor: .gray, onResize: { _ in }, onEqualize: {},
-            left: { Probe() }, right: { Probe() }))
+            left: Probe(), right: Probe()))
         window.contentView = host
         window.orderFront(nil)
         try? await Task.sleep(for: .milliseconds(200))

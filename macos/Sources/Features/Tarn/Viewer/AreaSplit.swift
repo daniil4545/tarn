@@ -49,24 +49,6 @@ struct AreaSplit<L: View, R: View>: View {
     let left: L
     let right: R
 
-    init(
-        direction: SplitViewDirection,
-        ratio: CGFloat,
-        dividerColor: Color,
-        onResize: @escaping (CGFloat) -> Void,
-        onEqualize: @escaping () -> Void,
-        @ViewBuilder left: () -> L,
-        @ViewBuilder right: () -> R
-    ) {
-        self.direction = direction
-        self.ratio = ratio
-        self.dividerColor = dividerColor
-        self.onResize = onResize
-        self.onEqualize = onEqualize
-        self.left = left()
-        self.right = right()
-    }
-
     var body: some View {
         SplitView(
             direction,

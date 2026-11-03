@@ -107,13 +107,6 @@ struct TarnModulesTests {
 
     // MARK: Viewer
 
-    @Test func viewerPanesAreDrawnOnlyWhenNotHiddenAndTheModuleIsOn() {
-        #expect(ViewerHost.isShown(hidden: false, moduleOn: true))
-        #expect(!ViewerHost.isShown(hidden: true, moduleOn: true))
-        #expect(!ViewerHost.isShown(hidden: false, moduleOn: false))
-        #expect(!ViewerHost.isShown(hidden: true, moduleOn: false))
-    }
-
     @Test func theOverlayStepsAsideForATerminalOfASplitBlock() {
         #expect(!ViewerHost.overlayActive(drag: .terminal(UUID()), loneTerminal: false))
         #expect(ViewerHost.overlayActive(drag: .terminal(UUID()), loneTerminal: true))
