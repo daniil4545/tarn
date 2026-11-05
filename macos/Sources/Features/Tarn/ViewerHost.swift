@@ -440,6 +440,8 @@ enum ViewerRouter {
         case open(OpenTarget)
         /// A pane that is already open reports the missing file; otherwise the default opener runs.
         case missing(raw: String)
+        /// The viewer cannot show it: the default app opens it (`ViewerPaths.openExternally`).
+        case system(path: String)
         case upstream(reason: String)
     }
 
@@ -451,7 +453,7 @@ enum ViewerRouter {
         }
         switch ViewerPaths.classify(target.path) {
         case .text: return .open(target)
-        case .system: return .upstream(reason: "a media, document or archive type")
+        case .system: return .system(path: target.path)
         case .directory: return .upstream(reason: "a directory")
         case .special: return .upstream(reason: "not a regular file")
         case .missing: return .missing(raw: raw)
@@ -460,7 +462,7 @@ enum ViewerRouter {
 
     /// Opens a clicked path in the viewer of the clicked surface's window. Returns false to let the
     /// default opener run: URLs, directories, a missing file without a pane, clicks without a
-    /// terminal. Files of media, document and archive types open in their own app.
+    /// terminal. Files the viewer cannot show open in their own app, here; a failure is a toast.
     @MainActor
     static func handle(_ raw: String, from surface: Ghostty.SurfaceView?) -> Bool {
         guard FileViewerSetting.isOn else {
@@ -486,6 +488,14 @@ enum ViewerRouter {
             // Only a shown pane can tell the user; otherwise the default opener reports it.
             guard let model = controller.viewerHost.activeModel, !controller.viewerHost.hidden else { return false }
             model.toast("No such file: \(raw)")
+            return true
+        case let .system(path):
+            if ViewerPaths.openExternally(path) { return true }
+            let reason = ViewerPaths.externalURL(path) == nil ? "Blocked: could execute code" : "No app opens this file"
+            ViewerModel.logger.info("\(reason, privacy: .public): \(path, privacy: .public)")
+            // Only a shown pane can tell the user; otherwise the default opener shows its alert.
+            guard let model = controller.viewerHost.activeModel, !controller.viewerHost.hidden else { return false }
+            model.toast("\(reason): \((path as NSString).lastPathComponent)")
             return true
         case .upstream:
             return false
@@ -525,14 +535,21 @@ enum ViewerRouter {
               let surface = SessionRegistry.surfaceView(id),
               let controller = surface.window?.windowController as? TerminalController
         else { return "unknown surface" }
+        if let refusal = refusal(path) { return refusal }
+        let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
+        return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "cannot open: \(path)"
+    }
+
+    /// Why `tarn open` refuses `path`, or nil for a text file the viewer shows. Unlike a click, the
+    /// socket never opens another app.
+    static func refusal(_ path: String) -> String? {
         switch ViewerPaths.classify(path) {
         case .missing: return "no such file: \(path)"
         case .directory, .special: return "not a file: \(path)"
-        case .system: return "not a text file: \(path)"
-        case .text where ViewerPaths.isBinary(path): return "not a text file: \(path)"
-        case .text:
-            let target = OpenTarget(path: URL(fileURLWithPath: path).standardizedFileURL.path, line: message["line"] as? Int)
-            return controller.viewerHost.open(target, root: surface.workingDirectory, focus: false) ? nil : "cannot open: \(path)"
+        case .system:
+            let big = (FileStamp.of(path)?.size ?? 0) > FileRead.maxBytes
+            return big ? "too large: \(path)" : "not a text file: \(path)"
+        case .text: return nil
         }
     }
 }

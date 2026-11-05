@@ -136,6 +136,65 @@ struct ViewerPathsTests {
         #expect(ViewerPaths.classify(dir + "/nope") == .missing)
     }
 
+    @Test func theViewerShowsOnlyWhatItCanRead() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        func write(_ name: String, _ data: Data) throws {
+            try data.write(to: URL(fileURLWithPath: dir + "/" + name))
+        }
+        try write("a.md", Data("x".utf8))
+        try write("a.swift", Data("x".utf8))
+        try write("a.drawio", Data("<mxfile/>".utf8))
+        try write("a.dio", Data("<mxfile/>".utf8))
+        try write("a.png", Data("x".utf8))
+        try write("a.sqlite", Data([0x53, 0x00, 0x01]))
+        try write("edge.log", Data(repeating: 0x61, count: FileRead.maxBytes))
+        try write("big.log", Data(repeating: 0x61, count: FileRead.maxBytes + 1))
+        try FileManager.default.createSymbolicLink(atPath: dir + "/link.log", withDestinationPath: dir + "/big.log")
+        for name in ["a.md", "a.swift", "edge.log"] { #expect(ViewerPaths.classify(dir + "/" + name) == .text, "\(name)") }
+        for name in ["a.drawio", "a.dio", "a.png", "a.sqlite", "big.log", "link.log"] {
+            #expect(ViewerPaths.classify(dir + "/" + name) == .system, "\(name)")
+            #expect(ViewerRouter.decide(name, cwd: dir) == .system(path: dir + "/" + name), "\(name)")
+        }
+        #expect(ViewerRouter.decide(dir, cwd: nil) == .upstream(reason: "a directory"))
+        #expect(ViewerRouter.decide("missing.bin", cwd: dir) == .missing(raw: "missing.bin"))
+    }
+
+    @Test func openExternallyCallsOpenOnlyForSafeFiles() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.png", atomically: true, encoding: .utf8)
+        try "#!/bin/sh\n".write(toFile: dir + "/run.sh", atomically: true, encoding: .utf8)
+        chmod(dir + "/run.sh", 0o755)
+        try FileManager.default.createDirectory(atPath: dir + "/X.app", withIntermediateDirectories: true)
+        var opened: [URL] = []
+        let ok = ViewerPaths.openExternally(dir + "/a.png") { opened.append($0); return true }
+        #expect(ok)
+        #expect(opened.map(\.path) == [URL(fileURLWithPath: dir + "/a.png").path])
+        #expect(!ViewerPaths.openExternally(dir + "/a.png") { _ in false })
+        opened = []
+        #expect(!ViewerPaths.openExternally(dir + "/X.app") { opened.append($0); return true })
+        #expect(!ViewerPaths.openExternally(dir + "/run.sh") { opened.append($0); return true })
+        try FileManager.default.createSymbolicLink(atPath: dir + "/link.png", withDestinationPath: dir + "/run.sh")
+        try "x".write(toFile: dir + "/a.pkg", atomically: true, encoding: .utf8)
+        #expect(!ViewerPaths.openExternally(dir + "/link.png") { opened.append($0); return true })
+        #expect(!ViewerPaths.openExternally(dir + "/a.pkg") { opened.append($0); return true })
+        #expect(opened.isEmpty)
+    }
+
+    @Test func tarnOpenAnswersPerKindOfFile() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try Data(repeating: 0x61, count: FileRead.maxBytes + 1).write(to: URL(fileURLWithPath: dir + "/big.log"))
+        try Data([0x61, 0x00]).write(to: URL(fileURLWithPath: dir + "/a.bin"))
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        #expect(ViewerRouter.refusal(dir + "/big.log") == "too large: \(dir)/big.log")
+        #expect(ViewerRouter.refusal(dir + "/a.bin") == "not a text file: \(dir)/a.bin")
+        #expect(ViewerRouter.refusal(dir) == "not a file: \(dir)")
+        #expect(ViewerRouter.refusal(dir + "/nope") == "no such file: \(dir)/nope")
+        #expect(ViewerRouter.refusal(dir + "/a.md") == nil)
+    }
+
     @Test func binaryIsDecidedByContent() throws {
         let dir = try Scratch.make()
         defer { try? FileManager.default.removeItem(atPath: dir) }
@@ -658,7 +717,7 @@ struct ViewerClickAndKeyTests {
         defer { try? FileManager.default.removeItem(atPath: dir) }
         #expect(ViewerRouter.decide("./a.md", cwd: nil) == .upstream(reason: "relative path and the terminal has no working directory"))
         #expect(ViewerRouter.decide("https://x.org/a.md", cwd: dir) == .upstream(reason: "a URL"))
-        #expect(ViewerRouter.decide("./pic.png", cwd: dir) == .upstream(reason: "a media, document or archive type"))
+        #expect(ViewerRouter.decide("./pic.png", cwd: dir) == .system(path: dir + "/pic.png"))
         #expect(ViewerRouter.decide(dir, cwd: dir) == .upstream(reason: "a directory"))
         #expect(ViewerRouter.decide("./nope.md", cwd: dir) == .missing(raw: "./nope.md"))
     }

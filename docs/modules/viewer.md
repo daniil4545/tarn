@@ -39,7 +39,7 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | In | close of a tab, window or the app | `ViewerClose` |
 | Out | script calls `tarn.setDoc`, `tarn.setChrome`, `tarn.toast`, `tarn.cmd` | `ViewerModel.runScript` |
 | Out | file write on Save and on a ticked task box | `ViewerModel.save` |
-| Out | `http`, `https`, `mailto` links and system-type files opened through the OS | `ViewerModel.follow` |
+| Out | `http`, `https`, `mailto` links opened through the OS (`ViewerModel.follow`); a clicked file the viewer cannot show opens in its default app (`ViewerPaths.openExternally`) | `ViewerModel.follow`, `ViewerRouter.handle` |
 | Out | socket reply `{"ok":true}` or `{"ok":false,"error":...}` | `ViewerRouter.handleCommand` |
 
 ## How it works
@@ -48,13 +48,13 @@ State: `ViewerTabs` (tab list, active index, preview flag, jump token), `ViewerD
 
 Open flow:
 - Which text is a link is Ghostty's matcher (`src/config/url.zig`), not ours: a path with a slash (`docs/a.md`, `./a.md`, `../a.md`, `~/a.md`, `/abs/a.md`, each with an optional `:line`). A bare name from `ls` has no slash and is not a link (user decision 2026-10-25); a relative path with no dot in its name and no `./` is not either. `$VAR/...` is matched but not expanded. Help states the rule (`KeyReference.pathClickRule`). Ghostty's core resolves a relative path against OSC 7 `pwd` when the file exists, else passes the text on.
-1. A click reaches `Ghostty.App.openURL`; for kind unknown on a surface it calls `ViewerRouter.handle`, which returns false for URLs, directories, system-type files and a missing file without a pane (upstream opens them).
+1. A click reaches `Ghostty.App.openURL`; for kind unknown on a surface it calls `ViewerRouter.handle`, which returns false for URLs, directories and a missing file without a pane (upstream opens them). A file the viewer cannot show it opens itself in the default app through `ViewerPaths.openExternally` (`UntrustedURL` first: `.app`, `.pkg` and executables are blocked) and returns true; a blocked or failed open is a toast in the shown pane.
 2. `ViewerPaths.resolve` expands `~/`, absolute and relative paths against the surface's `pwd`, and splits `:line[:column]`. A real file whose name holds a colon wins over the split.
-3. `ViewerPaths.classify` returns text, system (allowlist of media, document, archive extensions), directory, special or missing.
+3. `ViewerPaths.classify` returns text, system, directory, special or missing. System: an extension of the allowlist (media, document, archive), `drawio`/`dio`, a size over 5 MB (symlinks followed) or binary content; `viewerCanShow` is the one predicate.
 4. `ViewerHost.open` uses the viewer that has the keyboard, else the one used last, and creates a viewer beside the terminal block when the tab has none (model, web controller, rule list); then `ViewerModel.open` builds the `ViewerDocument`, arms a `FileWatcher`, opens or activates the tab, unfolds the tree to the file and pushes document and chrome to the page.
 5. A click opens a preview tab (replaced by the next open) and focuses the pane. A double click, an edit or a drag pins it.
 
-Socket open: same path, but `focus` is false. The host saves the first responder and restores it at 0 s and 0.15 s; if the user types in the pane, the open adds a pinned background tab and keeps the active one. Binary files (NUL byte or invalid UTF-8 in the first 8 KB) are refused.
+Socket open: same path, but `focus` is false. The host saves the first responder and restores it at 0 s and 0.15 s; if the user types in the pane, the open adds a pinned background tab and keeps the active one. Binary files (NUL byte or invalid UTF-8 in the first 8 KB) are refused ("not a text file"), as are files over 5 MB ("too large"); the socket never opens another app.
 
 Disk change: the watcher throttles 0.3 s and re-arms. The model compares size and mtime first; then `ViewerDocument.diskChanged` decides. Clean document: reload and flash. Dirty document: a conflict banner with Take disk or Keep mine, raised once per disk text. Deleted file: the tab keeps its text and Save writes it again. Over 5 MB or non-UTF-8: a notice instead of text.
 
