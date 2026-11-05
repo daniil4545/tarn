@@ -726,6 +726,7 @@ struct SidebarLayout<Content: View>: View {
     /// re-lays out every tab window, hidden ones included, which made the drag stutter.
     @State private var dragWidth: Double?
     @State private var dividerHovered = false
+    @State private var cursorPushed = false
 
     /// `dragWidth` starts a layout as if a resize drag were under way; tests use it.
     init(model: SidebarModel, ghostty: Ghostty.App, dragWidth: Double? = nil, @ViewBuilder content: () -> Content) {
@@ -823,10 +824,19 @@ struct SidebarLayout<Content: View>: View {
                     .onHover { isHovering in
                         // macOS 15 and later use the pointer style above.
                         if #available(macOS 15, *) { return }
-                        if isHovering {
+                        if isHovering, !cursorPushed {
                             NSCursor.resizeLeftRight.push()
-                        } else {
+                            cursorPushed = true
+                        } else if !isHovering, cursorPushed {
                             NSCursor.pop()
+                            cursorPushed = false
+                        }
+                    }
+                    .onDisappear {
+                        // Collapsing while hovering removes the zone without a hover exit.
+                        if cursorPushed {
+                            NSCursor.pop()
+                            cursorPushed = false
                         }
                     }
                     .onHover { dividerHovered = $0 }
@@ -1372,7 +1382,7 @@ struct NativeTabMark: View {
 
     var body: some View {
         if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }) {
-            let name = Self.workspaceName(tab.workspace, workspaces: model.groups.count)
+            let name = Self.workspaceName(tab.workspace, workspaces: model.groups.filter { $0.workspace != nil }.count)
             if name != nil || tab.agentProcess != nil {
                 HStack(spacing: 6) {
                     if let name {
