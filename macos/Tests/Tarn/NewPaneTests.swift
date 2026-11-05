@@ -110,9 +110,11 @@ struct NewPaneTests {
         window.isReleasedWhenClosed = false
         defer { window.close() }
         let caller = try #require(controller.surfaceTree.first)
-        let deadline = ContinuousClock.now + .seconds(5)
-        while caller.window !== window, ContinuousClock.now < deadline { try await Task.sleep(for: .milliseconds(20)) }
-        window.makeFirstResponder(caller)
+        let deadline = ContinuousClock.now + .seconds(20)
+        while window.firstResponder !== caller, ContinuousClock.now < deadline {
+            if caller.window === window { window.makeFirstResponder(caller) }
+            try await Task.sleep(for: .milliseconds(20))
+        }
         try #require(window.firstResponder === caller, "the caller never took the focus")
         let active = NSApp.isActive
         let key = NSApp.keyWindow
@@ -127,7 +129,19 @@ struct NewPaneTests {
             return
         }
         #expect(split.direction == .vertical)
-        try await Task.sleep(for: .milliseconds(400))
+        // SwiftUI rebuilds the tree, then `Ghostty.moveFocus` retries for up to ~0.75 s. Wait until the new pane
+        // is in the window, then watch 1 s: the new pane must never take the focus.
+        let attached = ContinuousClock.now + .seconds(20)
+        while pane.window !== window, ContinuousClock.now < attached { try await Task.sleep(for: .milliseconds(20)) }
+        try #require(pane.window === window, "the new pane never joined the window")
+        let watchEnd = ContinuousClock.now + .seconds(1)
+        while ContinuousClock.now < watchEnd {
+            if window.firstResponder === pane {
+                Issue.record("the new pane took the focus")
+                break
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
         #expect(window.firstResponder === caller)
         #expect(NSApp.isActive == active)
         #expect(NSApp.keyWindow === key)
