@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 extension Ghostty.SurfaceView {
@@ -92,8 +93,8 @@ enum ViewerPaths {
         return URL(fileURLWithPath: full).standardizedFileURL.path
     }
 
-    /// Files of these types open in their own app; every other regular file is read as text
-    /// (a non-UTF-8 file gets a notice). An allowlist, because `UTType` calls `.ts` video.
+    /// Files of these types open in their own app; so do binary files and files over 5 MB. Every
+    /// other regular file is read as text. An allowlist, because `UTType` calls `.ts` video.
     static let systemExtensions: Set<String> = [
         "png", "jpg", "jpeg", "gif", "webp", "heic", "tif", "tiff", "bmp", "ico", "icns", "psd",
         "pdf", "mp3", "m4a", "wav", "aac", "flac", "aif", "aiff", "mp4", "mov", "m4v", "mkv", "avi", "webm",
@@ -101,13 +102,38 @@ enum ViewerPaths {
         "doc", "docx", "xls", "xlsx", "ppt", "pptx", "key", "pages", "numbers", "rtf", "app",
     ]
 
+    /// Diagrams are XML text, but their app is the useful viewer.
+    static let externalExtensions: Set<String> = ["drawio", "dio"]
+
+    /// A regular file the viewer shows: not a system type, not over `FileRead.maxBytes`, not binary.
+    /// The one place that decides, next to `FileRead.read`, so the two cannot drift.
+    static func viewerCanShow(_ path: String) -> Bool {
+        let ext = (path as NSString).pathExtension.lowercased()
+        if systemExtensions.contains(ext) || externalExtensions.contains(ext) { return false }
+        if let size = FileStamp.of(path)?.size, size > FileRead.maxBytes { return false }
+        return !isBinary(path)
+    }
+
+    /// The file URL to hand to the default app, or nil when `UntrustedURL` blocks it (an app, a
+    /// package, an executable file).
+    static func externalURL(_ path: String) -> URL? {
+        if case let .allow(url) = UntrustedURL(URL(fileURLWithPath: path).absoluteString).decision { return url }
+        return nil
+    }
+
+    /// Opens `path` in its default app unless it could execute code. False: blocked or nothing opened it.
+    static func openExternally(_ path: String, open: (URL) -> Bool = { NSWorkspace.shared.open($0) }) -> Bool {
+        guard let url = externalURL(path) else { return false }
+        return open(url)
+    }
+
     static func classify(_ path: String) -> ViewerFileKind {
         var isDirectory: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory) else { return .missing }
         if isDirectory.boolValue { return .directory }
         let values = try? URL(fileURLWithPath: path).resolvingSymlinksInPath().resourceValues(forKeys: [.isRegularFileKey])
         guard values?.isRegularFile == true else { return .special }
-        return systemExtensions.contains((path as NSString).pathExtension.lowercased()) ? .system : .text
+        return viewerCanShow(path) ? .text : .system
     }
 
     /// The working directory of a process, for a terminal that reports none (no shell integration).
