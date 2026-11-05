@@ -126,8 +126,18 @@ enum WorkspacePrompt {
         form.onChange = { [weak create, weak form] in create?.isEnabled = form?.choice(confirmed: true) != nil }
         alert.beginSheetModal(for: window) { [weak window] response in
             guard let window, let choice = form.choice(confirmed: response == .alertFirstButtonReturn) else { return }
-            WorkspaceRegistry.shared.create(choice, from: window)
+            if !WorkspaceRegistry.shared.create(choice, from: window) { failedToCreate(in: window) }
         }
+    }
+
+    /// Create answered false: say so, rather than leave the sheet closing on nothing.
+    private static func failedToCreate(in window: NSWindow) {
+        let alert = NSAlert()
+        alert.messageText = "Could not create the group"
+        alert.informativeText = "The new tab did not open. Try again."
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "OK")
+        alert.beginSheetModal(for: window)
     }
 
     /// Asks before a group goes; `done` gets whether its tabs close with it (G7), unchecked by default.
