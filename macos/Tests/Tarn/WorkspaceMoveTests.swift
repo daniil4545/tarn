@@ -109,4 +109,15 @@ struct WorkspaceMoveTests {
         WorkspaceRegistry.restoreOrder(windows, in: native)
         #expect(native.windows == windows)
     }
+
+    // The first tab moved away: restoreOrder brings it back to the front.
+    @Test func restoreOrderBringsTheFirstTabBack() throws {
+        let (windows, native, close) = try tabs(4)
+        defer { close() }
+        native.removeWindow(windows[0])
+        try #require(windows[2].addTabbedWindowSafely(windows[0], ordered: .above))
+        try #require(native.windows.first !== windows[0])
+        WorkspaceRegistry.restoreOrder(windows, in: native)
+        #expect(native.windows == windows)
+    }
 }

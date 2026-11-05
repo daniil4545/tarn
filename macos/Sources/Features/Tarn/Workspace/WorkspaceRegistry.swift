@@ -487,12 +487,26 @@ final class WorkspaceRegistry {
 
     /// Puts the windows of `order` back in that native order, one removal and re-add per misplaced tab.
     static func restoreOrder(_ order: [NSWindow], in native: NSWindowTabGroup) {
+        // The first tab leads the group: bring it to the front, then hang each next one behind its predecessor.
+        if let lead = order.first, let front = native.windows.first, front !== lead, native.windows.contains(lead) {
+            native.removeWindow(lead)
+            if !native.windows[0].addTabbedWindowSafely(lead, ordered: .below) {
+                logger.error("workspace: could not restore tab order")
+                if let home = native.windows.first { home.addTabbedWindowSafely(lead, ordered: .above) }
+                return
+            }
+        }
         for (index, tabWindow) in order.enumerated().dropFirst() {
             let current = native.windows
             guard let at = current.firstIndex(of: tabWindow), at == 0 || current[at - 1] !== order[index - 1] else { continue }
             native.removeWindow(tabWindow)
             if !order[index - 1].addTabbedWindowSafely(tabWindow, ordered: .above) {
                 logger.error("workspace: could not restore tab order")
+                // Never leave it detached, and never hang the next windows on it.
+                if let home = native.windows.first, !home.addTabbedWindowSafely(tabWindow, ordered: .above) {
+                    logger.error("workspace: could not reattach tab after restore failed")
+                }
+                return
             }
         }
     }
