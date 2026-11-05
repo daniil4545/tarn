@@ -455,16 +455,20 @@ final class WorkspaceRegistry {
         isBusy = true
         NSAnimationContext.beginGrouping()
         NSAnimationContext.current.duration = 0
+        let original = native.windows
         for tabWindow in windows {
             let current = native.windows
             guard let index = current.firstIndex(of: tabWindow), current.count > 1 else { break }
-            let neighbour = current[index == 0 ? 1 : index - 1]
             native.removeWindow(tabWindow)
             guard anchor.addTabbedWindowSafely(tabWindow, ordered: before ? .below : .above) else {
-                // A caught AppKit exception must not leave the tab detached from its workspace.
-                if !neighbour.addTabbedWindowSafely(tabWindow, ordered: index == 0 ? .below : .above) {
-                    Self.logger.error("workspace: could not reattach tab after group move failed")
+                // A caught AppKit exception must not leave the block split or a tab detached: put all back.
+                if !native.windows.contains(tabWindow) {
+                    let neighbour = current[index == 0 ? 1 : index - 1]
+                    if !neighbour.addTabbedWindowSafely(tabWindow, ordered: index == 0 ? .below : .above) {
+                        Self.logger.error("workspace: could not reattach tab after group move failed")
+                    }
                 }
+                Self.restoreOrder(original, in: native)
                 break
             }
             if !before { anchor = tabWindow }
@@ -479,6 +483,18 @@ final class WorkspaceRegistry {
         for tabWindow in native.windows { tabWindow.invalidateRestorableState() }
         isBusy = false
         sync()
+    }
+
+    /// Puts the windows of `order` back in that native order, one removal and re-add per misplaced tab.
+    static func restoreOrder(_ order: [NSWindow], in native: NSWindowTabGroup) {
+        for (index, tabWindow) in order.enumerated().dropFirst() {
+            let current = native.windows
+            guard let at = current.firstIndex(of: tabWindow), at == 0 || current[at - 1] !== order[index - 1] else { continue }
+            native.removeWindow(tabWindow)
+            if !order[index - 1].addTabbedWindowSafely(tabWindow, ordered: .above) {
+                logger.error("workspace: could not restore tab order")
+            }
+        }
     }
 
     private func edit(_ window: NSWindow, _ change: (inout WorkspaceSet) -> Void) {

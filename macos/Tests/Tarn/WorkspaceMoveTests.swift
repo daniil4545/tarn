@@ -96,4 +96,17 @@ struct WorkspaceMoveTests {
         registry.moveWorkspace(groupA.id, before: nil, in: windows[0])
         #expect(native.windows == [windows[2], windows[3], windows[0], windows[1]])
     }
+
+    // review 1.3.1: a failed re-add mid-block left the block split; the rollback puts the order back.
+    @Test func restoreOrderPutsScrambledTabsBack() throws {
+        let (windows, native, close) = try tabs(5)
+        defer { close() }
+        native.removeWindow(windows[1])
+        try #require(windows[4].addTabbedWindowSafely(windows[1], ordered: .above))
+        native.removeWindow(windows[3])
+        try #require(windows[0].addTabbedWindowSafely(windows[3], ordered: .above))
+        try #require(native.windows != windows)
+        WorkspaceRegistry.restoreOrder(windows, in: native)
+        #expect(native.windows == windows)
+    }
 }
