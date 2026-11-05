@@ -281,3 +281,11 @@ extension NewGroupForm: NSTextFieldDelegate {
         onChange()
     }
 }
+
+extension TerminalController {
+    /// Non-native fullscreen: new tabs do not work, and upstream `newTab` says so with its own alert.
+    var tabsUnsupported: Bool {
+        guard let style = fullscreenStyle else { return false }
+        return style.isFullscreen && !style.supportsTabs
+    }
+}
