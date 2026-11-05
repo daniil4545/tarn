@@ -59,4 +59,65 @@ struct WorkspaceMoveTests {
             #expect(native.selectedWindow === selected)
         }
     }
+
+    private func tabs(_ count: Int) throws -> (windows: [NSWindow], native: NSWindowTabGroup, close: () -> Void) {
+        let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
+        let controllers = (0..<count).map { _ in TerminalController(app) }
+        let windows = try controllers.map { try #require($0.window) }
+        for window in windows {
+            window.isReleasedWhenClosed = false
+            window.tabbingMode = .preferred
+        }
+        for index in 1..<windows.count {
+            try #require(windows[index - 1].addTabbedWindowSafely(windows[index], ordered: .above))
+        }
+        let native = try #require(windows[0].tabGroup)
+        return (windows, native, {
+            for controller in controllers {
+                controller.surfaceTree = .init()
+                controller.window?.close()
+            }
+        })
+    }
+
+    // review 1.3.1: a stale run id sent the group to the end.
+    @Test func staleTargetGroupMovesNothing() throws {
+        let (windows, native, close) = try tabs(4)
+        defer { close() }
+        let registry = WorkspaceRegistry.shared
+        let keys = windows.map { _ in TabKey() }
+        let groupA = Workspace(name: "A"), groupB = Workspace(name: "B")
+        let set = WorkspaceSet(workspaces: [groupA, groupB], members: [keys[0]: groupA.id, keys[1]: groupA.id, keys[2]: groupB.id])
+        for (window, key) in zip(windows, keys) {
+            registry.restore(WorkspaceSnapshot(set: set, tabKey: key, order: keys), for: window)
+        }
+        registry.moveWorkspace(groupA.id, before: UUID(), in: windows[0])
+        #expect(native.windows == windows)
+        registry.moveWorkspace(groupA.id, before: nil, in: windows[0])
+        #expect(native.windows == [windows[2], windows[3], windows[0], windows[1]])
+    }
+
+    // review 1.3.1: a failed re-add mid-block left the block split; the rollback puts the order back.
+    @Test func restoreOrderPutsScrambledTabsBack() throws {
+        let (windows, native, close) = try tabs(5)
+        defer { close() }
+        native.removeWindow(windows[1])
+        try #require(windows[4].addTabbedWindowSafely(windows[1], ordered: .above))
+        native.removeWindow(windows[3])
+        try #require(windows[0].addTabbedWindowSafely(windows[3], ordered: .above))
+        try #require(native.windows != windows)
+        WorkspaceRegistry.restoreOrder(windows, in: native)
+        #expect(native.windows == windows)
+    }
+
+    // The first tab moved away: restoreOrder brings it back to the front.
+    @Test func restoreOrderBringsTheFirstTabBack() throws {
+        let (windows, native, close) = try tabs(4)
+        defer { close() }
+        native.removeWindow(windows[0])
+        try #require(windows[2].addTabbedWindowSafely(windows[0], ordered: .above))
+        try #require(native.windows.first !== windows[0])
+        WorkspaceRegistry.restoreOrder(windows, in: native)
+        #expect(native.windows == windows)
+    }
 }

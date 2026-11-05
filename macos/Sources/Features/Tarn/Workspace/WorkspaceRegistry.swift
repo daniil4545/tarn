@@ -432,7 +432,13 @@ final class WorkspaceRegistry {
             guard let at = target.firstIndex(of: beforeTab) else { return }
             target.insert(contentsOf: moving.tabs, at: at)
         } else {
-            runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.id == id } } ?? runs.count)
+            // A `other` that is no run any more (the sidebar was stale) moves nothing, not to the end.
+            var at = runs.count
+            if let other {
+                guard let found = runs.firstIndex(where: { $0.id == other }) else { return }
+                at = found
+            }
+            runs.insert(moving, at: at)
             target = runs.flatMap(\.tabs)
         }
 
@@ -449,16 +455,20 @@ final class WorkspaceRegistry {
         isBusy = true
         NSAnimationContext.beginGrouping()
         NSAnimationContext.current.duration = 0
+        let original = native.windows
         for tabWindow in windows {
             let current = native.windows
             guard let index = current.firstIndex(of: tabWindow), current.count > 1 else { break }
-            let neighbour = current[index == 0 ? 1 : index - 1]
             native.removeWindow(tabWindow)
             guard anchor.addTabbedWindowSafely(tabWindow, ordered: before ? .below : .above) else {
-                // A caught AppKit exception must not leave the tab detached from its workspace.
-                if !neighbour.addTabbedWindowSafely(tabWindow, ordered: index == 0 ? .below : .above) {
-                    Self.logger.error("workspace: could not reattach tab after group move failed")
+                // A caught AppKit exception must not leave the block split or a tab detached: put all back.
+                if !native.windows.contains(tabWindow) {
+                    let neighbour = current[index == 0 ? 1 : index - 1]
+                    if !neighbour.addTabbedWindowSafely(tabWindow, ordered: index == 0 ? .below : .above) {
+                        Self.logger.error("workspace: could not reattach tab after group move failed")
+                    }
                 }
+                Self.restoreOrder(original, in: native)
                 break
             }
             if !before { anchor = tabWindow }
@@ -473,6 +483,32 @@ final class WorkspaceRegistry {
         for tabWindow in native.windows { tabWindow.invalidateRestorableState() }
         isBusy = false
         sync()
+    }
+
+    /// Puts the windows of `order` back in that native order, one removal and re-add per misplaced tab.
+    static func restoreOrder(_ order: [NSWindow], in native: NSWindowTabGroup) {
+        // The first tab leads the group: bring it to the front, then hang each next one behind its predecessor.
+        if let lead = order.first, let front = native.windows.first, front !== lead, native.windows.contains(lead) {
+            native.removeWindow(lead)
+            if !native.windows[0].addTabbedWindowSafely(lead, ordered: .below) {
+                logger.error("workspace: could not restore tab order")
+                if let home = native.windows.first { home.addTabbedWindowSafely(lead, ordered: .above) }
+                return
+            }
+        }
+        for (index, tabWindow) in order.enumerated().dropFirst() {
+            let current = native.windows
+            guard let at = current.firstIndex(of: tabWindow), at == 0 || current[at - 1] !== order[index - 1] else { continue }
+            native.removeWindow(tabWindow)
+            if !order[index - 1].addTabbedWindowSafely(tabWindow, ordered: .above) {
+                logger.error("workspace: could not restore tab order")
+                // Never leave it detached, and never hang the next windows on it.
+                if let home = native.windows.first, !home.addTabbedWindowSafely(tabWindow, ordered: .above) {
+                    logger.error("workspace: could not reattach tab after restore failed")
+                }
+                return
+            }
+        }
     }
 
     private func edit(_ window: NSWindow, _ change: (inout WorkspaceSet) -> Void) {
