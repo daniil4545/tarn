@@ -493,7 +493,9 @@ enum ViewerRouter {
             if ViewerPaths.openExternally(path) { return true }
             let reason = ViewerPaths.externalURL(path) == nil ? "Blocked: could execute code" : "No app opens this file"
             ViewerModel.logger.info("\(reason, privacy: .public): \(path, privacy: .public)")
-            controller.viewerHost.activeModel?.toast("\(reason): \((path as NSString).lastPathComponent)")
+            // Only a shown pane can tell the user; otherwise the default opener shows its alert.
+            guard let model = controller.viewerHost.activeModel, !controller.viewerHost.hidden else { return false }
+            model.toast("\(reason): \((path as NSString).lastPathComponent)")
             return true
         case .upstream:
             return false

@@ -175,6 +175,10 @@ struct ViewerPathsTests {
         opened = []
         #expect(!ViewerPaths.openExternally(dir + "/X.app") { opened.append($0); return true })
         #expect(!ViewerPaths.openExternally(dir + "/run.sh") { opened.append($0); return true })
+        try FileManager.default.createSymbolicLink(atPath: dir + "/link.png", withDestinationPath: dir + "/run.sh")
+        try "x".write(toFile: dir + "/a.pkg", atomically: true, encoding: .utf8)
+        #expect(!ViewerPaths.openExternally(dir + "/link.png") { opened.append($0); return true })
+        #expect(!ViewerPaths.openExternally(dir + "/a.pkg") { opened.append($0); return true })
         #expect(opened.isEmpty)
     }
 
