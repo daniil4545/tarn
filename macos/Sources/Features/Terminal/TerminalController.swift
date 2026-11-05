@@ -421,6 +421,12 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
         return c
     }
 
+    /// Non-native fullscreen: new tabs do not work, and `newTab` says so itself.
+    var tabsUnsupported: Bool {
+        guard let style = fullscreenStyle else { return false }
+        return style.isFullscreen && !style.supportsTabs
+    }
+
     static func newTab(
         _ ghostty: Ghostty.App,
         from parent: NSWindow? = nil,
@@ -435,8 +441,7 @@ class TerminalController: BaseTerminalController, TabGroupCloseCoordinator.Contr
 
         // If our parent is in non-native fullscreen, then new tabs do not work.
         // See: https://github.com/mitchellh/ghostty/issues/392
-        if let fullscreenStyle = parentController.fullscreenStyle,
-           fullscreenStyle.isFullscreen && !fullscreenStyle.supportsTabs {
+        if parentController.tabsUnsupported {
             let alert = NSAlert()
             alert.messageText = "Cannot Create New Tab"
             alert.informativeText = "New tabs are unsupported while in non-native fullscreen. Exit fullscreen and try again."

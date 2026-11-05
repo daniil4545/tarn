@@ -126,7 +126,11 @@ enum WorkspacePrompt {
         form.onChange = { [weak create, weak form] in create?.isEnabled = form?.choice(confirmed: true) != nil }
         alert.beginSheetModal(for: window) { [weak window] response in
             guard let window, let choice = form.choice(confirmed: response == .alertFirstButtonReturn) else { return }
-            if !WorkspaceRegistry.shared.create(choice, from: window) { failedToCreate(in: window) }
+            if !WorkspaceRegistry.shared.create(choice, from: window),
+               // newTab has already told this one with its own alert.
+               (window.windowController as? TerminalController)?.tabsUnsupported != true {
+                failedToCreate(in: window)
+            }
         }
     }
 
