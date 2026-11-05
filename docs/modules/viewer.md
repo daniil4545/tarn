@@ -40,6 +40,7 @@ Reading: the model is the only owner of tabs, documents and tree; the page is re
 | Out | script calls `tarn.setDoc`, `tarn.setChrome`, `tarn.toast`, `tarn.cmd` | `ViewerModel.runScript` |
 | Out | file write on Save and on a ticked task box | `ViewerModel.save` |
 | Out | `http`, `https`, `mailto` links opened through the OS (`ViewerModel.follow`); a clicked file the viewer cannot show opens in its default app (`ViewerPaths.openExternally`) | `ViewerModel.follow`, `ViewerRouter.handle` |
+| Out | a tree row or a document link follows the path click rule (`ViewerModel.openByKind`): text opens a tab, a system file its default app (a double click opens it once), a folder unfolds in the tree (a link says it is a folder), a blocked, special or missing path gives a toast with the reason | `ViewerModel.handle`, `ViewerModel.follow` |
 | Out | socket reply `{"ok":true}` or `{"ok":false,"error":...}` | `ViewerRouter.handleCommand` |
 
 ## How it works

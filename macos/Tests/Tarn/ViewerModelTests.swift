@@ -931,6 +931,63 @@ struct ViewerPaneKeyTests {
         #expect(!calls.contains("tarn.focusContent()"))
     }
 
+    /// The tree and the links of a document follow the rule of the path click, per kind of path.
+    @Test func treeAndLinksOpenEachKindOfPathByTheRule() throws {
+        let dir = try Scratch.make()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        try "x".write(toFile: dir + "/a.md", atomically: true, encoding: .utf8)
+        try "x".write(toFile: dir + "/b.png", atomically: true, encoding: .utf8)
+        try "x".write(toFile: dir + "/c.png", atomically: true, encoding: .utf8)
+        try "x".write(toFile: dir + "/d.png", atomically: true, encoding: .utf8)
+        try FileManager.default.createDirectory(atPath: dir + "/sub", withIntermediateDirectories: true)
+        try "x".write(toFile: dir + "/App.app", atomically: true, encoding: .utf8)
+        let model = ViewerModel(root: dir)
+        var calls: [String] = []
+        var opened: [URL] = []
+        model.openURL = { opened.append($0); return true }
+        model.handle(["t": "ready"])
+        model.script = { calls.append($0) }
+
+        // Text: a tab.
+        model.handle(["t": "treeOpen", "path": dir + "/a.md"])
+        #expect(model.tabs.tabs.map(\.path) == [dir + "/a.md"])
+        // System: the default app, no tab, the keyboard stays in the tree.
+        model.handle(["t": "treeOpen", "path": dir + "/b.png", "enter": true])
+        #expect(opened.map(\.lastPathComponent) == ["b.png"])
+        #expect(model.tabs.tabs.count == 1)
+        #expect(!calls.contains("tarn.focusContent()"))
+        // A double click sends the row twice: one call.
+        model.handle(["t": "treeOpen", "path": dir + "/c.png"])
+        model.handle(["t": "treeOpen", "path": dir + "/c.png", "pin": true])
+        #expect(opened.map(\.lastPathComponent) == ["b.png", "c.png"])
+        // A folder unfolds.
+        model.handle(["t": "treeOpen", "path": dir + "/sub"])
+        #expect(model.tree.open.contains(dir + "/sub"))
+        // A blocked app and a missing file say why.
+        calls = []
+        model.handle(["t": "treeOpen", "path": dir + "/App.app"])
+        #expect(calls.contains { $0.contains("Blocked: could execute code") })
+        calls = []
+        model.handle(["t": "treeOpen", "path": dir + "/gone.md"])
+        #expect(calls.contains { $0.contains("No such file: gone.md") })
+        #expect(opened.count == 2)
+
+        // Links of a document: the same rule, the reason is true.
+        let from = dir + "/a.md"
+        model.handle(["t": "link", "href": "d.png", "from": from])
+        #expect(opened.map(\.lastPathComponent).last == "d.png")
+        calls = []
+        model.handle(["t": "link", "href": "sub", "from": from])
+        #expect(model.tree.open.contains(dir + "/sub"))
+        #expect(calls.contains { $0.contains("is a folder") })
+        calls = []
+        model.handle(["t": "link", "href": "gone.md", "from": from])
+        #expect(calls.contains { $0.contains("No such file: gone.md") })
+        model.handle(["t": "link", "href": "HTTPS://example.com/", "from": from])
+        model.handle(["t": "link", "href": "MAILTO:a@b.c", "from": from])
+        #expect(opened.suffix(2).map { $0.scheme?.lowercased() } == ["https", "mailto"])
+    }
+
     /// Ghostty's Find items (Cmd+F, Cmd+G, Shift+Cmd+G, Hide) search the page while it has the keyboard.
     @Test func findItemsOfTheMenuSearchThePage() throws {
         let model = ViewerModel(root: NSTemporaryDirectory())
