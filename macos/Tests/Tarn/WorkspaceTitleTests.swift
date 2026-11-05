@@ -17,4 +17,13 @@ struct WorkspaceTitleTests {
         #expect(NativeTabMark.workspaceName("Work", workspaces: 1) == nil)
         #expect(NativeTabMark.workspaceName("", workspaces: 2) == nil)
     }
+
+    // An ungrouped block next to the only workspace is not a second workspace.
+    @Test @MainActor func ungroupedBlocksDoNotCountAsWorkspaces() {
+        let model = SidebarModel(groups: [
+            .init(workspace: Workspace(name: "Work"), tabs: []),
+            .init(workspace: nil, tabs: []),
+        ])
+        #expect(model.workspaceCount == 1)
+    }
 }

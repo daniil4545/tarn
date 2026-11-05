@@ -404,6 +404,9 @@ final class SidebarModel: ObservableObject {
     /// The workspaces, headers only: the ungrouped blocks between them are not workspaces.
     private var workspaces: [Group] { groups.filter { $0.workspace != nil } }
 
+    /// How many workspaces the window has; the tab mark names one only when there are two or more.
+    var workspaceCount: Int { workspaces.count }
+
     func delete(_ workspace: Workspace) {
         guard let window, let group = workspaces.first(where: { $0.id == workspace.id }) else { return }
         WorkspacePrompt.confirmDelete(workspace.name, tabCount: group.tabs.count, in: window) { [weak self] closeTabs in
@@ -1382,7 +1385,7 @@ struct NativeTabMark: View {
 
     var body: some View {
         if tabStyle == .top, let tab = model.groups.lazy.flatMap(\.tabs).first(where: { $0.id == id }) {
-            let name = Self.workspaceName(tab.workspace, workspaces: model.groups.filter { $0.workspace != nil }.count)
+            let name = Self.workspaceName(tab.workspace, workspaces: model.workspaceCount)
             if name != nil || tab.agentProcess != nil {
                 HStack(spacing: 6) {
                     if let name {
