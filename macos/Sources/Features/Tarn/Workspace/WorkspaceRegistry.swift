@@ -432,7 +432,13 @@ final class WorkspaceRegistry {
             guard let at = target.firstIndex(of: beforeTab) else { return }
             target.insert(contentsOf: moving.tabs, at: at)
         } else {
-            runs.insert(moving, at: other.flatMap { id in runs.firstIndex { $0.id == id } } ?? runs.count)
+            // A `other` that is no run any more (the sidebar was stale) moves nothing, not to the end.
+            var at = runs.count
+            if let other {
+                guard let found = runs.firstIndex(where: { $0.id == other }) else { return }
+                at = found
+            }
+            runs.insert(moving, at: at)
             target = runs.flatMap(\.tabs)
         }
 
