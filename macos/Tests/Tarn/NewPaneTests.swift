@@ -129,10 +129,17 @@ struct NewPaneTests {
             return
         }
         #expect(split.direction == .vertical)
-        // The focus is given back to the caller after SwiftUI rebuilds the tree (`Ghostty.moveFocus` retries
-        // for up to ~0.75 s): wait for that, and fail at once if the new pane ever takes it.
-        let settle = ContinuousClock.now + .seconds(20)
-        while window.firstResponder !== caller, window.firstResponder !== pane, ContinuousClock.now < settle {
+        // SwiftUI rebuilds the tree, then `Ghostty.moveFocus` retries for up to ~0.75 s. Wait until the new pane
+        // is in the window, then watch 1 s: the new pane must never take the focus.
+        let attached = ContinuousClock.now + .seconds(20)
+        while pane.window !== window, ContinuousClock.now < attached { try await Task.sleep(for: .milliseconds(20)) }
+        try #require(pane.window === window, "the new pane never joined the window")
+        let watchEnd = ContinuousClock.now + .seconds(1)
+        while ContinuousClock.now < watchEnd {
+            if window.firstResponder === pane {
+                Issue.record("the new pane took the focus")
+                break
+            }
             try await Task.sleep(for: .milliseconds(20))
         }
         #expect(window.firstResponder === caller)
