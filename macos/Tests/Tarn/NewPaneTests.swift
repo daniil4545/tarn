@@ -162,15 +162,18 @@ struct NewPaneTests {
         let pane = try #require(NewPane.split(controller, at: caller, direction: .down, config: config))
 
         var process = ""
+        var folder: String?
         // The CI runner runs 4 test jobs at once; the shell there took over 5 s to exec the command.
+        // The folder is read from the same process as the name, so both wait for the exec.
         let deadline = ContinuousClock.now + .seconds(20)
         while ContinuousClock.now < deadline {
             process = pane.surfaceModel?.foregroundPID
                 .flatMap { AgentProcess.comm(pid: AgentProcess.foreground(group: pid_t($0))) } ?? ""
-            if process == "sleep" { break }
+            folder = pane.workingDirectory
+            if process == "sleep", folder == "/private/tmp" { break }
             try await Task.sleep(for: .milliseconds(50))
         }
         #expect(process == "sleep")
-        #expect(pane.workingDirectory == "/private/tmp")
+        #expect(folder == "/private/tmp")
     }
 }
