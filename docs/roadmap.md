@@ -68,4 +68,4 @@ Estimate: 40-49 PRs.
 | Git commit, push, diff and PR actions | out of the minimal git |
 | Remote agent state over ssh | needs a network channel; host only in 2.0 |
 | Per-workspace trust levels, decision log, menu bar | cut to keep the prototype small |
-| Codex and opencode state | 2.0 is Claude Code first |
+| opencode state | 2.0 is Claude Code and Codex first |
