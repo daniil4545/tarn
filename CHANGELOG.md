@@ -4,6 +4,27 @@ Changes of tarn on top of Ghostty. Releases use `tarn-vX.Y.Z`; `vX.Y.Z` tags bel
 
 ## [Unreleased]
 
+## [tarn-v1.4.0] - 2026-11-06
+
+### Added
+
+- Codex sessions show their state and the permission card in the sidebar through the same `tarn` plugin; Codex runs with `--no-daemon` in tarn (`docs/install.md`, T-519).
+- A path click on a file the viewer cannot show (image, archive, database, a large log) opens it in the default app, or shows a toast when there is none; an `.app` is blocked (T-465). Tree rows and links in a document follow the same rule (#191).
+
+### Changed
+
+- A link in a viewer document keeps that document as a pinned tab and opens its target as the preview tab (T-567).
+
+### Fixed
+
+- A pane opened by `tarn new -- claude` shows the agent icon in the sidebar (T-220).
+- A closed tab frees its agent session within a second, not only after Cmd+U (#182).
+- A failed `tarn open` from an agent gives the terminal its focus back (#184).
+- A slow socket client no longer delays permission replies to other clients (#185).
+- Permission card off opens no card on hover or force click (#176).
+- Group create alert, a move into a stale group and the restored tab order of groups (T-316); the tab name counts its workspace, the divider cursor on collapse (T-441).
+- A path click treats `MAILTO:` as a URL (#198).
+
 ## [tarn-v1.3.2] - 2026-11-01
 
 ### Fixed

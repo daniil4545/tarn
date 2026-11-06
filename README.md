@@ -54,12 +54,13 @@ planned parts: [demo/README.md](demo/README.md).
 
 ## Stage
 
-`tarn-v1.3.2`. What works:
+`tarn-v1.4.0`. What works:
 
 - a vertical sidebar with optional groups; a tab running `claude`, `codex` or `opencode` shows the
-  agent's icon, and Claude Code state shows as a colored dot with a card that answers a permission
+  agent's icon, and Claude Code and Codex state shows as a colored dot with a card that answers a permission
   request or a question with one click;
 - a file viewer next to the terminal: markdown with mermaid, source view, editing, a files tree;
+  a path click opens what the viewer cannot show in the default app;
 - a settings window with Ghostty options, a Help page of keys and switches for each module;
 - one notification per need of an agent, and cmd+U to jump to the session that waits for you;
 - the `tarn` command for agents: `tarn open`, `ls`, `notify`, `new` and `run` (a split or a tab
