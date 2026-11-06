@@ -11,7 +11,7 @@ Issue #34, task T-205. Switchable tarn features are modules in Settings > Module
 | Effective state | stored state on and every module it needs effectively on |
 | Needs | a module works only while another module is on; shown as "needs X" |
 
-Module, setting and companion as one model, with tab and global kinds: `docs/specs/companions.md`. There Permission card and Notifications are settings, not modules; in 1.3.3 the Settings page names and groups them so (T-373), the keys and behavior of section 5 stay.
+Module, setting and companion as one model, with tab and global kinds: `docs/specs/companions.md`. There Permission card and Notifications are settings, not modules; the Settings page will name and group them so with the hub (T-373), the keys and behavior of section 5 stay.
 
 ## 2. Decided by the user (2026-10-27)
 

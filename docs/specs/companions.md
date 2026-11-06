@@ -37,9 +37,9 @@ The window is the center: a terminal pane, with or without an agent in it. Every
 
 2026-11-02 (epic T-370, release 1.4.0, renamed from 1.3.3 on 2026-11-03):
 
-- Current modules are brought to one companion form in code before the hub: a companion table over the existing switches, menu actions and toggles (T-374). `TerminalController` keeps its nesting of sidebar, viewer and terminal.
+- Current modules are brought to one companion form in code before the hub: a companion table over the existing switches, menu actions and toggles (T-374, not in 1.4.0, comes with the hub). `TerminalController` keeps its nesting of sidebar, viewer and terminal.
 - The state model per tab group for global companions comes with the hub (T-427): the sidebar's width and collapse are already global through `@AppStorage` (`Sidebar.swift:710-711`).
-- Settings change in naming and grouping only (T-373); stored keys and behavior stay.
+- Settings change in naming and grouping only (T-373, not in 1.4.0, comes with the hub); stored keys and behavior stay.
 
 ## 4. Rules
 
@@ -85,7 +85,7 @@ Each companion's document `docs/modules/<name>.md` states:
 
 ## 8. Planned changes to existing documents
 
-Deferred by the user 2026-11-03: the hub (epic T-363) and the state model per tab group (T-427) come after 1.4.0, the last release of this line; 1.4.0 brings the current modules to the companion form without adding one. The changes below stay planned; the ones that need the hub move with it:
+Deferred by the user 2026-11-03: the hub (epic T-363) and the state model per tab group (T-427) come after 1.4.0, the last release of this line; the companion form of the current modules and the Settings renaming move with it. The changes below stay planned; the ones that need the hub move with it:
 
 - `docs/specs/modules.md`: Settings > Modules lists Sidebar, File viewer, Hub; "tarn answers requests" (R5) is shown under Sidebar and Hub and read by the card and the hub; Notifications is a tarn setting. Stored keys stay, so saved values survive. In 1.4.0 only the naming and grouping change (T-373).
 - Viewer spec: `tarn open` shows the viewer with the file instead of leaving it hidden; focus and typing stay (R4).
