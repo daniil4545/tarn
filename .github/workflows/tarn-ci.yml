@@ -63,6 +63,9 @@ jobs:
     # the app tests and the installer test (plutil, ditto) stay on macOS.
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    env:
+      # Shared runners stall a stale-socket connect past 100 ms; the contract is checked on the Mac.
+      TARN_HOOK_LIMIT_MS: "800"
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

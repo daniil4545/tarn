@@ -127,8 +127,9 @@ def check_stop(socket_path: Path, home: Path) -> str | None:
             read_line(client)
             hook.terminate()
             code = hook.wait(timeout=3)
-            # A sender left behind would print this answer into the dead hook's output.
-            with contextlib.suppress(BrokenPipeError):
+            # A sender left behind would print this answer into the dead hook's output. A gone
+            # sender makes the send fail: EPIPE, or ENOTCONN when macOS has already reset it.
+            with contextlib.suppress(OSError):
                 client.sendall(ANSWER)
         late = hook.stdout.read()
         hook.stdout.close()
