@@ -190,9 +190,10 @@ enum AgentProcess {
 /// process that was replaced by `exec`.
 @MainActor
 enum AgentProcessCache {
-    /// How a pid is read. Tests replace it to count the reads.
-    static var reader: (pid_t) -> String? = { AgentProcess.agent(pid: $0) }
-    static var sshReader: (pid_t) -> Bool = { AgentProcess.isSSH(pid: $0) }
+    /// How a pid is read. Tests replace it to count the reads. A pane opened by `tarn new` is led
+    /// by `/usr/bin/login`, so the command below it is read, as `tarn ls` does (T-218, T-220).
+    static var reader: (pid_t) -> String? = { AgentProcess.agent(pid: AgentProcess.foreground(group: $0)) }
+    static var sshReader: (pid_t) -> Bool = { AgentProcess.isSSH(pid: AgentProcess.foreground(group: $0)) }
 
     /// The reads that missed the cache since the last `reset`.
     private(set) static var misses = 0
