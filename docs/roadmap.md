@@ -52,7 +52,7 @@ it was opened in, also after `cd`. The sidebar navigates, the hub shows state.
 |---|---|
 | 1. Foundation | #34 modules, #35 tabs join by folder, #40 CLI survey |
 | 2. Base features | #36 git branch, #39 ssh host, #38 localhost, #40 CLI |
-| 3. Hub | #33 workspace hub, #41 neighbours, #42 collision radar, #44 permission card module. The whole wave is deferred past 1.4.0 (user 2026-11-03, T-363 and T-427 with it); 1.4.0 ships the companion form of the current modules (`docs/specs/companions.md`) |
+| 3. Hub | #33 workspace hub, #41 neighbours, #42 collision radar, #44 permission card module. The whole wave is deferred past 1.4.0 (user 2026-11-03, T-363 and T-427 with it) with the companion form of the current modules and the Settings renaming (`docs/spec/modules.md`) |
 | 4. Experiments | #43 Sleep mode, #37 commit graph |
 | Any time | #45 viewer polish, #46 layout look, #47 sidebar smoothness |
 
@@ -68,4 +68,4 @@ Estimate: 40-49 PRs.
 | Git commit, push, diff and PR actions | out of the minimal git |
 | Remote agent state over ssh | needs a network channel; host only in 2.0 |
 | Per-workspace trust levels, decision log, menu bar | cut to keep the prototype small |
-| Codex and opencode state | 2.0 is Claude Code first |
+| opencode state | 2.0 is Claude Code and Codex first |

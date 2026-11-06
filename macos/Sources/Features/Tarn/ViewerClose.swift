@@ -56,7 +56,9 @@ enum ViewerClose {
     }
 
     /// Runs the repeated close with Don't Save in force: its `intercept` call passes once. The mark is
-    /// cleared afterwards, so a path that never asks again cannot leave it behind.
+    /// cleared afterwards, so a path that never asks again cannot leave it behind. `proceed` must reach
+    /// `intercept` before it returns: a close deferred to a later run loop pass finds the mark gone and
+    /// asks again.
     @MainActor
     static func discardThen(_ models: [ViewerModel], _ proceed: () -> Void) {
         models.forEach { $0.discardOnce = true }
