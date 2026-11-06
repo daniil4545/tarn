@@ -100,10 +100,12 @@ Tests: `macos/build.nu --action test`; hook contract: `python3 -I plugin/test/ho
 |---|---|
 | how to install, upgrade, add the plugin and set up zsh | [docs/install.md](docs/install.md) |
 | what tarn is for and why it is built this way | [docs/spec.md](docs/spec.md) |
-| how windows, groups and layout behave | [docs/specs/windows-workspaces.md](docs/specs/windows-workspaces.md) |
-| how the viewer pane behaves | [docs/specs/viewer-pane.md](docs/specs/viewer-pane.md) |
+| how windows, groups, sidebar and layout behave | [docs/spec/workspaces.md](docs/spec/workspaces.md) |
+| how the viewer pane behaves | [docs/spec/viewer.md](docs/spec/viewer.md) |
+| agent commands, sessions, modules and settings | [docs/spec/](docs/spec/): `agent-cli.md`, `sessions.md`, `modules.md` |
 | how it is built and where things live | [docs/architecture.md](docs/architecture.md) |
-| how one part works | [docs/modules/](docs/modules/), one file per module |
+| how fast it runs against upstream Ghostty | [docs/bench.md](docs/bench.md) |
+| what is planned | [docs/roadmap.md](docs/roadmap.md) |
 | what the browser demo shows, how to run and test it | [demo/README.md](demo/README.md) |
 | what changed in each release | [CHANGELOG.md](CHANGELOG.md) |
 | ported code and its licenses | [THIRD_PARTY.md](THIRD_PARTY.md) |
