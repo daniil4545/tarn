@@ -190,6 +190,8 @@ export function createViewerModel({ fs, home, root, ui }) {
     const bare = decodeURIComponent(href.split("#")[0]);
     const target = resolve(bare, { cwd: from ? dirname(from) : root, home, exists: fs.exists });
     if (!target || !fs.exists(target.path) || fs.isDir(target.path)) return toast(`No such file: ${bare}`);
+    // The document a link leaves stays open; the target comes as a preview tab.
+    if (from) pinPath(from);
     open(target);
   }
 

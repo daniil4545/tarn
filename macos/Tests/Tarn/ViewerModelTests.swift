@@ -988,6 +988,25 @@ struct ViewerPaneKeyTests {
         #expect(opened.suffix(2).map { $0.scheme?.lowercased() } == ["https", "mailto"])
     }
 
+    /// spec: T-567 - a link keeps the document it leaves; its targets share one preview tab.
+    @Test func aLinkKeepsItsDocumentAndOpensAPreview() throws {
+        let dir = NSTemporaryDirectory() + "t567-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        for name in ["a.md", "b.md", "c.md"] { try "x".write(toFile: dir + "/" + name, atomically: true, encoding: .utf8) }
+        let model = ViewerModel(root: dir)
+        model.handle(["t": "ready"])
+        model.script = { _ in }
+
+        model.handle(["t": "treeOpen", "path": dir + "/a.md"])
+        #expect(model.tabs.tabs.map(\.preview) == [true])
+        model.handle(["t": "link", "href": "b.md", "from": dir + "/a.md"])
+        #expect(model.tabs.tabs.map { ($0.path as NSString).lastPathComponent } == ["a.md", "b.md"])
+        #expect(model.tabs.tabs.map(\.preview) == [false, true])
+        model.handle(["t": "link", "href": "c.md", "from": dir + "/a.md"])
+        #expect(model.tabs.tabs.map { ($0.path as NSString).lastPathComponent } == ["a.md", "c.md"])
+    }
+
     /// Ghostty's Find items (Cmd+F, Cmd+G, Shift+Cmd+G, Hide) search the page while it has the keyboard.
     @Test func findItemsOfTheMenuSearchThePage() throws {
         let model = ViewerModel(root: NSTemporaryDirectory())

@@ -53,7 +53,7 @@ Open flow:
 2. `ViewerPaths.resolve` expands `~/`, absolute and relative paths against the surface's `pwd`, and splits `:line[:column]`. A real file whose name holds a colon wins over the split.
 3. `ViewerPaths.classify` returns text, system, directory, special or missing. System: an extension of the allowlist (media, document, archive), `drawio`/`dio`, a size over 5 MB (symlinks followed) or binary content; `viewerCanShow` is the one predicate.
 4. `ViewerHost.open` uses the viewer that has the keyboard, else the one used last, and creates a viewer beside the terminal block when the tab has none (model, web controller, rule list); then `ViewerModel.open` builds the `ViewerDocument`, arms a `FileWatcher`, opens or activates the tab, unfolds the tree to the file and pushes document and chrome to the page.
-5. A click opens a preview tab (replaced by the next open) and focuses the pane. A double click, an edit or a drag pins it.
+5. A click opens a preview tab (replaced by the next open) and focuses the pane. A double click, an edit or a drag pins it. A link to a text file pins the tab it leaves first (`ViewerModel.follow`).
 
 Socket open: same path, but `focus` is false. The host saves the first responder and restores it at 0 s and 0.15 s; if the user types in the pane, the open adds a pinned background tab and keeps the active one. Binary files (NUL byte or invalid UTF-8 in the first 8 KB) are refused ("not a text file"), as are files over 5 MB ("too large"); the socket never opens another app.
 

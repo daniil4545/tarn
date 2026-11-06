@@ -437,6 +437,9 @@ final class ViewerModel {
         let decoded = bare.removingPercentEncoding ?? bare
         let folder = from.map { ($0 as NSString).deletingLastPathComponent } ?? tree.root
         guard let target = ViewerPaths.resolve(decoded, cwd: folder) else { return }
+        // The document a link leaves stays open and the target comes as a preview tab, as Zed's
+        // markdown preview opens a link beside its source.
+        if let from, ViewerPaths.classify(target.path) == .text { tabs.pin(path: from) }
         _ = openByKind(target, unfold: false)
     }
 
