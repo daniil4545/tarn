@@ -13,6 +13,7 @@ No backend, no build step, no network: ES modules and vendored files only.
 | --- | --- |
 | Sidebar and agent states | built |
 | Viewer (markdown, mermaid, code, save) | built |
+| Path click on a file the viewer cannot show (image, pdf, archive, office file, diagram) opens it in its default app with a toast here; an `.app` is blocked; a link in a document keeps that document as a pinned tab and opens its target as the preview (T-465, T-567) | built in 1.4.0 |
 | Cmd+B Toggle Pane (fallback Ctrl+Alt+B) and Cmd+W in the pane | built: Cmd+B opens the pane with the tree, hides it with tabs and unsaved text kept, shows it back, never closes; Cmd+W closes the file tab, the last tab or an empty pane; Enter on a file in the tree moves the keyboard to the file; a hidden pane with unsaved text still asks on close |
 | File viewer: arrows between tree and file, scroll keys in view mode, editing and saving any text file with colors by language, Settings switch (File Viewer) | built: off, open panes are hidden (their tabs and unsaved text stay) and come back when it is on again; Cmd+B and path clicks open no pane and say so, `tarn open` answers that the viewer is off; the Toggle File Viewer button hides |
 | Workspaces, splits, layout | built |

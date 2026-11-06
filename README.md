@@ -6,7 +6,7 @@
 </p>
 
 <p align="center"><b>An agent-first terminal for macOS, built on <a href="https://ghostty.org">Ghostty</a>.</b><br>
-Every tab in a sidebar, optionally grouped, with the state of each Claude Code session at a glance.</p>
+Every tab in a sidebar, optionally grouped, with the state of each Claude Code and Codex session at a glance.</p>
 
 tarn is an unofficial fork of Ghostty and is not affiliated with the Ghostty project; see
 [NOTICE.md](NOTICE.md).
@@ -19,10 +19,10 @@ Ghostty keeps rendering, input, splits and config. tarn adds:
   name (a group may be tied to a project folder); a tab running `claude`, `codex` or `opencode` shows the agent's icon.
 - **File viewer.** A click on a path in the terminal opens the file in a pane beside it: markdown
   rendered, mermaid diagrams, highlighted code, an editor with save, live reload when an agent
-  rewrites the file.
+  rewrites the file. A file it cannot show (an image, a pdf, an archive) opens in its default app.
 - **Window layout.** Drag a terminal or a viewer to a zone: under another pane, beside it, or at
   the window edge.
-- **Agent status and card.** Claude Code state shows as a colored dot: working, needs permission,
+- **Agent status and card.** Claude Code and Codex state shows as a colored dot: working, needs permission,
   asks a question, done, error. Hover a row: the card shows the request and answers it with one
   click (Allow, Deny, or a numbered option).
 

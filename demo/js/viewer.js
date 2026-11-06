@@ -40,7 +40,24 @@ function visibleTarget(id) {
 // The File viewer module off: no pane is drawn (workspace.js stashes them) and no request opens one.
 const viewerOn = () => isOn("viewer");
 
+// Files the viewer cannot show go to their default app; an app is blocked (ViewerPaths.swift
+// systemExtensions and externalExtensions, UntrustedURL).
+const SYSTEM_EXTENSIONS = new Set(("png jpg jpeg gif webp heic tif tiff bmp ico icns psd pdf mp3 m4a wav aac flac aif " +
+  "aiff mp4 mov m4v mkv avi webm zip gz tgz bz2 xz 7z rar tar dmg pkg iso doc docx xls xlsx ppt pptx key pages numbers " +
+  "rtf app drawio dio").split(" "));
+const extension = (path) => (/\.([^./]+)$/.exec(path)?.[1] ?? "").toLowerCase();
+const basename = (path) => path.split("/").pop();
+
+// A path click on such a file: the app hands it to macOS and the viewer stays as it is.
+function openElsewhere(path) {
+  const ext = extension(path);
+  if (!SYSTEM_EXTENSIONS.has(ext)) return false;
+  toast(ext === "app" ? `Blocked: could execute code: ${basename(path)}` : `Opens in its default app: ${basename(path)}`);
+  return true;
+}
+
 function open(payload) {
+  if (payload.path && openElsewhere(payload.path)) return undefined;
   const entry = visibleTarget(payload.pane);
   if (!viewerOn()) return toast("File viewer is off: the file opens in its default app");
   if (!entry) return bus.emit("viewer:needed", payload);
