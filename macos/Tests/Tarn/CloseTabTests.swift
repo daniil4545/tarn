@@ -42,7 +42,7 @@ struct CloseTabTests {
         #expect(posts == 3, "a publish that never settles stops after 3 rounds, got \(posts)")
     }
 
-    // spec: docs/specs/workspace-folder.md S1, S3, Q1
+    // spec: docs/spec/workspaces.md S1, S3, Q1
     /// A folder makes a workspace named after it with one new tab; the same folder again selects
     /// that workspace and opens nothing.
     @Test func aFolderOpensItsWorkspaceOnceAndThenSelectsIt() async throws {

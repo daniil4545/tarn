@@ -47,7 +47,7 @@ def ready(pg):
 
 
 def folder_story(pg):
-    """docs/specs/workspace-folder.md: no folder mark, the fixed folder, top tab prefix."""
+    """docs/spec/workspaces.md: no folder mark, the fixed folder, top tab prefix."""
     check(
         "F1 an agent outside its workspace folder carries no mark (D21 dropped)",
         pg.locator(f"{TAB}[data-tabid='t2'] .l2").count() == 1

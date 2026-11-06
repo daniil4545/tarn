@@ -4,7 +4,7 @@ import Testing
 @testable import Ghostty
 
 /// The layout of a tab: the terminal block is one leaf and viewers sit around it
-/// (`docs/modules/layout.md`).
+/// (`docs/spec/workspaces.md`).
 @MainActor
 @Suite
 struct AreaTreeTests {

@@ -1,6 +1,6 @@
 import Foundation
 
-/// The three checks of the Claude Code line in Settings > Modules (`docs/modules/settings.md`).
+/// The three checks of the Claude Code line in Settings > Modules (`docs/spec/modules.md`).
 /// Local only: no network, nothing written.
 struct AgentChecks: Equatable {
     /// The version of `claude --version`; nil when Claude Code was not found.

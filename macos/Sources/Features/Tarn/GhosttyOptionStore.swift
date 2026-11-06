@@ -3,7 +3,7 @@ import Combine
 import Foundation
 import OSLog
 
-/// The model behind the Ghostty option panes: reads and writes tarn's options file (`docs/modules/settings.md`).
+/// The model behind the Ghostty option panes: reads and writes tarn's options file (`docs/spec/modules.md`).
 /// A change always writes its line, even at the default; only `reset` removes it. Each write re-reads
 /// the file and changes one key, so a hand edit is kept.
 @MainActor

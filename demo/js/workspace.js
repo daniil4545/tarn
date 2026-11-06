@@ -148,7 +148,7 @@ function ensurePane(id, cwd) {
 }
 
 const short = (cwd) => cwd.replace("~/code/", "~/c/");
-// Ungrouped tabs sit in headerless blocks anywhere between the groups (docs/specs/workspace-folder.md
+// Ungrouped tabs sit in headerless blocks anywhere between the groups (docs/spec/workspaces.md
 // G5). The block at list index `at` (the tail by default), or the one just above it, else a new one there.
 const looseAt = (s, at = s.wss.length) => {
   if (s.wss[at]?.loose) return s.wss[at];

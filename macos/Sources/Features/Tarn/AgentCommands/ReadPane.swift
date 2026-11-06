@@ -2,7 +2,7 @@ import AppKit
 import GhosttyKit
 
 /// `tarn read <pane> [--lines N]`: plain text of the last lines of a pane's screen and scrollback
-/// (`docs/specs/agent-cli.md` 4.7). Follows herdr `pane read --lines N`: default 80, no escapes.
+/// (`docs/spec/agent-cli.md` 4.7). Follows herdr `pane read --lines N`: default 80, no escapes.
 enum ReadPane {
     static let defaultLines = 80
     static let badLines = AgentRefusal(text: "bad lines")

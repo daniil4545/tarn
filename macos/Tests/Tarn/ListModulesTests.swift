@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// `tarn module ls` (`docs/specs/agent-cli.md` 4.9).
+/// `tarn module ls` (`docs/spec/agent-cli.md` 4.9).
 @Suite
 struct ListModulesTests {
     private let defaults: UserDefaults

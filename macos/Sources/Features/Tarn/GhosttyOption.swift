@@ -1,7 +1,7 @@
 import Foundation
 
 /// One Ghostty option the settings window edits: the mockup's `GHOSTTY` table as data
-/// (`docs/modules/settings.md`). Names, values and defaults follow
+/// (`docs/spec/modules.md`). Names, values and defaults follow
 /// `src/config/Config.zig`; `GhosttyOptionTests` checks the defaults against a loaded config.
 struct GhosttyOption: Identifiable, Equatable {
     enum Section: CaseIterable {

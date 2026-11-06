@@ -1,7 +1,7 @@
 import AppKit
 import GhosttyKit
 
-/// How a pane was started by `tarn new` or `tarn run` (`docs/specs/agent-cli.md` 3, run mark).
+/// How a pane was started by `tarn new` or `tarn run` (`docs/spec/agent-cli.md` 3, run mark).
 struct RunMark: Equatable {
     enum Kind: Equatable { case new, run }
     let kind: Kind
@@ -30,7 +30,7 @@ struct WaitOutcome: Equatable {
         ["state": state, "command": command, "duration_ms": durationMs, "text": text, "exit_code": exitCode ?? NSNull()]
     }
 
-    /// `<state>  exit <code>  <duration>` (`docs/specs/agent-cli.md` 4.6).
+    /// `<state>  exit <code>  <duration>` (`docs/spec/agent-cli.md` 4.6).
     var text: String {
         "\(state)  exit \(exitCode.map(String.init) ?? "-")  \(String(format: "%.1f", Double(durationMs) / 1000))s"
     }
@@ -48,7 +48,7 @@ extension AgentRefusal {
     static let timeout = AgentRefusal(text: "timeout", code: 9)
 }
 
-/// The rules of `docs/specs/agent-cli.md` 3 "What ends a wait", free of windows so a test can drive them.
+/// The rules of `docs/spec/agent-cli.md` 3 "What ends a wait", free of windows so a test can drive them.
 enum WaitRule {
     /// The answer at once, or nil to park the wait until an end arrives.
     static func start(mark: RunMark?, facts: PaneFacts, integrated: Bool) -> Result<WaitOutcome, AgentRefusal>? {
@@ -216,7 +216,7 @@ final class PaneWaits {
 }
 
 /// `tarn wait <pane> [--timeout S]`: holds the reply until the pane reports an end
-/// (`docs/specs/agent-cli.md` 4.6). Follows Otty `pane wait` and Luvus `pane_closed`.
+/// (`docs/spec/agent-cli.md` 4.6). Follows Otty `pane wait` and Luvus `pane_closed`.
 enum WaitPane {
     /// Starts the wait; the answer line now, or nil when the reply is held until the end.
     @MainActor

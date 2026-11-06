@@ -74,7 +74,7 @@ def viewer_checks(pg):
         "C1 a path makes a viewer pane, the tree is hidden",
         viewers(pg) == 1 and count(tree) == 0,
     )
-    # spec: docs/specs/viewer-pane.md 4 - raw HTML inside markdown is escaped.
+    # spec: docs/spec/viewer.md 4 - raw HTML inside markdown is escaped.
     check(
         "C1a raw HTML in markdown is shown as text",
         count("#vcontent b") == 0
@@ -172,7 +172,7 @@ def viewer_checks(pg):
 
 
 def find_checks(pg, v) -> None:
-    """Find in the viewer page, view mode and source mode; spec: docs/specs/viewer-pane.md 3."""
+    """Find in the viewer page, view mode and source mode; spec: docs/spec/viewer.md 3."""
     bar = "#findbar:not([hidden])"
     shown = lambda: v.locator("#findbar .count").inner_text()
     focus_viewer(pg)

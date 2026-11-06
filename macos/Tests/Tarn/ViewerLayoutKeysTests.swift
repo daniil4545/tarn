@@ -4,7 +4,7 @@ import Testing
 @testable import Ghostty
 
 /// The split keys of Ghostty's menu while a viewer holds the keyboard: move the divider, equalize
-/// (`docs/modules/layout.md`).
+/// (`docs/spec/workspaces.md`).
 @MainActor
 @Suite
 struct ViewerLayoutKeysTests {

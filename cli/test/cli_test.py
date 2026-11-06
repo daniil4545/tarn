@@ -213,7 +213,7 @@ def main() -> int:
                 err,
             )
 
-        # spec: docs/specs/agent-cli.md U5
+        # spec: docs/spec/agent-cli.md U5
         for cmd in ["new", "run"]:
             for flags in [["--right", "--tab"], ["--tab", "--right"]]:
                 code, out, err = run(home, [cmd, *flags, "--", "ls"])

@@ -1,7 +1,7 @@
 import Foundation
 
 /// The themes Ghostty can load, and the base list the settings window shows on top
-/// (`docs/modules/settings.md`). Ghostty looks a theme up by name in the user's `ghostty/themes`
+/// (`docs/spec/modules.md`). Ghostty looks a theme up by name in the user's `ghostty/themes`
 /// folder, then in the app's own (`src/config/theme.zig:20`); the picker lists the same two.
 struct ThemeCatalog {
     /// Theme file names of the base list, one theme each; names of files in Ghostty's theme folder.

@@ -1,5 +1,5 @@
 // The tarn CLI as agents and people use it: open, ls, new, run, wait, read, close
-// (docs/specs/agent-cli.md 4). None of these moves focus or presses Enter. `new` and `run` open a
+// (docs/spec/agent-cli.md 4). None of these moves focus or presses Enter. `new` and `run` open a
 // split below the caller, or to its right with --right; the demo pane is a shell: `new` does not
 // run the command, `run` types it at the prompt and leaves Enter to the user.
 const USAGE =

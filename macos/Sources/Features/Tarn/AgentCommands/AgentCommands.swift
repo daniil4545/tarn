@@ -1,7 +1,7 @@
 import AppKit
 import OSLog
 
-/// A terminal pane as the agent commands see it (`docs/specs/agent-cli.md` 3, 4).
+/// A terminal pane as the agent commands see it (`docs/spec/agent-cli.md` 3, 4).
 struct PaneRow: Equatable {
     let pane: UUID
     let tab: UUID?
@@ -55,7 +55,7 @@ struct AgentScope: Equatable {
     }
 }
 
-/// The socket commands an agent calls on panes (`docs/specs/agent-cli.md`). One handler file per
+/// The socket commands an agent calls on panes (`docs/spec/agent-cli.md`). One handler file per
 /// command and one row in `handlers`, as kitty keeps one file per remote command (`kitty/rc/`).
 enum AgentCommands {
     typealias Handler = @MainActor (_ message: [String: Any], _ scope: AgentScope) -> Result<[String: Any], AgentRefusal>

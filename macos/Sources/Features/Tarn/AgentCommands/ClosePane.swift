@@ -1,7 +1,7 @@
 import AppKit
 
 /// `tarn close <pane>`: closes a pane at once, with no confirmation, whatever runs in it
-/// (`docs/specs/agent-cli.md` 4.8). Follows WezTerm `kill-pane` and herdr `pane close`. Which panes
+/// (`docs/spec/agent-cli.md` 4.8). Follows WezTerm `kill-pane` and herdr `pane close`. Which panes
 /// an agent may close is a rule of the skill, not a check here.
 enum ClosePane {
     static let unsavedEdits = AgentRefusal(text: "unsaved viewer edits")

@@ -5,7 +5,7 @@ import Testing
 import GhosttyKit
 
 /// The tab and window keybinds a viewer pane passes to its terminal, and the keys it keeps
-/// (`docs/specs/viewer-pane.md`).
+/// (`docs/spec/viewer.md`).
 @Suite
 struct ViewerForwardKeysTests {
     private static let cmd = NSEvent.ModifierFlags.command.rawValue

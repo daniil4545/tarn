@@ -2,10 +2,10 @@ import AppKit
 import Testing
 @testable import Ghostty
 
-/// `tarn new`: the command line and the split that keeps the focus (`docs/specs/agent-cli.md` 4.2-4.4, B1, B2).
+/// `tarn new`: the command line and the split that keeps the focus (`docs/spec/agent-cli.md` 4.2-4.4, B1, B2).
 @Suite
 struct NewPaneTests {
-    // spec: docs/specs/agent-cli.md U5
+    // spec: docs/spec/agent-cli.md U5
     @Test @MainActor func anUngroupedCallerCannotOpenATab() {
         let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: nil)
         let scope = AgentScope(caller: caller, panes: [caller])
@@ -13,7 +13,7 @@ struct NewPaneTests {
         #expect(throws: AgentRefusal(text: "put this tab in a group first")) { try result.get() }
     }
 
-    // spec: docs/specs/agent-cli.md U5
+    // spec: docs/spec/agent-cli.md U5
     @Test @MainActor func aNewTabJoinsTheUnselectedCallersGroup() throws {
         let app = try #require((NSApp.delegate as? AppDelegate)?.ghostty)
         // Construct controllers without showing windows, as in the split focus test.
@@ -64,7 +64,7 @@ struct NewPaneTests {
         #expect(child.titleOverride == nil)
     }
 
-    // spec: docs/specs/agent-cli.md U5
+    // spec: docs/spec/agent-cli.md U5
     @Test @MainActor func rightAndTabExcludeEachOther() {
         let caller = PaneRow(pane: UUID(), tab: UUID(), workspace: UUID())
         let scope = AgentScope(caller: caller, panes: [caller])

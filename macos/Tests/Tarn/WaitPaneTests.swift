@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// `tarn wait`: what ends a wait and how it answers (`docs/specs/agent-cli.md` 3, 4.6, U4, U8).
+/// `tarn wait`: what ends a wait and how it answers (`docs/spec/agent-cli.md` 3, 4.6, U4, U8).
 @Suite
 struct WaitPaneTests {
     private final class Sink: WaitSink {
