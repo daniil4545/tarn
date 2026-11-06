@@ -51,11 +51,12 @@ jobs:
         run: uv run -q --with playwright python -I viewer-web/test-clipboard.py
       - name: Demo checks
         run: |
-          # A pointer drag in a loaded browser misses its target now and then (W7 in check_b, T-270):
-          # a check script that fails gets one more run; a real defect fails both.
+          # A check script that fails gets one more run, and the retry is written to the job summary,
+          # so a flaky check shows up even when the second run passes; a real defect fails both.
           for c in 0 a b c e2e review modules; do
-            uv run -q --with playwright python -I demo/test/check_$c.py ||
-              uv run -q --with playwright python -I demo/test/check_$c.py
+            uv run -q --with playwright python -I demo/test/check_$c.py && continue
+            echo "- check_$c failed once and was retried" >> "$GITHUB_STEP_SUMMARY"
+            uv run -q --with playwright python -I demo/test/check_$c.py
           done
 
   lint:
