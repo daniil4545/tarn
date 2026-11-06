@@ -35,7 +35,7 @@ Zig core and Swift macOS app from upstream; our code is Swift. Versions: `build.
 | `tools/` | GIF capture, viewer bundle sync, benchmark |
 | `install.sh` | the installer `curl ... \| sh` runs |
 | `tarn.mk` | our make targets `check`, `release` and `bench` |
-| `docs/` | our docs: spec, architecture, install guide, module documents |
+| `docs/` | our docs: spec, feature specs, architecture, install guide |
 
 ## Commands
 

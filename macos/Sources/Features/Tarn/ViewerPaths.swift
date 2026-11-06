@@ -31,10 +31,10 @@ enum ViewerPaths {
     static let markdownExtensions: Set<String> = ["md", "markdown", "mdown", "mkd"]
 
     /// A scheme with `//` or `mailto:` is a URL, `file://` excepted; `spec.md:12` is a path whose
-    /// suffix looks like a scheme.
+    /// suffix looks like a scheme. Schemes are case-insensitive (RFC 3986, 3.1), as in `follow`.
     static func isURL(_ raw: String) -> Bool {
         if raw.hasPrefix("file://") { return false }
-        return raw.range(of: #"^[A-Za-z][A-Za-z0-9+.-]*://"#, options: .regularExpression) != nil || raw.hasPrefix("mailto:")
+        return raw.range(of: #"^[A-Za-z][A-Za-z0-9+.-]*://"#, options: .regularExpression) != nil || raw.lowercased().hasPrefix("mailto:")
     }
 
     /// Resolves `raw` against the clicked terminal's `cwd`. A real file whose name contains a colon

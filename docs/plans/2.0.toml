@@ -393,7 +393,7 @@ owns = ["layout"]
 needs = ["L1"]
 lines = 250
 
-# --- C: agent commands (#40, docs/specs/agent-cli.md section 11) ---
+# --- C: agent commands (#40, docs/spec/agent-cli.md) ---
 
 [[item]]
 key = "C3"
