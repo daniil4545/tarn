@@ -68,7 +68,7 @@ The marketplace file sits in `plugin/.claude-plugin/`, not at the repository roo
 
 ## Codex
 
-The same plugin works in Codex 0.166 and later.
+The same plugin works in Codex (checked on 0.166). Clone the repository as in step 1 above.
 
 1. Add the marketplace: `codex plugin marketplace add ~/tarn-plugin/plugin`.
 2. Install the plugin: `codex plugin add tarn@tarn`.
