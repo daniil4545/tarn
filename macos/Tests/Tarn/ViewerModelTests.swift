@@ -1000,6 +1000,9 @@ struct ViewerPaneKeyTests {
 
         model.handle(["t": "treeOpen", "path": dir + "/a.md"])
         #expect(model.tabs.tabs.map(\.preview) == [true])
+        // A link to the document itself opens nothing new, so it pins nothing.
+        model.handle(["t": "link", "href": "a.md", "from": dir + "/a.md"])
+        #expect(model.tabs.tabs.map(\.preview) == [true])
         model.handle(["t": "link", "href": "b.md", "from": dir + "/a.md"])
         #expect(model.tabs.tabs.map { ($0.path as NSString).lastPathComponent } == ["a.md", "b.md"])
         #expect(model.tabs.tabs.map(\.preview) == [false, true])
