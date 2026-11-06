@@ -72,7 +72,7 @@ None for the socket itself. The surface id reaches clients through `TARN_SURFACE
 | A slow or silent client cannot hold the reader | 1 s receive timeout; each client is read on its own thread of `tarn.socket.read`, so it delays neither the next accept nor a reply |
 | Memory per line is bounded | 4 MB cap, line dropped and logged |
 | Bind failure does not stop the app | `fail` logs and closes; process detection still works |
-| Protocol version is checked by the receiver | `version == 1` in `receive` and `openFromSocket` |
+| Protocol version is checked by the receiver | `version == 1` in `SessionRegistry.handle`; a wrong version is refused or, for a hook event, dropped with a log line |
 | No command moves focus or presses keys | `open` never takes focus (see [viewer.md](viewer.md)) |
 
 Path longer than the `sun_path` limit: bind is skipped and logged.

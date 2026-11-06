@@ -263,6 +263,8 @@ final class SessionRegistry {
                 reply.send(AgentCommands.handlers[command] != nil || command == "wait"
                     ? AgentCommands.encode(command, .failure(AgentRefusal(text: error)), surface: message["surface"] as? String)
                     : AttentionCommands.failure(error))
+            } else {
+                Self.logger.info("event dropped: unsupported version surface=\(message["surface"] as? String ?? "-", privacy: .public)")
             }
             return
         }
