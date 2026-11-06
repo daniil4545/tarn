@@ -11,13 +11,13 @@ Canon for the switchable features of tarn (issue #34, T-205; companions T-364), 
 | Companion | a module drawn beside the windows, a tool for one task; tab kind (the viewer, state in its tab) or global kind (the sidebar, the hub, one shared model) |
 | Stored / effective state | the switch in UserDefaults / stored on and every module it needs effectively on |
 
-The window is central: a terminal pane, with or without an agent. Since 1.3.3 (T-373) Settings names Permission card and Notifications as settings; keys and behavior did not change.
+The window is central: a terminal pane, with or without an agent. With the hub (T-373) Settings will name Permission card and Notifications as settings; keys and behavior stay.
 
 ## 2. Decided by the user
 
 2026-10-27 (modules): Sidebar, File viewer, Permission card, Notifications are switchable; several viewers around the terminal are part of the file viewer. Only Permission card needs another module (Sidebar). A switch applies at once, no restart. An off module shows no UI and does not react to events; light observers (socket, registry) may run. State lives in UserDefaults. Claude Code has one agent line in Modules, no module gated by version; Codex, pi, OpenCode come when supported. `docs/spec.md` principle 1 allows these four to be switched off; features outside its section 1 are still cut. Groups have no switch (2026-10-29, T-300).
 
-2026-10-31 and 2026-11-02 (companions): no separate agent window kind; two companion kinds; a global companion goes with the user to the next tab; several companions at once is normal, the last opened stands rightmost; agents may open, show and close companions but focus never moves and typing never stops; the permission card and the hub answer requests by the same rules under one setting; few rules now, add from use. The hub (a pane right of the windows, global across tabs, epic T-363) and the per-tab-group state model (T-427) are deferred past 1.4.0 (2026-11-03); 1.4.0 only brings current modules to one companion form in code (T-374).
+2026-10-31 and 2026-11-02 (companions): no separate agent window kind; two companion kinds; a global companion goes with the user to the next tab; several companions at once is normal, the last opened stands rightmost; agents may open, show and close companions but focus never moves and typing never stops; the permission card and the hub answer requests by the same rules under one setting; few rules now, add from use. The hub (a pane right of the windows, global across tabs, epic T-363) and the per-tab-group state model (T-427) are deferred past 1.4.0 (2026-11-03); the companion form of current modules in code (T-374) and the Settings renaming (T-373) move with the hub.
 
 ## 3. Rules
 
