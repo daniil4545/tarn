@@ -90,13 +90,13 @@ def story_viewer(pg):
 
 
 def story_sidebar(pg):
-    """Switch tabs, fold a workspace, drag a tab into another workspace."""
+    """Switch tabs, fold a group, drag a tab into another group."""
     for tab in ("t3", "t5", "t1"):
         glide(pg, *center(pg, f"{TAB}[data-tabid='{tab}']"))
         time.sleep(0.3)
         pg.click(f"{TAB}[data-tabid='{tab}']")
         time.sleep(0.7)
-    head = ".wsh[data-wsh]:has-text('Website')"
+    head = ".wsh[data-wsh]:has-text('release')"
     glide(pg, *center(pg, head))
     pg.click(head)
     time.sleep(1.0)

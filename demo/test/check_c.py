@@ -705,6 +705,15 @@ def path_checks(pg):
         "P4 task write-back works in quotes and refuses a plain line",
         got[3] == "- [ ] a\n> 1. [ ] b" and got[4] is None,
     )
+    cmd(pg, "viewer.open", {"path": "/Users/you/code/tarn/docs/logo.PNG"})
+    toast = pg.wait_for_selector("#toast:has-text('logo.PNG')").inner_text()
+    cmd(pg, "viewer.open", {"path": "/Applications/Tarn.app"})
+    blocked = pg.wait_for_selector("#toast:has-text('Tarn.app')").inner_text()
+    check(
+        "P5 path click: an image goes to its default app, an app is blocked",
+        "default app" in toast and "Blocked" in blocked and not viewers(pg),
+        f"{toast!r} {blocked!r}",
+    )
 
 
 def main():
