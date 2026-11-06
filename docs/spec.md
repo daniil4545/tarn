@@ -61,7 +61,7 @@ Requirements. "Session data" is the analysis of 683 Claude Code sessions from 20
 | R13 | SSH sessions in the sidebar: an ssh tab shows the title the remote shell sets, as every terminal does; no host parser (user decision 2026-10-27, T-250) | 2.0 | 3-4 mentions |
 | R14 | Phone access to waiting sessions, free, outside the home network | later, guide | - |
 | R22 | Preview of a localhost server an agent starts | later | Tellurion trial 2026-10-23 |
-| R23 | State for codex and opencode sessions | later | codex shows no state in the first version |
+| R23 | State for codex sessions: the same `tarn` plugin installs into Codex and maps its hooks unchanged; Codex runs with `--no-daemon` (2.3); opencode state stays later | built | user trial 2026-11-06 |
 
 Out of scope:
 
@@ -124,7 +124,8 @@ Hooks and agent commands enter through one socket; the registry is the only owne
 3. How it works:
    1. The `tarn` plugin for Claude Code registers `hook.sh` for `UserPromptSubmit`, `PostToolUse`, `PostToolUseFailure`, `Notification`, `Stop`, `StopFailure`, `SessionEnd`, and `permission.sh` for `PermissionRequest`.
    2. `hook.sh` reads `TARN_SURFACE`, which the app sets in the environment of each surface.
-   3. It sends the event with the surface id and exits; for `PermissionRequest` see rule 5.
+   3. Codex 0.166 accepts the same plugin; its hook input schemas carry the fields the registry reads (checked live: state and the permission card) (`codex plugin marketplace add`, `codex plugin add tarn@tarn`, hooks approved once in `/hooks`). Its shared app-server daemon runs hooks with the environment of the tab that started it, so a hook from another tab names a wrong surface; Codex in tarn runs with `--no-daemon`, which makes the hook a child of the tab's own `codex`. Prior art: `treyreynolds/iterm2-status#1` and `stablyai/orca#22873` (same bug, fix `--no-daemon`); `andrewjstryker/tmux-agent-tools#2` maps a hook to a pane by `session_id` and `cwd`, a mechanism tarn skips until the flag proves a burden (user decision 2026-11-06).
+   4. It sends the event with the surface id and exits; for `PermissionRequest` see rule 5.
 4. Rules, for any input: exit code 0; nothing on stdout or stderr; the whole run within 100 ms, connect and write included; no `TARN_SURFACE` or no socket means an immediate exit; errors go only to the log. The plugin never edits `~/.claude/settings.json`.
 5. Exception, `PermissionRequest`: the hook keeps the connection open while the app holds it (hook timeout 1 h) and prints the decision the card writes. No app, a closed connection, Esc or the timeout print nothing, and Claude Code shows its own dialog.
 
@@ -154,6 +155,7 @@ Purpose: read and edit a file next to a session without another app. Input: a pa
 | Repeat | the same hook event arrives twice | state unchanged, one notification |
 | App not running | a hook fires while tarn is closed or Claude runs in another terminal | `hook.sh` exits 0 at once; Claude Code is not slowed |
 | App hangs | the socket accepts but the app does not read | `hook.sh` gives up at 100 ms and exits 0; a permission hook waits until its timeout |
+| Codex daemon | Codex runs without `--no-daemon` in a second tab | its events land on the tab that started the daemon; a closed tab drops them, so the second tab shows no state |
 | Hooks not installed | the plugin is missing | the session stays `idle` from core events only, never a wrong agent state |
 | Bad request | junk JSON or unknown command on the socket | error reply, log line, state unchanged |
 | Notifications denied | macOS has not allowed notifications | the sidebar still marks sessions; one log line |
@@ -249,9 +251,9 @@ Code sources. Reference projects were picked from seven MIT agent terminals on l
 | R7 | built: zsh setup in `docs/install.md` |
 | R8 | built: `open`, `ls`, `notify`; the hook stays `hook.sh` |
 | R4 | built: Cmd+U, one notification per need, OSC 9/777 suppressed |
-| R24 | built |
+| R23, R24 | built |
 | R15-R18 | second wave, scoped |
-| R11, R13, R14, R22, R23 | later |
+| R11, R13, R14, R22 | later |
 
 - R3 state. When a session gets `permission_prompt`, then it shows `permission` until `UserPromptSubmit` or `PostToolUse`.
 - R4 jump. When one session failed and two wait, then the jump focuses the failed one first, then the unseen waiting one that started waiting earlier.
@@ -301,4 +303,4 @@ Open for the second wave, from the spec review of 2026-10-21 (resolve before des
 | --- | --- | --- |
 | first | R1-R10, R12, R20, R21, R24: viewer, sessions, workspaces, settings, attention, app identity | shipped as `tarn-v1.0.0` |
 | second | design R15-R18 against the open list of section 12 | next |
-| later | R11, R13, R14, R22, R23 | - |
+| later | R11, R13, R14, R22 | - |

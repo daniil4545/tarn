@@ -181,7 +181,7 @@ Upstream merge rule: a merge touching a row above gets its own commit (`.claude/
 
 ## 10. Limits and open items
 
-- Not supported: agents inside tmux or over ssh (the shell in tmux inherits `TARN_SURFACE` from the tmux server, so events would hit the wrong surface; spec section 12); wrapper scripts that hide the agent name; codex and opencode get an icon but no state, because they send no hooks here.
+- Not supported: agents inside tmux or over ssh (the shell in tmux inherits `TARN_SURFACE` from the tmux server, so events would hit the wrong surface; spec section 12); wrapper scripts that hide the agent name; opencode gets an icon but no state, because it sends no hooks here; codex without `--no-daemon` reports to the wrong tab (spec 2.3).
 - Sessions in tabs without hooks stay `idle`: the state needs the plugin; detection alone only shows the agent's icon.
 - Liveness depends on Claude Code title prefix `✳`, "Interrupted" and "1. Yes": a UI change breaks it silently.
 - Detection latency: up to 2 s on a visible window; hidden windows refresh on notifications only.

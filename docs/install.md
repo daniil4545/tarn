@@ -66,6 +66,16 @@ The plugin reports agent state (working, needs you, done) to the sidebar. It doe
 
 The marketplace file sits in `plugin/.claude-plugin/`, not at the repository root, so `claude plugin marketplace add daniil4545/tarn` does not find it; use the local path.
 
+## Codex
+
+The same plugin works in Codex (checked on 0.166). Clone the repository as in step 1 above.
+
+1. Add the marketplace: `codex plugin marketplace add ~/tarn-plugin/plugin`.
+2. Install the plugin: `codex plugin add tarn@tarn`.
+3. Start `codex --no-daemon` in a Tarn tab and approve the tarn hooks once in `/hooks`.
+
+Without `--no-daemon` Codex runs hooks in a shared background server that keeps the environment of the first tab, so state from other tabs is lost. A shell alias keeps the flag: `alias codex='codex --no-daemon'`.
+
 ## zsh: completion and history (R7)
 
 Ghostty's shell integration for zsh is on by default in Tarn. Completion and shared history need a few lines in `~/.zshrc`:

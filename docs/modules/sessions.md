@@ -64,7 +64,7 @@ Liveness: Claude Code sends no event on Esc. A 1 s timer checks sessions in `wor
 
 Answer: `answer` sends the decision to the request the card shows. Tool: option 0 allows, other denies with a message. Question: the option label goes in `updatedInput.answers`. With no request left the session returns to `working`.
 
-Agent naming: `AgentProcess.match` accepts `claude`, `codex`, `opencode` exactly or as a prefix followed by a non-alphanumeric. When the kernel name cannot be the command (a bare version such as `2.1.207`, or an interpreter such as `node`), it reads argv through `KERN_PROCARGS2` and takes argv[0] or the script name. Only `claude` has hooks; the others get an icon and a group.
+Agent naming: `AgentProcess.match` accepts `claude`, `codex`, `opencode` exactly or as a prefix followed by a non-alphanumeric. When the kernel name cannot be the command (a bare version such as `2.1.207`, or an interpreter such as `node`), it reads argv through `KERN_PROCARGS2` and takes argv[0] or the script name. `claude` and `codex` (with `--no-daemon`, spec 2.3) have hooks; `opencode` gets an icon and a group.
 
 ## Files
 
