@@ -113,6 +113,7 @@ struct ViewerPathsTests {
     @Test func tellsUrlsFromPaths() {
         #expect(ViewerPaths.isURL("https://example.com"))
         #expect(ViewerPaths.isURL("mailto:a@b.c"))
+        #expect(ViewerPaths.isURL("MAILTO:a@b.c"))
         #expect(!ViewerPaths.isURL("spec.md:12"))
         #expect(!ViewerPaths.isURL("file:///tmp/a.md"))
     }
