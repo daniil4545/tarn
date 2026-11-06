@@ -29,6 +29,9 @@ final class ViewerModel {
     private var rowCache: [TreeRow] = []
     private var watchers: [String: FileWatcher] = [:]
     private var ready = false
+    private var lastExternal: (path: String, at: Date)?
+    /// Hands a URL to the OS. The tests replace it.
+    var openURL: (URL) -> Bool = { NSWorkspace.shared.open($0) }
 
     var dark = true {
         didSet { if dark != oldValue { pushChrome() } }
@@ -292,7 +295,7 @@ final class ViewerModel {
             pushChrome()
         case "treeOpen":
             if let path {
-                let opened = open(OpenTarget(path: path), pin: body["pin"] as? Bool == true)
+                let opened = openByKind(OpenTarget(path: path), pin: body["pin"] as? Bool == true)
                 // Enter on a file moves the keyboard into it; a file that did not open leaves it in the tree.
                 if opened, body["enter"] as? Bool == true { focusContentInPage() }
             }
@@ -393,26 +396,48 @@ final class ViewerModel {
         pushDocument(path, reason: "task")
     }
 
+    /// The page asks for a link or a tree row: the rule of the path click. True only when the file
+    /// opened in a tab here. A system file goes to its app (a double click sends the row twice: the
+    /// second message within a second does nothing), a folder unfolds in the tree (a link says it is a folder), the rest explains itself.
+    private func openByKind(_ target: OpenTarget, pin: Bool = false, unfold: Bool = true) -> Bool {
+        let path = target.path
+        let name = (path as NSString).lastPathComponent
+        switch ViewerPaths.classify(path) {
+        case .text:
+            return open(target, pin: pin)
+        case .system:
+            if let last = lastExternal, last.path == path, Date().timeIntervalSince(last.at) < 1 { return false }
+            // A link in a document is as untrusted as terminal output: same policy as upstream.
+            if ViewerPaths.openExternally(path, open: openURL) {
+                lastExternal = (path, Date())
+            } else {
+                toast(ViewerPaths.externalURL(path) == nil
+                    ? "Blocked: could execute code: \(name)" : "No app opens this file: \(name)")
+            }
+        case .directory:
+            if unfold {
+                tree.toggle(path)
+                pushChrome()
+            } else {
+                toast("Not a file: \(name) is a folder")
+            }
+        case .special: toast("Not a regular file: \(name)")
+        case .missing: toast("No such file: \(name)")
+        }
+        return false
+    }
+
     private func follow(_ href: String, from: String?) {
-        if href.lowercased().hasPrefix("http://") || href.lowercased().hasPrefix("https://") || href.hasPrefix("mailto:") {
-            if let url = URL(string: href) { NSWorkspace.shared.open(url) }
+        let lower = href.lowercased()
+        if lower.hasPrefix("http://") || lower.hasPrefix("https://") || lower.hasPrefix("mailto:") {
+            if let url = URL(string: href) { _ = openURL(url) }
             return
         }
         let bare = href.split(separator: "#", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? href
         let decoded = bare.removingPercentEncoding ?? bare
         let folder = from.map { ($0 as NSString).deletingLastPathComponent } ?? tree.root
         guard let target = ViewerPaths.resolve(decoded, cwd: folder) else { return }
-        switch ViewerPaths.classify(target.path) {
-        case .text: open(target)
-        case .system:
-            // A link in a document is as untrusted as terminal output: same policy as upstream.
-            if case let .allow(url) = UntrustedURL(URL(fileURLWithPath: target.path).absoluteString).decision {
-                NSWorkspace.shared.open(url)
-            } else {
-                toast("Blocked: open \(decoded) from the terminal")
-            }
-        case .directory, .special, .missing: toast("No such file: \(decoded)")
-        }
+        _ = openByKind(target, unfold: false)
     }
 
     // MARK: Documents
