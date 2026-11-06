@@ -53,7 +53,7 @@ tarn module ls               # the tarn modules: on, off or unavailable
 tarn skill                   # how an agent uses these commands, for this build
 ```
 
-Details: [attention.md](modules/attention.md). Outside a Tarn terminal, call `/Applications/Tarn.app/Contents/MacOS/tarn`.
+Details: [spec/sessions.md](spec/sessions.md). Outside a Tarn terminal, call `/Applications/Tarn.app/Contents/MacOS/tarn`.
 
 ## Claude Code plugin
 
