@@ -4,7 +4,7 @@ import Testing
 import WebKit
 @testable import Ghostty
 
-/// Tab rules, path resolution and document conflicts of the viewer pane (`docs/modules/viewer.md`).
+/// Tab rules, path resolution and document conflicts of the viewer pane (`docs/spec/viewer.md`).
 @Suite
 struct ViewerTabsTests {
     @Test func nextOpenReplacesThePreviewTab() {

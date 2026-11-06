@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import Ghostty
 
-/// The viewer zoom: steps, ends of the range, reset and the saved value (`docs/specs/viewer-pane.md`).
+/// The viewer zoom: steps, ends of the range, reset and the saved value (`docs/spec/viewer.md`).
 @Suite
 struct ViewerZoomTests {
     @Test(arguments: [

@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The second line of a wide sidebar row (`docs/modules/sidebar.md`).
+/// The second line of a wide sidebar row (`docs/spec/workspaces.md`).
 @Suite
 struct TabRowsTests {
     private static let start = Date(timeIntervalSinceReferenceDate: 0)

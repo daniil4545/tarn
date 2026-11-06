@@ -5,7 +5,7 @@ import Testing
 @testable import Ghostty
 import GhosttyKit
 
-/// The tarn options file: writer, load order and atomic save (`docs/modules/settings.md`).
+/// The tarn options file: writer, load order and atomic save (`docs/spec/modules.md`).
 /// Every test passes its own temp folder as `tarnFile`; the real `~/.config/tarn` is never read.
 @Suite
 struct TarnConfigFileTests {

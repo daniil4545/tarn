@@ -1,7 +1,7 @@
 import Foundation
 
 /// A window's copy of its workspace set, as stored in the restorable state under
-/// `tarn.workspaces` (`docs/modules/workspaces.md`). Every tab window of a
+/// `tarn.workspaces` (`docs/spec/workspaces.md`). Every tab window of a
 /// set carries the whole table plus its own key.
 struct WorkspaceSnapshot: Codable, Equatable {
     static let version = 1

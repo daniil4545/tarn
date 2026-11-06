@@ -4,7 +4,7 @@ import Foundation
 /// goes, what happens when sets meet or part. `WorkspaceRegistry` feeds it the tab groups
 /// AppKit reports and acts on what it returns, so every rule is a unit test.
 ///
-/// Rules: `docs/modules/workspaces.md`.
+/// Rules: `docs/spec/workspaces.md`.
 struct WorkspaceBook {
     /// The tabs of one native tab group in tab order.
     struct Group {

@@ -4,7 +4,7 @@ import Testing
 import WebKit
 @testable import Ghostty
 
-/// The window colors derived from a terminal theme (`docs/modules/settings.md`).
+/// The window colors derived from a terminal theme (`docs/spec/modules.md`).
 @MainActor
 @Suite
 struct ThemeColorsTests {

@@ -20,7 +20,7 @@ struct WorkspaceSetTests {
         return WorkspaceSet(workspaces: [a, b, c], members: members)
     }
 
-    // spec: docs/specs/workspace-folder.md S45
+    // spec: docs/spec/workspaces.md S45
     @Test func ungroupLeavesEveryTabWhereItStands() {
         var set = threeWorkspaces()
         let ungrouped = set.ungroup(b.id)
@@ -33,7 +33,7 @@ struct WorkspaceSetTests {
         #expect(!again, "an unknown group changes nothing")
     }
 
-    // spec: docs/specs/workspace-folder.md S56
+    // spec: docs/spec/workspaces.md S56
     @Test func theOnlyGroupCanBeDeleted() {
         var set = WorkspaceSet()
         let id = set.create(name: "Only")!
@@ -116,7 +116,7 @@ struct WorkspaceSetTests {
         #expect(copy.runs(order: tabs) == set.runs(order: tabs))
     }
 
-    // spec: docs/specs/workspace-folder.md S21 - a snapshot saved with manual marks still restores
+    // spec: docs/spec/workspaces.md S21 - a snapshot saved with manual marks still restores
     @Test func aSnapshotWithTheDroppedManualKeyDecodes() throws {
         let set = threeWorkspaces()
         let snapshot = WorkspaceSnapshot(set: set, tabKey: tabs[0], order: tabs)
@@ -126,7 +126,7 @@ struct WorkspaceSetTests {
         #expect(restored == snapshot)
     }
 
-    /// spec: docs/specs/workspace-folder.md S21
+    /// spec: docs/spec/workspaces.md S21
     @Test func anUngroupedTabIsInNoWorkspaceOfTheSnapshotAndComesBackUngrouped() throws {
         let set = WorkspaceSet(workspaces: [a], members: [tabs[0]: a.id])
         let order = [tabs[0], tabs[1]]
@@ -173,7 +173,7 @@ struct WorkspaceSetTests {
 
 /// The New Group dialog's result (G2).
 struct NewGroupChoiceTests {
-    // spec: docs/specs/workspace-folder.md G2
+    // spec: docs/spec/workspaces.md G2
     @Test func folderPanelStartsAtTheTypedDirectoryOrHome() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-panel-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -187,13 +187,13 @@ struct NewGroupChoiceTests {
         }
     }
 
-    // spec: docs/specs/workspace-folder.md S41
+    // spec: docs/spec/workspaces.md S41
     @Test func aGroupTakesItsNameAndABlankNameBecomesGroup() {
         #expect(NewGroupChoice.make(confirmed: true, isWorkspace: false, name: " notes ", folder: "/x") == .group(name: "notes"))
         #expect(NewGroupChoice.make(confirmed: true, isWorkspace: false, name: "  ", folder: "") == .group(name: "Group"))
     }
 
-    // spec: docs/specs/workspace-folder.md S1
+    // spec: docs/spec/workspaces.md S1
     @Test func aWorkspaceTakesAnExistingFolderAndExpandsTheTilde() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -202,7 +202,7 @@ struct NewGroupChoiceTests {
         #expect(NewGroupChoice.make(confirmed: true, isWorkspace: true, name: "n", folder: "~") == .workspace(folder: NSHomeDirectory()))
     }
 
-    // spec: docs/specs/workspace-folder.md S1
+    // spec: docs/spec/workspaces.md S1
     @Test func aWorkspaceRefusesAMissingPathAFileAndABlankFolder() throws {
         let file = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
         try Data().write(to: file)
@@ -212,7 +212,7 @@ struct NewGroupChoiceTests {
         }
     }
 
-    // spec: docs/specs/workspace-folder.md S1
+    // spec: docs/spec/workspaces.md S1
     @Test func aTrailingSlashNamesTheSameFolder() throws {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("tarn-ng-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -222,7 +222,7 @@ struct NewGroupChoiceTests {
         #expect(plain != nil)
     }
 
-    // spec: docs/specs/workspace-folder.md S2
+    // spec: docs/spec/workspaces.md S2
     @Test func cancelChoosesNothing() {
         #expect(NewGroupChoice.make(confirmed: false, isWorkspace: false, name: "notes", folder: "") == nil)
         #expect(NewGroupChoice.make(confirmed: false, isWorkspace: true, name: "", folder: "/p") == nil)
@@ -232,7 +232,7 @@ struct NewGroupChoiceTests {
 /// The kind radios of the New Group sheet stand in two stacks and must still exclude each other.
 @MainActor
 struct NewGroupFormTests {
-    // spec: docs/specs/workspace-folder.md S41
+    // spec: docs/spec/workspaces.md S41
     @Test func pickingOneKindClearsTheOtherAndTheChoiceFollows() {
         let form = NewGroupForm()
         form.nameField.stringValue = "notes"

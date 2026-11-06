@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// The keys Help lists: a fixed list of actions, since Ghostty cannot list all bindings; Ghostty gives
-/// each trigger. `performable` actions get none, so their rows carry the default keys (`docs/modules/settings.md`).
+/// each trigger. `performable` actions get none, so their rows carry the default keys (`docs/spec/modules.md`).
 enum KeyReference {
     struct Row: Identifiable {
         let label: String

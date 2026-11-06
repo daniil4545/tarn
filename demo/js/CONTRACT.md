@@ -1,6 +1,6 @@
 # Demo module contracts
 
-What every module may rely on. Module description: `docs/modules/demo.md`. Checks: `demo/test/check_0.py`.
+What every module may rely on. Checks: `demo/test/check_0.py`.
 
 ## State
 

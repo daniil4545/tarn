@@ -117,7 +117,7 @@ function onClick(e) {
 
 // A group takes a name; a workspace is a group with a project folder, named after it. The app
 // shows the macOS folder panel; the browser has none, so the demo takes a typed path. A folder
-// another workspace already has selects that workspace (docs/specs/workspace-folder.md Q1).
+// another workspace already has selects that workspace (docs/spec/workspaces.md Q1).
 async function newWorkspace() {
   const form = document.createElement("div");
   form.className = "newgroup";

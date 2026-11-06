@@ -1,6 +1,6 @@
 import Foundation
 
-/// Pure path rules of a workspace folder (`docs/specs/workspace-folder.md` D19, S26).
+/// Pure path rules of a workspace folder (`docs/spec/workspaces.md` D19, S26).
 enum WorkspaceFolder {
     /// Absolute, standardized, symlinks resolved; nil for an empty or relative path.
     static func standardized(_ path: String) -> String? {

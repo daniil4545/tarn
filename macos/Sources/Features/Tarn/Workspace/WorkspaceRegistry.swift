@@ -10,7 +10,7 @@ struct WorkspaceRun {
 }
 
 /// Which workspace every tab window belongs to. The single writer of membership, names and
-/// fold; Ghostty stays the single writer of tab order (`docs/modules/workspaces.md`).
+/// fold; Ghostty stays the single writer of tab order (`docs/spec/workspaces.md`).
 /// The rules live in `WorkspaceBook`; this class maps them onto windows, makes
 /// the native moves they ask for, and tells restoration and the sidebar about changes.
 @MainActor

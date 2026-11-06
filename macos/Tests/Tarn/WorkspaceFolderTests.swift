@@ -17,7 +17,7 @@ struct WorkspaceFolderTests {
         return (root.path, folder.path, link.path)
     }
 
-    // spec: docs/specs/workspace-folder.md S26
+    // spec: docs/spec/workspaces.md S26
     @Test func aSymlinkAndATrailingSlashGiveTheSameFolder() throws {
         let tree = try tree()
         defer { try? FileManager.default.removeItem(atPath: tree.root) }
@@ -27,14 +27,14 @@ struct WorkspaceFolderTests {
         #expect(WorkspaceFolder.standardized(tree.folder + "/../F") == real)
     }
 
-    // spec: docs/specs/workspace-folder.md S26
+    // spec: docs/spec/workspaces.md S26
     @Test func anEmptyOrRelativePathHasNoFolder() {
         #expect(WorkspaceFolder.standardized("") == nil)
         #expect(WorkspaceFolder.standardized("relative/dir") == nil)
         #expect(WorkspaceFolder.standardized("~/code") == nil)
     }
 
-    // spec: docs/specs/workspace-folder.md S26
+    // spec: docs/spec/workspaces.md S26
     @Test func aPathThroughASymlinkLiesInsideTheRealFolder() throws {
         let tree = try tree()
         defer { try? FileManager.default.removeItem(atPath: tree.root) }
@@ -45,7 +45,7 @@ struct WorkspaceFolderTests {
         #expect(WorkspaceFolder.contains(real, "/private" + real))
     }
 
-    // spec: docs/specs/workspace-folder.md S26
+    // spec: docs/spec/workspaces.md S26
     @Test func containsComparesPathComponents() {
         #expect(WorkspaceFolder.contains("/a/F", "/a/F"))
         #expect(WorkspaceFolder.contains("/a/F", "/a/F/macos"))
@@ -74,7 +74,7 @@ struct WorkspaceFolderTests {
         #expect(WorkspaceFolder.display(link.path, home: root.appendingPathComponent("home").path) == link.path)
     }
 
-    // spec: docs/specs/workspace-folder.md S6. "+" opens after the last tab of the group, in its folder.
+    // spec: docs/spec/workspaces.md S6. "+" opens after the last tab of the group, in its folder.
     @Test func thePlusOfAGroupOpensAfterItsLastTabInTheGroupFolder() throws {
         var set = WorkspaceSet()
         let created = set.create(name: "tarn", folder: "/p/tarn")
@@ -89,7 +89,7 @@ struct WorkspaceFolderTests {
         #expect(set.lastTab(of: empty, order: order) == nil)
     }
 
-    // spec: docs/specs/workspace-folder.md S3. Q1 and Q4 pick the workspace that holds the folder.
+    // spec: docs/spec/workspaces.md S3. Q1 and Q4 pick the workspace that holds the folder.
     @Test func theFirstTabOfTheWorkspaceWithTheFolderIsChosen() throws {
         var set = WorkspaceSet()
         let createdNotes = set.create(name: "notes", folder: "/p/notes")
@@ -112,7 +112,7 @@ struct WorkspaceFolderTests {
         #expect(set.workspaces.isEmpty)
     }
 
-    // spec: docs/specs/workspace-folder.md S21
+    // spec: docs/spec/workspaces.md S21
     @Test func aSnapshotKeepsTheFolderThroughEncoding() throws {
         var set = WorkspaceSet()
         let created = set.create(name: "tarn", folder: "/p/tarn")
@@ -124,7 +124,7 @@ struct WorkspaceFolderTests {
         #expect(back.workspace(of: t[0])?.folder == nil)
     }
 
-    // spec: docs/specs/workspace-folder.md S21. A snapshot saved before folders has no such key.
+    // spec: docs/spec/workspaces.md S21. A snapshot saved before folders has no such key.
     @Test func anOldSnapshotWithoutTheFieldDecodesWithNoFolder() throws {
         let id = UUID()
         let json = """

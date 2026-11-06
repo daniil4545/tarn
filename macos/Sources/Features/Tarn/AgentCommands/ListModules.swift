@@ -1,6 +1,6 @@
 import Foundation
 
-/// `tarn module ls`: the modules of Settings > Modules and their switches (`docs/specs/agent-cli.md`
+/// `tarn module ls`: the modules of Settings > Modules and their switches (`docs/spec/agent-cli.md`
 /// 4.9), in the table form of `tarn ls`. Read only.
 enum ListModules {
     static let columns = ["MODULE", "STATE"]

@@ -117,7 +117,7 @@ struct TombstoneTests {
         #expect(book.set(of: t[4])?.workspaces.count == 1)
     }
 
-    // spec: docs/specs/workspace-folder.md S44
+    // spec: docs/spec/workspaces.md S44
     /// The last tab of a workspace closed the workspace; the undo recreates it in its place.
     @Test func aTabUndoRecreatesItsClosedWorkspaceAtItsPlace() {
         var book = WorkspaceBook()
@@ -134,7 +134,7 @@ struct TombstoneTests {
         #expect(book.workspace(of: t[3])?.id == work)
     }
 
-    // spec: docs/specs/workspace-folder.md S63
+    // spec: docs/spec/workspaces.md S63
     @Test func aTabUndoKeepsItsGroupWhileAppKitJoinsTheReopenedWindow() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]]])
@@ -153,7 +153,7 @@ struct TombstoneTests {
         #expect(book.names([t[0], t[1], t[2]]) == ["-", "solo"])
     }
 
-    // spec: docs/specs/workspace-folder.md S46
+    // spec: docs/spec/workspaces.md S46
     /// "Delete group" with the box checked closes the tabs one by one (`Sidebar.close`, one undo
     /// group); the group goes with the last, and the undo of both brings back the group with both.
     @Test func closingAllTabsOfAGroupGoesAndAnUndoBringsTheGroupBack() {
@@ -171,7 +171,7 @@ struct TombstoneTests {
         #expect(book.workspace(of: t[4])?.id == notes)
     }
 
-    /// spec: docs/specs/workspace-folder.md S64
+    /// spec: docs/spec/workspaces.md S64
     /// A tab with no group leaves a tombstone too: its undo puts it back ungrouped, and the shelf
     /// hands the tombstone (with its viewers) to the window that appears.
     @Test func anUngroupedTabLeavesATombstoneAndComesBackUngrouped() {
@@ -195,7 +195,7 @@ struct TombstoneTests {
         #expect(book.names([t[0], t[2]]) == ["Work", "-"])
     }
 
-    /// spec: docs/specs/workspace-folder.md S64
+    /// spec: docs/spec/workspaces.md S64
     @Test func theUndoOfAnUngroupedWindowRecreatesItsSetAndNoGroup() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0]]])

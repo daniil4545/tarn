@@ -26,7 +26,7 @@ struct TargetTests {
         #expect(book.names([t[0], t[1]]) == ["Work", "-"])
     }
 
-    /// spec: docs/specs/workspace-folder.md S42
+    /// spec: docs/spec/workspaces.md S42
     @Test func aTabOpenedFromAnotherTakesItsWorkspaceNotTheSelectedOne() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
@@ -45,7 +45,7 @@ struct TargetTests {
         #expect(book.runs(for: [t[0], t[1], t[2], t[3]])[1].tabs == [t[1], t[2], t[3]])
     }
 
-    /// spec: docs/specs/workspace-folder.md S42
+    /// spec: docs/spec/workspaces.md S42
     @Test func aTabOpenedFromAnUngroupedTabIsUngroupedRightAfterIt() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
@@ -95,7 +95,7 @@ struct TargetTests {
         #expect(book.set(of: t[1]) == nil)
     }
 
-    /// spec: docs/specs/workspace-folder.md S44
+    /// spec: docs/spec/workspaces.md S44
     @Test func theLastTabLeavingAWorkspaceTakesTheWorkspaceWithIt() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]]])
@@ -107,7 +107,7 @@ struct TargetTests {
         #expect(book.names([t[0], t[1]]) == ["tarn"])
     }
 
-    /// spec: docs/specs/workspace-folder.md S53
+    /// spec: docs/spec/workspaces.md S53
     @Test func aTabDroppedBetweenTwoTabsOfAWorkspaceDoesNotJoinIt() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1], t[2]], [t[3], t[4]]])

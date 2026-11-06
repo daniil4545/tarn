@@ -1,4 +1,4 @@
-// Terminal panes as `tarn ls` lists them (docs/specs/agent-cli.md 4.1): every pane of the caller's
+// Terminal panes as `tarn ls` lists them (docs/spec/agent-cli.md 4.1): every pane of the caller's
 // group; an ungrouped caller sees its own tab only. Pure over the `workspaces` and `registry` snapshots and the vfs (for the branch).
 
 // Pane ids in a layout tree; the tree shape belongs to workspace.js, a leaf carries `pane`.

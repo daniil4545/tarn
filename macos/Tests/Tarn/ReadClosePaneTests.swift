@@ -2,7 +2,7 @@ import AppKit
 import Testing
 @testable import Ghostty
 
-/// `tarn read` and `tarn close` (`docs/specs/agent-cli.md` 4.7, 4.8, B1, B3, B5).
+/// `tarn read` and `tarn close` (`docs/spec/agent-cli.md` 4.7, 4.8, B1, B3, B5).
 @Suite
 struct ReadClosePaneTests {
     private final class Sink: WaitSink {

@@ -17,7 +17,7 @@ struct Workspace: Equatable, Identifiable, Codable {
 ///
 /// Ghostty alone writes the order of tabs; this value stores only membership. Workspaces are
 /// drawn in the order of their first tab, so their order is derived and never stored
-/// (`docs/modules/workspaces.md`).
+/// (`docs/spec/workspaces.md`).
 struct WorkspaceSet: Equatable {
     /// One block of the sidebar. Not part of the stored state: a workspace with its tabs, or
     /// the ungrouped tabs between two workspaces (`workspace` is nil, no header).

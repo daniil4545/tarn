@@ -64,7 +64,7 @@ struct SidebarDragTests {
         return (model, tab, window)
     }
 
-    // spec: docs/specs/workspace-folder.md S58
+    // spec: docs/spec/workspaces.md S58
     @Test func aReleaseOverTheTerminalClosesTheGapAndMovesNothing() {
         let (model, tab, window) = lifted()
         #expect(model.gapSlot == .tail)

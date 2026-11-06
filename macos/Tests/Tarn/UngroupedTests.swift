@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// Sets of ungrouped tabs, and what an older build saved (`docs/specs/workspace-folder.md` G1, G13).
+/// Sets of ungrouped tabs, and what an older build saved (`docs/spec/workspaces.md` G1, G13).
 @Suite
 struct UngroupedTests {
     private let t = (0..<6).map { _ in TabKey() }
@@ -16,7 +16,7 @@ struct UngroupedTests {
         .init(id: UUID(), name: name, collapsed: false, folder: folder, tabKeys: tabs)
     }
 
-    /// spec: docs/specs/workspace-folder.md S50
+    /// spec: docs/spec/workspaces.md S50
     @Test func anOldHomeWorkspaceLoadsAsUngroupedTabsAndTheOthersStay() {
         let homeFolder = WorkspaceFolder.standardized(home)
         for folder in [nil, homeFolder] {
@@ -30,7 +30,7 @@ struct UngroupedTests {
         }
     }
 
-    /// spec: docs/specs/workspace-folder.md S50
+    /// spec: docs/spec/workspaces.md S50
     @Test func aHomeWorkspaceThatIsNotTheStartOneStays() {
         let homeFolder = WorkspaceFolder.standardized(home)
         let set = snapshot([
@@ -41,7 +41,7 @@ struct UngroupedTests {
         #expect(set.workspaces.map(\.folder) == ["/p/F", homeFolder])
     }
 
-    /// spec: docs/specs/workspace-folder.md S50
+    /// spec: docs/spec/workspaces.md S50
     @Test func aSetOfOnlyAnOldHomeLoadsWithNoGroupAndTheBookKeepsItsTabs() {
         var book = WorkspaceBook()
         book.adopt(snapshot([entry("~", tabs: [t[0], t[1]])]))

@@ -1,7 +1,7 @@
 import AppKit
 
 extension NSPasteboard.PasteboardType {
-    /// Private drag payload of a whole viewer: its id (`docs/modules/layout.md`).
+    /// Private drag payload of a whole viewer: its id (`docs/spec/workspaces.md`).
     static let tarnViewer = NSPasteboard.PasteboardType("com.daniil4545.tarn.viewer")
 }
 

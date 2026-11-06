@@ -7,7 +7,7 @@ import Testing
 struct MergeTests {
     private let t = (0..<6).map { _ in TabKey() }
 
-    /// spec: docs/specs/workspace-folder.md S54
+    /// spec: docs/spec/workspaces.md S54
     @Test func mergeAllWindowsKeepsTheFirstSetAndEveryTabsGroup() {
         var book = WorkspaceBook()
         _ = book.pass([[t[0], t[1]], [t[2], t[3]]])
@@ -149,7 +149,7 @@ struct MergeTests {
 
     // MARK: A window of one tab
 
-    /// spec: docs/specs/workspace-folder.md S65
+    /// spec: docs/spec/workspaces.md S65
     /// The only tab of a window dropped into another window is a merge: its group comes with it.
     @Test func theLastTabOfAWindowBringsItsGroupWhenDroppedIntoAnotherWindow() {
         var book = WorkspaceBook()

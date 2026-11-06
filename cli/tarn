@@ -1,7 +1,7 @@
 #!/bin/sh
 # tarn: client of the running tarn app (docs/spec.md 2.2, 11). One JSON line to the control
 # socket, one back. Errors: stderr "tarn: <text>", nothing on stdout, exit 1 or the "code" of the
-# reply (4: no pane matched, docs/specs/agent-cli.md 4).
+# reply (4: no pane matched, docs/spec/agent-cli.md 4).
 #   tarn open <path>        open a text file in the viewer; never moves focus
 #   tarn ls [--json]        list the terminal panes of your group
 #   tarn notify <text>      mark this session and notify the user; never moves focus
@@ -187,7 +187,7 @@ case $cmd in
     [ -z "$title" ] || [ -n "$tab" ] || fail "--title needs --tab"
     [ $# -gt 1 ] || usage
     shift
-    # A newline or a carriage return in the command would press Enter (docs/specs/agent-cli.md B2).
+    # A newline or a carriage return in the command would press Enter (docs/spec/agent-cli.md B2).
     nl='
 '
     cr=$(printf '\r')

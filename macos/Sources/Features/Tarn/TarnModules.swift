@@ -1,7 +1,7 @@
 import AppKit
 import OSLog
 
-/// A tarn feature with one switch in Settings > Modules (`docs/modules/settings.md`).
+/// A tarn feature with one switch in Settings > Modules (`docs/spec/modules.md`).
 enum TarnModule: String, CaseIterable, Identifiable {
     case sidebar, viewer, permissionCard, notifications
 
@@ -43,7 +43,7 @@ enum TarnModule: String, CaseIterable, Identifiable {
 
 /// The state of the modules. A switch is read at the moment a path draws UI or creates an
 /// object, so a switch applies at once and a path added later follows the same rule
-/// (`docs/modules/settings.md`).
+/// (`docs/spec/modules.md`).
 enum TarnModules {
     private static let logger = Logger(subsystem: "tarn", category: "settings")
 

@@ -8,7 +8,7 @@ extension GhosttyOption {
     }
 }
 
-/// The option catalog against Ghostty itself (`docs/modules/settings.md`).
+/// The option catalog against Ghostty itself (`docs/spec/modules.md`).
 @Suite
 struct GhosttyOptionTests {
     @Test func keysAreUniqueAndEachSectionHasOptions() {

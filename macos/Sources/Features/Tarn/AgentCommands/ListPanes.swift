@@ -1,6 +1,6 @@
 import Foundation
 
-/// `tarn ls`: the terminal panes of the caller's workspace (`docs/specs/agent-cli.md` 4.1), in the
+/// `tarn ls`: the terminal panes of the caller's workspace (`docs/spec/agent-cli.md` 4.1), in the
 /// form of WezTerm `cli list` (`wezterm/src/cli/list.rs`): a header row, columns padded to the widest cell.
 enum ListPanes {
     static let columns = ["PANE", "TAB", "GROUP", "TITLE", "CWD", "PROCESS", "BRANCH", "STATE"]

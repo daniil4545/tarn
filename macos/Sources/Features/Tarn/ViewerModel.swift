@@ -15,7 +15,7 @@ enum ViewerLayoutCommand {
 }
 
 /// What a viewer pane shows: tabs, documents, the files tree and the watchers. The web page draws
-/// it and reports user actions; this model owns the state. See `docs/modules/viewer.md`.
+/// it and reports user actions; this model owns the state. See `docs/spec/viewer.md`.
 @MainActor
 final class ViewerModel {
     static let logger = Logger(subsystem: "tarn", category: "viewer")

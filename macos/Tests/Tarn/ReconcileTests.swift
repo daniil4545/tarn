@@ -3,7 +3,7 @@ import Testing
 @testable import Ghostty
 
 /// Following a tab order Ghostty changed: membership never follows the order
-/// (`docs/specs/workspace-folder.md` M3), and a tab no rule placed is ungrouped (M1).
+/// (`docs/spec/workspaces.md` M3), and a tab no rule placed is ungrouped (M1).
 @Suite
 struct ReconcileTests {
     private let t = (0..<5).map { _ in TabKey() }
@@ -17,7 +17,7 @@ struct ReconcileTests {
         return book
     }
 
-    /// spec: docs/specs/workspace-folder.md S60
+    /// spec: docs/spec/workspaces.md S60
     @Test func aNativeReorderChangesNoMembership() {
         var book = twoWorkspaces()
         let before = book.set(of: t[0])
@@ -29,7 +29,7 @@ struct ReconcileTests {
         #expect(book.workspace(of: t[3])?.name == "B")
     }
 
-    /// spec: docs/specs/workspace-folder.md S40
+    /// spec: docs/spec/workspaces.md S40
     @Test func aNewWindowIsOneUngroupedTabWithNoGroupAtAll() {
         var book = WorkspaceBook()
         let outcome = book.pass([[t[0]]])

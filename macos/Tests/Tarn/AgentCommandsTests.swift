@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import Ghostty
 
-/// The agent commands: caller, workspace scope and `tarn ls` (`docs/specs/agent-cli.md` 4, 7).
+/// The agent commands: caller, workspace scope and `tarn ls` (`docs/spec/agent-cli.md` 4, 7).
 @Suite
 struct AgentCommandsTests {
     private let left = UUID()
@@ -48,7 +48,7 @@ struct AgentCommandsTests {
         }
     }
 
-    /// spec: docs/specs/workspace-folder.md S49 - a caller in a tab with no workspace reaches that tab only.
+    /// spec: docs/spec/workspaces.md S49 - a caller in a tab with no workspace reaches that tab only.
     @Test @MainActor func lsOfAnUngroupedCallerListsItsOwnTab() throws {
         let tab = UUID()
         let mine = [PaneRow(pane: UUID(), tab: tab, workspace: nil), PaneRow(pane: UUID(), tab: tab, workspace: nil)]
@@ -58,7 +58,7 @@ struct AgentCommandsTests {
         #expect(ids == mine.map(\.pane.uuidString))
     }
 
-    /// spec: docs/specs/workspace-folder.md S57 - `wait`, `read` and `close` on another ungrouped tab: exit 4.
+    /// spec: docs/spec/workspaces.md S57 - `wait`, `read` and `close` on another ungrouped tab: exit 4.
     @Test @MainActor func anUngroupedCallerCannotReachAnotherTab() throws {
         final class Sink: WaitSink {
             func send(_ line: Data) {}
@@ -109,7 +109,7 @@ struct AgentCommandsTests {
         #expect(ListPanes.text([]) == ListPanes.columns.joined(separator: "  ") + "\n")
     }
 
-    // spec: docs/specs/workspace-folder.md S48
+    // spec: docs/spec/workspaces.md S48
     @Test @MainActor func lsShowsGroupAndFolder() throws {
         let rows = [
             PaneRow(pane: UUID(), tab: UUID(), workspace: left, group: "tarn", folder: "/work/tarn"),

@@ -3,7 +3,7 @@ import Testing
 @testable import Ghostty
 
 /// The sidebar's workspace groups: the state a header shows, and where a drop lands
-/// (scenarios S7 to S9 and S23 of `docs/specs/windows-workspaces.md`).
+/// (scenarios S7 to S9 and S23 of `docs/spec/workspaces.md`).
 @Suite
 struct SidebarGroupingTests {
     private func tab(_ index: Int, agent: AgentSession? = nil) -> SidebarModel.Tab {
@@ -111,7 +111,7 @@ struct SidebarGroupingTests {
         #expect(slot == (beforeB ? .beforeWorkspace(groups[1].id) : .beforeWorkspace(groups[2].id)))
     }
 
-    // spec: docs/specs/windows-workspaces.md S9. The empty sidebar below the last row takes drops after everything.
+    // spec: docs/spec/workspaces.md S9. The empty sidebar below the last row takes drops after everything.
     @Test func belowTheLastRowAWorkspaceGoesToTheEndAndATabBelowAllRows() {
         let (groups, _) = layout()
         #expect(SidebarModel.dropSlot(dragging: .workspace, over: .tail, lowerHalf: true, in: groups) == .end)
@@ -148,7 +148,7 @@ struct SidebarGroupingTests {
         )
     }
 
-    /// spec: docs/specs/workspace-folder.md G5
+    /// spec: docs/spec/workspaces.md G5
     /// A row without a group takes a tab drag like any row (native order only).
     @Test func aTabDraggedOverAnUngroupedRowLandsByTheHalfOfThatRow() {
         let (groups, tabs) = withUngrouped()
@@ -163,7 +163,7 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .tail, lowerHalf: true, in: flat) == .endOfWorkspace(flat[0].id))
     }
 
-    // spec: docs/specs/workspace-folder.md G5
+    // spec: docs/spec/workspaces.md G5
     /// A header dragged over an ungrouped block lands before or after the whole block.
     @Test func aWorkspaceOverAnUngroupedRowLandsBeforeOrAfterItsBlock() {
         let (groups, tabs) = withUngrouped()
@@ -181,7 +181,7 @@ struct SidebarGroupingTests {
         #expect(SidebarModel.dropSlot(dragging: .tab, over: .header(key), lowerHalf: false, in: groups) == nil)
     }
 
-    // spec: docs/specs/workspace-folder.md G5
+    // spec: docs/spec/workspaces.md G5
     @Test func aWorkspaceDroppedBelowAnotherLandsBeforeTheNextBlockUngroupedOrNot() {
         let (groups, _) = withUngrouped()
         let a = groups[0].id, b = groups[2].id
@@ -191,7 +191,7 @@ struct SidebarGroupingTests {
         #expect(end == .end)
     }
 
-    // spec: docs/specs/workspace-folder.md S43
+    // spec: docs/spec/workspaces.md S43
     @Test func belowAnUngroupedLastBlockATabGoesToTheEndOfThatBlock() {
         let (groups, _) = withUngrouped()
         let ungroupedLast = Array(groups[0...1])
