@@ -132,6 +132,27 @@ struct AgentProcessTests {
         }
     }
 
+    /// spec: T-220 - the sidebar names the agent `tarn new` started under login, not login.
+    @MainActor
+    @Test func theSidebarReadsTheAgentBelowLogin() throws {
+        let user = String(cString: getpwuid(getuid()).pointee.pw_name)
+        // A copy of sleep named claude: the kernel name is the agent's. A copied system binary
+        // needs its own ad-hoc signature to run.
+        let agent = FileManager.default.temporaryDirectory.appendingPathComponent("t220-\(getpid())/claude")
+        try FileManager.default.createDirectory(at: agent.deletingLastPathComponent(), withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: agent.deletingLastPathComponent()) }
+        try FileManager.default.copyItem(atPath: "/bin/sleep", toPath: agent.path)
+        let sign = try Process.run(URL(fileURLWithPath: "/usr/bin/codesign"), arguments: ["-s", "-", "-f", agent.path])
+        sign.waitUntilExit()
+        try #require(sign.terminationStatus == 0, "codesign failed")
+        try withGroup(["/usr/bin/login", "-flp", user, "/bin/sh", "-c", "exec \(agent.path) 30"]) { login in
+            try #require(settled(login, comm: "claude") != nil, "login's child never appeared")
+            AgentProcessCache.reset()
+            defer { AgentProcessCache.reset() }
+            #expect(AgentProcessCache.agent(pid: login) == "claude")
+        }
+    }
+
     /// spec: T-218 - an agent keeps its group while its tools run: the leader still stands for it.
     @Test func aGroupLeaderThatIsNotLoginStandsForItsGroup() throws {
         try withGroup(["/bin/sh", "-c", "sleep 30; :"]) { shell in
