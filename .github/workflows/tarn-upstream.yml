@@ -33,6 +33,11 @@ jobs:
             exit 0
           fi
           files=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+          # A failed merge with no conflicted files is a git error, not a conflict: keep it red.
+          if [ -z "$files" ]; then
+            echo "::error::git merge failed without conflicts"
+            exit 1
+          fi
           echo "clean=false" >> "$GITHUB_OUTPUT"
           echo "::warning title=upstream merge conflict::$(echo "$files" | tr '\n' ' ')"
           {
