@@ -113,7 +113,7 @@ jobs:
       # The version comes from minimum_zig_version in build.zig.zon.
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - name: Linters
-        run: brew install swiftlint shellcheck typos-cli uv
+        run: brew install swiftlint shellcheck uv
       - name: make lint
         run: make lint
       - name: Build GhosttyKit

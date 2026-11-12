@@ -13,13 +13,13 @@ SHELL := /bin/bash -o pipefail
 # - check-translations.sh: runs `zig build update-translations`, a build.
 # - typos skips the generated viewer bundles, as tarn.mk does.
 lint:
-	zig fmt --check .
+	zig fmt --check --exclude .worktrees .
 	cd macos && swiftlint lint --strict
 	shellcheck --check-sourced --severity=warning \
 		$$(find . \( -name "*.sh" -o -name "*.bash" \) -type f ! -path "./zig-out/*" ! -path "./macos/build/*" \
 		! -path "./.git/*" ! -path "./.worktrees/*" | sort)
 	shellcheck -e SC2015 cli/tarn
-	typos --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*'
+	uvx typos@1.51.1 --exclude '.worktrees' --exclude 'macos/Sources/Features/Tarn/Viewer/tarn-*'
 	uvx ruff@0.17.2 check plugin/test
 	uvx ruff@0.17.2 format --check plugin/test
 .PHONY: lint
