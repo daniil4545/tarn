@@ -1,5 +1,7 @@
-# Weekly early warning: tarn CI on main with upstream/main merged in. Red means a conflict or a
-# break to handle at the next upstream merge, which stays a manual merge commit (docs/architecture.md).
+# Weekly early warning: tarn CI on main with upstream/main merged in. The upstream merge stays a
+# manual merge commit (docs/architecture.md), so a merge conflict here is expected between merges:
+# it is reported as a warning with the list of files and the run stays green. Red means the merge
+# is clean but tarn CI breaks on it.
 # Nothing is pushed: the job token may not write the upstream workflow files a merge brings.
 name: tarn-upstream
 
@@ -12,7 +14,43 @@ permissions:
   contents: read
 
 jobs:
+  merge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      clean: ${{ steps.try.outputs.clean }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Try the merge
+        id: try
+        run: |
+          git fetch --quiet https://github.com/ghostty-org/ghostty.git main
+          if git -c user.name=ci -c user.email=ci@localhost merge --no-edit FETCH_HEAD; then
+            echo "clean=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only --diff-filter=U | sed 's/^/- /')
+          # A failed merge with no conflicted files is a git error, not a conflict: keep it red.
+          if [ -z "$files" ]; then
+            echo "::error::git merge failed without conflicts"
+            exit 1
+          fi
+          echo "clean=false" >> "$GITHUB_OUTPUT"
+          echo "::warning title=upstream merge conflict::$(echo "$files" | tr '\n' ' ')"
+          {
+            echo "### upstream/main does not merge cleanly"
+            echo
+            echo "CI was skipped. Conflicts to resolve at the next upstream merge:"
+            echo
+            echo "$files"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   ci:
+    needs: merge
+    if: needs.merge.outputs.clean == 'true'
     uses: ./.github/workflows/tarn-ci.yml
     with:
       upstream: true
