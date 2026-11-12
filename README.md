@@ -95,6 +95,8 @@ for the build script, Claude Code for agent state.
 
 Tests: `macos/build.nu --action test`; hook contract: `python3 -I plugin/test/hook_test.py`.
 
+Checks: `make lint`.
+
 ## Documents
 
 | Question | Where |

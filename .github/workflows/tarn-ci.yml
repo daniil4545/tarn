@@ -114,6 +114,8 @@ jobs:
       - uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
       - name: Linters
         run: brew install swiftlint shellcheck typos-cli uv
+      - name: make lint
+        run: make lint
       - name: Build GhosttyKit
         run: zig build -Demit-macos-app=false
       - name: make -f tarn.mk check
